@@ -3,19 +3,25 @@ package logscli
 import (
 	"fmt"
 	"io"
+	"os"
+	"strconv"
 
 	"github.com/spf13/cobra"
+
+	"github.com/sukekyo26/cocoon/internal/cli/composex"
 )
 
 const logsLong = `cocoon logs — stream container logs
 
-Wraps ` + "`docker compose logs`" + ` against the generated stack.
+Wraps ` + "`docker compose -f .devcontainer/docker-compose.yml logs`" + `. Pass a
+service name to scope output, -f to follow, --tail N to limit history.`
 
-Status: stub. The full implementation is delivered in F3 of the v0.1.0 plan.`
-
-// NewCommand returns the cobra command for `cocoon logs`.
+// NewCommand returns the cobra command for ` + "`cocoon logs`" + `.
 func NewCommand(stdout, stderr io.Writer) *cobra.Command {
-	_, _ = stdout, stderr
+	var (
+		follow bool
+		tail   int
+	)
 	cmd := &cobra.Command{
 		Use:           "logs [service]",
 		Short:         "Tail logs from the workspace container",
@@ -23,11 +29,22 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 		Args:          cobra.MaximumNArgs(1),
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		RunE: func(_ *cobra.Command, _ []string) error {
-			return fmt.Errorf("%w: cocoon logs is not yet implemented (planned for F3)", ErrFailure)
+		RunE: func(cmd *cobra.Command, posArgs []string) error {
+			args := []string{"logs"}
+			if follow {
+				args = append(args, "-f")
+			}
+			if tail >= 0 {
+				args = append(args, "--tail", strconv.Itoa(tail))
+			}
+			args = append(args, posArgs...)
+			if err := composex.Run(cmd.Context(), os.Stdin, stdout, stderr, args...); err != nil {
+				return fmt.Errorf("%w: %w", ErrFailure, err)
+			}
+			return nil
 		},
 	}
-	cmd.Flags().BoolP("follow", "f", false, "follow log output")
-	cmd.Flags().Int("tail", -1, "number of recent lines to show before following")
+	cmd.Flags().BoolVarP(&follow, "follow", "f", false, "follow log output")
+	cmd.Flags().IntVar(&tail, "tail", -1, "number of recent lines to show before following (default: all)")
 	return cmd
 }

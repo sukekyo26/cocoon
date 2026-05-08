@@ -3,20 +3,25 @@ package upcli
 import (
 	"fmt"
 	"io"
+	"os"
 
 	"github.com/spf13/cobra"
+
+	"github.com/sukekyo26/cocoon/internal/cli/composex"
 )
 
 const upLong = `cocoon up — bring the workspace container up
 
-Regenerates the Dockerfile, docker-compose.yml and (optionally)
-devcontainer.json under .devcontainer/, then runs ` + "`docker compose up -d --build`" + `.
+Runs ` + "`docker compose -f .devcontainer/docker-compose.yml up -d --build`" + ` against
+the generated stack. Run ` + "`cocoon gen`" + ` first when ` + "`.devcontainer/`" + `
+artifacts do not yet exist.`
 
-Status: stub. The full implementation is delivered in F3 of the v0.1.0 plan.`
-
-// NewCommand returns the cobra command for `cocoon up`.
+// NewCommand returns the cobra command for ` + "`cocoon up`" + `.
 func NewCommand(stdout, stderr io.Writer) *cobra.Command {
-	_, _ = stdout, stderr
+	var (
+		noDetach bool
+		service  string
+	)
 	cmd := &cobra.Command{
 		Use:           "up",
 		Short:         "Generate workspace artifacts and start the container",
@@ -24,12 +29,21 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		RunE: func(_ *cobra.Command, _ []string) error {
-			return fmt.Errorf("%w: cocoon up is not yet implemented (planned for F3)", ErrFailure)
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			args := []string{"up", "--build"}
+			if !noDetach {
+				args = append(args, "-d")
+			}
+			if service != "" {
+				args = append(args, service)
+			}
+			if err := composex.Run(cmd.Context(), os.Stdin, stdout, stderr, args...); err != nil {
+				return fmt.Errorf("%w: %w", ErrFailure, err)
+			}
+			return nil
 		},
 	}
-	cmd.Flags().Bool("build", false, "force `docker compose --build` even when sources are unchanged")
-	cmd.Flags().Bool("no-detach", false, "run compose in the foreground (drop -d)")
-	cmd.Flags().StringP("service", "s", "", "operate on a single service from workspace.toml")
+	cmd.Flags().BoolVar(&noDetach, "no-detach", false, "run compose in the foreground (drop -d)")
+	cmd.Flags().StringVarP(&service, "service", "s", "", "operate on a single service from workspace.toml")
 	return cmd
 }
