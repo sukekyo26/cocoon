@@ -69,7 +69,12 @@ func TestExecuteUnknownCommand(t *testing.T) {
 func TestExecuteSubcommandDispatch(t *testing.T) {
 	t.Parallel()
 	subs := []string{
-		"config", "plugin", "generate-all", "clean", "rebuild", "setup",
+		// Lifecycle verbs (stubs in F2; full impls in F3).
+		"up", "down", "rebuild", "logs", "exec", "gen",
+		// Noun groups
+		"config", "plugin",
+		// Legacy commands surviving F2.
+		"setup", "generate-all", "clean",
 	}
 	for _, sub := range subs {
 		t.Run(sub, func(t *testing.T) {

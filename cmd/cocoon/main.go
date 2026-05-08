@@ -14,10 +14,14 @@ import (
 	"github.com/sukekyo26/cocoon/internal/cli"
 	cleancli "github.com/sukekyo26/cocoon/internal/cli/clean"
 	configcli "github.com/sukekyo26/cocoon/internal/cli/config"
+	downcli "github.com/sukekyo26/cocoon/internal/cli/down"
+	execcli "github.com/sukekyo26/cocoon/internal/cli/exec"
 	generatecli "github.com/sukekyo26/cocoon/internal/cli/generate"
+	logscli "github.com/sukekyo26/cocoon/internal/cli/logs"
 	plugincli "github.com/sukekyo26/cocoon/internal/cli/plugin"
 	rebuildcli "github.com/sukekyo26/cocoon/internal/cli/rebuild"
 	setupcli "github.com/sukekyo26/cocoon/internal/cli/setup"
+	upcli "github.com/sukekyo26/cocoon/internal/cli/up"
 	"github.com/sukekyo26/cocoon/internal/rebuild"
 	"github.com/sukekyo26/cocoon/internal/setup"
 	"github.com/sukekyo26/cocoon/internal/version"
@@ -45,6 +49,8 @@ func exitCode(err error, stderr io.Writer) int {
 	case errors.Is(err, configcli.ErrUsage), errors.Is(err, generatecli.ErrUsage),
 		errors.Is(err, cleancli.ErrUsage), errors.Is(err, rebuildcli.ErrUsage),
 		errors.Is(err, plugincli.ErrUsage), errors.Is(err, setupcli.ErrUsage),
+		errors.Is(err, upcli.ErrUsage), errors.Is(err, downcli.ErrUsage),
+		errors.Is(err, logscli.ErrUsage), errors.Is(err, execcli.ErrUsage),
 		errors.Is(err, configcli.ErrUnknownField), errors.Is(err, configcli.ErrUnknownPluginField):
 		return 2
 	case errors.Is(err, configcli.ErrFailure), errors.Is(err, generatecli.ErrFailure),
@@ -53,7 +59,9 @@ func exitCode(err error, stderr io.Writer) int {
 		errors.Is(err, rebuildcli.ErrInsideContainer), errors.Is(err, rebuild.ErrConfig),
 		errors.Is(err, rebuild.ErrPrereq), errors.Is(err, rebuild.ErrFailure),
 		errors.Is(err, setup.ErrInsideContainer),
-		errors.Is(err, plugincli.ErrFailure):
+		errors.Is(err, plugincli.ErrFailure),
+		errors.Is(err, upcli.ErrFailure), errors.Is(err, downcli.ErrFailure),
+		errors.Is(err, logscli.ErrFailure), errors.Is(err, execcli.ErrFailure):
 		return 1
 	default:
 		fmt.Fprintf(stderr, "cocoon: %v\n", err)
