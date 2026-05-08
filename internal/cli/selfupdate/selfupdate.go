@@ -16,3 +16,11 @@ var ErrUsage = errors.New("usage error")
 
 // ErrFailure signals a runtime failure of `cocoon self-update`.
 var ErrFailure = errors.New("self-update failed")
+
+// errHTTPStatus is wrapped by fetch / download paths so callers can
+// match on a stable sentinel instead of pattern-matching the message.
+var errHTTPStatus = errors.New("unexpected http status")
+
+// errAssetMissing is wrapped when the SHA256SUMS file does not list
+// the asset we just downloaded.
+var errAssetMissing = errors.New("asset checksum missing")
