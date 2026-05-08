@@ -103,20 +103,20 @@ RUN mkdir -p /home/${USERNAME}/.aws /home/${USERNAME}/.cargo /home/${USERNAME}/.
     chown ${USERNAME}:${USERNAME} /home/${USERNAME}/.aws /home/${USERNAME}/.cargo /home/${USERNAME}/.claude /home/${USERNAME}/.config /home/${USERNAME}/.copilot /home/${USERNAME}/.deno /home/${USERNAME}/.proto /home/${USERNAME}/.rustup /home/${USERNAME}/go
 # Install Docker CLI
 ARG DOCKER_GID
-RUN --mount=type=bind,source=plugins/docker-cli,target=/tmp/plugin \
+RUN --mount=type=bind,from=plugins,source=docker-cli,target=/tmp/plugin \
     RC_FILE="$HOME/.zshrc" \
     RC_SYNTAX="posix" \
     LOGIN_SHELL="zsh" \
     DOCKER_GID="${DOCKER_GID}" \
     bash /tmp/plugin/install.sh
 # Install GitHub CLI
-RUN --mount=type=bind,source=plugins/github-cli,target=/tmp/plugin \
+RUN --mount=type=bind,from=plugins,source=github-cli,target=/tmp/plugin \
     RC_FILE="$HOME/.zshrc" \
     RC_SYNTAX="posix" \
     LOGIN_SHELL="zsh" \
     bash /tmp/plugin/install.sh
 # Install Zig
-RUN --mount=type=bind,source=plugins/zig,target=/tmp/plugin \
+RUN --mount=type=bind,from=plugins,source=zig,target=/tmp/plugin \
     RC_FILE="$HOME/.zshrc" \
     RC_SYNTAX="posix" \
     LOGIN_SHELL="zsh" \
@@ -125,7 +125,7 @@ RUN --mount=type=bind,source=plugins/zig,target=/tmp/plugin \
     CHECKSUM_ARM64="" \
     bash /tmp/plugin/install.sh
 # Install Go
-RUN --mount=type=bind,source=plugins/go,target=/tmp/plugin \
+RUN --mount=type=bind,from=plugins,source=go,target=/tmp/plugin \
     RC_FILE="$HOME/.zshrc" \
     RC_SYNTAX="posix" \
     LOGIN_SHELL="zsh" \
@@ -136,7 +136,7 @@ RUN --mount=type=bind,source=plugins/go,target=/tmp/plugin \
 ENV GOPATH="/home/${USERNAME}/go"
 ENV PATH="/usr/local/go/bin:$GOPATH/bin:$PATH"
 # Install lazygit
-RUN --mount=type=bind,source=plugins/lazygit,target=/tmp/plugin \
+RUN --mount=type=bind,from=plugins,source=lazygit,target=/tmp/plugin \
     RC_FILE="$HOME/.zshrc" \
     RC_SYNTAX="posix" \
     LOGIN_SHELL="zsh" \
@@ -146,13 +146,13 @@ RUN --mount=type=bind,source=plugins/lazygit,target=/tmp/plugin \
     bash /tmp/plugin/install.sh
 USER ${USERNAME}
 # Install Custom PS1
-RUN --mount=type=bind,source=plugins/custom-ps1,target=/tmp/plugin \
+RUN --mount=type=bind,from=plugins,source=custom-ps1,target=/tmp/plugin \
     RC_FILE="$HOME/.zshrc" \
     RC_SYNTAX="posix" \
     LOGIN_SHELL="zsh" \
     bash /tmp/plugin/install.sh
 # Install proto
-RUN --mount=type=bind,source=plugins/proto,target=/tmp/plugin \
+RUN --mount=type=bind,from=plugins,source=proto,target=/tmp/plugin \
     RC_FILE="$HOME/.zshrc" \
     RC_SYNTAX="posix" \
     LOGIN_SHELL="zsh" \
@@ -163,19 +163,19 @@ RUN --mount=type=bind,source=plugins/proto,target=/tmp/plugin \
 ENV PROTO_HOME="/home/${USERNAME}/.proto"
 ENV PATH="$PROTO_HOME/shims:$PROTO_HOME/bin:$PATH"
 # Install AWS CLI v2
-RUN --mount=type=bind,source=plugins/aws-cli,target=/tmp/plugin \
+RUN --mount=type=bind,from=plugins,source=aws-cli,target=/tmp/plugin \
     RC_FILE="$HOME/.zshrc" \
     RC_SYNTAX="posix" \
     LOGIN_SHELL="zsh" \
     bash /tmp/plugin/install.sh
 # Install AWS SAM CLI
-RUN --mount=type=bind,source=plugins/aws-sam-cli,target=/tmp/plugin \
+RUN --mount=type=bind,from=plugins,source=aws-sam-cli,target=/tmp/plugin \
     RC_FILE="$HOME/.zshrc" \
     RC_SYNTAX="posix" \
     LOGIN_SHELL="zsh" \
     bash /tmp/plugin/install.sh
 # Install GitHub Copilot CLI
-RUN --mount=type=bind,source=plugins/copilot-cli,target=/tmp/plugin \
+RUN --mount=type=bind,from=plugins,source=copilot-cli,target=/tmp/plugin \
     RC_FILE="$HOME/.zshrc" \
     RC_SYNTAX="posix" \
     LOGIN_SHELL="zsh" \
@@ -184,13 +184,13 @@ RUN --mount=type=bind,source=plugins/copilot-cli,target=/tmp/plugin \
     CHECKSUM_ARM64="" \
     bash /tmp/plugin/install.sh
 # Install Claude Code
-RUN --mount=type=bind,source=plugins/claude-code,target=/tmp/plugin \
+RUN --mount=type=bind,from=plugins,source=claude-code,target=/tmp/plugin \
     RC_FILE="$HOME/.zshrc" \
     RC_SYNTAX="posix" \
     LOGIN_SHELL="zsh" \
     bash /tmp/plugin/install.sh
 # Install uv
-RUN --mount=type=bind,source=plugins/uv,target=/tmp/plugin \
+RUN --mount=type=bind,from=plugins,source=uv,target=/tmp/plugin \
     RC_FILE="$HOME/.zshrc" \
     RC_SYNTAX="posix" \
     LOGIN_SHELL="zsh" \
@@ -200,7 +200,7 @@ RUN --mount=type=bind,source=plugins/uv,target=/tmp/plugin \
     bash /tmp/plugin/install.sh
 ENV PATH="/home/${USERNAME}/.local/bin:$PATH"
 # Install Rust
-RUN --mount=type=bind,source=plugins/rust,target=/tmp/plugin \
+RUN --mount=type=bind,from=plugins,source=rust,target=/tmp/plugin \
     RC_FILE="$HOME/.zshrc" \
     RC_SYNTAX="posix" \
     LOGIN_SHELL="zsh" \

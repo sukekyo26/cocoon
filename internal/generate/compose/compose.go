@@ -194,6 +194,11 @@ func buildService(ctx *generate.WorkspaceContext, mounts []*yaml.Node) *yaml.Nod
 		{Key: "container_name", Value: yamlx.QuotedIfSpecial("${CONTAINER_SERVICE_NAME}")},
 		{Key: "build", Value: yamlx.Map(
 			yamlx.Pair{Key: "context", Value: yamlx.QuotedIfSpecial(".")},
+			yamlx.Pair{Key: "additional_contexts", Value: yamlx.Map(
+				// Pulls embedded plugin assets that `cocoon gen`
+				// materialized into ~/.cocoon/cache/build-context/.
+				yamlx.Pair{Key: "plugins", Value: yamlx.QuotedIfSpecial("${HOME}/.cocoon/cache/build-context")},
+			)},
 			yamlx.Pair{Key: "args", Value: yamlx.Seq(
 				yamlx.QuotedIfSpecial("OS_IMAGE=${OS_IMAGE}"),
 				yamlx.QuotedIfSpecial("OS_VERSION=${OS_VERSION}"),

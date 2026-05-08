@@ -256,7 +256,7 @@ var installRunTmpl = tmplx.MustParse("dockerfile-plugin-install", `{{ .Comment }
 {{- range .ArgLines }}
 {{ . }}
 {{- end }}
-RUN --mount=type=bind,source=plugins/{{ .PluginID }},target=/tmp/plugin \
+RUN --mount=type=bind,from=plugins,source={{ .PluginID }},target=/tmp/plugin \
 {{- range .EnvPairs }}
     {{ . }} \
 {{- end }}
