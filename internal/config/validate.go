@@ -101,6 +101,9 @@ func (w *Workspace) Validate(path string) error {
 // ============================================================
 
 func (w *Workspace) runValidate(a *errAccumulator) {
+	if w.Workspace != nil {
+		w.Workspace.validate(a.at("workspace"))
+	}
 	w.Container.validate(a.at("container"))
 	w.Plugins.validate(a.at("plugins"))
 	if w.Ports != nil {
@@ -124,6 +127,12 @@ func (w *Workspace) runValidate(a *errAccumulator) {
 	}
 	w.validateServices(a)
 	w.validateRepositories(a)
+}
+
+func (w *WorkspaceSpec) validate(a *errAccumulator) {
+	if w.MountRoot != "" && w.MountRoot != "." && w.MountRoot != ".." {
+		a.add(`mount_root must be "." or ".."`, "mount_root")
+	}
 }
 
 func (c *ContainerSpec) validate(a *errAccumulator) {

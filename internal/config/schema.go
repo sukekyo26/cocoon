@@ -13,6 +13,7 @@ package config
 
 // Workspace mirrors src/wsd/config.Workspace.
 type Workspace struct {
+	Workspace    *WorkspaceSpec            `toml:"workspace,omitempty"`
 	Container    ContainerSpec             `toml:"container"`
 	Plugins      PluginsSpec               `toml:"plugins"`
 	Ports        *PortsSpec                `toml:"ports,omitempty"`
@@ -31,6 +32,44 @@ type Workspace struct {
 
 // HasDevcontainer reports whether a [devcontainer] table was present.
 func (w *Workspace) HasDevcontainer() bool { return len(w.Devcontainer) > 0 }
+
+// WorkspaceSpec configures cocoon-level knobs that affect how artifacts
+// are generated and where they live. The whole section is optional; when
+// it is missing or fields are zero, the defaults below apply.
+type WorkspaceSpec struct {
+	// MountRoot selects which host directory is bind-mounted into the
+	// container at /workspace.
+	//
+	//   "."  — mount the project directory itself (default).
+	//   ".." — mount the parent directory so sibling repos are visible.
+	//
+	// The picker in `cocoon init` writes one of these two values and
+	// nothing else; loaders enforce the same constraint.
+	MountRoot string `toml:"mount_root,omitempty"`
+
+	// DevContainer toggles emission of .devcontainer/devcontainer.json.
+	// nil ⇒ default (true). Pointer so the loader can distinguish
+	// "field omitted" from an explicit `devcontainer = false`.
+	DevContainer *bool `toml:"devcontainer,omitempty"`
+}
+
+// MountRootOrDefault returns the configured mount range, falling back to
+// "." when [workspace] is omitted or mount_root is empty.
+func (w *WorkspaceSpec) MountRootOrDefault() string {
+	if w == nil || w.MountRoot == "" {
+		return "."
+	}
+	return w.MountRoot
+}
+
+// DevContainerOrDefault returns true unless the user explicitly set
+// `devcontainer = false`.
+func (w *WorkspaceSpec) DevContainerOrDefault() bool {
+	if w == nil || w.DevContainer == nil {
+		return true
+	}
+	return *w.DevContainer
+}
 
 // ContainerSpec mirrors src/wsd/config.ContainerSpec. Os selects the base
 // distribution ("ubuntu" or "debian"); OsVersion is the distribution-specific
