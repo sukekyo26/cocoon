@@ -70,8 +70,8 @@ forward = ["8080:8080"]
 packages = []
 `,
 			assertFiles: []expect{
-				{path: "Dockerfile", mustContain: []string{"Docker CLI", "GitHub CLI"}, mustNotContain: []string{"Install AWS CLI", "{{"}},
-				{path: "docker-compose.yml", mustContain: []string{"setup-test"}},
+				{path: ".devcontainer/Dockerfile", mustContain: []string{"Docker CLI", "GitHub CLI"}, mustNotContain: []string{"Install AWS CLI", "{{"}},
+				{path: ".devcontainer/docker-compose.yml", mustContain: []string{"setup-test"}},
 				{path: ".devcontainer/devcontainer.json", mustContain: []string{"setup-test"}},
 				{path: ".devcontainer/docker-compose.yml", mustContain: []string{"setup-test"}},
 				{path: ".env", mustContain: []string{
@@ -98,7 +98,7 @@ enable = []
 packages = []
 `,
 			assertFiles: []expect{
-				{path: "Dockerfile", mustNotContain: []string{
+				{path: ".devcontainer/Dockerfile", mustNotContain: []string{
 					"Install Docker CLI", "Install AWS CLI", "proto",
 				}},
 			},
@@ -117,8 +117,8 @@ packages = []
 					"packages = []",
 					"[volumes]",
 				}, mustNotContain: []string{"[vscode]"}},
-				{path: "Dockerfile", mustContain: nil},
-				{path: "docker-compose.yml", mustContain: nil},
+				{path: ".devcontainer/Dockerfile", mustContain: nil},
+				{path: ".devcontainer/docker-compose.yml", mustContain: nil},
 				{path: ".devcontainer/devcontainer.json", mustContain: nil},
 				{path: ".env", mustContain: []string{"COMPOSE_PROJECT_NAME="}},
 			},
@@ -147,8 +147,8 @@ extensions = ["eamodio.gitlens"]
 					"eamodio.gitlens",
 					"deno",
 				}},
-				{path: "Dockerfile", mustContain: []string{"Docker CLI", "GitHub CLI"}},
-				{path: "docker-compose.yml", mustContain: nil},
+				{path: ".devcontainer/Dockerfile", mustContain: []string{"Docker CLI", "GitHub CLI"}},
+				{path: ".devcontainer/docker-compose.yml", mustContain: nil},
 				{path: ".devcontainer/devcontainer.json", mustContain: []string{"eamodio.gitlens"}},
 				{path: ".env", mustContain: []string{"USERNAME="}},
 			},
@@ -182,7 +182,7 @@ packages = []
 				// pass even if the ARG default regressed; only the literal
 				// `ARG OS_VERSION=26.04` (and OS_IMAGE=ubuntu) proves the
 				// workspace.toml value reached the Dockerfile.
-				{path: "Dockerfile", mustContain: []string{
+				{path: ".devcontainer/Dockerfile", mustContain: []string{
 					"ARG OS_IMAGE=ubuntu",
 					"ARG OS_VERSION=26.04",
 					"FROM ${OS_IMAGE}:${OS_VERSION}",
@@ -224,7 +224,7 @@ packages = []
 				// archive.ubuntu.com sed expression appearing in a Debian
 				// build would silently break [apt.mirror] without any FROM
 				// regression.
-				{path: "Dockerfile", mustContain: []string{
+				{path: ".devcontainer/Dockerfile", mustContain: []string{
 					"ARG OS_IMAGE=debian",
 					"ARG OS_VERSION=12",
 					"FROM ${OS_IMAGE}:${OS_VERSION}",

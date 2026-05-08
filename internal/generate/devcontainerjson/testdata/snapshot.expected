@@ -1,8 +1,7 @@
 // Auto-generated from workspace.toml — do not edit directly.
 {
-	"name": "Existing Docker Compose (Extend)",
+	"name": "snapshot-test",
 	"dockerComposeFile": [
-		"../docker-compose.yml",
 		"docker-compose.yml"
 	],
 	"service": "snapshot-test",

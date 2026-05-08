@@ -47,11 +47,11 @@ func TestRun_Variants(t *testing.T) {
 packages = []
 `,
 			assert: []expect{
-				{path: "docker-compose.yml", mustContain: []string{
+				{path: ".devcontainer/docker-compose.yml", mustContain: []string{
 					"svc-all", "init: true", "stop_grace_period: 30s",
 					"shm_size: 1gb", "pids_limit: 4096",
 				}, mustNotContain: []string{"{{"}},
-				{path: "Dockerfile", mustContain: []string{
+				{path: ".devcontainer/Dockerfile", mustContain: []string{
 					"# syntax=docker/dockerfile:1.7",
 					"type=cache,target=/var/cache/apt",
 					"type=cache,target=/var/lib/apt",
@@ -72,12 +72,12 @@ packages = []
 packages = []
 `,
 			assert: []expect{
-				{path: "Dockerfile", mustContain: []string{
+				{path: ".devcontainer/Dockerfile", mustContain: []string{
 					"Docker CLI", "GitHub CLI",
 				}, mustNotContain: []string{
 					"{{", "Install AWS CLI", "Install AWS SAM CLI", "Install Zig",
 				}},
-				{path: "docker-compose.yml", mustContain: []string{"svc-partial"}},
+				{path: ".devcontainer/docker-compose.yml", mustContain: []string{"svc-partial"}},
 				{path: ".devcontainer/devcontainer.json", mustContain: []string{"svc-partial", "bob"}},
 			},
 		},
@@ -88,7 +88,7 @@ packages = []
 packages = ["vim-nox", "tmux"]
 `,
 			assert: []expect{
-				{path: "Dockerfile", mustContain: []string{"vim-nox", "tmux", "locale-gen"}, mustNotContain: []string{"{{APT_EXTRA_PACKAGES}}"}},
+				{path: ".devcontainer/Dockerfile", mustContain: []string{"vim-nox", "tmux", "locale-gen"}, mustNotContain: []string{"{{APT_EXTRA_PACKAGES}}"}},
 			},
 		},
 		{
@@ -98,7 +98,7 @@ packages = ["vim-nox", "tmux"]
 packages = []
 `,
 			assert: []expect{
-				{path: "Dockerfile", mustContain: []string{"build-essential", "libssl-dev"}, mustNotContain: []string{"{{APT_PLUGIN_PACKAGES}}"}},
+				{path: ".devcontainer/Dockerfile", mustContain: []string{"build-essential", "libssl-dev"}, mustNotContain: []string{"{{APT_PLUGIN_PACKAGES}}"}},
 			},
 		},
 		{
@@ -108,7 +108,7 @@ packages = []
 packages = []
 `,
 			assert: []expect{
-				{path: "Dockerfile", mustNotContain: []string{"build-essential", "libssl-dev", "lsb-release"}},
+				{path: ".devcontainer/Dockerfile", mustNotContain: []string{"build-essential", "libssl-dev", "lsb-release"}},
 			},
 		},
 		{
@@ -121,7 +121,7 @@ packages = []
 lang = "ja_JP.UTF-8"
 `,
 			assert: []expect{
-				{path: "Dockerfile", mustContain: []string{
+				{path: ".devcontainer/Dockerfile", mustContain: []string{
 					"locale-gen en_US.UTF-8 ja_JP.UTF-8",
 					"ENV LANG=ja_JP.UTF-8",
 					"ENV LANGUAGE=ja_JP:en",
@@ -159,7 +159,7 @@ target = "/usr/local/share/ca-certificates/corp"
 timezone = "Asia/Tokyo"
 `,
 			assert: []expect{
-				{path: "docker-compose.yml", mustContain: []string{
+				{path: ".devcontainer/docker-compose.yml", mustContain: []string{
 					"FOO=bar", "TZ=Asia/Tokyo",
 					"shm_size: 2gb", "pids_limit: 8192", "stop_grace_period: 60s",
 					"cpus: 4.0", "mem_limit: 8gb", "soft: 131072",
@@ -177,7 +177,7 @@ packages = []
 			useEmptyPluginsDir: true,
 			extras:             []seed{{rel: "certs/test-ca.crt", body: "-----BEGIN CERTIFICATE-----\nMIIBoj\n-----END CERTIFICATE-----\n"}},
 			assert: []expect{
-				{path: "Dockerfile", mustContain: []string{
+				{path: ".devcontainer/Dockerfile", mustContain: []string{
 					"COPY certs/test-ca.crt", "update-ca-certificates", "SSL_CERT_FILE",
 				}},
 			},

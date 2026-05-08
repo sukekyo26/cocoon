@@ -32,8 +32,8 @@ func buildConfig(ctx *generate.WorkspaceContext) *orderedMap {
 	forwardPorts := append([]int{}, ctx.DevcontainerForwardPorts()...)
 
 	base := newOrderedMap()
-	base.set("name", "Existing Docker Compose (Extend)")
-	base.set("dockerComposeFile", []string{"../docker-compose.yml", "docker-compose.yml"})
+	base.set("name", ctx.ServiceName())
+	base.set("dockerComposeFile", []string{"docker-compose.yml"})
 	base.set("service", ctx.ServiceName())
 	base.set("workspaceFolder", "/home/"+ctx.Username()+"/workspace")
 	base.set("forwardPorts", forwardPorts)

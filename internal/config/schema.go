@@ -96,6 +96,21 @@ type ContainerSpec struct {
 	Capabilities *CapabilitiesSpec   `toml:"capabilities,omitempty"`
 	SecurityOpt  *SecurityOptSpec    `toml:"security_opt,omitempty"`
 	Skel         []SkelEntry         `toml:"skel,omitempty"`
+
+	// DockerSocket opts in to bind-mounting /var/run/docker.sock into the
+	// container so docker-in-docker workflows can reach the host daemon.
+	// nil ⇒ default (false). Pointer so that the loader can distinguish
+	// "field omitted" from an explicit `docker_socket = false`.
+	//
+	// When true the generators add the bind mount and a `group_add:
+	// ${DOCKER_GID}` entry so the container's user can talk to the socket.
+	DockerSocket *bool `toml:"docker_socket,omitempty"`
+}
+
+// DockerSocketEnabled returns true when the user opted in to mounting
+// /var/run/docker.sock. False is the secure default.
+func (c *ContainerSpec) DockerSocketEnabled() bool {
+	return c.DockerSocket != nil && *c.DockerSocket
 }
 
 // SupportedOSes is the closed set of base distributions the generator can

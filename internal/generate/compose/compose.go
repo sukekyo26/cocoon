@@ -150,9 +150,12 @@ func buildVolumeMounts(
 		2+len(pluginVols)+len(customVols)+len(ctx.Mounts())+len(homeFiles),
 	)
 	mounts = append(mounts,
-		yamlx.QuotedIfSpecial("..:/home/${USERNAME}/workspace"),
+		yamlx.QuotedIfSpecial("..:/home/${USERNAME}/workspace:cached"),
 		yamlx.QuotedIfSpecial("local:/home/${USERNAME}/.local"),
 	)
+	if ctx.WS.Container.DockerSocketEnabled() {
+		mounts = append(mounts, yamlx.QuotedIfSpecial("/var/run/docker.sock:/var/run/docker.sock"))
+	}
 	for _, pv := range pluginVols {
 		mounts = append(mounts, yamlx.QuotedIfSpecial(pv.VolumeName+":"+pv.MountPath))
 	}
@@ -226,8 +229,15 @@ func buildService(ctx *generate.WorkspaceContext, mounts []*yaml.Node) *yaml.Nod
 	if sec := ctx.SecurityOptions(); len(sec) > 0 {
 		pairs = append(pairs, yamlx.Pair{Key: "security_opt", Value: stringSeq(sec)})
 	}
+	if ctx.WS.Container.DockerSocketEnabled() {
+		pairs = append(pairs, yamlx.Pair{
+			Key:   "group_add",
+			Value: yamlx.Seq(yamlx.QuotedIfSpecial("${DOCKER_GID}")),
+		})
+	}
 	pairs = append(pairs, yamlx.Pair{Key: "tty", Value: yamlx.Bool(true)})
 	pairs = append(pairs, yamlx.Pair{Key: "init", Value: yamlx.Bool(true)})
+	pairs = append(pairs, yamlx.Pair{Key: "command", Value: yamlx.QuotedIfSpecial("sleep infinity")})
 	pairs = append(pairs, applyResources(ctx)...)
 	return yamlx.Map(pairs...)
 }

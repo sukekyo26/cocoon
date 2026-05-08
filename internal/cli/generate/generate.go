@@ -18,7 +18,6 @@ import (
 	"github.com/sukekyo26/cocoon/internal/fsx"
 	"github.com/sukekyo26/cocoon/internal/generate"
 	"github.com/sukekyo26/cocoon/internal/generate/compose"
-	"github.com/sukekyo26/cocoon/internal/generate/devcontainercompose"
 	"github.com/sukekyo26/cocoon/internal/generate/devcontainerjson"
 	"github.com/sukekyo26/cocoon/internal/generate/dockerfile"
 	"github.com/sukekyo26/cocoon/internal/generate/shellrc"
@@ -68,7 +67,7 @@ func buildArtifacts(ctx *generate.WorkspaceContext, pluginsDir string, stderr io
 	if err != nil {
 		return nil, fmt.Errorf("%w: compose: %w", ErrFailure, err)
 	}
-	arts = append(arts, artifact{rel: "docker-compose.yml", body: body})
+	arts = append(arts, artifact{rel: ".devcontainer/docker-compose.yml", body: body})
 
 	body, err = dockerfile.Generate(ctx, dockerfile.Options{
 		WorkspaceRoot: wsRoot,
@@ -79,19 +78,15 @@ func buildArtifacts(ctx *generate.WorkspaceContext, pluginsDir string, stderr io
 	if err != nil {
 		return nil, fmt.Errorf("%w: dockerfile: %w", ErrFailure, err)
 	}
-	arts = append(arts, artifact{rel: "Dockerfile", body: body})
+	arts = append(arts, artifact{rel: ".devcontainer/Dockerfile", body: body})
 
-	body, err = devcontainerjson.Generate(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("%w: devcontainer.json: %w", ErrFailure, err)
+	if ctx.WS.Workspace.DevContainerOrDefault() {
+		body, err = devcontainerjson.Generate(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("%w: devcontainer.json: %w", ErrFailure, err)
+		}
+		arts = append(arts, artifact{rel: ".devcontainer/devcontainer.json", body: body})
 	}
-	arts = append(arts, artifact{rel: ".devcontainer/devcontainer.json", body: body})
-
-	body, err = devcontainercompose.Generate(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("%w: devcontainer compose: %w", ErrFailure, err)
-	}
-	arts = append(arts, artifact{rel: ".devcontainer/docker-compose.yml", body: body})
 
 	rcRel, body, err := shellrc.Generate(ctx)
 	if err != nil {

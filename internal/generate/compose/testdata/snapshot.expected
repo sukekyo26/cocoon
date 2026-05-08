@@ -15,7 +15,7 @@ services:
     environment:
       - "CONTAINER_SERVICE_NAME=${CONTAINER_SERVICE_NAME}"
     volumes:
-      - "..:/home/${USERNAME}/workspace"
+      - "..:/home/${USERNAME}/workspace:cached"
       - "local:/home/${USERNAME}/.local"
       - "proto:/home/${USERNAME}/.proto"
       - "aws:/home/${USERNAME}/.aws"
@@ -49,6 +49,7 @@ services:
       - "no-new-privileges:true"
     tty: true
     init: true
+    command: sleep infinity
     stop_grace_period: 30s
     shm_size: 1gb
     pids_limit: 4096
