@@ -138,6 +138,20 @@ type volPair struct {
 	Path string
 }
 
+// workspaceBindMount returns the host:container bind mount line for the
+// workspace, choosing between cwd-only and parent-dir mounts based on
+// [workspace] mount_root. The :cached flag is a no-op on Linux but is
+// the macOS performance hint v1 used to set in the override compose
+// file; keeping it in the generated output preserves that behaviour.
+func workspaceBindMount(ctx *generate.WorkspaceContext) string {
+	switch ctx.WS.Workspace.MountRootOrDefault() {
+	case "..":
+		return "..:/home/${USERNAME}/workspace:cached"
+	default:
+		return ".:/home/${USERNAME}/workspace/" + ctx.ServiceName() + ":cached"
+	}
+}
+
 func buildVolumeMounts(
 	ctx *generate.WorkspaceContext,
 	pluginVols []plugin.Volume,
@@ -150,7 +164,7 @@ func buildVolumeMounts(
 		2+len(pluginVols)+len(customVols)+len(ctx.Mounts())+len(homeFiles),
 	)
 	mounts = append(mounts,
-		yamlx.QuotedIfSpecial("..:/home/${USERNAME}/workspace:cached"),
+		yamlx.QuotedIfSpecial(workspaceBindMount(ctx)),
 		yamlx.QuotedIfSpecial("local:/home/${USERNAME}/.local"),
 	)
 	if ctx.WS.Container.DockerSocketEnabled() {
@@ -233,6 +247,17 @@ func buildService(ctx *generate.WorkspaceContext, mounts []*yaml.Node) *yaml.Nod
 		pairs = append(pairs, yamlx.Pair{
 			Key:   "group_add",
 			Value: yamlx.Seq(yamlx.QuotedIfSpecial("${DOCKER_GID}")),
+		})
+	}
+	if ctx.WS.Workspace.MountRootOrDefault() == "." {
+		// `mount_root = "."` mounts only the project so the host bind point
+		// already includes the project basename. Emit a matching
+		// working_dir so `cocoon exec` lands inside the project tree
+		// rather than at the parent /home/<user>/workspace WORKDIR baked
+		// into the image.
+		pairs = append(pairs, yamlx.Pair{
+			Key:   "working_dir",
+			Value: yamlx.QuotedIfSpecial("/home/${USERNAME}/workspace/" + ctx.ServiceName()),
 		})
 	}
 	pairs = append(pairs, yamlx.Pair{Key: "tty", Value: yamlx.Bool(true)})

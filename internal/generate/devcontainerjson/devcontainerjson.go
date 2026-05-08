@@ -35,7 +35,13 @@ func buildConfig(ctx *generate.WorkspaceContext) *orderedMap {
 	base.set("name", ctx.ServiceName())
 	base.set("dockerComposeFile", []string{"docker-compose.yml"})
 	base.set("service", ctx.ServiceName())
-	base.set("workspaceFolder", "/home/"+ctx.Username()+"/workspace")
+	workspaceFolder := "/home/" + ctx.Username() + "/workspace"
+	if ctx.WS.Workspace.MountRootOrDefault() == "." {
+		// Match the compose working_dir so VS Code opens the same
+		// directory `cocoon exec` lands in.
+		workspaceFolder += "/" + ctx.ServiceName()
+	}
+	base.set("workspaceFolder", workspaceFolder)
 	base.set("forwardPorts", forwardPorts)
 	base.set("shutdownAction", "stopCompose")
 

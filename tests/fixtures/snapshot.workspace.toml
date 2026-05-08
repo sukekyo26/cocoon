@@ -1,6 +1,13 @@
 # Snapshot test fixture — all plugins enabled with fixed values
 # Used by tests/test_snapshot.sh for regression detection
 
+[workspace]
+# The fixture predates the cocoon mount_root selector. Pin to ".." so
+# the existing snapshot expectations (`..:/home/${USERNAME}/workspace`)
+# stay stable; new tests that want the cwd-mount form should use a
+# separate fixture with mount_root = ".".
+mount_root = ".."
+
 [container]
 service_name = "snapshot-test"
 username = "testuser"

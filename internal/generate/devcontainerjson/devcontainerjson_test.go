@@ -40,7 +40,7 @@ func TestGenerateMinimalDefaults(t *testing.T) {
 	}
 	for _, want := range []string{
 		`"service": "dev"`,
-		`"workspaceFolder": "/home/developer/workspace"`,
+		`"workspaceFolder": "/home/developer/workspace/dev"`,
 		`"forwardPorts": [`,
 		`"shutdownAction": "stopCompose"`,
 		`"extensions": []`,
