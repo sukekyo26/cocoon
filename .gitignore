@@ -1,0 +1,27 @@
+# Go binaries
+/bin/cocoon
+/bin/cocoon-linux-amd64
+/bin/cocoon-linux-arm64
+/bin/cocoon-darwin-amd64
+/bin/cocoon-darwin-arm64
+/bin/SHA256SUMS
+
+# Build & coverage artifacts
+/coverage.out
+/coverage.html
+/dist/
+.coverage
+htmlcov/
+
+# Test sandboxes (Python plugins, etc.)
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.venv/
+
+# VS Code user-specific
+.vscode/
+
+# Local agent notes
+agent/lessons.md
