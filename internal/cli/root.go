@@ -24,11 +24,11 @@ import (
 	workspacecli "github.com/sukekyo26/cocoon/internal/cli/workspace"
 )
 
-const rootLong = `wsd — workspace-docker orchestrator
+const rootLong = `cocoon — project-aware container workspace generator
 
-This binary is invoked from the bash entry point scripts at the repository
-root (setup-docker.sh, generate-workspace.sh, ...). Most users should not
-call wsd directly.`
+Run cocoon from any project directory to read its workspace.toml and
+materialize a Dev Container or plain docker-compose stack tailored to
+that repository.`
 
 const rootHelpTemplate = `{{.Long}}
 
@@ -41,7 +41,7 @@ Commands:{{range .Commands}}{{if (or .IsAvailableCommand (eq .Name "help"))}}
 Flags:
 {{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}
 
-Run 'wsd <command> --help' for command-specific usage.
+Run 'cocoon <command> --help' for command-specific usage.
 `
 
 // newRootCommand constructs the cobra root command tree. It is stateless
@@ -49,8 +49,8 @@ Run 'wsd <command> --help' for command-specific usage.
 // writers, so concurrent uses (tests in parallel) are safe.
 func newRootCommand(version string, stdout, stderr io.Writer) *cobra.Command {
 	root := &cobra.Command{
-		Use:           "wsd",
-		Short:         "workspace-docker orchestrator",
+		Use:           "cocoon",
+		Short:         "Project-aware container workspace generator",
 		Long:          rootLong,
 		Version:       version,
 		Args:          cobra.ArbitraryArgs, // RunE handles unknown args explicitly.
@@ -60,7 +60,7 @@ func newRootCommand(version string, stdout, stderr io.Writer) *cobra.Command {
 			if len(args) == 0 {
 				return cmd.Help() //nolint:wrapcheck // top-level help write error is descriptive
 			}
-			return fmt.Errorf("%w: %q (try `wsd help`)", ErrUnknownCommand, args[0])
+			return fmt.Errorf("%w: %q (try `cocoon help`)", ErrUnknownCommand, args[0])
 		},
 	}
 	root.SetOut(stdout)
@@ -106,13 +106,13 @@ func addLeafHelpAlias(c *cobra.Command) {
 	}
 }
 
-// newVersionSubcommand mirrors the bare positional `wsd version` invocation
-// that older bash scripts may rely on. Cobra's built-in `--version` / `-v`
-// covers the flag forms via SetVersionTemplate.
+// newVersionSubcommand mirrors the bare positional `cocoon version`
+// invocation. Cobra's built-in `--version` / `-v` covers the flag forms via
+// SetVersionTemplate.
 func newVersionSubcommand(version string, stdout io.Writer) *cobra.Command {
 	return &cobra.Command{
 		Use:           "version",
-		Short:         "Print the wsd binary version",
+		Short:         "Print the cocoon binary version",
 		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,

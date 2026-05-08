@@ -41,7 +41,7 @@ func TestExecuteUsage(t *testing.T) {
 			if err := app.Execute(args); err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if !strings.Contains(stdout.String(), "wsd — workspace-docker orchestrator") {
+			if !strings.Contains(stdout.String(), "cocoon — project-aware container workspace generator") {
 				t.Fatalf("usage banner missing in stdout: %q", stdout.String())
 			}
 		})

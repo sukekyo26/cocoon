@@ -1,4 +1,4 @@
-// Package cli wires together the wsd command-line interface using
+// Package cli wires together the cocoon command-line interface using
 // spf13/cobra.
 //
 // Each subcommand lives in its own internal/cli/<sub> package and exposes a
