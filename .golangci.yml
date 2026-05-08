@@ -1,0 +1,220 @@
+# golangci-lint v2 configuration
+#
+# Strictness policy for the cocoon Go migration:
+#   - "all-on, opt-out" rather than "opt-in". Anything not enabled here must
+#     have a documented reason.
+#   - Test code gets a small set of relaxations (asserts, magic numbers,
+#     long lines, exhaustruct) but never any safety-critical linter is
+#     disabled globally.
+#   - The list intentionally tracks the linters listed in plan.md (Phase 1.3).
+
+version: "2"
+
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+  allow-parallel-runners: true
+
+linters:
+  default: none
+  enable:
+    # bug catchers
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - bodyclose
+    - contextcheck
+    - errorlint
+    - exhaustive
+    - exhaustruct
+    - makezero
+    - nakedret
+    - nilerr
+    - nilnil
+    - noctx
+    - prealloc
+    - predeclared
+    - rowserrcheck
+    - sqlclosecheck
+    - unconvert
+    - unparam
+    # security
+    - gosec
+    # style + complexity
+    - revive
+    - gocritic
+    - gocognit
+    - gocyclo
+    - funlen
+    - lll
+    - misspell
+    - dupl
+    # error wrapping discipline
+    - wrapcheck
+    - err113
+    # API hygiene
+    - forbidigo
+    - depguard
+    - importas
+    - gomoddirectives
+    # tests
+    - testifylint
+    - paralleltest
+    - tparallel
+    - thelper
+    - testpackage
+    # logging
+    - sloglint
+
+  settings:
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
+    govet:
+      enable-all: true
+      disable:
+        # fieldalignment forces putting larger fields first which fights the
+        # readability of config schema structs that mirror Pydantic models.
+        # Memory savings are negligible for short-lived CLI process state.
+        - fieldalignment
+    revive:
+      rules:
+        - name: var-naming
+        - name: indent-error-flow
+        - name: error-return
+        - name: error-naming
+        - name: error-strings
+        - name: exported
+          arguments: ["checkPrivateReceivers", "sayRepetitiveInsteadOfStutters"]
+        - name: receiver-naming
+        - name: unused-parameter
+        - name: unused-receiver
+        - name: redefines-builtin-id
+        - name: superfluous-else
+        - name: confusing-naming
+        - name: confusing-results
+        - name: unreachable-code
+        - name: empty-block
+        - name: range-val-in-closure
+        - name: defer
+        - name: early-return
+    exhaustruct:
+      include:
+        - "github.com/sukekyo26/cocoon/internal/.*"
+    exhaustive:
+      default-signifies-exhaustive: true
+    gocognit:
+      min-complexity: 20
+    gocyclo:
+      min-complexity: 15
+    funlen:
+      lines: 100
+      statements: 60
+    lll:
+      line-length: 120
+    nakedret:
+      max-func-lines: 0
+    forbidigo:
+      forbid:
+        - pattern: ^print(ln)?$
+          msg: "use the logx package instead of print/println"
+        - pattern: ^panic$
+          msg: "do not panic; return an error from internal/ packages"
+        - pattern: ^fmt\.Print(f|ln)?$
+          msg: "do not write to stdout via fmt.Print*; use the App writers or logx"
+      analyze-types: true
+      exclude-godoc-examples: true
+    depguard:
+      rules:
+        internal-from-cmd:
+          list-mode: lax
+          deny:
+            - pkg: "github.com/sukekyo26/cocoon/cmd"
+              desc: "internal packages must not import the cmd binary"
+        no-stdlog:
+          list-mode: lax
+          deny:
+            - pkg: "log"
+              desc: "use log/slog (wrapped by internal/logx) instead of the standard log package"
+    wrapcheck:
+      ignore-sigs:
+        - .Errorf(
+        - errors.New(
+        - errors.Unwrap(
+        - errors.Join(
+        - .Wrap(
+        - .Wrapf(
+    sloglint:
+      no-mixed-args: true
+      kv-only: false
+      attr-only: true
+      static-msg: true
+      no-raw-keys: false
+      key-naming-case: snake
+    testifylint:
+      enable-all: true
+    importas:
+      no-unaliased: true
+      alias: []
+
+  exclusions:
+    generated: lax
+    presets:
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      # Tests get a relaxed profile but still benefit from bug catchers.
+      - path: _test\.go
+        linters:
+          - exhaustruct
+          - funlen
+          - gocognit
+          - gocyclo
+          - dupl
+          - lll
+          - err113
+          - wrapcheck
+          - forbidigo
+          - revive
+      # logx is the print seam that wraps fmt.Fprint*; it must be allowed to
+      # call them directly so the rest of the tree can stay forbidigo-clean.
+      - path: internal/logx/.*
+        text: "do not write to stdout via fmt.Print"
+      # internal/setup composes many concerns (TUI, validation, codegen, env
+      # writer, repo cloner). exhaustruct stays exempt because the package
+      # builds Options-style structs incrementally; the readability linters
+      # (funlen / gocognit / gocyclo / lll) are now opted-in per-function via
+      # //nolint comments where the concern is genuinely orchestration.
+      - path: internal/setup/.*
+        linters:
+          - exhaustruct
+      # i18n catalog tables intentionally hold long literal hint strings.
+      - path: internal/i18n/.*
+        linters:
+          - lll
+      # Package-doc-only files have no executable code.
+      - path: doc\.go
+        linters:
+          - revive
+          - testpackage
+
+formatters:
+  enable:
+    - gofumpt
+    - goimports
+    - gci
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/sukekyo26/cocoon)
+    gofumpt:
+      extra-rules: true
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
