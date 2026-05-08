@@ -1,0 +1,8 @@
+[container]
+service_name = "dev"
+username = "developer"
+os = "ubuntu"
+os_version = "24.04"
+
+[plugins]
+enable = []

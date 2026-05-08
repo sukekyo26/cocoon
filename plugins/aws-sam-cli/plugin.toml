@@ -1,0 +1,10 @@
+[metadata]
+name = "AWS SAM CLI"
+description = "AWS Serverless Application Model CLI (https://github.com/aws/aws-sam-cli)"
+default = false
+
+[install]
+requires_root = false
+
+[version]
+version_capable = false

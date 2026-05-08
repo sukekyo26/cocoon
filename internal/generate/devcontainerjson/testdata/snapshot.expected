@@ -1,0 +1,30 @@
+// Auto-generated from workspace.toml — do not edit directly.
+{
+	"name": "Existing Docker Compose (Extend)",
+	"dockerComposeFile": [
+		"../docker-compose.yml",
+		"docker-compose.yml"
+	],
+	"service": "snapshot-test",
+	"workspaceFolder": "/home/testuser/workspace",
+	"forwardPorts": [
+		3000
+	],
+	"shutdownAction": "stopCompose",
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"MS-CEINTL.vscode-language-pack-ja",
+				"ms-azuretools.vscode-docker",
+				"ms-python.python",
+				"ms-python.vscode-pylance",
+				"ms-vscode.vscode-typescript-next",
+				"eamodio.gitlens",
+				"github.copilot-chat",
+				"github.vscode-github-actions",
+				"oderwat.indent-rainbow",
+				"shardulm94.trailing-spaces"
+			]
+		}
+	}
+}

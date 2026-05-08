@@ -1,0 +1,884 @@
+package config_test
+
+import (
+	"os"
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/sukekyo26/cocoon/internal/config"
+)
+
+// minimalWorkspace returns a TOML string for a syntactically valid workspace
+// with the smallest possible content. Tests append extra sections to it.
+func minimalWorkspace() string {
+	return `
+[container]
+service_name = "dev"
+username = "developer"
+os = "ubuntu"
+os_version = "24.04"
+
+[plugins]
+enable = []
+`
+}
+
+func loadWS(t *testing.T, body string) error {
+	t.Helper()
+	tmp := t.TempDir() + "/ws.toml"
+	require.NoError(t, os.WriteFile(tmp, []byte(body), 0o600))
+	_, err := config.LoadWorkspace(tmp)
+	return err
+}
+
+func TestValidate_ContainerInvalidServiceName(t *testing.T) {
+	t.Parallel()
+	body := strings.ReplaceAll(minimalWorkspace(), `service_name = "dev"`, `service_name = "Dev"`)
+	err := loadWS(t, body)
+	require.Error(t, err)
+	v, ok := config.AsValidationError(err)
+	require.True(t, ok)
+	require.Contains(t, v.Errors[0].Message, "service_name does not match")
+}
+
+// TestValidate_LegacyUbuntuVersionRejected pins the migration error message
+// so the rewrite snippet does not silently regress. A workspace.toml that
+// still uses the pre-multi-OS `ubuntu_version = "..."` field must emit a
+// container.ubuntu_version error containing both the new field names
+// (os / os_version) and the value the user had set, so they can copy the
+// snippet straight from the error and re-run setup.
+func TestValidate_LegacyUbuntuVersionRejected(t *testing.T) {
+	t.Parallel()
+	body := strings.ReplaceAll(
+		minimalWorkspace(),
+		`os = "ubuntu"
+os_version = "24.04"`,
+		`ubuntu_version = "24.04"`,
+	)
+	err := loadWS(t, body)
+	require.Error(t, err)
+	v, ok := config.AsValidationError(err)
+	require.True(t, ok)
+	// Locate the deprecation entry by Loc; relying on Errors[0] would couple
+	// the test to the order in which container.validate emits errors.
+	var got *config.FieldError
+	for i := range v.Errors {
+		if len(v.Errors[i].Loc) > 0 && v.Errors[i].Loc[len(v.Errors[i].Loc)-1] == "ubuntu_version" {
+			got = &v.Errors[i]
+			break
+		}
+	}
+	require.NotNilf(t, got, "no ubuntu_version error in: %v", v.Errors)
+	for _, want := range []string{
+		"ubuntu_version is no longer supported",
+		`os = "ubuntu"`,
+		`os_version = "24.04"`,
+	} {
+		require.Containsf(t, got.Message, want, "migration error must contain %q", want)
+	}
+}
+
+// TestValidate_LegacyUbuntuVersionSuppressesOsErrors verifies that when the
+// legacy ubuntu_version field is present (and os/os_version are therefore
+// missing), the migration error is the only container-OS error emitted.
+// Previously validateOs ran unconditionally and stacked "os is required" /
+// "os_version is required" pairs on top of the migration snippet, burying
+// the actionable rewrite the user actually needs.
+func TestValidate_LegacyUbuntuVersionSuppressesOsErrors(t *testing.T) {
+	t.Parallel()
+	body := strings.ReplaceAll(
+		minimalWorkspace(),
+		`os = "ubuntu"
+os_version = "24.04"`,
+		`ubuntu_version = "24.04"`,
+	)
+	err := loadWS(t, body)
+	require.Error(t, err)
+	v, ok := config.AsValidationError(err)
+	require.True(t, ok)
+	for i := range v.Errors {
+		loc := v.Errors[i].Loc
+		if len(loc) == 0 {
+			continue
+		}
+		last := loc[len(loc)-1]
+		if last == "os" || last == "os_version" {
+			t.Errorf("validateOs error must be suppressed while ubuntu_version is set, got %v: %q", loc, v.Errors[i].Message)
+		}
+	}
+}
+
+func TestValidate_DuplicatePlugins(t *testing.T) {
+	t.Parallel()
+	body := strings.ReplaceAll(minimalWorkspace(), "enable = []", `enable = ["go", "go"]`)
+	err := loadWS(t, body)
+	require.Error(t, err)
+	v, _ := config.AsValidationError(err)
+	require.Contains(t, v.Error(), "duplicate")
+}
+
+func TestValidate_InvalidEnvKey(t *testing.T) {
+	t.Parallel()
+	err := loadWS(t, minimalWorkspace()+"\n[env]\n\"123BAD\" = \"v\"\n")
+	require.Error(t, err)
+}
+
+func TestValidate_ShellInvalidAliasKey(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() + "\n[container.shell]\naliases = { \"$bad$\" = \"ls\" }\nenv = {}\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+}
+
+func TestValidate_LegacyShellSectionGivesMigrationHint(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() + "\n[shell]\naliases = { ll = \"ls -lah\" }\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "[container.shell]")
+}
+
+func TestValidate_ContainerShellInvalidDefault(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() + "\n[container.shell]\ndefault = \"nu\"\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "default")
+}
+
+func TestValidate_ContainerShellAcceptsFish(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() + "\n[container.shell]\ndefault = \"fish\"\nenv = { EDITOR = \"vim\" }\n"
+	err := loadWS(t, body)
+	require.NoError(t, err)
+}
+
+func TestValidate_SidecarCollidesWithMain(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() + "\n[services.dev]\nimage = \"redis:7\"\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "collides")
+}
+
+func TestValidate_DependsOnMain(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() + "\n[services.redis]\nimage = \"redis:7\"\ndepends_on = [\"dev\"]\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "main service")
+}
+
+func TestValidate_DependsOnUndefined(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() + "\n[services.redis]\nimage = \"redis:7\"\ndepends_on = [\"ghost\"]\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "undefined sidecar")
+}
+
+func TestValidate_DependsOnSelf(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() + "\n[services.redis]\nimage = \"redis:7\"\ndepends_on = [\"redis\"]\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "references itself")
+}
+
+func TestValidate_ReservedLocalVolume(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() + "\n[services.redis]\nimage = \"redis:7\"\nvolumes = { local = \"/data\" }\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), `reserved name "local"`)
+}
+
+func TestValidate_RepoPathDotDot(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[repositories]\nclone = [{ url = \"https://x/y/foo.git\", path = \"foo/../bar\" }]\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "`..` segments")
+}
+
+func TestValidate_RepoPathBadCharacter(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[repositories]\nclone = [{ url = \"https://x/y/foo.git\", path = \"with space\" }]\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), `[A-Za-z0-9_./-]`)
+}
+
+func TestValidate_RepoPathDotDotSubstring(t *testing.T) {
+	t.Parallel()
+	// "foo..bar" contains ".." as a substring but not as a path segment,
+	// so it must pass validation (no path traversal risk).
+	body := minimalWorkspace() +
+		"\n[repositories]\nclone = [{ url = \"https://x/y/foo.git\", path = \"foo..bar\" }]\n"
+	err := loadWS(t, body)
+	require.NoError(t, err)
+}
+
+func TestValidate_RepoWorkspaceDocker(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() + "\n[repositories]\nclone = [{ url = \"https://x/y/workspace-docker.git\" }]\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "workspace-docker itself")
+}
+
+func TestValidate_RepoDuplicatePath(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() + "\n[repositories]\nclone = [\n" +
+		"  { url = \"https://x/y/foo.git\" },\n" +
+		"  { url = \"https://other/foo.git\" },\n]\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "collides with entry")
+}
+
+func TestValidate_RepoDuplicateURL(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() + "\n[repositories]\nclone = [\n" +
+		"  { url = \"https://x/y/foo.git\", path = \"a\" },\n" +
+		"  { url = \"https://x/y/foo.git\", path = \"b\" },\n]\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "duplicates entry")
+}
+
+func TestValidate_UnresolvableRepoPath(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[repositories]\nclone = [{ url = \"?\", path = \"libs/\" }]\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "cannot derive target path")
+}
+
+func TestValidate_SidecarInvalidEnvKey(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() + "\n[services.redis]\nimage = \"redis:7\"\nenv = { \"1BAD\" = \"v\" }\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+}
+
+func TestValidate_SidecarDuplicateDepends(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[services.a]\nimage = \"x:1\"\n" +
+		"\n[services.b]\nimage = \"y:1\"\ndepends_on = [\"a\", \"a\"]\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+}
+
+func TestValidate_HomeFilesValid(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[home_files]\nfiles = [\".claude.json\", \".gemini/oauth_creds.json\"]\n"
+	err := loadWS(t, body)
+	require.NoError(t, err)
+}
+
+func TestValidate_HomeFilesRejectsAbsolute(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() + "\n[home_files]\nfiles = [\"/etc/passwd\"]\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "no leading /")
+}
+
+func TestValidate_HomeFilesRejectsTilde(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() + "\n[home_files]\nfiles = [\"~/.claude.json\"]\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "~")
+}
+
+func TestValidate_HomeFilesRejectsDotDot(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() + "\n[home_files]\nfiles = [\"../escape\"]\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "../")
+}
+
+func TestValidate_HomeFilesRejectsDotDotSegment(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() + "\n[home_files]\nfiles = [\".cfg/../escape\"]\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "`..`")
+}
+
+func TestValidate_HomeFilesRejectsTrailingSlash(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() + "\n[home_files]\nfiles = [\".config/\"]\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "files only")
+}
+
+func TestValidate_HomeFilesRejectsEmpty(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() + "\n[home_files]\nfiles = [\"\"]\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "must not be empty")
+}
+
+func TestValidate_HomeFilesRejectsColon(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() + "\n[home_files]\nfiles = [\".cache/foo:bar.json\"]\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "`:`")
+}
+
+func TestValidate_HomeFilesRejectsDuplicate(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[home_files]\nfiles = [\".claude.json\", \".claude.json\"]\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "duplicate")
+}
+
+func TestValidate_ContainerHostsAcceptsValid(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[container.hosts]\n\"db.local\" = \"host-gateway\"\n\"corp.example\" = \"10.0.0.42\"\n"
+	require.NoError(t, loadWS(t, body))
+}
+
+func TestValidate_ContainerHostsRejectsBadHostname(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[container.hosts]\n\"bad host name\" = \"127.0.0.1\"\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "hostname does not match")
+}
+
+func TestValidate_ContainerHostsRejectsBadIP(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[container.hosts]\n\"host.local\" = \"not-an-ip\"\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "host-gateway")
+}
+
+func TestValidate_ContainerDNSAcceptsValid(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[container.dns]\nservers = [\"10.0.0.53\", \"1.1.1.1\"]\nsearch = [\"corp.example.com\"]\n"
+	require.NoError(t, loadWS(t, body))
+}
+
+func TestValidate_ContainerDNSRejectsBadServer(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[container.dns]\nservers = [\"not-an-ip\"]\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "valid IPv4/IPv6")
+}
+
+func TestValidate_ContainerDNSRejectsDuplicate(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[container.dns]\nservers = [\"1.1.1.1\", \"1.1.1.1\"]\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "duplicate")
+}
+
+func TestValidate_ContainerSysctlsAcceptsIntAndString(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[container.sysctls]\n\"vm.max_map_count\" = 262144\n\"kernel.shmmax\" = \"68719476736\"\n"
+	require.NoError(t, loadWS(t, body))
+}
+
+func TestValidate_ContainerSysctlsRejectsBadKey(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[container.sysctls]\n\"BadKey\" = 1\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "sysctl key does not match")
+}
+
+func TestValidate_ContainerSysctlsRejectsBoolValue(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[container.sysctls]\n\"vm.swappiness\" = true\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "must be int or string")
+}
+
+func TestValidate_ContainerCapabilitiesAcceptsValid(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[container.capabilities]\nadd = [\"SYS_PTRACE\"]\ndrop = [\"AUDIT_WRITE\"]\n"
+	require.NoError(t, loadWS(t, body))
+}
+
+func TestValidate_ContainerCapabilitiesRejectsLowercase(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[container.capabilities]\nadd = [\"sys_ptrace\"]\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "capability does not match")
+}
+
+func TestValidate_ContainerCapabilitiesRejectsAddDropConflict(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[container.capabilities]\nadd = [\"NET_ADMIN\"]\ndrop = [\"NET_ADMIN\"]\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "appears in both add and drop")
+}
+
+func TestValidate_ContainerSecurityOptAcceptsValid(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[container.security_opt]\nseccomp = \"unconfined\"\nno_new_privileges = true\n"
+	require.NoError(t, loadWS(t, body))
+}
+
+func TestValidate_ContainerSecurityOptRejectsEmptySeccomp(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[container.security_opt]\nseccomp = \"\"\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "seccomp must not be empty")
+}
+
+func TestValidate_ContainerSkelAcceptsValid(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[[container.skel]]\nsource = \"config/dotfiles/.editorconfig\"\ntarget = \".editorconfig\"\n"
+	require.NoError(t, loadWS(t, body))
+}
+
+func TestValidate_ContainerSkelRejectsAbsoluteSource(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[[container.skel]]\nsource = \"/etc/passwd\"\ntarget = \".passwd\"\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "no leading /")
+}
+
+func TestValidate_ContainerSkelRejectsTrailingSlashTarget(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[[container.skel]]\nsource = \"a\"\ntarget = \".cfg/\"\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "files only")
+}
+
+func TestValidate_ContainerSkelRejectsDotDot(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[[container.skel]]\nsource = \"a/../b\"\ntarget = \".x\"\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "`..`")
+}
+
+func TestValidate_ContainerSkelRejectsLeadingDash(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[[container.skel]]\nsource = \"-from=builder/x\"\ntarget = \".x\"\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Dockerfile flag")
+}
+
+func TestValidate_ContainerSkelRejectsWhitespace(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[[container.skel]]\nsource = \"a b\"\ntarget = \".x\"\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "whitespace or control")
+}
+
+func TestValidate_ContainerHostsRejectsUnderscore(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[container.hosts]\n\"db_local\" = \"127.0.0.1\"\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "hostname does not match")
+}
+
+func TestValidate_ContainerHostsRejectsDoubleDot(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[container.hosts]\n\"db..local\" = \"127.0.0.1\"\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "hostname does not match")
+}
+
+func TestValidate_ContainerSkelRejectsDuplicateTarget(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[[container.skel]]\nsource = \"a\"\ntarget = \".x\"\n" +
+		"\n[[container.skel]]\nsource = \"b\"\ntarget = \".x\"\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "duplicates entry")
+}
+
+func TestValidate_AptMirrorAcceptsHTTP(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[apt.mirror]\nurl = \"http://jp.archive.ubuntu.com/ubuntu/\"\n"
+	require.NoError(t, loadWS(t, body))
+}
+
+func TestValidate_AptMirrorRejectsBadScheme(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[apt.mirror]\nurl = \"ftp://example.com\"\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "must start with http")
+}
+
+func TestValidate_AptMirrorRejectsSedDelimiter(t *testing.T) {
+	t.Parallel()
+	for _, bad := range []string{
+		"http://example.com/x|y",
+		"http://example.com/x'y",
+		"http://example.com/x&y",
+		"http://example.com/x\\y",
+		"http://example.com/x y",
+		"http://example.com/x\ty",
+		"http://example.com/x\ny",
+	} {
+		bad := bad
+		t.Run(bad, func(t *testing.T) {
+			t.Parallel()
+			body := minimalWorkspace() +
+				"\n[apt.mirror]\nurl = " + tomlString(bad) + "\n"
+			err := loadWS(t, body)
+			require.Error(t, err, "expected %q to be rejected", bad)
+			require.Contains(t, err.Error(), "url must not contain")
+		})
+	}
+}
+
+// tomlString escapes s for embedding inside a TOML basic-string literal so
+// the parser can round-trip control characters that we want to send through
+// validation.
+func tomlString(s string) string {
+	var b strings.Builder
+	b.WriteByte('"')
+	for _, r := range s {
+		switch r {
+		case '\\':
+			b.WriteString(`\\`)
+		case '"':
+			b.WriteString(`\"`)
+		case '\n':
+			b.WriteString(`\n`)
+		case '\t':
+			b.WriteString(`\t`)
+		case '\r':
+			b.WriteString(`\r`)
+		default:
+			b.WriteRune(r)
+		}
+	}
+	b.WriteByte('"')
+	return b.String()
+}
+
+func TestValidate_AptProxyRejectsBadScheme(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[apt.proxy]\nhttp = \"socks5://x\"\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "must start with http")
+}
+
+func TestValidate_AptSourcesAcceptsValid(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[[apt.sources]]\nname = \"fish-stable\"\nsuite = \"noble\"\ncomponents = [\"main\"]\n" +
+		"url = \"https://example.com/repo/\"\nkey_url = \"https://example.com/repo/key.gpg\"\n"
+	require.NoError(t, loadWS(t, body))
+}
+
+func TestValidate_AptSourcesRejectsBadName(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[[apt.sources]]\nname = \"BadName\"\nsuite = \"noble\"\ncomponents = [\"main\"]\n" +
+		"url = \"https://example.com/repo/\"\nkey_url = \"https://example.com/repo/key.gpg\"\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "name does not match")
+}
+
+func TestValidate_AptSourcesRejectsEmptyComponents(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[[apt.sources]]\nname = \"foo\"\nsuite = \"noble\"\ncomponents = []\n" +
+		"url = \"https://example.com/repo/\"\nkey_url = \"https://example.com/repo/key.gpg\"\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "components must not be empty")
+}
+
+func TestValidate_SkelEmptySource(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[[container.skel]]\nsource = \"\"\ntarget = \".cfg\"\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "must not be empty")
+}
+
+func TestValidate_SkelTilde(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[[container.skel]]\nsource = \"~/foo\"\ntarget = \".cfg\"\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "must not start with ~")
+}
+
+func TestValidate_SkelColon(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[[container.skel]]\nsource = \"a:b\"\ntarget = \".cfg\"\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "must not contain `:`")
+}
+
+func TestValidate_SkelWhitespace(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[[container.skel]]\nsource = \"a b\"\ntarget = \".cfg\"\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "whitespace")
+}
+
+func TestValidate_LocaleInvalid(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[locale]\nlang = \"NotALocale\"\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "lang does not match")
+}
+
+func TestValidate_LocaleAccepts(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[locale]\nlang = \"en_US.UTF-8\"\n"
+	require.NoError(t, loadWS(t, body))
+}
+
+func TestValidate_GitIdentityInvalidEmail(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[git]\nuser_email = \"not an email\"\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "user_email does not match")
+}
+
+func TestValidate_GitIdentityAccepts(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[git]\nuser_email = \"dev@example.com\"\n"
+	require.NoError(t, loadWS(t, body))
+}
+
+func TestValidate_SecurityOptSeccompEmpty(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[container.security_opt]\nseccomp = \"\"\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "seccomp must not be empty")
+}
+
+func TestValidate_SecurityOptApparmorEmpty(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[container.security_opt]\napparmor = \"\"\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "apparmor must not be empty")
+}
+
+func TestValidate_AptProxyHTTPSBadScheme(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[apt.proxy]\nhttps = \"file:///etc\"\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "https must start with http")
+}
+
+func TestValidate_MountEmptySource(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[[mounts]]\nsource = \"\"\ntarget = \"/abs/path\"\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "source must not be empty")
+}
+
+func TestValidate_MountRelativeTarget(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[[mounts]]\nsource = \"./local/path\"\ntarget = \"relative/path\"\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "target must be an absolute path")
+}
+
+func TestValidate_MountAccepts(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[[mounts]]\nsource = \"./local\"\ntarget = \"/etc/profile\"\n"
+	require.NoError(t, loadWS(t, body))
+}
+
+func TestValidate_AptSourcesBadComponent(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[[apt.sources]]\nname = \"foo\"\nsuite = \"noble\"\ncomponents = [\"BAD comp\"]\n" +
+		"url = \"https://example.com/repo/\"\nkey_url = \"https://example.com/repo/key.gpg\"\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "component does not match")
+}
+
+func TestValidate_AptSourcesBadURL(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[[apt.sources]]\nname = \"foo\"\nsuite = \"noble\"\ncomponents = [\"main\"]\n" +
+		"url = \"ftp://bad/url\"\nkey_url = \"https://example.com/repo/key.gpg\"\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "url must start with http")
+}
+
+func TestValidate_AptSourcesBadKeyURL(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[[apt.sources]]\nname = \"foo\"\nsuite = \"noble\"\ncomponents = [\"main\"]\n" +
+		"url = \"https://example.com/repo/\"\nkey_url = \"ftp://bad\"\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "key_url must start with http")
+}
+
+func TestValidate_AptSourcesBadArch(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[[apt.sources]]\nname = \"foo\"\nsuite = \"noble\"\ncomponents = [\"main\"]\n" +
+		"url = \"https://example.com/repo/\"\nkey_url = \"https://example.com/repo/key.gpg\"\n" +
+		"arch = \"riscv-32\"\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "arch must be")
+}
+
+func TestValidate_AptSourcesDuplicateNames(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[[apt.sources]]\nname = \"foo\"\nsuite = \"noble\"\ncomponents = [\"main\"]\n" +
+		"url = \"https://example.com/repo/\"\nkey_url = \"https://example.com/repo/key.gpg\"\n" +
+		"\n[[apt.sources]]\nname = \"foo\"\nsuite = \"noble\"\ncomponents = [\"main\"]\n" +
+		"url = \"https://example.com/repo/\"\nkey_url = \"https://example.com/repo/key.gpg\"\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "duplicates entry")
+}
+
+func TestValidate_PluginsBadIDChar(t *testing.T) {
+	t.Parallel()
+	body := strings.ReplaceAll(minimalWorkspace(), "enable = []", `enable = ["BAD/id"]`)
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "plugin id does not match")
+}
+
+func TestValidate_PluginVersionPinEmpty(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[plugins.versions.go]\npin = \"\"\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "pin must not be empty")
+}
+
+func TestValidate_PluginVersionBadChecksum(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[plugins.versions.go]\npin = \"1.23.4\"\nchecksum_amd64 = \"NOT-A-HEX\"\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "checksum_amd64")
+}
+
+func TestValidate_PortsOutOfRange(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[ports]\nforward = [70000]\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+}
+
+func TestValidate_SidecarRestartInvalid(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[services.app]\nimage = \"nginx\"\nrestart = \"sometimes\"\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+}
+
+func TestValidate_SidecarRestartAccepted(t *testing.T) {
+	t.Parallel()
+	for _, v := range []string{"no", "always", "on-failure", "unless-stopped"} {
+		body := minimalWorkspace() +
+			"\n[services.app]\nimage = \"nginx\"\nrestart = \"" + v + "\"\n"
+		if err := loadWS(t, body); err != nil {
+			t.Errorf("restart=%q err = %v", v, err)
+		}
+	}
+}
+
+func TestValidate_SidecarMountInvalid(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[services.app]\nimage = \"nginx\"\n" +
+		"\n[[services.app.mounts]]\nsource = \"\"\ntarget = \"relative/path\"\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "source must not be empty")
+}

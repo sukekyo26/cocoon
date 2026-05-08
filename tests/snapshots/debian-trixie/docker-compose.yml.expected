@@ -1,0 +1,36 @@
+# Auto-generated from workspace.toml — do not edit directly.
+services:
+  ci-debian-trixie:
+    container_name: "${CONTAINER_SERVICE_NAME}"
+    build:
+      context: .
+      args:
+        - "OS_IMAGE=${OS_IMAGE}"
+        - "OS_VERSION=${OS_VERSION}"
+        - "USERNAME=${USERNAME}"
+        - "UID=${UID}"
+        - "GID=${GID}"
+        - "DOCKER_GID=${DOCKER_GID}"
+    user: "${UID}:${GID}"
+    environment:
+      - "CONTAINER_SERVICE_NAME=${CONTAINER_SERVICE_NAME}"
+    volumes:
+      - "..:/home/${USERNAME}/workspace"
+      - "local:/home/${USERNAME}/.local"
+      - "go:/home/${USERNAME}/go"
+    ports:
+      - "3000:3000"
+    tty: true
+    init: true
+    stop_grace_period: 30s
+    shm_size: 1gb
+    pids_limit: 4096
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 1048576
+volumes:
+  local:
+    name: "${COMPOSE_PROJECT_NAME}_${CONTAINER_SERVICE_NAME}_local"
+  go:
+    name: "${COMPOSE_PROJECT_NAME}_${CONTAINER_SERVICE_NAME}_go"

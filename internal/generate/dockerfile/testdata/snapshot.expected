@@ -1,0 +1,271 @@
+# syntax=docker/dockerfile:1.7
+# Auto-generated from workspace.toml — do not edit directly.
+ARG OS_IMAGE=ubuntu
+ARG OS_VERSION=24.04
+FROM ${OS_IMAGE}:${OS_VERSION}
+
+ARG USERNAME
+ARG UID
+ARG GID
+
+# Rewrite upstream apt archive URLs to the configured [apt.mirror].url
+RUN sed -i \
+    -e 's|http://archive.ubuntu.com/ubuntu/|http://jp.archive.ubuntu.com/ubuntu/|g' \
+    -e 's|http://security.ubuntu.com/ubuntu/|http://jp.archive.ubuntu.com/ubuntu/|g' \
+    -e 's|http://ports.ubuntu.com/ubuntu-ports/|http://jp.archive.ubuntu.com/ubuntu/|g' \
+    /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources 2>/dev/null || true
+
+# Configure apt HTTP(S) proxy from [apt.proxy]
+RUN { echo 'Acquire::http::Proxy "http://proxy.corp:8080";'; echo 'Acquire::https::Proxy "http://proxy.corp:8080";'; } > /etc/apt/apt.conf.d/95proxy
+
+# Pre-install ca-certificates from the default HTTP archive so the
+# subsequent HTTPS [apt.mirror] can complete its TLS handshake.
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates
+
+# Add third-party apt repositories from [[apt.sources]]
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        ca-certificates curl gnupg && \
+    install -d -m 0755 /etc/apt/keyrings && \
+    curl -fsSL https://download.opensuse.org/repositories/shells:fish:release:3/xUbuntu_24.04/Release.key | gpg --dearmor -o /etc/apt/keyrings/fish-stable.gpg && \
+    echo 'deb [signed-by=/etc/apt/keyrings/fish-stable.gpg] https://download.opensuse.org/repositories/shells:fish:release:3/xUbuntu_24.04/ noble main' > /etc/apt/sources.list.d/fish-stable.list
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    rm -f /etc/apt/apt.conf.d/docker-clean && \
+    apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    curl \
+    wget \
+    ca-certificates \
+    gnupg \
+    openssh-client \
+    git \
+    make \
+    sudo \
+    vim \
+    nano \
+    zip \
+    unzip \
+    tar \
+    gzip \
+    bzip2 \
+    xz-utils \
+    tree \
+    jq \
+    bc \
+    less \
+    rsync \
+    procps \
+    iproute2 \
+    dnsutils \
+    iputils-ping \
+    net-tools \
+    shellcheck \
+    uuid-runtime \
+    file \
+    patch \
+    gettext-base \
+    fzf \
+    bat \
+    ripgrep \
+    python3 \
+    python3-pip \
+    python3-venv \
+    locales \
+    bash-completion \
+    build-essential \
+    libssl-dev \
+    zlib1g-dev \
+    libbz2-dev \
+    libreadline-dev \
+    libsqlite3-dev \
+    libncursesw5-dev \
+    tk-dev \
+    libxml2-dev \
+    libxmlsec1-dev \
+    libffi-dev \
+    liblzma-dev \
+    && locale-gen en_US.UTF-8 \
+    && rm -rf /tmp/* /var/tmp/*
+
+# Dotfiles seeded into the new user's home via /etc/skel
+COPY config/shell_custom.example /etc/skel/.shell_skel_example
+
+RUN existing_user="$(getent passwd ${UID} | cut -d: -f1)" && \
+    if [ -n "$existing_user" ] && [ "$existing_user" != "${USERNAME}" ]; then \
+        userdel -r "$existing_user" 2>/dev/null || true; \
+    fi && \
+    existing_group="$(getent group ${GID} | cut -d: -f1)" && \
+    if [ -n "$existing_group" ] && [ "$existing_group" != "${USERNAME}" ]; then \
+        groupdel "$existing_group" 2>/dev/null || true; \
+    fi && \
+    groupadd -g ${GID} ${USERNAME} && \
+    useradd -m -s /bin/bash -u ${UID} -g ${GID} ${USERNAME} && \
+    usermod -aG sudo ${USERNAME} && \
+    echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${USERNAME} && \
+    chmod 0440 /etc/sudoers.d/${USERNAME}
+
+USER ${USERNAME}
+WORKDIR /home/${USERNAME}
+
+# Set locale environment variables
+ENV LANG=en_US.UTF-8
+ENV LANGUAGE=en_US:en
+ENV LC_ALL=en_US.UTF-8
+
+# Ensure the active login shell's rc file exists before any later RUN
+# (plugin install scripts, cert env exports, completion init) appends to it
+# via >> "$RC_FILE". fish in particular keeps its config under
+# ~/.config/fish/, a path useradd does not pre-create.
+RUN mkdir -p "$(dirname "$HOME/.bashrc")" && touch "$HOME/.bashrc"
+
+# Enable bash completion
+RUN echo 'if [ -f /usr/share/bash-completion/bash_completion ]; then' >> "$HOME/.bashrc" && \
+    echo '  . /usr/share/bash-completion/bash_completion' >> "$HOME/.bashrc" && \
+    echo 'fi' >> "$HOME/.bashrc"
+
+# Prepare volume mount directories with correct ownership
+USER root
+RUN mkdir -p /home/${USERNAME}/.aws /home/${USERNAME}/.cargo /home/${USERNAME}/.claude /home/${USERNAME}/.config /home/${USERNAME}/.copilot /home/${USERNAME}/.deno /home/${USERNAME}/.proto /home/${USERNAME}/.rustup /home/${USERNAME}/go && \
+    chown ${USERNAME}:${USERNAME} /home/${USERNAME}/.aws /home/${USERNAME}/.cargo /home/${USERNAME}/.claude /home/${USERNAME}/.config /home/${USERNAME}/.copilot /home/${USERNAME}/.deno /home/${USERNAME}/.proto /home/${USERNAME}/.rustup /home/${USERNAME}/go
+# Install Docker CLI
+ARG DOCKER_GID
+RUN --mount=type=bind,source=plugins/docker-cli,target=/tmp/plugin \
+    RC_FILE="$HOME/.bashrc" \
+    RC_SYNTAX="posix" \
+    LOGIN_SHELL="bash" \
+    DOCKER_GID="${DOCKER_GID}" \
+    bash /tmp/plugin/install.sh
+# Install GitHub CLI
+RUN --mount=type=bind,source=plugins/github-cli,target=/tmp/plugin \
+    RC_FILE="$HOME/.bashrc" \
+    RC_SYNTAX="posix" \
+    LOGIN_SHELL="bash" \
+    bash /tmp/plugin/install.sh
+# Install Zig
+RUN --mount=type=bind,source=plugins/zig,target=/tmp/plugin \
+    RC_FILE="$HOME/.bashrc" \
+    RC_SYNTAX="posix" \
+    LOGIN_SHELL="bash" \
+    PIN="0.14.0" \
+    CHECKSUM_AMD64="" \
+    CHECKSUM_ARM64="" \
+    bash /tmp/plugin/install.sh
+# Install Go
+RUN --mount=type=bind,source=plugins/go,target=/tmp/plugin \
+    RC_FILE="$HOME/.bashrc" \
+    RC_SYNTAX="posix" \
+    LOGIN_SHELL="bash" \
+    PIN="1.26.1" \
+    CHECKSUM_AMD64="" \
+    CHECKSUM_ARM64="" \
+    bash /tmp/plugin/install.sh
+ENV GOPATH="/home/${USERNAME}/go"
+ENV PATH="/usr/local/go/bin:$GOPATH/bin:$PATH"
+# Install lazygit
+RUN --mount=type=bind,source=plugins/lazygit,target=/tmp/plugin \
+    RC_FILE="$HOME/.bashrc" \
+    RC_SYNTAX="posix" \
+    LOGIN_SHELL="bash" \
+    PIN="0.44.1" \
+    CHECKSUM_AMD64="" \
+    CHECKSUM_ARM64="" \
+    bash /tmp/plugin/install.sh
+USER ${USERNAME}
+# Install Custom PS1
+RUN --mount=type=bind,source=plugins/custom-ps1,target=/tmp/plugin \
+    RC_FILE="$HOME/.bashrc" \
+    RC_SYNTAX="posix" \
+    LOGIN_SHELL="bash" \
+    bash /tmp/plugin/install.sh
+# Install proto
+RUN --mount=type=bind,source=plugins/proto,target=/tmp/plugin \
+    RC_FILE="$HOME/.bashrc" \
+    RC_SYNTAX="posix" \
+    LOGIN_SHELL="bash" \
+    PIN="0.46.1" \
+    CHECKSUM_AMD64="" \
+    CHECKSUM_ARM64="" \
+    bash /tmp/plugin/install.sh
+ENV PROTO_HOME="/home/${USERNAME}/.proto"
+ENV PATH="$PROTO_HOME/shims:$PROTO_HOME/bin:$PATH"
+# Install AWS CLI v2
+RUN --mount=type=bind,source=plugins/aws-cli,target=/tmp/plugin \
+    RC_FILE="$HOME/.bashrc" \
+    RC_SYNTAX="posix" \
+    LOGIN_SHELL="bash" \
+    bash /tmp/plugin/install.sh
+# Install AWS SAM CLI
+RUN --mount=type=bind,source=plugins/aws-sam-cli,target=/tmp/plugin \
+    RC_FILE="$HOME/.bashrc" \
+    RC_SYNTAX="posix" \
+    LOGIN_SHELL="bash" \
+    bash /tmp/plugin/install.sh
+# Install GitHub Copilot CLI
+RUN --mount=type=bind,source=plugins/copilot-cli,target=/tmp/plugin \
+    RC_FILE="$HOME/.bashrc" \
+    RC_SYNTAX="posix" \
+    LOGIN_SHELL="bash" \
+    PIN="0.0.369" \
+    CHECKSUM_AMD64="" \
+    CHECKSUM_ARM64="" \
+    bash /tmp/plugin/install.sh
+# Install Claude Code
+RUN --mount=type=bind,source=plugins/claude-code,target=/tmp/plugin \
+    RC_FILE="$HOME/.bashrc" \
+    RC_SYNTAX="posix" \
+    LOGIN_SHELL="bash" \
+    bash /tmp/plugin/install.sh
+# Install uv
+RUN --mount=type=bind,source=plugins/uv,target=/tmp/plugin \
+    RC_FILE="$HOME/.bashrc" \
+    RC_SYNTAX="posix" \
+    LOGIN_SHELL="bash" \
+    PIN="0.5.7" \
+    CHECKSUM_AMD64="" \
+    CHECKSUM_ARM64="" \
+    bash /tmp/plugin/install.sh
+ENV PATH="/home/${USERNAME}/.local/bin:$PATH"
+# Install Rust
+RUN --mount=type=bind,source=plugins/rust,target=/tmp/plugin \
+    RC_FILE="$HOME/.bashrc" \
+    RC_SYNTAX="posix" \
+    LOGIN_SHELL="bash" \
+    bash /tmp/plugin/install.sh
+ENV PATH="/home/${USERNAME}/.cargo/bin:$PATH"
+
+# Backup image-installed files for volume-mount resilience
+RUN if [ -d ~/.local ]; then cp -a ~/.local ~/.image-local; else mkdir -p ~/.image-local; fi
+
+# create volume mount directories for permission
+RUN mkdir -p ~/.local
+
+# Setup persistent shell history
+RUN echo 'export HISTFILE=~/.local/state/.bash_history_docker' >> "$HOME/.bashrc" && \
+    echo 'export HISTSIZE=10000' >> "$HOME/.bashrc" && \
+    echo 'export HISTFILESIZE=20000' >> "$HOME/.bashrc" && \
+    mkdir -p ~/.local/state && touch ~/.local/state/.bash_history_docker
+
+# Custom configuration file support (config/shell_custom and optional config/.bashrc_custom.generated)
+RUN echo '' >> "$HOME/.bashrc" && \
+    echo '# Load auto-generated shell config from [container.shell] of workspace.toml' >> "$HOME/.bashrc" && \
+    echo '[ -f "$HOME/workspace/cocoon/config/.bashrc_custom.generated" ] && . "$HOME/workspace/cocoon/config/.bashrc_custom.generated"' >> "$HOME/.bashrc" && \
+    echo '# Load user-editable custom configuration from config/shell_custom' >> "$HOME/.bashrc" && \
+    echo '[ -f "$HOME/workspace/cocoon/config/shell_custom" ] && . "$HOME/workspace/cocoon/config/shell_custom"' >> "$HOME/.bashrc"
+
+# Entrypoint: sync image files to volume-mounted ~/.local
+USER root
+COPY config/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+USER ${USERNAME}
+
+ENTRYPOINT ["docker-entrypoint.sh"]
+CMD ["sleep", "infinity"]
+
+WORKDIR /home/${USERNAME}/workspace

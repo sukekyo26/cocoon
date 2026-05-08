@@ -1,0 +1,12 @@
+# Auto-generated from workspace.toml — do not edit directly.
+services:
+  snapshot-test:
+    volumes:
+      - ..:/home/${USERNAME}/workspace:cached
+      - /var/run/docker.sock:/var/run/docker.sock
+
+    # GID is set automatically by setup-docker.sh
+    group_add:
+      - "${DOCKER_GID}"
+
+    command: sleep infinity

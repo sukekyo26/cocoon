@@ -1,0 +1,400 @@
+package generatecli_test
+
+import (
+	"bytes"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	generatecli "github.com/sukekyo26/cocoon/internal/cli/generate"
+)
+
+// TestRun_Variants exercises `wsd generate-all` end-to-end with a handful
+// of workspace.toml shapes and asserts substrings on the generated files.
+//
+// It replaces the bash integration tests previously living under:
+//   - tests/integration/generation/test_compose.sh
+//   - tests/integration/generation/test_devcontainer.sh
+//   - tests/integration/generation/test_dockerfile.sh
+//   - tests/integration/generation/test_generate_all.sh
+//   - tests/integration/test_pipeline.sh (the e2e portion)
+func TestRun_Variants(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := repoRoot(t)
+	pluginsDir := filepath.Join(repoRoot, "plugins")
+
+	type expect struct {
+		path           string   // relative to outDir
+		mustContain    []string // substrings that MUST appear
+		mustNotContain []string // substrings that MUST NOT appear
+	}
+
+	type tc struct {
+		name               string
+		workspace          string   // workspace.toml body
+		extras             []seed   // extra files to drop into outDir before run
+		useEmptyPluginsDir bool     // when true, create a fresh empty plugins/ under tempdir; certs probe uses dir(pluginsDir)
+		assert             []expect // post-run substring assertions
+	}
+
+	cases := []tc{
+		{
+			name: "all_artifacts_no_plugins",
+			workspace: tomlBase("svc-all", "alice", nil) + `
+[apt]
+packages = []
+`,
+			assert: []expect{
+				{path: "docker-compose.yml", mustContain: []string{
+					"svc-all", "init: true", "stop_grace_period: 30s",
+					"shm_size: 1gb", "pids_limit: 4096",
+				}, mustNotContain: []string{"{{"}},
+				{path: "Dockerfile", mustContain: []string{
+					"# syntax=docker/dockerfile:1.7",
+					"type=cache,target=/var/cache/apt",
+					"type=cache,target=/var/lib/apt",
+					"ENTRYPOINT", "CMD",
+				}, mustNotContain: []string{
+					"{{", "Install Docker CLI", "Install AWS CLI", "Install Zig",
+					"DOCKER_GID", "apt-get clean",
+				}},
+				{path: ".devcontainer/devcontainer.json", mustContain: []string{"svc-all", "alice"}, mustNotContain: []string{"{{"}},
+				{path: ".devcontainer/docker-compose.yml", mustContain: []string{"svc-all"}, mustNotContain: []string{"{{"}},
+				{path: "config/.bashrc_custom.generated", mustContain: nil, mustNotContain: []string{"{{"}},
+			},
+		},
+		{
+			name: "partial_plugins",
+			workspace: tomlBase("svc-partial", "bob", []string{"docker-cli", "github-cli"}) + `
+[apt]
+packages = []
+`,
+			assert: []expect{
+				{path: "Dockerfile", mustContain: []string{
+					"Docker CLI", "GitHub CLI",
+				}, mustNotContain: []string{
+					"{{", "Install AWS CLI", "Install AWS SAM CLI", "Install Zig",
+				}},
+				{path: "docker-compose.yml", mustContain: []string{"svc-partial"}},
+				{path: ".devcontainer/devcontainer.json", mustContain: []string{"svc-partial", "bob"}},
+			},
+		},
+		{
+			name: "apt_extra_packages_before_locale_gen",
+			workspace: tomlBase("svc-apt", "u", nil) + `
+[apt]
+packages = ["vim-nox", "tmux"]
+`,
+			assert: []expect{
+				{path: "Dockerfile", mustContain: []string{"vim-nox", "tmux", "locale-gen"}, mustNotContain: []string{"{{APT_EXTRA_PACKAGES}}"}},
+			},
+		},
+		{
+			name: "plugin_apt_packages_present_when_enabled",
+			workspace: tomlBase("svc-proto", "u", []string{"proto"}) + `
+[apt]
+packages = []
+`,
+			assert: []expect{
+				{path: "Dockerfile", mustContain: []string{"build-essential", "libssl-dev"}, mustNotContain: []string{"{{APT_PLUGIN_PACKAGES}}"}},
+			},
+		},
+		{
+			name: "plugin_apt_packages_absent_when_disabled",
+			workspace: tomlBase("svc-noproto", "u", nil) + `
+[apt]
+packages = []
+`,
+			assert: []expect{
+				{path: "Dockerfile", mustNotContain: []string{"build-essential", "libssl-dev", "lsb-release"}},
+			},
+		},
+		{
+			name: "locale_lang_override",
+			workspace: tomlBase("svc-loc", "u", nil) + `
+[apt]
+packages = []
+
+[locale]
+lang = "ja_JP.UTF-8"
+`,
+			assert: []expect{
+				{path: "Dockerfile", mustContain: []string{
+					"locale-gen en_US.UTF-8 ja_JP.UTF-8",
+					"ENV LANG=ja_JP.UTF-8",
+					"ENV LANGUAGE=ja_JP:en",
+					"ENV LC_ALL=ja_JP.UTF-8",
+				}},
+			},
+		},
+		{
+			name: "compose_extensions",
+			workspace: tomlBase("svc-ext", "u", nil) + `
+[apt]
+packages = []
+
+[container.resources]
+shm_size = "2gb"
+pids_limit = 8192
+stop_grace_period = "60s"
+cpus = 4.0
+memory = "8gb"
+nofile_soft = 131072
+
+[env]
+FOO = "bar"
+
+[[mounts]]
+source = "~/.gitconfig"
+target = "/home/u/.gitconfig"
+readonly = true
+
+[[mounts]]
+source = "/etc/corp-ca"
+target = "/usr/local/share/ca-certificates/corp"
+
+[locale]
+timezone = "Asia/Tokyo"
+`,
+			assert: []expect{
+				{path: "docker-compose.yml", mustContain: []string{
+					"FOO=bar", "TZ=Asia/Tokyo",
+					"shm_size: 2gb", "pids_limit: 8192", "stop_grace_period: 60s",
+					"cpus: 4.0", "mem_limit: 8gb", "soft: 131072",
+					".gitconfig:/home/u/.gitconfig:ro",
+					"/etc/corp-ca:/usr/local/share/ca-certificates/corp",
+				}},
+			},
+		},
+		{
+			name: "certificates_section",
+			workspace: tomlBase("svc-cert", "u", nil) + `
+[apt]
+packages = []
+`,
+			useEmptyPluginsDir: true,
+			extras:             []seed{{rel: "certs/test-ca.crt", body: "-----BEGIN CERTIFICATE-----\nMIIBoj\n-----END CERTIFICATE-----\n"}},
+			assert: []expect{
+				{path: "Dockerfile", mustContain: []string{
+					"COPY certs/test-ca.crt", "update-ca-certificates", "SSL_CERT_FILE",
+				}},
+			},
+		},
+	}
+
+	for _, c := range cases {
+		c := c
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+
+			work := t.TempDir()
+			pdir := pluginsDir
+			if c.useEmptyPluginsDir {
+				pdir = filepath.Join(work, "plugins")
+				if err := os.MkdirAll(pdir, 0o755); err != nil {
+					t.Fatalf("mkdir plugins: %v", err)
+				}
+			}
+			wsPath := filepath.Join(work, "workspace.toml")
+			if err := os.WriteFile(wsPath, []byte(c.workspace), 0o600); err != nil {
+				t.Fatalf("write workspace.toml: %v", err)
+			}
+			for _, s := range c.extras {
+				abs := filepath.Join(work, s.rel)
+				if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+					t.Fatalf("mkdir extras: %v", err)
+				}
+				if err := os.WriteFile(abs, []byte(s.body), 0o600); err != nil {
+					t.Fatalf("write extras: %v", err)
+				}
+			}
+
+			var out, errOut bytes.Buffer
+			cmd := generatecli.NewCommand(&out, &errOut)
+			cmd.SetArgs([]string{wsPath, pdir, work})
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("Run: %v\nstderr:\n%s", err, errOut.String())
+			}
+
+			for _, e := range c.assert {
+				body, err := os.ReadFile(filepath.Join(work, e.path))
+				if err != nil {
+					t.Fatalf("read %s: %v", e.path, err)
+				}
+				s := string(body)
+				for _, want := range e.mustContain {
+					if !strings.Contains(s, want) {
+						t.Errorf("%s missing %q\n--- got ---\n%s", e.path, want, s)
+					}
+				}
+				for _, bad := range e.mustNotContain {
+					if strings.Contains(s, bad) {
+						t.Errorf("%s must not contain %q\n--- got ---\n%s", e.path, bad, s)
+					}
+				}
+			}
+		})
+	}
+}
+
+// TestRun_PluginConflictPropagatesAsFailure exercises the conflict branch in
+// loadContext: plugin "a" declares "b" in metadata.conflicts.
+func TestRun_PluginConflictPropagatesAsFailure(t *testing.T) {
+	t.Parallel()
+	work := t.TempDir()
+
+	pluginsDir := filepath.Join(work, "plugins")
+	tomlBody := func(id, conflictsLine string) string {
+		return `
+[metadata]
+name = "` + id + `"
+description = "demo (https://example.com)"
+default = false
+` + conflictsLine + `
+
+[install]
+requires_root = false
+
+[version]
+version_capable = false
+`
+	}
+	for _, p := range []struct {
+		id, conflicts string
+	}{
+		{"a", `conflicts = ["b"]`},
+		{"b", ""},
+	} {
+		dir := filepath.Join(pluginsDir, p.id)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "plugin.toml"), []byte(tomlBody(p.id, p.conflicts)), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "install.sh"), []byte("#!/bin/sh\n"), 0o755); err != nil { //nolint:gosec
+			t.Fatal(err)
+		}
+	}
+
+	wsPath := filepath.Join(work, "workspace.toml")
+	body := `[container]
+service_name = "dev"
+username = "dev"
+os = "ubuntu"
+os_version = "24.04"
+
+[plugins]
+enable = ["a", "b"]
+`
+	if err := os.WriteFile(wsPath, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var out, errOut bytes.Buffer
+	cmd := generatecli.NewCommand(&out, &errOut)
+	cmd.SetArgs([]string{wsPath, pluginsDir, work})
+	if err := cmd.Execute(); err == nil {
+		t.Fatalf("expected conflict error, stderr=%q", errOut.String())
+	}
+}
+
+func TestRun_MissingPluginsDir(t *testing.T) {
+	t.Parallel()
+	work := t.TempDir()
+	wsPath := filepath.Join(work, "workspace.toml")
+	body := `[container]
+service_name = "dev"
+username = "dev"
+os = "ubuntu"
+os_version = "24.04"
+
+[plugins]
+enable = []
+`
+	if err := os.WriteFile(wsPath, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out, errOut bytes.Buffer
+	cmd := generatecli.NewCommand(&out, &errOut)
+	// Pluginsdir does not exist; LoadEnabled with empty enable list still
+	// succeeds, so this exercises the "no enabled plugins" no-op path.
+	cmd.SetArgs([]string{wsPath, filepath.Join(work, "no-such-plugins"), work})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("expected success with no enabled plugins, got %v", err)
+	}
+}
+
+// TestRun_BadTOMLFailsBeforeWriting verifies the generator surfaces an
+// error and does not produce any output file when workspace.toml is invalid.
+// Atomic placement (staging dir + rename) is the wrapper's responsibility,
+// covered by tests/integration/test_wrappers.sh.
+func TestRun_BadTOMLFailsBeforeWriting(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := repoRoot(t)
+	pluginsDir := filepath.Join(repoRoot, "plugins")
+
+	work := t.TempDir()
+	wsPath := filepath.Join(work, "workspace.toml")
+	// Missing required [container] section.
+	if err := os.WriteFile(wsPath, []byte("[plugins]\nenable = []\n"), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	var out, errOut bytes.Buffer
+	cmd := generatecli.NewCommand(&out, &errOut)
+	cmd.SetArgs([]string{wsPath, pluginsDir, work})
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatalf("expected error, got nil; stderr=%q", errOut.String())
+	}
+
+	for _, name := range []string{"Dockerfile", "docker-compose.yml"} {
+		if _, statErr := os.Stat(filepath.Join(work, name)); statErr == nil {
+			t.Errorf("%s should not have been written", name)
+		}
+	}
+}
+
+type seed struct {
+	rel  string
+	body string
+}
+
+func tomlBase(serviceName, username string, plugins []string) string {
+	var pluginsList strings.Builder
+	pluginsList.WriteString("[")
+	for i, p := range plugins {
+		if i > 0 {
+			pluginsList.WriteString(", ")
+		}
+		pluginsList.WriteString(`"`)
+		pluginsList.WriteString(p)
+		pluginsList.WriteString(`"`)
+	}
+	pluginsList.WriteString("]")
+
+	var b strings.Builder
+	b.WriteString("[container]\n")
+	b.WriteString(`service_name = "` + serviceName + "\"\n")
+	b.WriteString(`username = "` + username + "\"\n")
+	b.WriteString("os = \"ubuntu\"\n")
+	b.WriteString("os_version = \"24.04\"\n\n")
+	b.WriteString("[plugins]\n")
+	b.WriteString("enable = " + pluginsList.String() + "\n\n")
+	b.WriteString("[ports]\n")
+	b.WriteString("forward = []\n")
+	return b.String()
+}
+
+func repoRoot(t *testing.T) string {
+	t.Helper()
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	return filepath.Clean(filepath.Join(wd, "..", "..", ".."))
+}

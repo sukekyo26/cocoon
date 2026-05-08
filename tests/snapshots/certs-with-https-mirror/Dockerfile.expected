@@ -1,0 +1,158 @@
+# syntax=docker/dockerfile:1.7
+# Auto-generated from workspace.toml — do not edit directly.
+ARG OS_IMAGE=ubuntu
+ARG OS_VERSION=24.04
+FROM ${OS_IMAGE}:${OS_VERSION}
+
+ARG USERNAME
+ARG UID
+ARG GID
+
+# Install custom CA certificates (root stage; runs before any apt-get update so
+# HTTPS apt mirrors / sources signed by a corporate CA can complete TLS handshake).
+COPY certs/example-corp.crt /tmp/certs/example-corp.crt
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates && \
+    mkdir -p /usr/local/share/ca-certificates && \
+    cp /tmp/certs/example-corp.crt /usr/local/share/ca-certificates/example-corp.crt && \
+    update-ca-certificates && \
+    rm -rf /tmp/certs
+
+# Rewrite upstream apt archive URLs to the configured [apt.mirror].url
+RUN sed -i \
+    -e 's|http://archive.ubuntu.com/ubuntu/|https://archive.ubuntu.com/ubuntu/|g' \
+    -e 's|http://security.ubuntu.com/ubuntu/|https://archive.ubuntu.com/ubuntu/|g' \
+    -e 's|http://ports.ubuntu.com/ubuntu-ports/|https://archive.ubuntu.com/ubuntu/|g' \
+    /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources 2>/dev/null || true
+
+# Add third-party apt repositories from [[apt.sources]]
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        ca-certificates curl gnupg && \
+    install -d -m 0755 /etc/apt/keyrings && \
+    curl -fsSL https://apt.example.corp/keyring.gpg | gpg --dearmor -o /etc/apt/keyrings/example-corp.gpg && \
+    echo 'deb [signed-by=/etc/apt/keyrings/example-corp.gpg] https://apt.example.corp/ubuntu/ noble main' > /etc/apt/sources.list.d/example-corp.list
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    rm -f /etc/apt/apt.conf.d/docker-clean && \
+    apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    curl \
+    wget \
+    ca-certificates \
+    gnupg \
+    openssh-client \
+    git \
+    make \
+    sudo \
+    vim \
+    nano \
+    zip \
+    unzip \
+    tar \
+    gzip \
+    bzip2 \
+    xz-utils \
+    tree \
+    jq \
+    bc \
+    less \
+    rsync \
+    procps \
+    iproute2 \
+    dnsutils \
+    iputils-ping \
+    net-tools \
+    shellcheck \
+    uuid-runtime \
+    file \
+    patch \
+    gettext-base \
+    fzf \
+    bat \
+    ripgrep \
+    python3 \
+    python3-pip \
+    python3-venv \
+    locales \
+    bash-completion \
+    && locale-gen en_US.UTF-8 \
+    && rm -rf /tmp/* /var/tmp/*
+
+RUN existing_user="$(getent passwd ${UID} | cut -d: -f1)" && \
+    if [ -n "$existing_user" ] && [ "$existing_user" != "${USERNAME}" ]; then \
+        userdel -r "$existing_user" 2>/dev/null || true; \
+    fi && \
+    existing_group="$(getent group ${GID} | cut -d: -f1)" && \
+    if [ -n "$existing_group" ] && [ "$existing_group" != "${USERNAME}" ]; then \
+        groupdel "$existing_group" 2>/dev/null || true; \
+    fi && \
+    groupadd -g ${GID} ${USERNAME} && \
+    useradd -m -s /bin/bash -u ${UID} -g ${GID} ${USERNAME} && \
+    usermod -aG sudo ${USERNAME} && \
+    echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${USERNAME} && \
+    chmod 0440 /etc/sudoers.d/${USERNAME}
+
+USER ${USERNAME}
+WORKDIR /home/${USERNAME}
+
+# Set locale environment variables
+ENV LANG=en_US.UTF-8
+ENV LANGUAGE=en_US:en
+ENV LC_ALL=en_US.UTF-8
+
+# Ensure the active login shell's rc file exists before any later RUN
+# (plugin install scripts, cert env exports, completion init) appends to it
+# via >> "$RC_FILE". fish in particular keeps its config under
+# ~/.config/fish/, a path useradd does not pre-create.
+RUN mkdir -p "$(dirname "$HOME/.bashrc")" && touch "$HOME/.bashrc"
+
+# Enable bash completion
+RUN echo 'if [ -f /usr/share/bash-completion/bash_completion ]; then' >> "$HOME/.bashrc" && \
+    echo '  . /usr/share/bash-completion/bash_completion' >> "$HOME/.bashrc" && \
+    echo 'fi' >> "$HOME/.bashrc"
+
+# Set certificate environment variables for various tools
+RUN echo 'export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt' >> /home/${USERNAME}/.bashrc && \
+    echo 'export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt' >> /home/${USERNAME}/.bashrc && \
+    echo 'export REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt' >> /home/${USERNAME}/.bashrc && \
+    echo 'export NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt' >> /home/${USERNAME}/.bashrc
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+ENV CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+ENV REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
+
+# Backup image-installed files for volume-mount resilience
+RUN if [ -d ~/.local ]; then cp -a ~/.local ~/.image-local; else mkdir -p ~/.image-local; fi
+
+# create volume mount directories for permission
+RUN mkdir -p ~/.local
+
+# Setup persistent shell history
+RUN echo 'export HISTFILE=~/.local/state/.bash_history_docker' >> "$HOME/.bashrc" && \
+    echo 'export HISTSIZE=10000' >> "$HOME/.bashrc" && \
+    echo 'export HISTFILESIZE=20000' >> "$HOME/.bashrc" && \
+    mkdir -p ~/.local/state && touch ~/.local/state/.bash_history_docker
+
+# Custom configuration file support (config/shell_custom and optional config/.bashrc_custom.generated)
+RUN echo '' >> "$HOME/.bashrc" && \
+    echo '# Load auto-generated shell config from [container.shell] of workspace.toml' >> "$HOME/.bashrc" && \
+    echo '[ -f "$HOME/workspace/cocoon/config/.bashrc_custom.generated" ] && . "$HOME/workspace/cocoon/config/.bashrc_custom.generated"' >> "$HOME/.bashrc" && \
+    echo '# Load user-editable custom configuration from config/shell_custom' >> "$HOME/.bashrc" && \
+    echo '[ -f "$HOME/workspace/cocoon/config/shell_custom" ] && . "$HOME/workspace/cocoon/config/shell_custom"' >> "$HOME/.bashrc"
+
+# Entrypoint: sync image files to volume-mounted ~/.local
+USER root
+COPY config/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+USER ${USERNAME}
+
+ENTRYPOINT ["docker-entrypoint.sh"]
+CMD ["sleep", "infinity"]
+
+WORKDIR /home/${USERNAME}/workspace

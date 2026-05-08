@@ -1,0 +1,47 @@
+{
+  "files.autoSave": "afterDelay",
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "editor.formatOnSave": true,
+  "editor.insertSpaces": true,
+  "editor.detectIndentation": false,
+  "editor.tabSize": 2,
+  "[python]": {
+    "editor.tabSize": 4
+  },
+  "[dockerfile]": {
+    "editor.tabSize": 4
+  },
+  "[go]": {
+    "editor.tabSize": 4,
+    "editor.insertSpaces": false
+  },
+  "[rust]": {
+    "editor.tabSize": 4
+  },
+  "[java]": {
+    "editor.tabSize": 4
+  },
+  "[csharp]": {
+    "editor.tabSize": 4
+  },
+  "[c]": {
+    "editor.tabSize": 4
+  },
+  "[cpp]": {
+    "editor.tabSize": 4
+  },
+  "[swift]": {
+    "editor.tabSize": 4
+  },
+  "[kotlin]": {
+    "editor.tabSize": 4
+  },
+  "[php]": {
+    "editor.tabSize": 4
+  },
+  "[makefile]": {
+    "editor.insertSpaces": false,
+    "editor.tabSize": 4
+  }
+}

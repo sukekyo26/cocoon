@@ -1,0 +1,29 @@
+# tests/fixtures/ci/ports-comprehensive.workspace.toml
+#
+# Smoke fixture exercising every shape of [ports].forward that wsd accepts:
+# short-form strings (with and without host_ip / protocol / range) and
+# long-form tables. Used by tests/structure/test_snapshot.sh to assert the
+# generated docker-compose.yml and devcontainer.json round-trip every form
+# correctly. Keep this file minimal outside [ports] so the fixture stays
+# focused on port handling.
+[container]
+service_name = "ports"
+username = "developer"
+os = "ubuntu"
+os_version = "24.04"
+
+[plugins]
+enable = []
+
+[ports]
+forward = [
+    "3000",
+    "8080:80",
+    "127.0.0.1:5432:5432/tcp",
+    "3000-3005:3000-3005",
+    { target = 9000, published = 9000, host_ip = "127.0.0.1", protocol = "udp" },
+    { target = 9090, mode = "host" },
+]
+
+[apt]
+packages = []

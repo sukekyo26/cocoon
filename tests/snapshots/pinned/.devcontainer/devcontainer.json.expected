@@ -1,0 +1,29 @@
+// Auto-generated from workspace.toml — do not edit directly.
+{
+	"name": "Existing Docker Compose (Extend)",
+	"dockerComposeFile": [
+		"../docker-compose.yml",
+		"docker-compose.yml"
+	],
+	"service": "ci-test",
+	"workspaceFolder": "/home/testuser/workspace",
+	"forwardPorts": [
+		3000,
+		8080,
+		9229
+	],
+	"shutdownAction": "stopCompose",
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"ms-python.python",
+				"eamodio.gitlens"
+			]
+		}
+	},
+	"features": {
+		"ghcr.io/devcontainers/features/node:1": {
+			"version": "20"
+		}
+	}
+}

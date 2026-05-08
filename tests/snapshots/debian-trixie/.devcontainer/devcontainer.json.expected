@@ -1,0 +1,19 @@
+// Auto-generated from workspace.toml — do not edit directly.
+{
+	"name": "Existing Docker Compose (Extend)",
+	"dockerComposeFile": [
+		"../docker-compose.yml",
+		"docker-compose.yml"
+	],
+	"service": "ci-debian-trixie",
+	"workspaceFolder": "/home/testuser/workspace",
+	"forwardPorts": [
+		3000
+	],
+	"shutdownAction": "stopCompose",
+	"customizations": {
+		"vscode": {
+			"extensions": []
+		}
+	}
+}

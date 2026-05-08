@@ -1,0 +1,177 @@
+# CI fixture: pinned versions for reproducible PR/push builds.
+# Used by .github/workflows/ci.yml. Edit this file to bump CI-tested versions.
+#
+# This fixture declares ALL schema options so CI exercises every code path.
+# When a new section/key is added to workspace.schema.json, add it here too.
+
+[container]
+service_name = "ci-test"
+username = "testuser"
+os = "ubuntu"
+os_version = "24.04"
+
+[container.resources]
+shm_size = "2gb"
+pids_limit = 8192
+stop_grace_period = "60s"
+cpus = 4.0
+memory = "8gb"
+nofile_soft = 32768
+nofile_hard = 524288
+
+# Compose pass-through sections (OS-4..8): all five exercise the YAML emit
+# paths in compose.go. None of these affect the actual `docker build`, so
+# they are safe to enable in the pinned amd64 build.
+[container.hosts]
+"db.local" = "host-gateway"
+"corp.example" = "10.0.0.42"
+
+[container.dns]
+servers = ["1.1.1.1"]
+search = ["corp.example.com"]
+
+[container.sysctls]
+"net.ipv4.ip_unprivileged_port_start" = 0
+
+[container.capabilities]
+add = ["SYS_PTRACE"]
+drop = ["AUDIT_WRITE"]
+
+[container.security_opt]
+seccomp = "unconfined"
+no_new_privileges = true
+
+# OS-13: seed a dotfile via /etc/skel. Uses an existing repo file as source so
+# the docker build COPY step succeeds without extra fixtures.
+[[container.skel]]
+source = "config/shell_custom.example"
+target = ".shell_skel_example"
+
+[plugins]
+# All plugins enabled to exercise the full install surface in CI.
+# custom-ps1 is excluded because it conflicts with starship (which is
+# version_capable and the upstream-regression target for docker-build-latest).
+enable = [
+    "docker-cli",
+    "aws-cli",
+    "aws-sam-cli",
+    "github-cli",
+    "claude-code",
+    "copilot-cli",
+    "proto",
+    "mise",
+    "uv",
+    "bun",
+    "zig",
+    "rust",
+    "go",
+    "lazygit",
+    "starship",
+    "nerd-fonts",
+    "google-chrome",
+    "terraform",
+    "opentofu",
+]
+
+# Pin every version_capable plugin so PR/push CI builds are reproducible.
+# Latest-version regression detection lives in docker-build-latest.yml
+# (scheduled weekly + manual workflow_dispatch).
+[plugins.versions]
+go = { pin = "1.23.4" }
+lazygit = { pin = "0.44.1" }
+starship = { pin = "1.21.1" }
+zig = { pin = "0.13.0" }
+uv = { pin = "0.5.7" }
+proto = { pin = "0.46.1" }
+copilot-cli = { pin = "0.0.369" }
+mise = { pin = "2025.12.0" }
+bun = { pin = "1.3.3" }
+terraform = { pin = "1.10.5" }
+opentofu = { pin = "1.9.0" }
+
+[ports]
+forward = ["3000:3000", "8080:8080"]
+
+[apt]
+packages = ["jq", "tree"]
+
+# OS-10: apt environment. We only enable [apt.mirror] in CI — the URL is set to
+# the default Ubuntu archive so the rewrite is a no-op (exercises the sed RUN
+# without changing where apt actually fetches from in CI). [apt.proxy] would
+# point at a non-existent proxy and break apt-get update; [[apt.sources]] would
+# require an external GPG key fetch and make CI dependent on a third-party
+# repository's uptime. Both are exercised by Go unit + validate-workspace tests
+# instead.
+[apt.mirror]
+url = "http://archive.ubuntu.com/ubuntu/"
+
+[volumes]
+ci-data = "/home/testuser/.ci-data"
+
+[env]
+CI_TEST = "true"
+NODE_ENV = "development"
+
+[[mounts]]
+source = "~/.gnupg"
+target = "/home/testuser/.gnupg"
+readonly = true
+
+[locale]
+timezone = "Asia/Tokyo"
+lang = "ja_JP.UTF-8"
+
+[git]
+user_name = "CI Test"
+user_email = "ci@example.com"
+
+[container.shell]
+default = "zsh"
+aliases = { ll = "ls -lah", gs = "git status" }
+env = { EDITOR = "vim", PAGER = "less -R" }
+
+[dockerfile]
+# Use marker files so wsd verify-image can detect that the hooks ran.
+# pre_user_setup runs as root; post_plugins runs as the unprivileged user (hence sudo).
+pre_user_setup = "RUN touch /etc/marker-pre-user-setup"
+post_plugins = "RUN sudo touch /etc/marker-post-plugins"
+
+# Dev Container-only sections
+[devcontainer]
+forwardPorts = [9229]
+
+[devcontainer.features]
+"ghcr.io/devcontainers/features/node:1" = { version = "20" }
+
+[devcontainer.customizations.vscode]
+extensions = ["ms-python.python", "eamodio.gitlens"]
+
+# Sidecar services — exercises [services.*] code paths in CI.
+# The Docker build step only generates compose files; it does not actually run
+# these containers. wsd verify-artifacts confirms the sidecars
+# appear in docker-compose.yml with the correct image / ports / env / volumes /
+# healthcheck / depends_on / restart.
+
+[services.postgres]
+image = "postgres:16-alpine"
+ports = ["5432:5432"]
+env   = { POSTGRES_PASSWORD = "dev", POSTGRES_DB = "app" }
+volumes = { data = "/var/lib/postgresql/data" }
+healthcheck = { test = ["CMD-SHELL", "pg_isready -U postgres"], interval = "5s", timeout = "5s", retries = 5 }
+restart = "unless-stopped"
+
+[services.redis]
+image = "redis:7-alpine"
+ports = ["6379:6379"]
+depends_on = ["postgres"]
+
+# Companion repositories — exercises [repositories] schema validation in CI.
+# Actual cloning is not performed in the docker-build job (no --no-clone
+# bypass needed because setup-docker.sh is not invoked here). End-to-end
+# clone behaviour is exercised by tests/integration/test_clone_repositories.sh
+# against a local bare repo.
+[repositories]
+clone = [
+  { url = "https://example.invalid/org/frontend.git" },
+  { url = "https://example.invalid/org/backend.git", path = "services/backend", branch = "main", depth = 1, recurse_submodules = true },
+]
