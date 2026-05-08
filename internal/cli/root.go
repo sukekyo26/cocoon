@@ -6,22 +6,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	certificatescli "github.com/sukekyo26/cocoon/internal/cli/certificates"
 	cleancli "github.com/sukekyo26/cocoon/internal/cli/clean"
 	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
 	configcli "github.com/sukekyo26/cocoon/internal/cli/config"
-	devcontainercli "github.com/sukekyo26/cocoon/internal/cli/devcontainer"
-	doctorcli "github.com/sukekyo26/cocoon/internal/cli/doctor"
 	generatecli "github.com/sukekyo26/cocoon/internal/cli/generate"
 	plugincli "github.com/sukekyo26/cocoon/internal/cli/plugin"
 	rebuildcli "github.com/sukekyo26/cocoon/internal/cli/rebuild"
-	repositoriescli "github.com/sukekyo26/cocoon/internal/cli/repositories"
-	schemacli "github.com/sukekyo26/cocoon/internal/cli/schema"
 	setupcli "github.com/sukekyo26/cocoon/internal/cli/setup"
-	tuicli "github.com/sukekyo26/cocoon/internal/cli/tui"
-	verifyartifactscli "github.com/sukekyo26/cocoon/internal/cli/verifyartifacts"
-	verifyimagecli "github.com/sukekyo26/cocoon/internal/cli/verifyimage"
-	workspacecli "github.com/sukekyo26/cocoon/internal/cli/workspace"
 )
 
 const rootLong = `cocoon — project-aware container workspace generator
@@ -72,17 +63,8 @@ func newRootCommand(version string, stdout, stderr io.Writer) *cobra.Command {
 		generatecli.NewCommand(stdout, stderr),
 		rebuildcli.NewCommand(stdout, stderr),
 		cleancli.NewCommand(stdout, stderr),
-		doctorcli.NewCommand(stdout, stderr),
-		workspacecli.NewCommand(stdout, stderr),
-		devcontainercli.NewCommand(stdout, stderr),
 		configcli.NewCommand(stdout, stderr),
 		plugincli.NewCommand(stdout, stderr),
-		repositoriescli.NewCommand(stdout, stderr),
-		certificatescli.NewCommand(stdout, stderr),
-		schemacli.NewCommand(stdout, stderr),
-		verifyartifactscli.NewCommand(stdout, stderr),
-		verifyimagecli.NewCommand(stdout, stderr),
-		tuicli.NewCommand(stdout, stderr),
 		newVersionSubcommand(version, stdout),
 	)
 	addLeafHelpAlias(root)

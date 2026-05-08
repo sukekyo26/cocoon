@@ -69,9 +69,7 @@ func TestExecuteUnknownCommand(t *testing.T) {
 func TestExecuteSubcommandDispatch(t *testing.T) {
 	t.Parallel()
 	subs := []string{
-		"config", "plugin", "generate-all", "tui", "doctor", "repositories",
-		"certificates", "devcontainer", "clean", "rebuild", "setup",
-		"schema", "workspace", "verify-artifacts", "verify-image",
+		"config", "plugin", "generate-all", "clean", "rebuild", "setup",
 	}
 	for _, sub := range subs {
 		t.Run(sub, func(t *testing.T) {
