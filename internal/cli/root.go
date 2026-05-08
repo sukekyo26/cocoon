@@ -13,6 +13,7 @@ import (
 	execcli "github.com/sukekyo26/cocoon/internal/cli/exec"
 	gencli "github.com/sukekyo26/cocoon/internal/cli/gen"
 	generatecli "github.com/sukekyo26/cocoon/internal/cli/generate"
+	initcli "github.com/sukekyo26/cocoon/internal/cli/init"
 	logscli "github.com/sukekyo26/cocoon/internal/cli/logs"
 	plugincli "github.com/sukekyo26/cocoon/internal/cli/plugin"
 	rebuildcli "github.com/sukekyo26/cocoon/internal/cli/rebuild"
@@ -64,9 +65,10 @@ func newRootCommand(version string, stdout, stderr io.Writer) *cobra.Command {
 	root.SetVersionTemplate("{{.Version}}\n")
 	root.SetHelpTemplate(rootHelpTemplate)
 	root.AddCommand(
-		// Lifecycle verbs (cocoon v0.1.0). Implementations are stubs in F2;
-		// F3 wires them to the .devcontainer/-centred generators and docker
-		// compose calls.
+		// Lifecycle verbs (cocoon v0.1.0). Most are stubs in F2; F3 wires
+		// them to the .devcontainer/-centred generators and docker compose
+		// calls. `init` is fully implemented here.
+		initcli.NewCommand(stdout, stderr),
 		upcli.NewCommand(stdout, stderr),
 		downcli.NewCommand(stdout, stderr),
 		rebuildcli.NewCommand(stdout, stderr),

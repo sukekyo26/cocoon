@@ -17,6 +17,7 @@ import (
 	downcli "github.com/sukekyo26/cocoon/internal/cli/down"
 	execcli "github.com/sukekyo26/cocoon/internal/cli/exec"
 	generatecli "github.com/sukekyo26/cocoon/internal/cli/generate"
+	initcli "github.com/sukekyo26/cocoon/internal/cli/init"
 	logscli "github.com/sukekyo26/cocoon/internal/cli/logs"
 	plugincli "github.com/sukekyo26/cocoon/internal/cli/plugin"
 	rebuildcli "github.com/sukekyo26/cocoon/internal/cli/rebuild"
@@ -51,6 +52,7 @@ func exitCode(err error, stderr io.Writer) int {
 		errors.Is(err, plugincli.ErrUsage), errors.Is(err, setupcli.ErrUsage),
 		errors.Is(err, upcli.ErrUsage), errors.Is(err, downcli.ErrUsage),
 		errors.Is(err, logscli.ErrUsage), errors.Is(err, execcli.ErrUsage),
+		errors.Is(err, initcli.ErrUsage),
 		errors.Is(err, configcli.ErrUnknownField), errors.Is(err, configcli.ErrUnknownPluginField):
 		return 2
 	case errors.Is(err, configcli.ErrFailure), errors.Is(err, generatecli.ErrFailure),
@@ -61,7 +63,8 @@ func exitCode(err error, stderr io.Writer) int {
 		errors.Is(err, setup.ErrInsideContainer),
 		errors.Is(err, plugincli.ErrFailure),
 		errors.Is(err, upcli.ErrFailure), errors.Is(err, downcli.ErrFailure),
-		errors.Is(err, logscli.ErrFailure), errors.Is(err, execcli.ErrFailure):
+		errors.Is(err, logscli.ErrFailure), errors.Is(err, execcli.ErrFailure),
+		errors.Is(err, initcli.ErrFailure):
 		return 1
 	default:
 		fmt.Fprintf(stderr, "cocoon: %v\n", err)
