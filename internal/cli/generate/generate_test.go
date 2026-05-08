@@ -175,7 +175,10 @@ timezone = "Asia/Tokyo"
 packages = []
 `,
 			useEmptyPluginsDir: true,
-			extras:             []seed{{rel: "certs/test-ca.crt", body: "-----BEGIN CERTIFICATE-----\nMIIBoj\n-----END CERTIFICATE-----\n"}},
+			extras: []seed{{
+				Rel:  "certs/test-ca.crt",
+				Body: "-----BEGIN CERTIFICATE-----\nMIIBoj\n-----END CERTIFICATE-----\n",
+			}},
 			assert: []expect{
 				{path: ".devcontainer/Dockerfile", mustContain: []string{
 					"COPY certs/test-ca.crt", "update-ca-certificates", "SSL_CERT_FILE",
@@ -202,11 +205,11 @@ packages = []
 				t.Fatalf("write workspace.toml: %v", err)
 			}
 			for _, s := range c.extras {
-				abs := filepath.Join(work, s.rel)
+				abs := filepath.Join(work, s.Rel)
 				if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
 					t.Fatalf("mkdir extras: %v", err)
 				}
-				if err := os.WriteFile(abs, []byte(s.body), 0o600); err != nil {
+				if err := os.WriteFile(abs, []byte(s.Body), 0o600); err != nil {
 					t.Fatalf("write extras: %v", err)
 				}
 			}
@@ -360,8 +363,8 @@ func TestRun_BadTOMLFailsBeforeWriting(t *testing.T) {
 }
 
 type seed struct {
-	rel  string
-	body string
+	Rel  string
+	Body string
 }
 
 func tomlBase(serviceName, username string, plugins []string) string {

@@ -30,12 +30,21 @@ var ErrUsage = errors.New("usage error")
 // ErrFailure signals a runtime failure. Maps to exit code 1.
 var ErrFailure = errors.New("failure")
 
-type artifact struct {
-	rel  string
-	body string
+// Artifact is one generated file produced by BuildArtifacts. Rel is
+// the path relative to the caller-supplied output directory; Body is
+// its contents. The type is exported so in-process callers (like
+// `cocoon up`) can run the generation pipeline without the cobra
+// command surface.
+type Artifact struct {
+	Rel  string
+	Body string
 }
 
-func loadContext(wsPath, pluginsDir string, stderr io.Writer) (*generate.WorkspaceContext, error) {
+// LoadContext loads workspace.toml, the enabled plugins from
+// pluginsDir, and runs plugin conflict checks, returning a
+// WorkspaceContext ready for BuildArtifacts. Stderr receives
+// plugin-loader warnings.
+func LoadContext(wsPath, pluginsDir string, stderr io.Writer) (*generate.WorkspaceContext, error) {
 	ws, err := config.LoadWorkspace(wsPath)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrFailure, err)
@@ -55,19 +64,22 @@ func loadContext(wsPath, pluginsDir string, stderr io.Writer) (*generate.Workspa
 	}, nil
 }
 
-func buildArtifacts(ctx *generate.WorkspaceContext, pluginsDir string, stderr io.Writer) ([]artifact, error) {
+// BuildArtifacts produces the in-memory list of generated files
+// (compose, Dockerfile, devcontainer.json when enabled, shellrc) for
+// the given loaded WorkspaceContext.
+func BuildArtifacts(ctx *generate.WorkspaceContext, pluginsDir string, stderr io.Writer) ([]Artifact, error) {
 	absPlugins, err := filepath.Abs(pluginsDir)
 	if err != nil {
 		return nil, fmt.Errorf("%w: abs(%s): %w", ErrFailure, pluginsDir, err)
 	}
 	wsRoot := filepath.Dir(absPlugins)
-	arts := make([]artifact, 0, 5)
+	arts := make([]Artifact, 0, 5)
 
 	body, err := compose.Generate(ctx, compose.Options{Plugins: ctx.Plugins, Warnings: stderr})
 	if err != nil {
 		return nil, fmt.Errorf("%w: compose: %w", ErrFailure, err)
 	}
-	arts = append(arts, artifact{rel: ".devcontainer/docker-compose.yml", body: body})
+	arts = append(arts, Artifact{Rel: ".devcontainer/docker-compose.yml", Body: body})
 
 	body, err = dockerfile.Generate(ctx, dockerfile.Options{
 		WorkspaceRoot: wsRoot,
@@ -78,35 +90,39 @@ func buildArtifacts(ctx *generate.WorkspaceContext, pluginsDir string, stderr io
 	if err != nil {
 		return nil, fmt.Errorf("%w: dockerfile: %w", ErrFailure, err)
 	}
-	arts = append(arts, artifact{rel: ".devcontainer/Dockerfile", body: body})
+	arts = append(arts, Artifact{Rel: ".devcontainer/Dockerfile", Body: body})
 
 	if ctx.WS.Workspace.DevContainerOrDefault() {
 		body, err = devcontainerjson.Generate(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("%w: devcontainer.json: %w", ErrFailure, err)
 		}
-		arts = append(arts, artifact{rel: ".devcontainer/devcontainer.json", body: body})
+		arts = append(arts, Artifact{Rel: ".devcontainer/devcontainer.json", Body: body})
 	}
 
 	rcRel, body, err := shellrc.Generate(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("%w: shellrc: %w", ErrFailure, err)
 	}
-	arts = append(arts, artifact{rel: rcRel, body: body})
+	arts = append(arts, Artifact{Rel: rcRel, Body: body})
 	return arts, nil
 }
 
-func writeArtifacts(arts []artifact, outDir string) error {
+// WriteArtifacts atomically lays the artifact set down under outDir.
+// Stale per-shell rc fragments left over from a previous shell choice
+// are removed so a `bash → zsh → bash` flip does not leave an
+// orphaned .zshrc_custom.generated next to the new bash file.
+func WriteArtifacts(arts []Artifact, outDir string) error {
 	written := make(map[string]struct{}, len(arts))
 	for _, a := range arts {
-		target := filepath.Join(outDir, a.rel)
+		target := filepath.Join(outDir, a.Rel)
 		if mkErr := os.MkdirAll(filepath.Dir(target), 0o755); mkErr != nil {
 			return fmt.Errorf("%w: mkdir %s: %w", ErrFailure, target, mkErr)
 		}
-		if wErr := fsx.AtomicWriteFile(target, []byte(a.body), 0o644); wErr != nil {
+		if wErr := fsx.AtomicWriteFile(target, []byte(a.Body), 0o644); wErr != nil {
 			return fmt.Errorf("%w: write %s: %w", ErrFailure, target, wErr)
 		}
-		written[a.rel] = struct{}{}
+		written[a.Rel] = struct{}{}
 	}
 	// Sweep stale per-shell rc fragments left over from a previous default
 	// (e.g. user switched [container.shell].default = "bash" → "zsh"). The

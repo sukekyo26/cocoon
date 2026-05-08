@@ -31,15 +31,15 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 				log.Error("Usage: wsd generate-all <workspace.toml> <plugins_dir> <output_dir>")
 				return ErrUsage
 			}
-			ctx, err := loadContext(args[0], args[1], stderr)
+			ctx, err := LoadContext(args[0], args[1], stderr)
 			if err != nil {
 				return err
 			}
-			arts, err := buildArtifacts(ctx, args[1], stderr)
+			arts, err := BuildArtifacts(ctx, args[1], stderr)
 			if err != nil {
 				return err
 			}
-			if err := writeArtifacts(arts, args[2]); err != nil {
+			if err := WriteArtifacts(arts, args[2]); err != nil {
 				return err
 			}
 			return nil
