@@ -1,0 +1,13 @@
+[metadata]
+name = "Zig"
+description = "Zig programming language, required for cargo-lambda cross-compilation (https://github.com/ziglang/zig)"
+default = false
+
+[apt]
+packages = ["jq"]
+
+[install]
+requires_root = true
+
+[version]
+version_capable = true

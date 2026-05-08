@@ -1,0 +1,15 @@
+[metadata]
+name = "Go"
+description = "Go programming language (https://github.com/golang/go)"
+default = false
+
+[install]
+requires_root = true
+volumes = ["/home/${USERNAME}/go"]
+
+[install.env]
+GOPATH = "/home/${USERNAME}/go"
+PATH = "/usr/local/go/bin:$GOPATH/bin:$PATH"
+
+[version]
+version_capable = true

@@ -1,0 +1,14 @@
+[metadata]
+name = "Rust"
+description = "Rust toolchain via rustup — cargo, clippy, rustfmt (https://github.com/rust-lang/rustup)"
+default = false
+
+[install]
+requires_root = false
+volumes = ["/home/${USERNAME}/.cargo", "/home/${USERNAME}/.rustup"]
+
+[install.env]
+PATH = "/home/${USERNAME}/.cargo/bin:$PATH"
+
+[version]
+version_capable = false

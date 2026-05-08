@@ -2,6 +2,7 @@ package dockerfile_test
 
 import (
 	"bytes"
+	"flag"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +13,16 @@ import (
 	"github.com/sukekyo26/cocoon/internal/generate/dockerfile"
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
+
+// updateGolden, when set with `go test -update-golden`, rewrites the
+// testdata/*.expected files from the current generator output instead of
+// asserting against them. This is the cocoon-wide pattern for regen-ing
+// snapshots after intentional generator changes; only this package wires
+// it up today, but other generators that grow snapshot suites should
+// adopt the same flag name.
+//
+//nolint:gochecknoglobals // test-only flag scoped to dockerfile_test.
+var updateGolden = flag.Bool("update-golden", false, "rewrite testdata/*.expected from current generator output")
 
 // TestGenerate_Snapshot exercises the dockerfile generator against the
 // pinned fixture for each supported login shell so per-shell parameterization
@@ -67,7 +78,14 @@ func TestGenerate_Snapshot(t *testing.T) {
 				t.Fatalf("generate: %v", err)
 			}
 
-			wantBytes, err := os.ReadFile(filepath.Join("testdata", tc.expected))
+			path := filepath.Join("testdata", tc.expected)
+			if *updateGolden {
+				if werr := os.WriteFile(path, []byte(got), 0o600); werr != nil {
+					t.Fatalf("update golden: %v", werr)
+				}
+				return
+			}
+			wantBytes, err := os.ReadFile(path)
 			if err != nil {
 				t.Fatalf("read expected: %v", err)
 			}
@@ -404,9 +422,10 @@ func TestGenerate_NoCertsLeavesNoCertBlock(t *testing.T) {
 	}
 }
 
-// stagingRoot creates a temp workspace root with empty certs/ and a
-// minimal config/ that points at the repo's apt-base-packages.conf so
-// Generate can run end-to-end.
+// stagingRoot creates a temp workspace root with an empty certs/ and an
+// empty config/ directory; the apt base set now lives in
+// internal/aptbase.MinimalBasePackages and no longer needs a copied
+// apt-base-packages.conf for Generate to run end-to-end.
 func stagingRoot(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
@@ -415,15 +434,6 @@ func stagingRoot(t *testing.T) string {
 	}
 	if err := os.MkdirAll(filepath.Join(root, "config"), 0o755); err != nil {
 		t.Fatalf("mkdir config: %v", err)
-	}
-	src := filepath.Join(repoRoot(t), "config", "apt-base-packages.conf")
-	dst := filepath.Join(root, "config", "apt-base-packages.conf")
-	data, err := os.ReadFile(src) //nolint:gosec // src is repoRoot()/config/...
-	if err != nil {
-		t.Fatalf("read apt-base-packages.conf: %v", err)
-	}
-	if err := os.WriteFile(dst, data, 0o600); err != nil { //nolint:gosec // dst is t.TempDir()/config/...
-		t.Fatalf("write apt-base-packages.conf: %v", err)
 	}
 	return root
 }

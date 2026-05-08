@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/sukekyo26/cocoon/internal/aptbase"
 	"github.com/sukekyo26/cocoon/internal/generate"
 	"github.com/sukekyo26/cocoon/internal/generate/shellrc"
 	"github.com/sukekyo26/cocoon/internal/generate/shellx"
@@ -243,10 +244,7 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 	bootstrapPresent := certInstallRoot != "" || aptCABootstrap != ""
 	mirrorRewritePre, mirrorRewrite, proxyConfPre, proxyConf := splitAptSetupForBootstrap(ctx, bootstrapPresent)
 
-	aptBase, err := readAptPackages(configDir)
-	if err != nil {
-		return "", err
-	}
+	aptBase := readAptPackages(configDir)
 	basePkgNames := parseBasePackages(aptBase)
 	aptPlugin := collectPluginAptPackages(opts.Plugins, enabled, basePkgNames)
 
@@ -633,27 +631,23 @@ func buildDockerfileHooks(ctx *generate.WorkspaceContext, warnings io.Writer) (p
 
 // readAptPackages reads config/apt-base-packages.conf and formats each
 // non-blank, non-comment line as a Dockerfile continuation.
-func readAptPackages(configDir string) (string, error) {
-	conf := filepath.Join(configDir, "apt-base-packages.conf")
-	data, err := os.ReadFile(conf)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return "", nil
-		}
-		return "", fmt.Errorf("read apt-base-packages.conf: %w", err)
+//
+// The configDir argument is retained for compatibility with the v1
+// caller signature; cocoon ignores it because the base apt set is
+// now hardcoded in internal/setup.MinimalBasePackages. Users add the
+// rest through [apt] packages (cocoon init's AptCategories picker
+// pre-fills common groups).
+func readAptPackages(configDir string) string {
+	_ = configDir
+	pkgs := aptbase.MinimalBasePackages
+	if len(pkgs) == 0 {
+		return ""
 	}
-	var lines []string
-	for _, raw := range strings.Split(string(data), "\n") {
-		line := strings.TrimSpace(raw)
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		lines = append(lines, "    "+line+" \\")
+	lines := make([]string, 0, len(pkgs))
+	for _, p := range pkgs {
+		lines = append(lines, "    "+p+" \\")
 	}
-	if len(lines) == 0 {
-		return "", nil
-	}
-	return strings.Join(lines, "\n") + "\n", nil
+	return strings.Join(lines, "\n") + "\n"
 }
 
 func parseBasePackages(aptBase string) map[string]struct{} {

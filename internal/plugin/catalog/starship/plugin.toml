@@ -1,0 +1,12 @@
+[metadata]
+name = "Starship"
+description = "Cross-shell prompt, alternative to custom-ps1 (https://github.com/starship/starship)"
+default = false
+conflicts = ["custom-ps1"]
+
+[install]
+requires_root = true
+volumes = ["/home/${USERNAME}/.config"]
+
+[version]
+version_capable = true
