@@ -17,6 +17,7 @@ import (
 	logscli "github.com/sukekyo26/cocoon/internal/cli/logs"
 	plugincli "github.com/sukekyo26/cocoon/internal/cli/plugin"
 	rebuildcli "github.com/sukekyo26/cocoon/internal/cli/rebuild"
+	selfupdatecli "github.com/sukekyo26/cocoon/internal/cli/selfupdate"
 	setupcli "github.com/sukekyo26/cocoon/internal/cli/setup"
 	upcli "github.com/sukekyo26/cocoon/internal/cli/up"
 )
@@ -75,6 +76,7 @@ func newRootCommand(version string, stdout, stderr io.Writer) *cobra.Command {
 		logscli.NewCommand(stdout, stderr),
 		execcli.NewCommand(stdout, stderr),
 		gencli.NewCommand(stdout, stderr),
+		selfupdatecli.NewCommand(stdout, stderr),
 		// Noun groups
 		configcli.NewCommand(stdout, stderr),
 		plugincli.NewCommand(stdout, stderr),
