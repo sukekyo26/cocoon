@@ -1,0 +1,2 @@
+[plugins.versions.go]
+pin = "1.23.4"

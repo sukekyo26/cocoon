@@ -1,0 +1,11 @@
+# cocoon workspace
+[base]
+distro = "debian"
+
+[plugins]
+enable = ["go"]
+
+[plugins.versions.go]
+pin = "1.23.4"
+checksum_amd64 = "deadbeef"
+checksum_arm64 = "cafebabe"
