@@ -25,7 +25,9 @@ const header = "# Auto-generated from workspace.toml — do not edit directly.\n
 // ErrVolumeNameConflict is returned when a workspace.toml [volumes] entry
 // shares a name with an auto-derived plugin volume or with a name cocoon
 // reserves at the compose level (see reservedVolumeNames).
-var ErrVolumeNameConflict = errors.New("compose: volume name conflicts with enabled plugin")
+var ErrVolumeNameConflict = errors.New(
+	"compose: volume name conflicts with an enabled plugin or a cocoon reserved name",
+)
 
 // reservedVolumeNames are volume keys cocoon emits unconditionally in the
 // generated compose. Plugins and workspace.toml [volumes] cannot reuse them.
@@ -179,7 +181,7 @@ func buildVolumeMounts(
 	mounts := make(
 		[]*yaml.Node,
 		0,
-		2+len(pluginVols)+len(customVols)+len(ctx.Mounts())+len(homeFiles),
+		3+len(pluginVols)+len(customVols)+len(ctx.Mounts())+len(homeFiles),
 	)
 	mounts = append(mounts,
 		yamlx.QuotedIfSpecial(workspaceBindMount(ctx)),
