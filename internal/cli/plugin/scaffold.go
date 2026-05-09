@@ -266,7 +266,7 @@ func resolvePluginsDir(opts scaffoldOpts) (string, bool) {
 
 // renderAndWrite renders a single scaffold file via render and writes it under
 // dir/name with the given mode. On failure it logs and triggers cleanup.
-// Returns the absolute path written on success.
+// Returns the path written on success — relative if dir was relative.
 func renderAndWrite(
 	dir, name string, mode os.FileMode,
 	render func() (string, error),
