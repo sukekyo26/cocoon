@@ -19,6 +19,7 @@ import (
 	"github.com/sukekyo26/cocoon/internal/generate/compose"
 	"github.com/sukekyo26/cocoon/internal/generate/devcontainerjson"
 	"github.com/sukekyo26/cocoon/internal/generate/dockerfile"
+	"github.com/sukekyo26/cocoon/internal/generate/envfile"
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
 
@@ -103,6 +104,12 @@ func BuildArtifacts(ctx *generate.WorkspaceContext, pluginsDir string, stderr io
 		Body: dockerfile.EntrypointScript(),
 		Mode: 0o755,
 	})
+
+	envBody, err := envfile.Generate(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("%w: envfile: %w", ErrFailure, err)
+	}
+	arts = append(arts, Artifact{Rel: ".devcontainer/.env", Body: envBody, Mode: 0o600})
 	return arts, nil
 }
 

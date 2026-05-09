@@ -53,9 +53,14 @@ jobs:
           "$COCOON" gen
           # The generated tree must land under .devcontainer/ exclusively;
           # any leakage back into config/ or to the project root is a regression.
+          # The .env file is critical for compose interpolation (UID/GID/
+          # DOCKER_GID/CONTAINER_SERVICE_NAME/OS_IMAGE/OS_VERSION/USERNAME);
+          # without it `docker compose build` fails with
+          # `failed to parse stage name ":": invalid reference format`.
           test -f .devcontainer/Dockerfile
           test -f .devcontainer/docker-compose.yml
           test -f .devcontainer/docker-entrypoint.sh
+          test -f .devcontainer/.env
           test ! -d config
           docker compose -f .devcontainer/docker-compose.yml build
           docker compose -f .devcontainer/docker-compose.yml up -d
