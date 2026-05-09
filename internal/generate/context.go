@@ -19,6 +19,12 @@ import (
 type WorkspaceContext struct {
 	WS         *config.Workspace
 	PluginsDir string
+	// ProjectDir is the directory holding workspace.toml. envfile uses its
+	// basename as COMPOSE_PROJECT_NAME so the docker-compose namespace
+	// matches the project root the user invoked `cocoon gen` against,
+	// rather than aliasing it to container.service_name. May be empty for
+	// older callers; envfile falls back to ServiceName in that case.
+	ProjectDir string
 	// Plugins maps plugin id -> loaded plugin definition. Iteration order is
 	// fixed to WS.Plugins.Enable so generators emit deterministic output.
 	Plugins map[string]*plugin.Plugin

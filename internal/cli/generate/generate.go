@@ -58,6 +58,7 @@ func LoadContext(wsPath, pluginsDir string, stderr io.Writer) (*generate.Workspa
 	return &generate.WorkspaceContext{
 		WS:         ws,
 		PluginsDir: pluginsDir,
+		ProjectDir: filepath.Dir(wsPath),
 		Plugins:    plugins,
 		Warnings:   stderr,
 	}, nil
