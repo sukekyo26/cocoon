@@ -25,26 +25,9 @@ func TestLoad_Sample(t *testing.T) {
 	require.False(t, p.Version.VersionCapable)
 }
 
-func TestLoadDir(t *testing.T) {
-	t.Parallel()
-
-	plugins, err := plugin.LoadDir("../../internal/plugin/catalog")
-	require.NoError(t, err)
-	require.NotEmpty(t, plugins)
-	// Sanity: a few well-known plugins must be present.
-	require.Contains(t, plugins, "go")
-	require.Contains(t, plugins, "uv")
-}
-
 func TestLoad_MissingFile(t *testing.T) {
 	t.Parallel()
 	_, err := plugin.Load(filepath.Join(t.TempDir(), "missing.toml"))
-	require.Error(t, err)
-}
-
-func TestLoadDir_MissingDir(t *testing.T) {
-	t.Parallel()
-	_, err := plugin.LoadDir(filepath.Join(t.TempDir(), "no-such"))
 	require.Error(t, err)
 }
 

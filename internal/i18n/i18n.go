@@ -57,9 +57,6 @@ func New(lang Lang) *Catalog {
 	return &Catalog{lang: lang}
 }
 
-// Lang reports the catalog's language.
-func (c *Catalog) Lang() Lang { return c.lang }
-
 // Msg returns the formatted message for key. Missing keys fall back to
 // English; a key absent from both tables is returned verbatim so the
 // caller still sees something useful.

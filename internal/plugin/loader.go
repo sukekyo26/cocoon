@@ -5,7 +5,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
 
 	"github.com/sukekyo26/cocoon/internal/config"
 )
@@ -24,37 +23,6 @@ func Load(path string) (*Plugin, error) {
 		return nil, err //nolint:wrapcheck // already a *config.ValidationError.
 	}
 	return &p, nil
-}
-
-// LoadDir loads every plugins/<id>/plugin.toml under dir. Entries without
-// a plugin.toml are skipped silently to mirror the Python loader.
-func LoadDir(dir string) (map[string]*Plugin, error) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, config.WrapIO(dir, err) //nolint:wrapcheck // wrapper preserves the renderer-friendly format.
-	}
-	names := make([]string, 0, len(entries))
-	for _, e := range entries {
-		if e.IsDir() {
-			names = append(names, e.Name())
-		}
-	}
-	sort.Strings(names)
-
-	out := make(map[string]*Plugin, len(names))
-	for _, name := range names {
-		manifest := filepath.Join(dir, name, "plugin.toml")
-		info, statErr := os.Stat(manifest)
-		if statErr != nil || info.IsDir() {
-			continue
-		}
-		plug, loadErr := Load(manifest)
-		if loadErr != nil {
-			return nil, loadErr
-		}
-		out[name] = plug
-	}
-	return out, nil
 }
 
 // LoadEnabled loads plugin.toml for every id in `enabled` from `pluginsDir`.

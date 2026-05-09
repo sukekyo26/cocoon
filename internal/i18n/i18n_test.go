@@ -34,20 +34,6 @@ func TestDetect(t *testing.T) {
 	}
 }
 
-func TestCatalogLang(t *testing.T) {
-	t.Parallel()
-	if got := i18n.New(i18n.LangEN).Lang(); got != i18n.LangEN {
-		t.Errorf("Lang() = %v, want LangEN", got)
-	}
-	if got := i18n.New(i18n.LangJA).Lang(); got != i18n.LangJA {
-		t.Errorf("Lang() = %v, want LangJA", got)
-	}
-	// Unknown language falls back to English.
-	if got := i18n.New(i18n.Lang("xx")).Lang(); got != i18n.LangEN {
-		t.Errorf("Lang() with unknown = %v, want LangEN fallback", got)
-	}
-}
-
 func TestCatalogMsg(t *testing.T) {
 	t.Parallel()
 	en := i18n.New(i18n.LangEN)

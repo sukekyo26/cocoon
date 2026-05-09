@@ -5,9 +5,6 @@
 // $HOME/.docker/run/docker.sock and only exposes /var/run/docker.sock when
 // the user enables the "Allow the default Docker socket to be used" toggle
 // in Settings → Advanced.
-//
-// [CandidatePaths] returns every path we look at, in priority order;
-// [First] returns the first one that actually exists as a Unix socket.
 package dockersock
 
 import (
@@ -33,23 +30,4 @@ func CandidatePaths() []string {
 	}
 
 	return paths
-}
-
-// First returns the first candidate path that exists as a Unix socket file,
-// or "" when none do.
-func First() string {
-	for _, p := range CandidatePaths() {
-		if isSocket(p) {
-			return p
-		}
-	}
-	return ""
-}
-
-func isSocket(p string) bool {
-	info, err := os.Stat(p)
-	if err != nil {
-		return false
-	}
-	return info.Mode()&os.ModeSocket != 0
 }
