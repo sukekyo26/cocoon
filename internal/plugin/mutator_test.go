@@ -128,31 +128,63 @@ func TestUpsertPinBlockPreservesFileMode(t *testing.T) {
 	}
 }
 
-// When workspace.toml uses the inline-table form (`[plugins.versions]` +
-// `<id> = { ... }`), the line-based mutator must refuse rather than append a
-// duplicate `[plugins.versions.<id>]` block (which would produce a TOML
-// duplicate-key error at gen time).
-func TestUpsertPinBlockRejectsInlineForm(t *testing.T) {
+// Any per-id key assignment under [plugins.versions] — inline-table or bare
+// scalar / array — collides with a [plugins.versions.<id>] block at parse
+// time. The line-based mutator must refuse uniformly rather than append a
+// duplicate block.
+func TestUpsertPinBlockRejectsVersionsKeyAssign(t *testing.T) {
 	t.Parallel()
-	tmp := t.TempDir()
-	path := filepath.Join(tmp, "ws.toml")
-	body := []byte(`[plugins]
+	cases := []struct {
+		name string
+		body string
+	}{
+		{
+			name: "inline-table",
+			body: `[plugins]
 enable = ["go"]
 
 [plugins.versions]
 go = { pin = "1.22.5" }
-`)
-	if err := os.WriteFile(path, body, 0o600); err != nil {
-		t.Fatalf("seed: %v", err)
+`,
+		},
+		{
+			name: "bare-string",
+			body: `[plugins]
+enable = ["go"]
+
+[plugins.versions]
+go = "1.22.5"
+`,
+		},
+		{
+			name: "bare-array",
+			body: `[plugins]
+enable = ["go"]
+
+[plugins.versions]
+go = ["1.22.5"]
+`,
+		},
 	}
-	if err := plugin.UpsertPinBlock(path, "go", "1.23.4", "", ""); !errors.Is(err, plugin.ErrPinBlockInlineForm) {
-		t.Errorf("inline form: got %v, want ErrPinBlockInlineForm", err)
-	}
-	got, err := os.ReadFile(path) //nolint:gosec // tmp path under t.TempDir
-	if err != nil {
-		t.Fatalf("read after refusal: %v", err)
-	}
-	if string(got) != string(body) {
-		t.Errorf("workspace.toml was modified despite refusal:\n--- got ---\n%s", got)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			tmp := t.TempDir()
+			path := filepath.Join(tmp, "ws.toml")
+			if err := os.WriteFile(path, []byte(tc.body), 0o600); err != nil {
+				t.Fatalf("seed: %v", err)
+			}
+			err := plugin.UpsertPinBlock(path, "go", "1.23.4", "", "")
+			if !errors.Is(err, plugin.ErrPinBlockVersionsKeyAssign) {
+				t.Errorf("got %v, want ErrPinBlockVersionsKeyAssign", err)
+			}
+			got, rerr := os.ReadFile(path) //nolint:gosec // tmp path under t.TempDir
+			if rerr != nil {
+				t.Fatalf("read after refusal: %v", rerr)
+			}
+			if string(got) != tc.body {
+				t.Errorf("workspace.toml was modified despite refusal:\n--- got ---\n%s", got)
+			}
+		})
 	}
 }

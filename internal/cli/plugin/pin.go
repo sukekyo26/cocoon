@@ -71,7 +71,7 @@ func runPin(stdout, _ io.Writer, id, ref, amd64sum, arm64sum string, write bool)
 				ErrUsage)
 		}
 		if uErr := plugin.UpsertPinBlock(wsPath, id, ref, amd64sum, arm64sum); uErr != nil {
-			if errors.Is(uErr, plugin.ErrPinBlockInlineForm) {
+			if errors.Is(uErr, plugin.ErrPinBlockVersionsKeyAssign) {
 				return fmt.Errorf("%w: %w (in %s)", ErrUsage, uErr, wsPath)
 			}
 			return fmt.Errorf("%w: %w", ErrFailure, uErr)

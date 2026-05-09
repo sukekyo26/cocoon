@@ -25,19 +25,22 @@ var ErrPinBlockEmptyRef = errors.New("UpsertPinBlock: empty ref")
 // the whole line (modulo a trailing comment) to be the header.
 var sectionHeaderRE = regexp.MustCompile(`^\s*\[([A-Za-z0-9_.-]+)\]\s*(#.*)?$`)
 
-// inlinePinRE matches a `<id> = { ... }` line that looks like a per-plugin
-// inline-table pin (e.g. `go = { pin = "1.22.5" }`). It is intentionally
-// loose: any inline-table assignment under [plugins.versions] would clash
-// with an appended [plugins.versions.<id>] block at parse time, so we refuse
-// rather than try to edit the inline form line-by-line.
-var inlinePinRE = regexp.MustCompile(`^\s*([A-Za-z0-9_-]+)\s*=\s*\{`)
+// versionsKeyAssignRE matches any `<id> = ...` assignment line under
+// [plugins.versions] regardless of the right-hand side (`go = "1.23.4"`,
+// `go = { pin = "1.23.4" }`, `go = [..]`, etc.). All such forms collide with
+// an appended `[plugins.versions.<id>]` block at parse time (TOML rejects
+// "value + table with the same key"), so the mutator refuses uniformly
+// rather than handling only the inline-table form.
+var versionsKeyAssignRE = regexp.MustCompile(`^\s*([A-Za-z0-9_-]+)\s*=`)
 
-// ErrPinBlockInlineForm is returned when workspace.toml uses the inline-table
-// form (`[plugins.versions]` + `<id> = { ... }`) which the line-based mutator
-// cannot safely edit.
-var ErrPinBlockInlineForm = errors.New(
-	"workspace.toml uses inline-table form under [plugins.versions]; " +
-		"convert to [plugins.versions.<id>] blocks before using --write")
+// ErrPinBlockVersionsKeyAssign is returned when workspace.toml has any
+// per-id key assignment under [plugins.versions] (e.g. `go = "1.23.4"` or
+// `go = { pin = "..." }`) which the line-based mutator cannot safely edit
+// without producing duplicate-key TOML.
+var ErrPinBlockVersionsKeyAssign = errors.New(
+	"workspace.toml has key assignments directly under [plugins.versions] " +
+		"(e.g. `<id> = \"...\"` or `<id> = { ... }`); " +
+		"convert each to a [plugins.versions.<id>] block before using --write")
 
 // UpsertPinBlock loads the workspace.toml at path, inserts (or replaces) a
 // `[plugins.versions.<id>]` block formatted by FormatPinBlock, and writes the
@@ -180,8 +183,8 @@ func upsertPinBlockBytes(input []byte, id, ref, amd64Sum, arm64Sum string) ([]by
 		lines = nil
 	}
 
-	if hasInlinePinUnderVersions(lines) {
-		return nil, ErrPinBlockInlineForm
+	if hasKeyAssignUnderVersions(lines) {
+		return nil, ErrPinBlockVersionsKeyAssign
 	}
 	targetSpan, lastVersionsSpan := findPinSpans(lines, target, versionsPrefix)
 	switch {
@@ -195,12 +198,12 @@ func upsertPinBlockBytes(input []byte, id, ref, amd64Sum, arm64Sum string) ([]by
 	return renderLines(lines, hadTrailingNewline)
 }
 
-// hasInlinePinUnderVersions reports whether lines contain an active
-// [plugins.versions] section with an inline-table assignment such as
-// `go = { pin = "1.22.5" }`. Such files cannot be edited by the line-based
-// mutator without producing a TOML duplicate-key error, so the caller is
-// expected to refuse with ErrPinBlockInlineForm.
-func hasInlinePinUnderVersions(lines []string) bool {
+// hasKeyAssignUnderVersions reports whether lines contain an active
+// [plugins.versions] section with a per-id key assignment in any form
+// (`go = "1.23.4"`, `go = { pin = "1.22.5" }`, `go = [..]`, etc.). Any such
+// assignment collides with a later [plugins.versions.<id>] block, so the
+// caller refuses with ErrPinBlockVersionsKeyAssign.
+func hasKeyAssignUnderVersions(lines []string) bool {
 	const versionsSection = "plugins.versions"
 	inVersions := false
 	for _, ln := range lines {
@@ -211,7 +214,7 @@ func hasInlinePinUnderVersions(lines []string) bool {
 		if !inVersions {
 			continue
 		}
-		if inlinePinRE.MatchString(ln) {
+		if versionsKeyAssignRE.MatchString(ln) {
 			return true
 		}
 	}
