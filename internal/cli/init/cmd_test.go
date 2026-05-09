@@ -10,7 +10,21 @@ import (
 	"testing"
 
 	"github.com/sukekyo26/cocoon/internal/i18n"
+	"github.com/sukekyo26/cocoon/internal/plugin"
 )
+
+// loadPluginsForTest loads the embedded plugin catalog so tests can drive
+// applyFlags / applyDefaults / validatePluginConflicts against the same
+// data the production runInit path would see. t.Fatal on failure because
+// catalog loading is a pure compile-time / embed-time guarantee.
+func loadPluginsForTest(t *testing.T) map[string]*plugin.Plugin {
+	t.Helper()
+	plugins, err := loadEmbeddedPlugins()
+	if err != nil {
+		t.Fatalf("loadEmbeddedPlugins: %v", err)
+	}
+	return plugins
+}
 
 // pinEnglish forces the i18n catalog to English so assertions stay
 // stable on hosts whose LANG starts with "ja".
@@ -113,13 +127,14 @@ func TestRegex_LeadingUnderscoreAsymmetry(t *testing.T) {
 
 func TestApplyFlags_AllValid(t *testing.T) {
 	t.Parallel()
+	plugins := loadPluginsForTest(t)
 	flags := initFlags{
 		AutoYes: true, ServiceName: "myapp", Username: "dev",
 		OS: "ubuntu", OSVersion: "24.04", MountRoot: "..",
 		Devcontainer: false, NoDevcontainer: true,
 		AptCategories: "text-editors,build", Force: false,
 	}
-	ans, err := applyFlags(&flags)
+	ans, err := applyFlags(&flags, plugins)
 	if err != nil {
 		t.Fatalf("applyFlags: %v", err)
 	}
@@ -148,7 +163,8 @@ func TestApplyFlags_AllValid(t *testing.T) {
 
 func TestApplyFlags_UnsetLeavesZero(t *testing.T) {
 	t.Parallel()
-	ans, err := applyFlags(&initFlags{})
+	plugins := loadPluginsForTest(t)
+	ans, err := applyFlags(&initFlags{}, plugins)
 	if err != nil {
 		t.Fatalf("applyFlags: %v", err)
 	}
@@ -160,8 +176,9 @@ func TestApplyFlags_UnsetLeavesZero(t *testing.T) {
 
 func TestApplyFlags_InvalidServiceName(t *testing.T) {
 	t.Parallel()
+	plugins := loadPluginsForTest(t)
 	for _, bad := range []string{"BAD", "with space", "1leading", "_under"} {
-		_, err := applyFlags(&initFlags{ServiceName: bad})
+		_, err := applyFlags(&initFlags{ServiceName: bad}, plugins)
 		if !errors.Is(err, ErrUsage) {
 			t.Errorf("%q → expected ErrUsage, got %v", bad, err)
 		}
@@ -170,8 +187,9 @@ func TestApplyFlags_InvalidServiceName(t *testing.T) {
 
 func TestApplyFlags_InvalidUsername(t *testing.T) {
 	t.Parallel()
+	plugins := loadPluginsForTest(t)
 	for _, bad := range []string{"BAD", "with space", "1leading"} {
-		_, err := applyFlags(&initFlags{Username: bad})
+		_, err := applyFlags(&initFlags{Username: bad}, plugins)
 		if !errors.Is(err, ErrUsage) {
 			t.Errorf("%q → expected ErrUsage, got %v", bad, err)
 		}
@@ -180,7 +198,8 @@ func TestApplyFlags_InvalidUsername(t *testing.T) {
 
 func TestApplyFlags_InvalidOS(t *testing.T) {
 	t.Parallel()
-	_, err := applyFlags(&initFlags{OS: "alpine"})
+	plugins := loadPluginsForTest(t)
+	_, err := applyFlags(&initFlags{OS: "alpine"}, plugins)
 	if !errors.Is(err, ErrUsage) {
 		t.Errorf("expected ErrUsage for unknown --os, got %v", err)
 	}
@@ -188,7 +207,8 @@ func TestApplyFlags_InvalidOS(t *testing.T) {
 
 func TestApplyFlags_OSVersionWithoutOS(t *testing.T) {
 	t.Parallel()
-	_, err := applyFlags(&initFlags{OSVersion: "24.04"})
+	plugins := loadPluginsForTest(t)
+	_, err := applyFlags(&initFlags{OSVersion: "24.04"}, plugins)
 	if !errors.Is(err, ErrUsage) {
 		t.Errorf("--os-version without --os should be ErrUsage, got %v", err)
 	}
@@ -196,7 +216,8 @@ func TestApplyFlags_OSVersionWithoutOS(t *testing.T) {
 
 func TestApplyFlags_OSVersionMismatch(t *testing.T) {
 	t.Parallel()
-	_, err := applyFlags(&initFlags{OS: "debian", OSVersion: "24.04"})
+	plugins := loadPluginsForTest(t)
+	_, err := applyFlags(&initFlags{OS: "debian", OSVersion: "24.04"}, plugins)
 	if !errors.Is(err, ErrUsage) {
 		t.Errorf("ubuntu version on debian should be ErrUsage, got %v", err)
 	}
@@ -204,7 +225,8 @@ func TestApplyFlags_OSVersionMismatch(t *testing.T) {
 
 func TestApplyFlags_OSVersionValidPair(t *testing.T) {
 	t.Parallel()
-	ans, err := applyFlags(&initFlags{OS: "debian", OSVersion: "13"})
+	plugins := loadPluginsForTest(t)
+	ans, err := applyFlags(&initFlags{OS: "debian", OSVersion: "13"}, plugins)
 	if err != nil {
 		t.Fatalf("applyFlags: %v", err)
 	}
@@ -215,7 +237,8 @@ func TestApplyFlags_OSVersionValidPair(t *testing.T) {
 
 func TestApplyFlags_InvalidMountRoot(t *testing.T) {
 	t.Parallel()
-	_, err := applyFlags(&initFlags{MountRoot: "/abs"})
+	plugins := loadPluginsForTest(t)
+	_, err := applyFlags(&initFlags{MountRoot: "/abs"}, plugins)
 	if !errors.Is(err, ErrUsage) {
 		t.Errorf("expected ErrUsage for /abs mount-root, got %v", err)
 	}
@@ -223,13 +246,14 @@ func TestApplyFlags_InvalidMountRoot(t *testing.T) {
 
 func TestApplyFlags_DevcontainerExclusivity(t *testing.T) {
 	t.Parallel()
+	plugins := loadPluginsForTest(t)
 	// applyFlags itself does not detect this — runInit does. Confirm that
 	// each flag in isolation produces the matching boolean.
-	ans, err := applyFlags(&initFlags{Devcontainer: true})
+	ans, err := applyFlags(&initFlags{Devcontainer: true}, plugins)
 	if err != nil || !ans.Devcontainer || !ans.DevcontainerSet {
 		t.Errorf("--devcontainer should set true: %v %+v", err, ans)
 	}
-	ans, err = applyFlags(&initFlags{NoDevcontainer: true})
+	ans, err = applyFlags(&initFlags{NoDevcontainer: true}, plugins)
 	if err != nil || ans.Devcontainer || !ans.DevcontainerSet {
 		t.Errorf("--no-devcontainer should set false: %v %+v", err, ans)
 	}
@@ -237,7 +261,8 @@ func TestApplyFlags_DevcontainerExclusivity(t *testing.T) {
 
 func TestApplyFlags_UnknownAptCategory(t *testing.T) {
 	t.Parallel()
-	_, err := applyFlags(&initFlags{AptCategories: "text-editors,not-a-real-category"})
+	plugins := loadPluginsForTest(t)
+	_, err := applyFlags(&initFlags{AptCategories: "text-editors,not-a-real-category"}, plugins)
 	if !errors.Is(err, ErrUsage) {
 		t.Errorf("expected ErrUsage for unknown apt category, got %v", err)
 	}
@@ -245,7 +270,8 @@ func TestApplyFlags_UnknownAptCategory(t *testing.T) {
 
 func TestApplyFlags_AptCategoriesWhitespace(t *testing.T) {
 	t.Parallel()
-	ans, err := applyFlags(&initFlags{AptCategories: " text-editors , build , "})
+	plugins := loadPluginsForTest(t)
+	ans, err := applyFlags(&initFlags{AptCategories: " text-editors , build , "}, plugins)
 	if err != nil {
 		t.Fatalf("applyFlags: %v", err)
 	}
@@ -260,7 +286,8 @@ func TestApplyFlags_AptCategoriesWhitespace(t *testing.T) {
 
 func TestApplyDefaults_RequiresServiceName(t *testing.T) {
 	t.Parallel()
-	_, err := applyDefaults(initAnswers{Username: "dev"})
+	plugins := loadPluginsForTest(t)
+	_, err := applyDefaults(initAnswers{Username: "dev"}, plugins)
 	if !errors.Is(err, ErrUsage) {
 		t.Errorf("--yes without service_name should be ErrUsage, got %v", err)
 	}
@@ -268,7 +295,8 @@ func TestApplyDefaults_RequiresServiceName(t *testing.T) {
 
 func TestApplyDefaults_RequiresUsername(t *testing.T) {
 	t.Parallel()
-	_, err := applyDefaults(initAnswers{ServiceName: "x"})
+	plugins := loadPluginsForTest(t)
+	_, err := applyDefaults(initAnswers{ServiceName: "x"}, plugins)
 	if !errors.Is(err, ErrUsage) {
 		t.Errorf("--yes without username should be ErrUsage, got %v", err)
 	}
@@ -276,7 +304,8 @@ func TestApplyDefaults_RequiresUsername(t *testing.T) {
 
 func TestApplyDefaults_FillsMissingDefaults(t *testing.T) {
 	t.Parallel()
-	ans, err := applyDefaults(initAnswers{ServiceName: "svc", Username: "dev"})
+	plugins := loadPluginsForTest(t)
+	ans, err := applyDefaults(initAnswers{ServiceName: "svc", Username: "dev"}, plugins)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -299,6 +328,7 @@ func TestApplyDefaults_FillsMissingDefaults(t *testing.T) {
 
 func TestApplyDefaults_PreservesExplicitSettings(t *testing.T) {
 	t.Parallel()
+	plugins := loadPluginsForTest(t)
 	in := initAnswers{
 		ServiceName: "svc",
 		Username:    "dev",
@@ -308,7 +338,7 @@ func TestApplyDefaults_PreservesExplicitSettings(t *testing.T) {
 		Devcontainer: false, DevcontainerSet: true,
 		AptCategories: []string{"text-editors"}, AptSet: true,
 	}
-	ans, err := applyDefaults(in)
+	ans, err := applyDefaults(in, plugins)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -420,6 +450,19 @@ func TestRenderWorkspaceToml_WithPackages(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Errorf("output missing %q\n--- got ---\n%s", want, got)
 		}
+	}
+}
+
+func TestRenderWorkspaceToml_WithPlugins(t *testing.T) {
+	t.Parallel()
+	got := renderWorkspaceToml(containerSpec{
+		ServiceName: "svc", Username: "dev", OS: "ubuntu", OSVersion: "24.04",
+		MountRoot: ".", Devcontainer: true,
+		Plugins: []string{"go", "uv", "github-cli"},
+	})
+	want := "[plugins]\nenable = [\n  \"go\",\n  \"uv\",\n  \"github-cli\",\n]"
+	if !strings.Contains(got, want) {
+		t.Errorf("output missing %q\n--- got ---\n%s", want, got)
 	}
 }
 
@@ -551,5 +594,158 @@ func TestRunInit_DevcontainerConflict(t *testing.T) {
 	})
 	if err := cmd.Execute(); !errors.Is(err, ErrUsage) {
 		t.Errorf("conflicting flags should be ErrUsage, got %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------
+// Plugin selection: --plugins flag, conflicts validation, defaults.
+// ---------------------------------------------------------------------
+
+func TestParsePlugins(t *testing.T) {
+	t.Parallel()
+	plugins := loadPluginsForTest(t)
+
+	out, err := parsePlugins("go,uv,github-cli", plugins)
+	if err != nil || len(out) != 3 {
+		t.Errorf("got %v %v", out, err)
+	}
+	out, err = parsePlugins("", plugins)
+	if err != nil || len(out) != 0 {
+		t.Errorf("empty string → empty list, got %v %v", out, err)
+	}
+	out, err = parsePlugins(" go , uv , ", plugins)
+	if err != nil || len(out) != 2 || out[0] != "go" || out[1] != "uv" {
+		t.Errorf("whitespace handling: got %v %v", out, err)
+	}
+	if _, err := parsePlugins("does-not-exist", plugins); !errors.Is(err, ErrUsage) {
+		t.Errorf("unknown plugin should be ErrUsage, got %v", err)
+	}
+}
+
+func TestValidatePluginConflicts(t *testing.T) {
+	t.Parallel()
+	plugins := loadPluginsForTest(t)
+
+	// custom-ps1 ↔ starship is the canonical conflict pair shipped in the
+	// embedded catalog. Picking both must report a conflict.
+	err := validatePluginConflicts(plugins, []string{"custom-ps1", "starship"})
+	if !errors.Is(err, ErrUsage) {
+		t.Errorf("custom-ps1+starship should be ErrUsage, got %v", err)
+	}
+
+	// Either alone is fine.
+	if err := validatePluginConflicts(plugins, []string{"custom-ps1"}); err != nil {
+		t.Errorf("custom-ps1 alone should be ok, got %v", err)
+	}
+	if err := validatePluginConflicts(plugins, []string{"starship"}); err != nil {
+		t.Errorf("starship alone should be ok, got %v", err)
+	}
+
+	// Empty list is trivially ok.
+	if err := validatePluginConflicts(plugins, nil); err != nil {
+		t.Errorf("nil enabled should be ok, got %v", err)
+	}
+
+	// Disjoint plugins do not conflict.
+	if err := validatePluginConflicts(plugins, []string{"go", "uv", "github-cli"}); err != nil {
+		t.Errorf("disjoint plugins should be ok, got %v", err)
+	}
+}
+
+func TestDefaultPluginIDs(t *testing.T) {
+	t.Parallel()
+	plugins := loadPluginsForTest(t)
+
+	got := defaultPluginIDs(plugins)
+	// The current catalog ships `docker-cli` as the only default-on plugin.
+	// If you add another default-on plugin, update this assertion alongside
+	// the catalog change.
+	want := []string{"docker-cli"}
+	if len(got) != len(want) || got[0] != want[0] {
+		t.Errorf("default plugin ids: got %v, want %v", got, want)
+	}
+}
+
+//nolint:paralleltest // t.Chdir
+func TestRunInit_PluginsFlagWritesEnable(t *testing.T) {
+	pinEnglish(t)
+	work := t.TempDir()
+	t.Chdir(work)
+
+	cmd := NewCommand(io.Discard, io.Discard)
+	cmd.SetArgs([]string{
+		"--yes", "--service-name", "myapp", "--username", "dev",
+		"--plugins", "go,uv,github-cli",
+		"--apt-categories", "text-editors",
+	})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("init --yes --plugins: %v", err)
+	}
+	body, err := os.ReadFile(filepath.Join(work, "workspace.toml"))
+	if err != nil {
+		t.Fatalf("read workspace.toml: %v", err)
+	}
+	want := "[plugins]\nenable = [\n  \"go\",\n  \"uv\",\n  \"github-cli\",\n]"
+	if !strings.Contains(string(body), want) {
+		t.Errorf("workspace.toml missing %q\n--- got ---\n%s", want, body)
+	}
+}
+
+//nolint:paralleltest // t.Chdir
+func TestRunInit_PluginsFlagRejectsUnknown(t *testing.T) {
+	pinEnglish(t)
+	work := t.TempDir()
+	t.Chdir(work)
+
+	cmd := NewCommand(io.Discard, io.Discard)
+	cmd.SetArgs([]string{
+		"--yes", "--service-name", "x", "--username", "y",
+		"--plugins", "does-not-exist",
+	})
+	if err := cmd.Execute(); !errors.Is(err, ErrUsage) {
+		t.Errorf("unknown plugin should be ErrUsage, got %v", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(work, "workspace.toml")); statErr == nil {
+		t.Error("workspace.toml should NOT have been written when --plugins lists an unknown id")
+	}
+}
+
+//nolint:paralleltest // t.Chdir
+func TestRunInit_PluginsFlagRejectsConflict(t *testing.T) {
+	pinEnglish(t)
+	work := t.TempDir()
+	t.Chdir(work)
+
+	cmd := NewCommand(io.Discard, io.Discard)
+	cmd.SetArgs([]string{
+		"--yes", "--service-name", "x", "--username", "y",
+		"--plugins", "custom-ps1,starship",
+	})
+	if err := cmd.Execute(); !errors.Is(err, ErrUsage) {
+		t.Errorf("conflicting plugins should be ErrUsage, got %v", err)
+	}
+}
+
+//nolint:paralleltest // t.Chdir
+func TestRunInit_YesDefaultsToDockerCli(t *testing.T) {
+	// `--yes` with no --plugins should fall back to defaultPluginIDs(),
+	// which currently means just docker-cli (the only `default = true`
+	// plugin in the embedded catalog).
+	pinEnglish(t)
+	work := t.TempDir()
+	t.Chdir(work)
+
+	cmd := NewCommand(io.Discard, io.Discard)
+	cmd.SetArgs([]string{"--yes", "--service-name", "x", "--username", "y"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("init --yes: %v", err)
+	}
+	body, err := os.ReadFile(filepath.Join(work, "workspace.toml"))
+	if err != nil {
+		t.Fatalf("read workspace.toml: %v", err)
+	}
+	want := "[plugins]\nenable = [\n  \"docker-cli\",\n]"
+	if !strings.Contains(string(body), want) {
+		t.Errorf("workspace.toml missing %q\n--- got ---\n%s", want, body)
 	}
 }

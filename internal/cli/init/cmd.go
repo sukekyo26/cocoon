@@ -4,9 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/charmbracelet/huh"
@@ -15,6 +17,7 @@ import (
 	"github.com/sukekyo26/cocoon/internal/aptcategories"
 	"github.com/sukekyo26/cocoon/internal/config"
 	"github.com/sukekyo26/cocoon/internal/i18n"
+	"github.com/sukekyo26/cocoon/internal/plugin"
 )
 
 const initLong = `cocoon init — generate workspace.toml in the current directory
@@ -36,7 +39,7 @@ scrolled under it.)
 
 Use --yes plus --service-name / --username (both required when --yes
 is set) and any of --os / --os-version / --mount-root / --devcontainer
-/ --apt-categories to drive non-interactively from CI.`
+/ --apt-categories / --plugins to drive non-interactively from CI.`
 
 var (
 	rxServiceName = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
@@ -71,6 +74,12 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 		"",
 		"comma-separated apt category IDs (skips the multi-select prompt)",
 	)
+	cmd.Flags().StringVar(
+		&flags.Plugins,
+		"plugins",
+		"",
+		"comma-separated plugin IDs to enable (skips the plugin multi-select prompt)",
+	)
 	cmd.Flags().BoolVar(&flags.Force, "force", false, "overwrite an existing workspace.toml")
 	return cmd
 }
@@ -85,6 +94,7 @@ type initFlags struct {
 	Devcontainer   bool
 	NoDevcontainer bool
 	AptCategories  string
+	Plugins        string
 	Force          bool
 }
 
@@ -99,6 +109,7 @@ func zeroFlags() initFlags {
 		Devcontainer:   false,
 		NoDevcontainer: false,
 		AptCategories:  "",
+		Plugins:        "",
 		Force:          false,
 	}
 }
@@ -121,6 +132,8 @@ type initAnswers struct {
 	DevcontainerSet bool
 	AptCategories   []string
 	AptSet          bool
+	Plugins         []string
+	PluginsSet      bool
 }
 
 func zeroAnswers() initAnswers {
@@ -137,6 +150,8 @@ func zeroAnswers() initAnswers {
 		DevcontainerSet: false,
 		AptCategories:   nil,
 		AptSet:          false,
+		Plugins:         nil,
+		PluginsSet:      false,
 	}
 }
 
@@ -155,7 +170,12 @@ func runInit(cmd *cobra.Command, stdout, _ io.Writer, flags *initFlags) error {
 		return fmt.Errorf("%w: %s already exists; use --force to overwrite", ErrUsage, target)
 	}
 
-	ans, err := collectAnswers(flags, cat)
+	plugins, err := loadEmbeddedPlugins()
+	if err != nil {
+		return fmt.Errorf("%w: %s", ErrFailure, cat.Msg("init_err_plugin_load_fmt", err))
+	}
+
+	ans, err := collectAnswers(flags, cat, plugins)
 	if err != nil {
 		return err
 	}
@@ -169,6 +189,7 @@ func runInit(cmd *cobra.Command, stdout, _ io.Writer, flags *initFlags) error {
 		MountRoot:    ans.MountRoot,
 		Devcontainer: ans.Devcontainer,
 		Packages:     pkgs,
+		Plugins:      ans.Plugins,
 	})
 	if err := os.WriteFile(target, []byte(content), 0o644); err != nil { //nolint:gosec // workspace.toml is user-readable.
 		return fmt.Errorf("%w: write %s: %w", ErrFailure, target, err)
@@ -193,15 +214,15 @@ func printNextSteps(stdout io.Writer, cat *i18n.Catalog, devcontainer bool) {
 // collectAnswers folds CLI flags into initAnswers, then either applies
 // safe defaults (when --yes is set) or runs an interactive form for
 // whatever is still missing.
-func collectAnswers(flags *initFlags, cat *i18n.Catalog) (initAnswers, error) {
-	ans, err := applyFlags(flags)
+func collectAnswers(flags *initFlags, cat *i18n.Catalog, plugins map[string]*plugin.Plugin) (initAnswers, error) {
+	ans, err := applyFlags(flags, plugins)
 	if err != nil {
 		return ans, err
 	}
 	if flags.AutoYes {
-		return applyDefaults(ans)
+		return applyDefaults(ans, plugins)
 	}
-	return promptForMissing(ans, cat)
+	return promptForMissing(ans, cat, plugins)
 }
 
 // applyFlags copies validated CLI-flag values into initAnswers and marks
@@ -209,7 +230,7 @@ func collectAnswers(flags *initFlags, cat *i18n.Catalog) (initAnswers, error) {
 // prompt or default layer knows to fill it in.
 //
 //nolint:gocognit,gocyclo // sequence of independent flag checks; splitting hides intent.
-func applyFlags(flags *initFlags) (initAnswers, error) {
+func applyFlags(flags *initFlags, plugins map[string]*plugin.Plugin) (initAnswers, error) {
 	ans := zeroAnswers()
 	if flags.ServiceName != "" {
 		if !rxServiceName.MatchString(flags.ServiceName) {
@@ -266,6 +287,16 @@ func applyFlags(flags *initFlags) (initAnswers, error) {
 		}
 		ans.AptCategories, ans.AptSet = ids, true
 	}
+	if flags.Plugins != "" {
+		ids, err := parsePlugins(flags.Plugins, plugins)
+		if err != nil {
+			return ans, err
+		}
+		if conflictErr := validatePluginConflicts(plugins, ids); conflictErr != nil {
+			return ans, conflictErr
+		}
+		ans.Plugins, ans.PluginsSet = ids, true
+	}
 	return ans, nil
 }
 
@@ -273,7 +304,7 @@ func applyFlags(flags *initFlags) (initAnswers, error) {
 // defaults so --yes can proceed without prompts. service_name and
 // username are required and never defaulted; missing them returns
 // ErrUsage so CI scripts know to pass the flags.
-func applyDefaults(ans initAnswers) (initAnswers, error) {
+func applyDefaults(ans initAnswers, plugins map[string]*plugin.Plugin) (initAnswers, error) {
 	if ans.ServiceName == "" {
 		return ans, fmt.Errorf("%w: --yes requires --service-name", ErrUsage)
 	}
@@ -294,6 +325,9 @@ func applyDefaults(ans initAnswers) (initAnswers, error) {
 	}
 	if !ans.AptSet {
 		ans.AptCategories, ans.AptSet = aptcategories.DefaultAptCategoryIDs(), true
+	}
+	if !ans.PluginsSet {
+		ans.Plugins, ans.PluginsSet = defaultPluginIDs(plugins), true
 	}
 	return ans, nil
 }
@@ -316,7 +350,7 @@ func applyDefaults(ans initAnswers) (initAnswers, error) {
 // `cocoon init` is the way to fix an earlier answer.
 //
 //nolint:gocognit,gocyclo // sequence of independent prompt steps; splitting hides intent.
-func promptForMissing(ans initAnswers, cat *i18n.Catalog) (initAnswers, error) {
+func promptForMissing(ans initAnswers, cat *i18n.Catalog, plugins map[string]*plugin.Plugin) (initAnswers, error) {
 	if ans.ServiceName == "" {
 		if err := runStrictIdentForm(cat, "init_prompt_service_name",
 			"init_desc_service_name", "init_err_service_name_fmt",
@@ -373,10 +407,40 @@ func promptForMissing(ans initAnswers, cat *i18n.Catalog) (initAnswers, error) {
 		}
 		ans.AptSet = true
 	}
+	if !ans.PluginsSet {
+		ans.Plugins = defaultPluginIDs(plugins)
+		if err := promptPluginsWithRetry(cat, plugins, &ans.Plugins); err != nil {
+			return ans, err
+		}
+		ans.PluginsSet = true
+	}
 	if !versionMatchesOS(ans.OS, ans.OSVersion) {
 		ans.OSVersion = defaultOSVersion(ans.OS)
 	}
 	return ans, nil
+}
+
+// promptPluginsWithRetry runs the plugin multi-select form, then verifies
+// the user did not pick a conflicting pair (e.g. custom-ps1 ↔ starship).
+// On conflict, the form is re-run up to two more times so the user can
+// reconcile without restarting the whole flow. Three failures in a row
+// return ErrUsage so CI / scripted invocations cannot loop forever.
+func promptPluginsWithRetry(cat *i18n.Catalog, plugins map[string]*plugin.Plugin, target *[]string) error {
+	const maxAttempts = 3
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		if err := runSingleFieldForm(pluginsMultiSelect(cat, plugins, target)); err != nil {
+			return err
+		}
+		err := validatePluginConflicts(plugins, *target)
+		if err == nil {
+			return nil
+		}
+		// Echo the conflict to stderr so the user sees why the form is
+		// re-appearing (huh's prompt body is fully redrawn between runs
+		// and prior status lines are not preserved).
+		fmt.Fprintln(os.Stderr, err)
+	}
+	return fmt.Errorf("%w: plugin conflict not resolved after %d attempts", ErrUsage, maxAttempts)
 }
 
 // runSingleFieldForm wraps a single huh.Field into a one-Group, one-
@@ -504,6 +568,48 @@ func aptMultiSelect(cat *i18n.Catalog, target *[]string) *huh.MultiSelect[string
 		Value(target)
 }
 
+// pluginsMultiSelect renders the embedded plugin catalog as a single
+// multi-select. Options are sorted by id so the order is stable across
+// runs (LoadDir returns a map so iteration order is otherwise random).
+// The label format mirrors aptMultiSelect — "<Name> (<short description
+// or conflicts hint>)" — so both prompts feel like the same family.
+func pluginsMultiSelect(cat *i18n.Catalog, plugins map[string]*plugin.Plugin,
+	target *[]string,
+) *huh.MultiSelect[string] {
+	ids := sortedPluginIDs(plugins)
+	options := make([]huh.Option[string], len(ids))
+	for i, id := range ids {
+		options[i] = huh.NewOption(formatPluginLabel(id, plugins[id]), id)
+	}
+	return huh.NewMultiSelect[string]().
+		Title(cat.Msg("init_prompt_plugins")).
+		Description(cat.Msg("init_desc_plugins")).
+		Options(options...).
+		Value(target)
+}
+
+// formatPluginLabel collapses Name + short hint into a single display
+// line. The "conflicts" hint surfaces incompatibilities up front so the
+// user does not have to dig into plugin.toml — e.g. picking custom-ps1
+// makes the conflict with starship immediately obvious.
+func formatPluginLabel(id string, p *plugin.Plugin) string {
+	name := p.Metadata.Name
+	if name == "" {
+		name = id
+	}
+	hint := p.Metadata.Description
+	if len(p.Metadata.Conflicts) > 0 {
+		// Conflicts is the user-actionable signal here; description is
+		// nice to have but the conflict warning is the thing that
+		// changes their pick. Trim description if both are present.
+		hint = "conflicts: " + strings.Join(p.Metadata.Conflicts, ", ")
+	}
+	if hint == "" {
+		return name
+	}
+	return fmt.Sprintf("%s (%s)", name, hint)
+}
+
 // makeStrictValidator rejects empty input and bad characters. Used by
 // the standalone Inputs in promptForMissing. Showing the regex itself
 // to end users is useless; this surfaces a human sentence instead.
@@ -543,6 +649,116 @@ func parseAptCategories(raw string) ([]string, error) {
 	return ids, nil
 }
 
+// parsePlugins splits a comma-separated plugin id list and validates each
+// against the loaded embedded catalog. The conflict check is left to
+// validatePluginConflicts so the same logic covers both flag and prompt
+// paths.
+func parsePlugins(raw string, plugins map[string]*plugin.Plugin) ([]string, error) {
+	var ids []string
+	for _, part := range strings.Split(raw, ",") {
+		id := strings.TrimSpace(part)
+		if id == "" {
+			continue
+		}
+		if _, ok := plugins[id]; !ok {
+			return nil, fmt.Errorf("%w: unknown plugin %q (run `cocoon plugin list` for the catalog)",
+				ErrUsage, id)
+		}
+		ids = append(ids, id)
+	}
+	return ids, nil
+}
+
+// validatePluginConflicts reports the first incompatible pair in the
+// enabled list. Conflicts are declared on plugin.toml's metadata.conflicts
+// field; the relation is symmetric (custom-ps1 lists starship and vice
+// versa) so checking one direction is enough.
+func validatePluginConflicts(plugins map[string]*plugin.Plugin, enabled []string) error {
+	enabledSet := make(map[string]struct{}, len(enabled))
+	for _, id := range enabled {
+		enabledSet[id] = struct{}{}
+	}
+	// Iterate enabled in a deterministic order so the first-failure
+	// message is stable when more than one conflict exists.
+	sorted := make([]string, len(enabled))
+	copy(sorted, enabled)
+	sort.Strings(sorted)
+	for _, id := range sorted {
+		p, ok := plugins[id]
+		if !ok {
+			continue
+		}
+		for _, other := range p.Metadata.Conflicts {
+			if _, hit := enabledSet[other]; hit {
+				return fmt.Errorf("%w: %s conflicts with %s — pick one",
+					ErrUsage, id, other)
+			}
+		}
+	}
+	return nil
+}
+
+// defaultPluginIDs returns the ids of plugins whose plugin.toml metadata
+// has `default = true`. Order is sorted by id for determinism.
+func defaultPluginIDs(plugins map[string]*plugin.Plugin) []string {
+	var ids []string
+	for id, p := range plugins {
+		if p.Metadata.Default {
+			ids = append(ids, id)
+		}
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+// sortedPluginIDs returns every id in plugins in sorted order. Pulled out
+// so the prompt builder and other callers stay readable.
+func sortedPluginIDs(plugins map[string]*plugin.Plugin) []string {
+	ids := make([]string, 0, len(plugins))
+	for id := range plugins {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+// loadEmbeddedPlugins enumerates every <id>/plugin.toml in the binary's
+// embedded catalog and returns them keyed by id. Mirrors
+// internal/cli/plugin/sources.go::loadPluginFromLayer's parse path so
+// init agrees with `cocoon plugin list` on metadata interpretation.
+//
+// init runs in a fresh project where neither the project layer
+// (<project>/.cocoon/plugins) nor user overlay (~/.cocoon/plugins)
+// is meaningful yet — bootstrapping deliberately stays embedded-only so
+// the option list cannot be tampered with by stray on-disk overlays.
+func loadEmbeddedPlugins() (map[string]*plugin.Plugin, error) {
+	fsys, err := plugin.CatalogFS()
+	if err != nil {
+		return nil, fmt.Errorf("plugin catalog: %w", err)
+	}
+	entries, err := fs.ReadDir(fsys, ".")
+	if err != nil {
+		return nil, fmt.Errorf("read catalog dir: %w", err)
+	}
+	out := make(map[string]*plugin.Plugin, len(entries))
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		id := e.Name()
+		body, readErr := fs.ReadFile(fsys, id+"/plugin.toml")
+		if readErr != nil {
+			return nil, fmt.Errorf("read %s/plugin.toml: %w", id, readErr)
+		}
+		var p plugin.Plugin
+		if uerr := config.StrictUnmarshal(id+"/plugin.toml", body, &p); uerr != nil {
+			return nil, fmt.Errorf("parse %s/plugin.toml: %w", id, uerr)
+		}
+		out[id] = &p
+	}
+	return out, nil
+}
+
 // defaultOSVersion picks the LTS-flavoured default for ubuntu (24.04
 // over the newer 26.04 which is not yet on dockerhub for every arch);
 // other distros fall back to the first listed version.
@@ -569,6 +785,7 @@ type containerSpec struct {
 	MountRoot    string
 	Devcontainer bool
 	Packages     []string
+	Plugins      []string
 }
 
 func renderWorkspaceToml(s containerSpec) string {
@@ -587,7 +804,15 @@ func renderWorkspaceToml(s containerSpec) string {
 	fmt.Fprintf(&sb, "os_version = %q\n\n", s.OSVersion)
 
 	sb.WriteString("[plugins]\n")
-	sb.WriteString("enable = []\n\n")
+	if len(s.Plugins) == 0 {
+		sb.WriteString("enable = []\n\n")
+	} else {
+		sb.WriteString("enable = [\n")
+		for _, id := range s.Plugins {
+			fmt.Fprintf(&sb, "  %q,\n", id)
+		}
+		sb.WriteString("]\n\n")
+	}
 
 	sb.WriteString("[apt]\n")
 	if len(s.Packages) == 0 {

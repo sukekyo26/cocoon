@@ -36,6 +36,11 @@ var messagesEN_init = map[string]string{
 	"init_confirm_no":               "No",
 	"init_prompt_apt":               "Select common apt packages to install",
 	"init_desc_apt":                 "Pre-checked categories are installed by default; uncheck what you do not need.",
+	"init_prompt_plugins":           "Select plugins to enable",
+	"init_desc_plugins":             "Space toggles, Enter confirms. Pre-checked plugins are enabled by default.",
+	"init_err_plugin_unknown_fmt":   "unknown plugin %q (run `cocoon plugin list` for the catalog)",
+	"init_err_plugin_conflict_fmt":  "%s conflicts with %s — pick one",
+	"init_err_plugin_load_fmt":      "load plugin catalog: %s",
 	// init result + next steps
 	"init_wrote":             "wrote %s",
 	"init_next_header":       "Next steps:",
@@ -79,6 +84,11 @@ var messagesJA_init = map[string]string{
 	"init_confirm_no":               "いいえ",
 	"init_prompt_apt":               "インストールする apt パッケージのカテゴリを選択",
 	"init_desc_apt":                 "プリチェック済みのカテゴリがデフォルトでインストールされます。不要なものはチェックを外してください。",
+	"init_prompt_plugins":           "有効化するプラグインを選択",
+	"init_desc_plugins":             "スペースでトグル、Enter で確定します。プリチェック済みのプラグインがデフォルトで有効になります。",
+	"init_err_plugin_unknown_fmt":   "未知のプラグイン %q (`cocoon plugin list` で一覧を確認してください)",
+	"init_err_plugin_conflict_fmt":  "%s と %s は併用できません — どちらか一方を選んでください",
+	"init_err_plugin_load_fmt":      "プラグインカタログの読み込みに失敗: %s",
 	// init result + next steps
 	"init_wrote":             "%s を書き出しました",
 	"init_next_header":       "次のステップ:",
