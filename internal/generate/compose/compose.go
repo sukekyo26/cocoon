@@ -193,7 +193,14 @@ func buildService(ctx *generate.WorkspaceContext, mounts []*yaml.Node) *yaml.Nod
 	pairs := []yamlx.Pair{
 		{Key: "container_name", Value: yamlx.QuotedIfSpecial("${CONTAINER_SERVICE_NAME}")},
 		{Key: "build", Value: yamlx.Map(
-			yamlx.Pair{Key: "context", Value: yamlx.QuotedIfSpecial(".")},
+			// The compose file lives at .devcontainer/docker-compose.yml;
+			// `context: ..` makes the project root the build context so the
+			// Dockerfile's `COPY .devcontainer/docker-entrypoint.sh ...`
+			// resolves. dockerfile is set explicitly because the default
+			// (./Dockerfile) would point at the project root, not at our
+			// generated .devcontainer/Dockerfile.
+			yamlx.Pair{Key: "context", Value: yamlx.QuotedIfSpecial("..")},
+			yamlx.Pair{Key: "dockerfile", Value: yamlx.QuotedIfSpecial(".devcontainer/Dockerfile")},
 			yamlx.Pair{Key: "additional_contexts", Value: yamlx.Map(
 				// Pulls embedded plugin assets that `cocoon gen`
 				// materialized into ~/.cocoon/cache/build-context/.

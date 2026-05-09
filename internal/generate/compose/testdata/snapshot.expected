@@ -3,7 +3,8 @@ services:
   snapshot-test:
     container_name: "${CONTAINER_SERVICE_NAME}"
     build:
-      context: .
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
       additional_contexts:
         plugins: "${HOME}/.cocoon/cache/build-context"
       args:
