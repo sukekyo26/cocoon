@@ -32,11 +32,17 @@ func resolveLayered() (*plugin.LayeredFS, error) {
 		return nil, fmt.Errorf("%w: %w", ErrFailure, err)
 	}
 	projectDir, projErr := projectPluginsDir()
-	if projErr != nil {
-		// Discovery failure (no workspace.toml in tree) is expected outside
-		// a cocoon project and must not fail plugin commands; drop the layer
-		// silently, the user/embedded view stays valid.
+	switch {
+	case errors.Is(projErr, ErrWorkspaceNotFound):
+		// Running outside a cocoon project is expected for read-only views
+		// (`cocoon plugin list / show`); the user/embedded layers still
+		// satisfy the request. Drop the project layer silently.
 		projectDir = ""
+	case projErr != nil:
+		// A genuine system failure during discovery (Getwd / stat) should
+		// not be hidden — surface it instead of pretending no project layer
+		// exists.
+		return nil, fmt.Errorf("%w: project plugins dir: %w", ErrFailure, projErr)
 	}
 	return plugin.NewLayeredFS(embedded, userDir, projectDir), nil
 }
