@@ -799,20 +799,13 @@ func loadEmbeddedPlugins() (map[string]*plugin.Plugin, error) {
 	return out, nil
 }
 
-// defaultOSVersion picks the LTS-flavoured default for ubuntu (24.04
-// over the newer 26.04 which is not yet on dockerhub for every arch);
-// other distros fall back to the first listed version.
+// defaultOSVersion returns the first listed version for the OS, which
+// SupportedOsVersions orders newest-first. ubuntu therefore defaults to
+// 26.04, debian to 13.
 func defaultOSVersion(osID string) string {
 	versions := config.SupportedOsVersions[osID]
 	if len(versions) == 0 {
 		return ""
-	}
-	if osID == "ubuntu" {
-		for _, v := range versions {
-			if v == "24.04" {
-				return v
-			}
-		}
 	}
 	return versions[0]
 }

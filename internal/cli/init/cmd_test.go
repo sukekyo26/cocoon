@@ -312,7 +312,7 @@ func TestApplyDefaults_FillsMissingDefaults(t *testing.T) {
 	if ans.OS != "ubuntu" || !ans.OSSet {
 		t.Errorf("OS default = %q OSSet=%v", ans.OS, ans.OSSet)
 	}
-	if ans.OSVersion != "24.04" || !ans.OSVersionSet {
+	if ans.OSVersion != "26.04" || !ans.OSVersionSet {
 		t.Errorf("OSVersion default = %q", ans.OSVersion)
 	}
 	if ans.MountRoot != "." || !ans.MountRootSet {
@@ -352,13 +352,13 @@ func TestApplyDefaults_PreservesExplicitSettings(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------
-// defaultOSVersion: ubuntu prefers 24.04 LTS; others take the first.
+// defaultOSVersion: returns the first (newest) entry per OS.
 // ---------------------------------------------------------------------
 
 func TestDefaultOSVersion(t *testing.T) {
 	t.Parallel()
-	if got := defaultOSVersion("ubuntu"); got != "24.04" {
-		t.Errorf("ubuntu default = %q, want 24.04", got)
+	if got := defaultOSVersion("ubuntu"); got != "26.04" {
+		t.Errorf("ubuntu default = %q, want 26.04", got)
 	}
 	if got := defaultOSVersion("debian"); got != "13" {
 		t.Errorf("debian default = %q, want 13", got)
