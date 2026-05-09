@@ -10,6 +10,20 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 - Mount a named Docker volume `cocoon` at `/home/<user>/.cocoon` inside the dev container so per-user shell tweaks survive container rebuilds. The container's rc file (bash / zsh / fish) sources `~/.cocoon/.shellrc` (or `~/.cocoon/.shellrc.fish` for fish) automatically; edit those files from inside the container and they persist across `docker compose down && up --build` (only `down -v` resets them).
 - Add `cocoon init --plugin-versions=<id>=<ref>,...` so a single command emits both `[plugins] enable` and `[plugins.versions]` blocks. Each `<id>` must already appear in `--plugins`, must be `version_capable`, and may not repeat. Replaces the prior workflow of pasting `cocoon plugin pin` output by hand.
+- Add `cocoon plugin pin --write` to insert (or replace) a `[plugins.versions.<id>]` block directly in `workspace.toml`. The line-based mutator preserves comments and blank lines outside the target block; the existing stdout-only behavior remains the default.
+
+### Changed
+
+- **BREAKING**: `cocoon plugin scaffold` now defaults `--plugins-dir` to `<workspace>/.cocoon/plugins` (auto-discovered from `workspace.toml`) instead of `./plugins`. Without `--plugins-dir` and outside a cocoon project, scaffold refuses with an actionable error rather than writing to `./plugins/<id>/`. Pass `--plugins-dir <path>` explicitly to override.
+
+### Fixed
+
+- Catalog `claude-code` and `copilot-cli` plugins now export `~/.local/bin` to `PATH` via `[install.env]` so the installed CLIs are reachable in interactive shells without depending on another plugin (e.g. `uv`) to set the same PATH.
+- Catalog `go` plugin now installs `build-essential` (gcc / make) so cgo builds and `go install` of native-dependent tools work out of the box.
+
+### Docs
+
+- Expand `docs/commands.md` plugin section with purpose, runnable example, and gotchas for each subcommand. Document the layered FS (project > user > embedded) and the typical `add → edit → enable → gen` workflow at the top of the section.
 
 ### Removed
 
