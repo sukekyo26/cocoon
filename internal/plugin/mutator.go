@@ -58,6 +58,10 @@ func UpsertPinBlock(path, id, ref, amd64Sum, arm64Sum string) error {
 	if ref == "" {
 		return ErrPinBlockEmptyRef
 	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("stat %s: %w", path, err)
+	}
 	body, err := os.ReadFile(path) //nolint:gosec // caller-provided workspace path
 	if err != nil {
 		return fmt.Errorf("read %s: %w", path, err)
@@ -66,7 +70,7 @@ func UpsertPinBlock(path, id, ref, amd64Sum, arm64Sum string) error {
 	if err != nil {
 		return err
 	}
-	if err := fsx.AtomicWriteFile(path, out, 0o644); err != nil {
+	if err := fsx.AtomicWriteFile(path, out, info.Mode().Perm()); err != nil {
 		return fmt.Errorf("write %s: %w", path, err)
 	}
 	return nil
@@ -215,7 +219,8 @@ func hasInlinePinUnderVersions(lines []string) bool {
 }
 
 // renderLines joins lines back into a byte slice, restoring the trailing
-// newline convention of the source.
+// newline convention of the source: every line gets a separator newline, and
+// the final newline is appended only when the source file had one.
 func renderLines(lines []string, hadTrailingNewline bool) ([]byte, error) {
 	var out bytes.Buffer
 	w := bufio.NewWriter(&out)
@@ -223,7 +228,8 @@ func renderLines(lines []string, hadTrailingNewline bool) ([]byte, error) {
 		if _, err := w.WriteString(ln); err != nil {
 			return nil, fmt.Errorf("write line: %w", err)
 		}
-		if i < len(lines)-1 || hadTrailingNewline || len(lines) > 0 {
+		isLast := i == len(lines)-1
+		if !isLast || hadTrailingNewline {
 			if _, err := w.WriteString("\n"); err != nil {
 				return nil, fmt.Errorf("write newline: %w", err)
 			}
