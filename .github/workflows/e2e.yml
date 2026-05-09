@@ -165,15 +165,25 @@ jobs:
           #      both paths absolutely via `--set "*.context=$PWD"` and
           #      `--set "*.dockerfile=$PWD/.devcontainer/Dockerfile"`.
           #
-          # `--allow fs=*` is required because additional_contexts.plugins
-          # points at ${HOME}/.cocoon/cache/build-context, outside the compose
-          # file's directory and rejected by bake's default entitlements.
+          # `--allow fs=<path>` is narrowed to the single directory bake needs
+          # to read: `${HOME}/.cocoon/cache/build-context`, the materialized
+          # plugin context referenced by additional_contexts.plugins. It sits
+          # outside the compose file's directory so bake's default entitlements
+          # would otherwise reject it; `--allow fs=*` would also work but
+          # grants BuildKit unrestricted host filesystem access for no benefit.
           # `scope=e2e-${PRESET}` separates minimal / amd64-full / arm64-full
           # cache buckets; GHA cache backend further isolates by branch.
           # mode=max captures all layers (within the 10GB/repo limit).
           # The subsequent `compose up -d` reuses the just-loaded image
           # instead of rebuilding.
-          arch="$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
+          # `arch` is derived from `uname -m` with an explicit case so an
+          # unexpected runner architecture fails loudly here instead of
+          # producing a malformed `linux/<garbage>` platform string downstream.
+          case "$(uname -m)" in
+            x86_64) arch=amd64 ;;
+            aarch64) arch=arm64 ;;
+            *) printf 'unsupported runner arch: %s\n' "$(uname -m)" >&2; exit 1 ;;
+          esac
           env_args=()
           while IFS= read -r line || [ -n "$line" ]; do
             case "$line" in
@@ -184,7 +194,7 @@ jobs:
           env "${env_args[@]}" docker buildx bake \
             -f .devcontainer/docker-compose.yml \
             --load \
-            --allow fs=* \
+            --allow "fs=${HOME}/.cocoon/cache/build-context" \
             --set "*.context=$PWD" \
             --set "*.dockerfile=$PWD/.devcontainer/Dockerfile" \
             --set "*.cache-from=type=gha,scope=e2e-${PRESET}" \
