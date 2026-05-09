@@ -86,6 +86,12 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 		"comma-separated plugin IDs to enable (skips the plugin multi-select prompt)",
 	)
 	cmd.Flags().StringVar(
+		&flags.PluginVersions,
+		"plugin-versions",
+		"",
+		"comma-separated <id>=<ref> pins for version_capable plugins (each <id> must also appear in --plugins)",
+	)
+	cmd.Flags().StringVar(
 		&flags.AliasBundles,
 		"alias-bundles",
 		"",
@@ -107,6 +113,7 @@ type initFlags struct {
 	NoDevcontainer bool
 	AptCategories  string
 	Plugins        string
+	PluginVersions string
 	AliasBundles   string
 	Force          bool
 }
@@ -124,6 +131,7 @@ func zeroFlags() initFlags {
 		NoDevcontainer: false,
 		AptCategories:  "",
 		Plugins:        "",
+		PluginVersions: "",
 		AliasBundles:   "",
 		Force:          false,
 	}
@@ -135,46 +143,50 @@ func zeroFlags() initFlags {
 // flag-set vs prompt-pending would be ambiguous and the prompt builder
 // would skip groups whose value happens to look empty.
 type initAnswers struct {
-	ServiceName     string
-	Username        string
-	OS              string
-	OSSet           bool
-	OSVersion       string
-	OSVersionSet    bool
-	Shell           string
-	ShellSet        bool
-	MountRoot       string
-	MountRootSet    bool
-	Devcontainer    bool
-	DevcontainerSet bool
-	AptCategories   []string
-	AptSet          bool
-	Plugins         []string
-	PluginsSet      bool
-	AliasBundles    []string
-	AliasBundlesSet bool
+	ServiceName       string
+	Username          string
+	OS                string
+	OSSet             bool
+	OSVersion         string
+	OSVersionSet      bool
+	Shell             string
+	ShellSet          bool
+	MountRoot         string
+	MountRootSet      bool
+	Devcontainer      bool
+	DevcontainerSet   bool
+	AptCategories     []string
+	AptSet            bool
+	Plugins           []string
+	PluginsSet        bool
+	PluginVersions    map[string]string
+	PluginVersionsSet bool
+	AliasBundles      []string
+	AliasBundlesSet   bool
 }
 
 func zeroAnswers() initAnswers {
 	return initAnswers{
-		ServiceName:     "",
-		Username:        "",
-		OS:              "",
-		OSSet:           false,
-		OSVersion:       "",
-		OSVersionSet:    false,
-		Shell:           "",
-		ShellSet:        false,
-		MountRoot:       "",
-		MountRootSet:    false,
-		Devcontainer:    false,
-		DevcontainerSet: false,
-		AptCategories:   nil,
-		AptSet:          false,
-		Plugins:         nil,
-		PluginsSet:      false,
-		AliasBundles:    nil,
-		AliasBundlesSet: false,
+		ServiceName:       "",
+		Username:          "",
+		OS:                "",
+		OSSet:             false,
+		OSVersion:         "",
+		OSVersionSet:      false,
+		Shell:             "",
+		ShellSet:          false,
+		MountRoot:         "",
+		MountRootSet:      false,
+		Devcontainer:      false,
+		DevcontainerSet:   false,
+		AptCategories:     nil,
+		AptSet:            false,
+		Plugins:           nil,
+		PluginsSet:        false,
+		PluginVersions:    nil,
+		PluginVersionsSet: false,
+		AliasBundles:      nil,
+		AliasBundlesSet:   false,
 	}
 }
 
@@ -206,16 +218,17 @@ func runInit(cmd *cobra.Command, stdout, _ io.Writer, flags *initFlags) error {
 	pkgs := aptcategories.ExpandAptCategories(ans.AptCategories)
 	aliases := aliasbundles.ExpandAliasBundles(ans.AliasBundles)
 	content := renderWorkspaceToml(containerSpec{
-		ServiceName:  ans.ServiceName,
-		Username:     ans.Username,
-		OS:           ans.OS,
-		OSVersion:    ans.OSVersion,
-		Shell:        ans.Shell,
-		Aliases:      aliases,
-		MountRoot:    ans.MountRoot,
-		Devcontainer: ans.Devcontainer,
-		Packages:     pkgs,
-		Plugins:      ans.Plugins,
+		ServiceName:    ans.ServiceName,
+		Username:       ans.Username,
+		OS:             ans.OS,
+		OSVersion:      ans.OSVersion,
+		Shell:          ans.Shell,
+		Aliases:        aliases,
+		MountRoot:      ans.MountRoot,
+		Devcontainer:   ans.Devcontainer,
+		Packages:       pkgs,
+		Plugins:        ans.Plugins,
+		PluginVersions: ans.PluginVersions,
 	}, cat)
 	if err := os.WriteFile(target, []byte(content), 0o644); err != nil { //nolint:gosec // workspace.toml is user-readable.
 		return fmt.Errorf("%w: write %s: %w", ErrFailure, target, err)
@@ -329,6 +342,13 @@ func applyFlags(flags *initFlags, plugins map[string]*plugin.Plugin) (initAnswer
 			return ans, conflictErr
 		}
 		ans.Plugins, ans.PluginsSet = ids, true
+	}
+	if flags.PluginVersions != "" {
+		pins, err := parsePluginVersions(flags.PluginVersions, plugins, ans.Plugins)
+		if err != nil {
+			return ans, err
+		}
+		ans.PluginVersions, ans.PluginVersionsSet = pins, true
 	}
 	if flags.AliasBundles != "" {
 		ids, err := parseAliasBundles(flags.AliasBundles)
@@ -771,6 +791,71 @@ func parsePlugins(raw string, plugins map[string]*plugin.Plugin) ([]string, erro
 	return ids, nil
 }
 
+// parsePluginVersions parses `--plugin-versions=<id>=<ref>,<id>=<ref>,...`
+// into a map keyed by plugin id. Each id must:
+//   - exist in the loaded catalog (`plugins`),
+//   - be in the caller-supplied `enabled` list (the resolved `[plugins].enable`
+//     for this run; pinning a plugin that is not enabled is a usage error
+//     because the pin would silently never apply),
+//   - have `[version] version_capable = true` in its plugin.toml.
+//
+// Empty input returns (nil, nil). Whitespace around id / ref is trimmed.
+// Duplicate ids are rejected so a typo (`go=1.23,go=1.24`) cannot silently
+// pick the last value.
+func parsePluginVersions(raw string, plugins map[string]*plugin.Plugin, enabled []string) (map[string]string, error) {
+	enabledSet := make(map[string]struct{}, len(enabled))
+	for _, id := range enabled {
+		enabledSet[id] = struct{}{}
+	}
+	out := map[string]string{}
+	for _, part := range strings.Split(raw, ",") {
+		token := strings.TrimSpace(part)
+		if token == "" {
+			continue
+		}
+		// Require exactly one '=' so typos like "go==1.23" surface as ErrUsage
+		// instead of silently feeding "=1.23" as the pin ref. Real-world pin
+		// refs (version strings, semver, git tags) never contain '='.
+		if strings.Count(token, "=") != 1 {
+			return nil, fmt.Errorf(
+				"%w: --plugin-versions token %q must be <id>=<ref>", ErrUsage, token)
+		}
+		eq := strings.IndexByte(token, '=')
+		id := strings.TrimSpace(token[:eq])
+		ref := strings.TrimSpace(token[eq+1:])
+		if id == "" || ref == "" {
+			return nil, fmt.Errorf(
+				"%w: --plugin-versions token %q must be <id>=<ref>", ErrUsage, token)
+		}
+		p, ok := plugins[id]
+		if !ok {
+			return nil, fmt.Errorf(
+				"%w: --plugin-versions: unknown plugin %q (run `cocoon plugin list`)",
+				ErrUsage, id)
+		}
+		if !p.Version.VersionCapable {
+			return nil, fmt.Errorf(
+				"%w: --plugin-versions: plugin %q is not version_capable",
+				ErrUsage, id)
+		}
+		if _, on := enabledSet[id]; !on {
+			return nil, fmt.Errorf(
+				"%w: --plugin-versions: plugin %q must also appear in --plugins",
+				ErrUsage, id)
+		}
+		if _, dup := out[id]; dup {
+			return nil, fmt.Errorf(
+				"%w: --plugin-versions: duplicate id %q", ErrUsage, id)
+		}
+		out[id] = ref
+	}
+	// Returning an empty (non-nil) map for an all-whitespace input is fine —
+	// the writer falls back to the commented template when len == 0, and
+	// keeping a non-nil sentinel keeps `nilnil` happy without forcing a
+	// custom error for "I parsed your input but it was empty."
+	return out, nil
+}
+
 // validatePluginConflicts reports the first incompatible pair in the
 // enabled list. Conflicts are declared on plugin.toml's metadata.conflicts
 // field; the relation is symmetric (custom-ps1 lists starship and vice
@@ -873,16 +958,17 @@ func defaultOSVersion(osID string) string {
 }
 
 type containerSpec struct {
-	ServiceName  string
-	Username     string
-	OS           string
-	OSVersion    string
-	Shell        string
-	Aliases      map[string]string
-	MountRoot    string
-	Devcontainer bool
-	Packages     []string
-	Plugins      []string
+	ServiceName    string
+	Username       string
+	OS             string
+	OSVersion      string
+	Shell          string
+	Aliases        map[string]string
+	MountRoot      string
+	Devcontainer   bool
+	Packages       []string
+	Plugins        []string
+	PluginVersions map[string]string
 }
 
 // renderWorkspaceToml emits the workspace.toml body. Section comments come
@@ -948,7 +1034,7 @@ func renderWorkspaceToml(s containerSpec, cat *i18n.Catalog) string {
 		sb.WriteString("]\n\n")
 	}
 
-	emitTemplate(&sb, cat, "init_toml_template_plugins_versions")
+	writePluginVersions(&sb, cat, s.PluginVersions)
 
 	sb.WriteString(cat.Msg("init_toml_section_apt"))
 	sb.WriteByte('\n')
@@ -989,6 +1075,30 @@ func renderWorkspaceToml(s containerSpec, cat *i18n.Catalog) string {
 	}
 
 	return strings.TrimRight(sb.String(), "\n") + "\n"
+}
+
+// writePluginVersions emits the [plugins.versions.<id>] blocks for each pin
+// in deterministic id order. When pins is empty it falls back to the
+// commented-out example template so the reader still discovers the section.
+func writePluginVersions(sb *strings.Builder, cat *i18n.Catalog, pins map[string]string) {
+	if len(pins) == 0 {
+		emitTemplate(sb, cat, "init_toml_template_plugins_versions")
+		return
+	}
+	ids := make([]string, 0, len(pins))
+	for id := range pins {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	sb.WriteString(cat.Msg("init_toml_section_plugins_versions"))
+	sb.WriteByte('\n')
+	for i, id := range ids {
+		if i > 0 {
+			sb.WriteByte('\n')
+		}
+		sb.WriteString(plugin.FormatPinBlock(id, pins[id], "", ""))
+	}
+	sb.WriteByte('\n')
 }
 
 // emitTemplate writes a localized commented-out section template to sb,

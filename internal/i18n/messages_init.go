@@ -68,6 +68,8 @@ var messagesEN_init = map[string]string{
 		"#   - PAGER=less / less -R needs the `utilities` apt category (less is not in cocoon's minimal base).",
 	"init_toml_section_plugins": "# [plugins] — enable cocoon plugins (run `cocoon plugin list` for the catalog).\n" +
 		"#   Pin versions in [plugins.versions] when you need reproducible builds.",
+	"init_toml_section_plugins_versions": "# [plugins.versions] — pinned versions for the enabled plugins above.\n" +
+		"#   Add checksum_amd64 / checksum_arm64 (64 lowercase hex chars) per block to verify install tarballs.",
 	"init_toml_section_apt": "# [apt] — extra apt packages installed on top of cocoon's minimal base + selected categories.\n" +
 		"#   Re-run `cocoon init --force` to change category checkboxes, or edit this list directly.",
 	// init result + next steps
@@ -145,6 +147,8 @@ var messagesJA_init = map[string]string{
 		"#   - PAGER=less / less -R は apt カテゴリ `utilities` が前提（less は cocoon の最小ベースに含まれない）。",
 	"init_toml_section_plugins": "# [plugins] — cocoon プラグインの有効化（一覧は `cocoon plugin list`）。\n" +
 		"#   再現性が必要なら [plugins.versions] でバージョン固定。",
+	"init_toml_section_plugins_versions": "# [plugins.versions] — 上で有効化したプラグインに対するバージョン固定。\n" +
+		"#   各ブロックに checksum_amd64 / checksum_arm64（64 文字小文字 hex）を足すと install 時のハッシュ検証が有効になる。",
 	"init_toml_section_apt": "# [apt] — cocoon の最小ベース + 選択カテゴリに追加する apt パッケージ。\n" +
 		"#   カテゴリのチェックを変えるなら `cocoon init --force` を再実行、または直接このリストを編集。",
 	// init result + next steps
