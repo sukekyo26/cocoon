@@ -1044,3 +1044,120 @@ func TestRunInit_AliasBundlesFlagRejectsUnknown(t *testing.T) {
 		t.Errorf("--alias-bundles k8s should be ErrUsage, got %v", err)
 	}
 }
+
+// ---------------------------------------------------------------------
+// Opt-in section templates (commented-out blocks for discoverability).
+// ---------------------------------------------------------------------
+
+// allTemplateSectionHeaders is the canonical list of `# [section]` literals
+// every renderWorkspaceToml output must contain. The literals are unchanged
+// across locales (TOML schema names are universal) — only the surrounding
+// prose is localized — so a single table drives both EN and JA assertions.
+var allTemplateSectionHeaders = []string{
+	// [container.*]
+	"# [container.resources]",
+	"# [container.hosts]",
+	"# [container.dns]",
+	"# [container.sysctls]",
+	"# [container.capabilities]",
+	"# [container.security_opt]",
+	"# [[container.skel]]",
+	// [plugins.*]
+	"# [plugins.versions]",
+	// [apt.*]
+	"# [apt.mirror]",
+	"# [apt.proxy]",
+	"# [[apt.sources]]",
+	// top-level
+	"# [ports]",
+	"# [volumes]",
+	"# [env]",
+	"# [[mounts]]",
+	"# [home_files]",
+	"# [locale]",
+	"# [dockerfile]",
+	"# [services.postgres]",
+	"# [devcontainer.customizations.vscode]",
+}
+
+func TestRenderWorkspaceToml_AllTemplatesPresent_EN(t *testing.T) {
+	t.Parallel()
+	cat := i18n.New(i18n.LangEN)
+	got := renderWorkspaceToml(containerSpec{
+		ServiceName: "svc", Username: "dev", OS: "ubuntu", OSVersion: "26.04",
+		Shell: "bash", MountRoot: ".", Devcontainer: true,
+	}, cat)
+	for _, header := range allTemplateSectionHeaders {
+		if !strings.Contains(got, header) {
+			t.Errorf("EN output missing section template %q", header)
+		}
+	}
+}
+
+func TestRenderWorkspaceToml_AllTemplatesPresent_JA(t *testing.T) {
+	t.Parallel()
+	cat := i18n.New(i18n.LangJA)
+	got := renderWorkspaceToml(containerSpec{
+		ServiceName: "svc", Username: "dev", OS: "ubuntu", OSVersion: "26.04",
+		Shell: "bash", MountRoot: ".", Devcontainer: true,
+	}, cat)
+	for _, header := range allTemplateSectionHeaders {
+		if !strings.Contains(got, header) {
+			t.Errorf("JA output missing section template %q", header)
+		}
+	}
+}
+
+// TestRenderWorkspaceToml_NoDeprecatedSections is a regression guard: cocoon
+// dropped [git] and [repositories] from the design's intended set. Neither
+// must appear as an active section header (`[git]` at line start) nor as
+// a commented-out template header (`# [git]` at line start) — both forms
+// would nudge a user to use the retired sections.
+//
+// In-line backrefs ("…replaces the v1 [git] section…") are allowed: they
+// document the deprecation rather than promote the section, so we check
+// section-header position only, not raw substring presence.
+func TestRenderWorkspaceToml_NoDeprecatedSections(t *testing.T) {
+	t.Parallel()
+	for _, lang := range []i18n.Lang{i18n.LangEN, i18n.LangJA} {
+		cat := i18n.New(lang)
+		got := renderWorkspaceToml(containerSpec{
+			ServiceName: "svc", Username: "dev", OS: "ubuntu", OSVersion: "26.04",
+			Shell: "bash", MountRoot: ".", Devcontainer: true,
+		}, cat)
+		for _, banned := range []string{"[git]", "[repositories]"} {
+			for _, prefix := range []string{"", "# "} {
+				header := prefix + banned
+				for _, line := range strings.Split(got, "\n") {
+					if strings.TrimSpace(line) == header {
+						t.Errorf("[%s] deprecated section header %q must not appear at line start", lang, header)
+					}
+				}
+			}
+		}
+	}
+}
+
+// TestRenderWorkspaceToml_TemplateOrdering pins that container.* extras
+// land between the active [container] block and the active
+// [container.shell] block, matching workspace-docker's convention of
+// grouping sub-table extras under their parent.
+func TestRenderWorkspaceToml_TemplateOrdering(t *testing.T) {
+	t.Parallel()
+	cat := i18n.New(i18n.LangEN)
+	got := renderWorkspaceToml(containerSpec{
+		ServiceName: "svc", Username: "dev", OS: "ubuntu", OSVersion: "26.04",
+		Shell: "bash", MountRoot: ".", Devcontainer: true,
+	}, cat)
+
+	containerActive := strings.Index(got, "[container]\n")
+	containerHostsTpl := strings.Index(got, "# [container.hosts]")
+	containerShellActive := strings.Index(got, "[container.shell]\n")
+	if containerActive < 0 || containerHostsTpl < 0 || containerShellActive < 0 {
+		t.Fatalf("anchor missing: container=%d hosts=%d shell=%d", containerActive, containerHostsTpl, containerShellActive)
+	}
+	if containerActive >= containerHostsTpl || containerHostsTpl >= containerShellActive {
+		t.Errorf("expected order [container] < [container.hosts] template < [container.shell], got %d / %d / %d",
+			containerActive, containerHostsTpl, containerShellActive)
+	}
+}

@@ -909,6 +909,21 @@ func renderWorkspaceToml(s containerSpec, cat *i18n.Catalog) string {
 	fmt.Fprintf(&sb, "os = %q\n", s.OS)
 	fmt.Fprintf(&sb, "os_version = %q\n\n", s.OSVersion)
 
+	// Commented-out templates for [container.*] opt-in extras. Grouped
+	// under [container] so a reader scanning the file finds related
+	// knobs next to the parent section.
+	for _, key := range []string{
+		"init_toml_template_container_resources",
+		"init_toml_template_container_hosts",
+		"init_toml_template_container_dns",
+		"init_toml_template_container_sysctls",
+		"init_toml_template_container_capabilities",
+		"init_toml_template_container_security_opt",
+		"init_toml_template_container_skel",
+	} {
+		emitTemplate(&sb, cat, key)
+	}
+
 	sb.WriteString(cat.Msg("init_toml_section_container_shell"))
 	sb.WriteByte('\n')
 	sb.WriteString("[container.shell]\n")
@@ -933,19 +948,57 @@ func renderWorkspaceToml(s containerSpec, cat *i18n.Catalog) string {
 		sb.WriteString("]\n\n")
 	}
 
+	emitTemplate(&sb, cat, "init_toml_template_plugins_versions")
+
 	sb.WriteString(cat.Msg("init_toml_section_apt"))
 	sb.WriteByte('\n')
 	sb.WriteString("[apt]\n")
 	if len(s.Packages) == 0 {
-		sb.WriteString("packages = []\n")
-		return sb.String()
+		sb.WriteString("packages = []\n\n")
+	} else {
+		sb.WriteString("packages = [\n")
+		for _, pkg := range s.Packages {
+			fmt.Fprintf(&sb, "    %q,\n", pkg)
+		}
+		sb.WriteString("]\n\n")
 	}
-	sb.WriteString("packages = [\n")
-	for _, pkg := range s.Packages {
-		fmt.Fprintf(&sb, "    %q,\n", pkg)
+
+	for _, key := range []string{
+		"init_toml_template_apt_mirror",
+		"init_toml_template_apt_proxy",
+		"init_toml_template_apt_sources",
+	} {
+		emitTemplate(&sb, cat, key)
 	}
-	sb.WriteString("]\n")
-	return sb.String()
+
+	// Top-level opt-in extras at the end of the file. Order roughly
+	// follows "compose runtime knobs first, then host-side persistence,
+	// then locale + Dockerfile hooks, then sidecars + IDE config".
+	for _, key := range []string{
+		"init_toml_template_ports",
+		"init_toml_template_volumes",
+		"init_toml_template_env",
+		"init_toml_template_mounts",
+		"init_toml_template_home_files",
+		"init_toml_template_locale",
+		"init_toml_template_dockerfile",
+		"init_toml_template_services",
+		"init_toml_template_devcontainer",
+	} {
+		emitTemplate(&sb, cat, key)
+	}
+
+	return strings.TrimRight(sb.String(), "\n") + "\n"
+}
+
+// emitTemplate writes a localized commented-out section template to sb,
+// followed by exactly one blank line so adjacent templates stay visually
+// separated. Each i18n value is the raw `# ...` block (no trailing
+// newline) — the `\n\n` here adds the closing newline for that line plus
+// the blank-line separator.
+func emitTemplate(sb *strings.Builder, cat *i18n.Catalog, key string) {
+	sb.WriteString(cat.Msg(key))
+	sb.WriteString("\n\n")
 }
 
 // writeInlineTable emits a TOML inline-table value (`{ k = "v", ... }`)
