@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/user"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -13,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/sukekyo26/cocoon/internal/config"
+	"github.com/sukekyo26/cocoon/internal/i18n"
 	"github.com/sukekyo26/cocoon/internal/setup"
 )
 
@@ -21,19 +21,17 @@ const initLong = `cocoon init — generate workspace.toml in the current directo
 Asks (when running interactively) for the container service name, the
 inside-the-container username, the base OS / version, the mount range,
 whether to emit .devcontainer/devcontainer.json, and which categories
-of common apt packages to install. The answers are written into a fresh
-workspace.toml at the project root.
+of common apt packages to install. service_name and username have no
+default — you must type them — because cocoon refuses to bake either
+the cwd basename or your host $USER into a file you may commit.
 
-Use --yes plus --service-name / --username / --os / --os-version /
---mount-root / --devcontainer / --apt-categories to drive non-
-interactively from CI.`
+Use --yes plus --service-name / --username (both required when --yes
+is set) and any of --os / --os-version / --mount-root / --devcontainer
+/ --apt-categories to drive non-interactively from CI.`
 
 var (
 	rxServiceName = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
 	rxUsername    = regexp.MustCompile(`^[a-z_][a-z0-9_-]*$`)
-
-	errBadServiceName = fmt.Errorf("must match %s", rxServiceName)
-	errBadUsername    = fmt.Errorf("must match %s", rxUsername)
 )
 
 // NewCommand returns the cobra command for ` + "`cocoon init`" + `.
@@ -61,9 +59,9 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 			return runInit(cmd, stdout, stderr, &flags)
 		},
 	}
-	cmd.Flags().BoolVar(&flags.AutoYes, "yes", false, "skip interactive prompts and use defaults")
-	cmd.Flags().StringVar(&flags.ServiceName, "service-name", "", "compose service name (default: sanitized cwd basename)")
-	cmd.Flags().StringVar(&flags.Username, "username", "", "in-container user (default: $USER, sanitized)")
+	cmd.Flags().BoolVar(&flags.AutoYes, "yes", false, "skip optional prompts; --service-name and --username then required")
+	cmd.Flags().StringVar(&flags.ServiceName, "service-name", "", "compose service name (required with --yes)")
+	cmd.Flags().StringVar(&flags.Username, "username", "", "in-container user (required with --yes)")
 	cmd.Flags().StringVar(&flags.OS, "os", "", fmt.Sprintf("base OS: %s", strings.Join(config.SupportedOSes, ", ")))
 	cmd.Flags().StringVar(&flags.OSVersion, "os-version", "", "base OS version (must match --os)")
 	cmd.Flags().StringVar(&flags.MountRoot, "mount-root", "", `mount range: "." (cwd, default) or ".." (parent)`)
@@ -96,6 +94,7 @@ func runInit(cmd *cobra.Command, stdout, _ io.Writer, flags *initFlags) error {
 	if flags.Devcontainer && flags.NoDevcontainer {
 		return fmt.Errorf("%w: --devcontainer and --no-devcontainer are mutually exclusive", ErrUsage)
 	}
+	cat := i18n.New(i18n.Detect())
 
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -106,31 +105,31 @@ func runInit(cmd *cobra.Command, stdout, _ io.Writer, flags *initFlags) error {
 		return fmt.Errorf("%w: %s already exists; use --force to overwrite", ErrUsage, target)
 	}
 
-	serviceName, err := resolveServiceName(flags, cwd)
+	serviceName, err := resolveServiceName(flags, cat)
 	if err != nil {
 		return err
 	}
-	username, err := resolveUsername(flags)
+	username, err := resolveUsername(flags, cat)
 	if err != nil {
 		return err
 	}
-	osID, err := resolveOS(flags)
+	osID, err := resolveOS(flags, cat)
 	if err != nil {
 		return err
 	}
-	osVersion, err := resolveOSVersion(flags, osID)
+	osVersion, err := resolveOSVersion(flags, osID, cat)
 	if err != nil {
 		return err
 	}
-	mountRoot, err := resolveMountRoot(flags)
+	mountRoot, err := resolveMountRoot(flags, cat)
 	if err != nil {
 		return err
 	}
-	devcontainer, err := resolveDevcontainer(flags)
+	devcontainer, err := resolveDevcontainer(flags, cat)
 	if err != nil {
 		return err
 	}
-	aptCatIDs, err := resolveAptCategories(flags)
+	aptCatIDs, err := resolveAptCategories(flags, cat)
 	if err != nil {
 		return err
 	}
@@ -149,97 +148,49 @@ func runInit(cmd *cobra.Command, stdout, _ io.Writer, flags *initFlags) error {
 		return fmt.Errorf("%w: write %s: %w", ErrFailure, target, err)
 	}
 
-	fmt.Fprintf(stdout, "wrote %s\n", target)
-	printNextSteps(stdout, devcontainer)
+	fmt.Fprintln(stdout, cat.Msg("init_wrote", target))
+	printNextSteps(stdout, cat, devcontainer)
 	_ = cmd // reserved for future ctx-aware flows
 	return nil
 }
 
-func printNextSteps(stdout io.Writer, devcontainer bool) {
+func printNextSteps(stdout io.Writer, cat *i18n.Catalog, devcontainer bool) {
 	fmt.Fprintln(stdout)
-	fmt.Fprintln(stdout, "Next steps:")
-	fmt.Fprintln(stdout, "  1. cocoon gen")
-	fmt.Fprintln(stdout, "  2. docker compose -f .devcontainer/docker-compose.yml up -d")
+	fmt.Fprintln(stdout, cat.Msg("init_next_header"))
+	fmt.Fprintln(stdout, cat.Msg("init_next_step_gen"))
+	fmt.Fprintln(stdout, cat.Msg("init_next_step_compose"))
 	if devcontainer {
-		fmt.Fprintln(stdout, `     (or open in VS Code → "Reopen in Container")`)
+		fmt.Fprintln(stdout, cat.Msg("init_next_step_vscode"))
 	}
 }
 
-// sanitizeIdent maps an arbitrary string to something that satisfies pat by
-// lowercasing and replacing every disallowed rune with `-`. If the result
-// would not start with a letter (or `_` for usernames), it is prefixed with
-// `app-` / `user-` so the prompt has a viable default rather than empty.
-func sanitizeIdent(s string, allowLeadingUnderscore bool) string {
-	s = strings.ToLower(s)
-	var b strings.Builder
-	b.Grow(len(s))
-	for _, r := range s {
-		switch {
-		case r >= 'a' && r <= 'z',
-			r >= '0' && r <= '9',
-			r == '_', r == '-':
-			b.WriteRune(r)
-		default:
-			b.WriteRune('-')
-		}
-	}
-	out := strings.Trim(b.String(), "-")
-	if out == "" {
-		return ""
-	}
-	first := out[0]
-	startOK := (first >= 'a' && first <= 'z') || (allowLeadingUnderscore && first == '_')
-	if !startOK {
-		prefix := "app-"
-		if allowLeadingUnderscore {
-			prefix = "user-"
-		}
-		out = prefix + out
-	}
-	return out
+// promptedIdent factors out the resolveServiceName / resolveUsername bodies:
+// validate the flag if set, fail on --yes if missing, otherwise prompt.
+type promptedIdent struct {
+	flagName, flagValue, msgKey string // msgKey: "service_name" or "username"
+	pattern                     *regexp.Regexp
+	autoYes                     bool
 }
 
-func defaultServiceName(cwd string) string {
-	return sanitizeIdent(filepath.Base(cwd), false)
-}
-
-func defaultUsername() string {
-	if u, err := user.Current(); err == nil && u.Username != "" {
-		if name := sanitizeIdent(u.Username, true); name != "" {
-			return name
+func resolveIdent(p promptedIdent, cat *i18n.Catalog) (string, error) {
+	if p.flagValue != "" {
+		if !p.pattern.MatchString(p.flagValue) {
+			return "", fmt.Errorf("%w: --%s %q does not match %s", ErrUsage, p.flagName, p.flagValue, p.pattern)
 		}
+		return p.flagValue, nil
 	}
-	if v := os.Getenv("USER"); v != "" {
-		if name := sanitizeIdent(v, true); name != "" {
-			return name
-		}
+	if p.autoYes {
+		return "", fmt.Errorf("%w: --yes requires --%s", ErrUsage, p.flagName)
 	}
-	return "user"
-}
-
-func resolveServiceName(flags *initFlags, cwd string) (string, error) {
-	if flags.ServiceName != "" {
-		if !rxServiceName.MatchString(flags.ServiceName) {
-			return "", fmt.Errorf("%w: --service-name %q does not match %s", ErrUsage, flags.ServiceName, rxServiceName)
-		}
-		return flags.ServiceName, nil
-	}
-	def := defaultServiceName(cwd)
-	if flags.AutoYes {
-		if def == "" || !rxServiceName.MatchString(def) {
-			return "", fmt.Errorf("%w: cannot derive service_name from cwd %q; pass --service-name", ErrUsage, cwd)
-		}
-		return def, nil
-	}
-	v := def
+	var v string
 	form := huh.NewForm(
 		huh.NewGroup(
 			huh.NewInput().
-				Title("Service name").
-				Description("Compose service name; lowercase letters, digits, _ and - only.").
+				Title(cat.Msg("init_prompt_" + p.msgKey)).
+				Description(cat.Msg("init_desc_" + p.msgKey)).
 				Validate(func(s string) error {
-					if !rxServiceName.MatchString(s) {
-						return errBadServiceName
+					if !p.pattern.MatchString(s) {
+						return fmt.Errorf("%s", cat.Msg("init_err_"+p.msgKey, p.pattern)) //nolint:err113 // user-facing
 					}
 					return nil
 				}).
@@ -247,47 +198,26 @@ func resolveServiceName(flags *initFlags, cwd string) (string, error) {
 		),
 	)
 	if err := form.Run(); err != nil {
-		return "", fmt.Errorf("%w: service-name prompt: %w", ErrFailure, err)
+		return "", fmt.Errorf("%w: %s prompt: %w", ErrFailure, p.flagName, err)
 	}
 	return v, nil
 }
 
-func resolveUsername(flags *initFlags) (string, error) {
-	if flags.Username != "" {
-		if !rxUsername.MatchString(flags.Username) {
-			return "", fmt.Errorf("%w: --username %q does not match %s", ErrUsage, flags.Username, rxUsername)
-		}
-		return flags.Username, nil
-	}
-	def := defaultUsername()
-	if flags.AutoYes {
-		if !rxUsername.MatchString(def) {
-			return "", fmt.Errorf("%w: cannot derive username from $USER; pass --username", ErrUsage)
-		}
-		return def, nil
-	}
-	v := def
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewInput().
-				Title("Username").
-				Description("In-container user; lowercase letters, digits, _ and - only.").
-				Validate(func(s string) error {
-					if !rxUsername.MatchString(s) {
-						return errBadUsername
-					}
-					return nil
-				}).
-				Value(&v),
-		),
-	)
-	if err := form.Run(); err != nil {
-		return "", fmt.Errorf("%w: username prompt: %w", ErrFailure, err)
-	}
-	return v, nil
+func resolveServiceName(flags *initFlags, cat *i18n.Catalog) (string, error) {
+	return resolveIdent(promptedIdent{
+		flagName: "service-name", flagValue: flags.ServiceName, msgKey: "service_name",
+		pattern: rxServiceName, autoYes: flags.AutoYes,
+	}, cat)
 }
 
-func resolveOS(flags *initFlags) (string, error) {
+func resolveUsername(flags *initFlags, cat *i18n.Catalog) (string, error) {
+	return resolveIdent(promptedIdent{
+		flagName: "username", flagValue: flags.Username, msgKey: "username",
+		pattern: rxUsername, autoYes: flags.AutoYes,
+	}, cat)
+}
+
+func resolveOS(flags *initFlags, cat *i18n.Catalog) (string, error) {
 	if flags.OS != "" {
 		if _, ok := config.SupportedOsVersions[flags.OS]; !ok {
 			return "", fmt.Errorf("%w: --os %q not in %s", ErrUsage, flags.OS, strings.Join(config.SupportedOSes, ", "))
@@ -305,8 +235,8 @@ func resolveOS(flags *initFlags) (string, error) {
 	form := huh.NewForm(
 		huh.NewGroup(
 			huh.NewSelect[string]().
-				Title("Base OS").
-				Description("Linux distribution that backs the container image (FROM <os>:<os_version>).").
+				Title(cat.Msg("init_prompt_os")).
+				Description(cat.Msg("init_desc_os")).
 				Options(options...).
 				Value(&v),
 		),
@@ -317,7 +247,7 @@ func resolveOS(flags *initFlags) (string, error) {
 	return v, nil
 }
 
-func resolveOSVersion(flags *initFlags, osID string) (string, error) {
+func resolveOSVersion(flags *initFlags, osID string, cat *i18n.Catalog) (string, error) {
 	versions, ok := config.SupportedOsVersions[osID]
 	if !ok || len(versions) == 0 {
 		return "", fmt.Errorf("%w: no supported versions for os %q", ErrFailure, osID)
@@ -332,9 +262,9 @@ func resolveOSVersion(flags *initFlags, osID string) (string, error) {
 			ErrUsage, flags.OSVersion, strings.Join(versions, ", "), osID)
 	}
 	if flags.AutoYes {
-		// Default: the first LTS-ish entry. For ubuntu we skip the leading
-		// 26.04 (newest, may not yet be on dockerhub for all arches) and
-		// pick 24.04; for other distros take the first listed version.
+		// Prefer the current LTS for ubuntu (24.04 over the newer 26.04
+		// which may not yet be on dockerhub for all arches); fall back to
+		// the first listed version for other distros.
 		if osID == "ubuntu" {
 			for _, v := range versions {
 				if v == "24.04" {
@@ -352,8 +282,8 @@ func resolveOSVersion(flags *initFlags, osID string) (string, error) {
 	form := huh.NewForm(
 		huh.NewGroup(
 			huh.NewSelect[string]().
-				Title(fmt.Sprintf("%s version", osID)).
-				Description(fmt.Sprintf("Pulled as FROM %s:<version> in the generated Dockerfile.", osID)).
+				Title(cat.Msg("init_prompt_os_version", osID)).
+				Description(cat.Msg("init_desc_os_version", osID)).
 				Options(options...).
 				Value(&v),
 		),
@@ -364,7 +294,7 @@ func resolveOSVersion(flags *initFlags, osID string) (string, error) {
 	return v, nil
 }
 
-func resolveMountRoot(flags *initFlags) (string, error) {
+func resolveMountRoot(flags *initFlags, cat *i18n.Catalog) (string, error) {
 	if flags.MountRoot != "" {
 		if flags.MountRoot != "." && flags.MountRoot != ".." {
 			return "", fmt.Errorf(`%w: --mount-root must be "." or ".."`, ErrUsage)
@@ -378,11 +308,11 @@ func resolveMountRoot(flags *initFlags) (string, error) {
 	form := huh.NewForm(
 		huh.NewGroup(
 			huh.NewSelect[string]().
-				Title("Mount range").
-				Description("How much of your filesystem should be visible inside the container?").
+				Title(cat.Msg("init_prompt_mount_root")).
+				Description(cat.Msg("init_desc_mount_root")).
 				Options(
-					huh.NewOption("Just this project (.)", "."),
-					huh.NewOption("Parent directory — sibling repos visible (..)", ".."),
+					huh.NewOption(cat.Msg("init_option_mount_cwd"), "."),
+					huh.NewOption(cat.Msg("init_option_mount_parent"), ".."),
 				).
 				Value(&v),
 		),
@@ -393,7 +323,7 @@ func resolveMountRoot(flags *initFlags) (string, error) {
 	return v, nil
 }
 
-func resolveDevcontainer(flags *initFlags) (bool, error) {
+func resolveDevcontainer(flags *initFlags, cat *i18n.Catalog) (bool, error) {
 	if flags.Devcontainer {
 		return true, nil
 	}
@@ -407,8 +337,8 @@ func resolveDevcontainer(flags *initFlags) (bool, error) {
 	form := huh.NewForm(
 		huh.NewGroup(
 			huh.NewConfirm().
-				Title("Generate .devcontainer/devcontainer.json for VS Code Dev Containers?").
-				Description("Says yes if you ever open this repo in VS Code Dev Containers; harmless otherwise.").
+				Title(cat.Msg("init_prompt_devcontainer")).
+				Description(cat.Msg("init_desc_devcontainer")).
 				Affirmative("Yes").
 				Negative("No").
 				Value(&v),
@@ -420,7 +350,7 @@ func resolveDevcontainer(flags *initFlags) (bool, error) {
 	return v, nil
 }
 
-func resolveAptCategories(flags *initFlags) ([]string, error) {
+func resolveAptCategories(flags *initFlags, cat *i18n.Catalog) ([]string, error) {
 	if flags.AptCategories != "" {
 		var ids []string
 		for _, raw := range strings.Split(flags.AptCategories, ",") {
@@ -446,8 +376,8 @@ func resolveAptCategories(flags *initFlags) ([]string, error) {
 	form := huh.NewForm(
 		huh.NewGroup(
 			huh.NewMultiSelect[string]().
-				Title("Select common apt packages to install").
-				Description("Pre-checked categories are installed by default; uncheck what you do not need.").
+				Title(cat.Msg("init_prompt_apt")).
+				Description(cat.Msg("init_desc_apt")).
 				Options(options...).
 				Value(&selected),
 		),

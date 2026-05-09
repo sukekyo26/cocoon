@@ -22,6 +22,7 @@ import (
 	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
 	generatecli "github.com/sukekyo26/cocoon/internal/cli/generate"
 	"github.com/sukekyo26/cocoon/internal/config"
+	"github.com/sukekyo26/cocoon/internal/i18n"
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
 
@@ -78,6 +79,7 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 }
 
 func runGen(stdout, stderr io.Writer, workspaceFlag, outputFlag string) error {
+	cat := i18n.New(i18n.Detect())
 	wsPath, err := resolveWorkspace(workspaceFlag)
 	if err != nil {
 		return err
@@ -119,9 +121,9 @@ func runGen(stdout, stderr io.Writer, workspaceFlag, outputFlag string) error {
 
 	cwd, _ := os.Getwd() //nolint:errcheck // cwd is best-effort for pretty-printing only.
 	for _, a := range arts {
-		fmt.Fprintf(stdout, "wrote %s\n", displayPath(cwd, filepath.Join(outDir, a.Rel)))
+		fmt.Fprintln(stdout, cat.Msg("gen_wrote", displayPath(cwd, filepath.Join(outDir, a.Rel))))
 	}
-	printNextSteps(stdout, ws.Workspace.DevContainerOrDefault())
+	printNextSteps(stdout, cat, ws.Workspace.DevContainerOrDefault())
 	return nil
 }
 
@@ -175,11 +177,11 @@ func defaultBuildContextDir() (string, error) {
 	return filepath.Join(home, ".cocoon", "cache", "build-context"), nil
 }
 
-func printNextSteps(stdout io.Writer, devcontainer bool) {
+func printNextSteps(stdout io.Writer, cat *i18n.Catalog, devcontainer bool) {
 	fmt.Fprintln(stdout)
-	fmt.Fprintln(stdout, "To start the container:")
-	fmt.Fprintln(stdout, "  docker compose -f .devcontainer/docker-compose.yml up -d")
+	fmt.Fprintln(stdout, cat.Msg("gen_next_header"))
+	fmt.Fprintln(stdout, cat.Msg("gen_next_step_compose"))
 	if devcontainer {
-		fmt.Fprintln(stdout, `  (or open in VS Code → "Reopen in Container")`)
+		fmt.Fprintln(stdout, cat.Msg("gen_next_step_vscode"))
 	}
 }

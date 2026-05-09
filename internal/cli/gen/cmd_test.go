@@ -11,6 +11,17 @@ import (
 	gencli "github.com/sukekyo26/cocoon/internal/cli/gen"
 )
 
+// pinEnglish forces the i18n catalog to English for assertion stability.
+// The cocoon binary picks Japanese when LANG / LC_* / WORKSPACE_LANG starts
+// with "ja"; CI machines and Japanese developer hosts both fit that profile.
+func pinEnglish(t *testing.T) {
+	t.Helper()
+	for _, k := range []string{"WORKSPACE_LANG", "LC_ALL", "LC_MESSAGES", "LANG"} {
+		t.Setenv(k, "")
+	}
+	t.Setenv("WORKSPACE_LANG", "en")
+}
+
 const minimalWorkspaceTOML = `[workspace]
 mount_root = "."
 devcontainer = true
@@ -41,6 +52,7 @@ func TestGen_DefaultRun(t *testing.T) {
 		t.Fatalf("mkdir home: %v", err)
 	}
 	t.Setenv("HOME", home)
+	pinEnglish(t)
 	t.Chdir(work)
 
 	if err := os.WriteFile(filepath.Join(work, "workspace.toml"), []byte(minimalWorkspaceTOML), 0o600); err != nil {
@@ -92,6 +104,7 @@ func TestGen_NoDevcontainerSuppressesVSCodeHint(t *testing.T) {
 		t.Fatalf("mkdir home: %v", err)
 	}
 	t.Setenv("HOME", home)
+	pinEnglish(t)
 	t.Chdir(work)
 
 	body := strings.Replace(minimalWorkspaceTOML, "devcontainer = true", "devcontainer = false", 1)
@@ -130,6 +143,7 @@ func TestGen_ExplicitWorkspaceAndOutput(t *testing.T) {
 		t.Fatalf("mkdir home: %v", err)
 	}
 	t.Setenv("HOME", home)
+	pinEnglish(t)
 
 	wsPath := filepath.Join(work, "custom-workspace.toml")
 	if err := os.WriteFile(wsPath, []byte(minimalWorkspaceTOML), 0o600); err != nil {
@@ -166,6 +180,7 @@ func TestGen_MissingWorkspaceReturnsUsage(t *testing.T) {
 		t.Fatalf("mkdir home: %v", err)
 	}
 	t.Setenv("HOME", home)
+	pinEnglish(t)
 	t.Chdir(work)
 
 	var stdout, stderr bytes.Buffer
