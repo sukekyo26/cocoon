@@ -129,6 +129,29 @@ func TestScaffoldRejectsInvalidID(t *testing.T) {
 	}
 }
 
+// When --plugins-dir is omitted and no workspace.toml is discoverable from
+// cwd, scaffold must surface an actionable error instead of silently writing
+// to ./plugins/<id>/. Regression guard for the v0.1.0 default that left
+// stray plugins directories at the cocoon repo root.
+//
+//nolint:paralleltest // t.Chdir mutates process-wide state; cannot run in parallel.
+func TestScaffoldRequiresPluginsDirOrWorkspace(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	_, stderr, err := runCmd(t,
+		"scaffold", "demo",
+		"--non-interactive",
+		"--name", "Demo",
+		"--description", "Demo (https://example.com)",
+	)
+	if !errors.Is(err, plugincli.ErrUsage) {
+		t.Fatalf("err = %v, want ErrUsage", err)
+	}
+	if !strings.Contains(stderr, "--plugins-dir") {
+		t.Errorf("stderr should mention --plugins-dir: %q", stderr)
+	}
+}
+
 func TestScaffoldRequiresIDArg(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -252,7 +275,7 @@ func TestScaffoldHelp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run err=%v", err)
 	}
-	if !strings.Contains(stdout, "wsd plugin scaffold") {
+	if !strings.Contains(stdout, "cocoon plugin scaffold") {
 		t.Errorf("help missing banner: %q", stdout)
 	}
 }

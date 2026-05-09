@@ -1,8 +1,13 @@
-// Package plugincli implements the `wsd plugin` subcommand tree.
+// Package plugincli implements the `cocoon plugin` subcommand tree.
 //
 // Subcommands:
 //
-//	scaffold   create a new plugins/<id>/ directory from a template
+//	list       list every plugin available in the layered view
+//	show       print the resolved manifest for one plugin id
+//	add        copy an embedded plugin into a writable overlay
+//	remove     delete a user / project overlay copy
+//	pin        emit (or write in-place) a [plugins.versions.<id>] block
+//	scaffold   create a new <id>/ directory under .cocoon/plugins from a template
 //
 // Each handler writes its output to the supplied stdout/stderr writers and
 // returns sentinel errors that the binary boundary maps to exit codes.
