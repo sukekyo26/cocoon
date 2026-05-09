@@ -65,7 +65,10 @@ func runPin(stdout, _ io.Writer, id, ref, amd64sum, arm64sum string, write bool)
 			return fmt.Errorf("%w: getwd: %w", ErrFailure, cwdErr)
 		}
 		wsPath, dErr := config.Discover(cwd)
-		if dErr != nil || wsPath == "" {
+		if dErr != nil {
+			return fmt.Errorf("%w: discover workspace.toml: %w", ErrFailure, dErr)
+		}
+		if wsPath == "" {
 			return fmt.Errorf(
 				"%w: --write needs a discoverable workspace.toml (run inside a cocoon project)",
 				ErrUsage)
