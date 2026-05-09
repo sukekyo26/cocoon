@@ -141,46 +141,50 @@ jobs:
           # Build via `docker buildx bake` to opt into BuildKit's GHA cache backend.
           # `docker compose build` cannot pass cache-from/cache-to without baking
           # CI concerns into the generated docker-compose.yml (which is the
-          # user-visible artifact). Bake reads the same compose file and lets us
-          # inject cache settings purely on the CI side.
+          # user-visible artifact). Bake reads the same compose file and lets
+          # us inject cache settings purely on the CI side.
           #
-          # We `cd .devcontainer` (and source .env there) because bake differs
-          # from compose in two compose-side conveniences we have to replicate:
-          #   1. Path resolution — `docker compose` resolves `context: ..` and
-          #      `dockerfile: .devcontainer/Dockerfile` relative to the compose
-          #      file's directory; `docker buildx bake` resolves them relative
-          #      to its own cwd. Without the cd, `..` becomes e2e/ instead of
-          #      the project root, and bake fails with
-          #      `lstat ../.devcontainer: no such file or directory`.
-          #   2. .env loading — compose auto-loads .env from the compose file's
-          #      directory; bake does not. Without sourcing it the build args
-          #      (USERNAME, OS_IMAGE, UID, GID, DOCKER_GID, ...) interpolate to
-          #      blank and the build is broken regardless of cache.
+          # Two compose-side conveniences we have to replicate manually:
+          #   1. .env loading — compose auto-loads .env from the compose file's
+          #      directory; bake does not. We can't `source .env` either: bash
+          #      treats UID (and EUID) as readonly variables, so the
+          #      `UID=<runner-uid>` line that cocoon writes aborts the shell
+          #      under `set -e`. We read .env into an array and pass it inline
+          #      to bake's child process via `env KEY=VAL ... cmd`, which
+          #      bypasses the parent shell's readonly attributes entirely.
+          #   2. Path resolution — compose resolves `context: ..` relative to
+          #      the compose file's directory; bake resolves it relative to
+          #      its own cwd. Without an override bake fails with
+          #      `lstat ../.devcontainer: no such file or directory`. We pin
+          #      both paths absolutely via `--set "*.context=$PWD"` and
+          #      `--set "*.dockerfile=$PWD/.devcontainer/Dockerfile"`.
           #
-          # `--allow fs=*` is required because additional_contexts.plugins points
-          # at ${HOME}/.cocoon/cache/build-context, which is outside the compose
+          # `--allow fs=*` is required because additional_contexts.plugins
+          # points at ${HOME}/.cocoon/cache/build-context, outside the compose
           # file's directory and rejected by bake's default entitlements.
-          # `scope=e2e-${PRESET}` keeps amd64-full / arm64-full / minimal in
-          # separate cache buckets; GHA cache backend further isolates by branch
-          # automatically. mode=max captures all layers (within the 10GB/repo
-          # limit; revisit if buckets approach the cap).
-          # The subsequent `compose up -d` reuses the just-loaded image instead
-          # of rebuilding.
+          # `scope=e2e-${PRESET}` separates minimal / amd64-full / arm64-full
+          # cache buckets; GHA cache backend further isolates by branch.
+          # mode=max captures all layers (within the 10GB/repo limit).
+          # The subsequent `compose up -d` reuses the just-loaded image
+          # instead of rebuilding.
           arch="$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
-          (
-            cd .devcontainer
-            set -a
-            . ./.env
-            set +a
-            docker buildx bake \
-              -f docker-compose.yml \
-              --load \
-              --allow fs=* \
-              --set "*.cache-from=type=gha,scope=e2e-${PRESET}" \
-              --set "*.cache-to=type=gha,scope=e2e-${PRESET},mode=max" \
-              --set "*.platform=linux/${arch}" \
-              dev
-          )
+          env_args=()
+          while IFS= read -r line || [ -n "$line" ]; do
+            case "$line" in
+              ''|'#'*) continue ;;
+            esac
+            env_args+=("$line")
+          done < .devcontainer/.env
+          env "${env_args[@]}" docker buildx bake \
+            -f .devcontainer/docker-compose.yml \
+            --load \
+            --allow fs=* \
+            --set "*.context=$PWD" \
+            --set "*.dockerfile=$PWD/.devcontainer/Dockerfile" \
+            --set "*.cache-from=type=gha,scope=e2e-${PRESET}" \
+            --set "*.cache-to=type=gha,scope=e2e-${PRESET},mode=max" \
+            --set "*.platform=linux/${arch}" \
+            dev
           docker compose -f .devcontainer/docker-compose.yml up -d
           docker compose -f .devcontainer/docker-compose.yml exec -T dev bash -lc 'echo cocoon-e2e-ok'
           docker compose -f .devcontainer/docker-compose.yml down -v
