@@ -62,6 +62,12 @@ jobs:
           go-version-file: go.mod
           cache: true
       - uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+      # Exposes ACTIONS_RUNTIME_TOKEN / ACTIONS_CACHE_URL / ACTIONS_RESULTS_URL
+      # as plain env vars so the raw `docker buildx bake` invocation below can
+      # talk to the GHA cache backend. docker/build-push-action and
+      # docker/bake-action inject these automatically; a hand-written shell
+      # step does not, so we surface them explicitly here.
+      - uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
       - uses: taiki-e/install-action@b1fb785e72add1aaabe1e13115c2292ca8925d3f # just
       - name: Build cocoon binary
         run: just build
