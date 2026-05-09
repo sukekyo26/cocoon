@@ -6,20 +6,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	cleancli "github.com/sukekyo26/cocoon/internal/cli/clean"
 	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
 	configcli "github.com/sukekyo26/cocoon/internal/cli/config"
-	downcli "github.com/sukekyo26/cocoon/internal/cli/down"
-	execcli "github.com/sukekyo26/cocoon/internal/cli/exec"
 	gencli "github.com/sukekyo26/cocoon/internal/cli/gen"
-	generatecli "github.com/sukekyo26/cocoon/internal/cli/generate"
 	initcli "github.com/sukekyo26/cocoon/internal/cli/init"
-	logscli "github.com/sukekyo26/cocoon/internal/cli/logs"
 	plugincli "github.com/sukekyo26/cocoon/internal/cli/plugin"
-	rebuildcli "github.com/sukekyo26/cocoon/internal/cli/rebuild"
 	selfupdatecli "github.com/sukekyo26/cocoon/internal/cli/selfupdate"
-	setupcli "github.com/sukekyo26/cocoon/internal/cli/setup"
-	upcli "github.com/sukekyo26/cocoon/internal/cli/up"
 )
 
 const rootLong = `cocoon — project-aware container workspace generator
@@ -66,24 +58,16 @@ func newRootCommand(version string, stdout, stderr io.Writer) *cobra.Command {
 	root.SetVersionTemplate("{{.Version}}\n")
 	root.SetHelpTemplate(rootHelpTemplate)
 	root.AddCommand(
-		// Lifecycle verbs (cocoon v0.1.0). Most are stubs in F2; F3 wires
-		// them to the .devcontainer/-centred generators and docker compose
-		// calls. `init` is fully implemented here.
+		// Generator commands. `init` writes a fresh workspace.toml; `gen`
+		// reads it and emits .devcontainer/{Dockerfile, docker-compose.yml,
+		// devcontainer.json}. Container start-up is left to docker compose
+		// or VS Code's Reopen in Container — cocoon does not wrap them.
 		initcli.NewCommand(stdout, stderr),
-		upcli.NewCommand(stdout, stderr),
-		downcli.NewCommand(stdout, stderr),
-		rebuildcli.NewCommand(stdout, stderr),
-		logscli.NewCommand(stdout, stderr),
-		execcli.NewCommand(stdout, stderr),
 		gencli.NewCommand(stdout, stderr),
 		selfupdatecli.NewCommand(stdout, stderr),
 		// Noun groups
 		configcli.NewCommand(stdout, stderr),
 		plugincli.NewCommand(stdout, stderr),
-		// Legacy commands kept until F3 retires them.
-		setupcli.NewCommand(stdout, stderr),
-		generatecli.NewCommand(stdout, stderr),
-		cleancli.NewCommand(stdout, stderr),
 		newVersionSubcommand(version, stdout),
 	)
 	addLeafHelpAlias(root)

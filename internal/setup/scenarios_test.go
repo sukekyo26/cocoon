@@ -333,10 +333,15 @@ remoteUser = "testuser"
 			opts.Catalog = noopCatalog{}
 			opts.Selector = nil // unused: AutoYes paths bypass the selector
 			opts.Generator = generatorFunc(func(wsPath, pdir, outDir string, stderr io.Writer) error {
-				var buf bytes.Buffer
-				cmd := generatecli.NewCommand(&buf, stderr)
-				cmd.SetArgs([]string{wsPath, pdir, outDir})
-				return cmd.Execute()
+				ctx, err := generatecli.LoadContext(wsPath, pdir, stderr)
+				if err != nil {
+					return err
+				}
+				arts, err := generatecli.BuildArtifacts(ctx, pdir, stderr)
+				if err != nil {
+					return err
+				}
+				return generatecli.WriteArtifacts(arts, outDir)
 			})
 			opts.Cloner = noopCloner{}
 			opts.GIDDetector = fixedGID{gid: 999}

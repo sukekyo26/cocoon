@@ -212,12 +212,20 @@ func defaults(o *Options) {
 
 type execGenerator struct{}
 
-// GenerateAll delegates to the generate CLI subcommand, discarding stdout.
-// The error wrap is left to the caller (Run) to avoid double-prefixing.
+// GenerateAll runs the LoadContext → BuildArtifacts → WriteArtifacts
+// pipeline directly. It used to subprocess into the `generate-all`
+// cobra command, which was retired together with the other docker-
+// compose-wrapper verbs in v0.2.0.
 func (execGenerator) GenerateAll(wsPath, pluginsDir, outputDir string, stderr io.Writer) error {
-	cmd := generatecli.NewCommand(io.Discard, stderr)
-	cmd.SetArgs([]string{wsPath, pluginsDir, outputDir})
-	return cmd.Execute() //nolint:wrapcheck // caller wraps.
+	ctx, err := generatecli.LoadContext(wsPath, pluginsDir, stderr)
+	if err != nil {
+		return err //nolint:wrapcheck // caller wraps.
+	}
+	arts, err := generatecli.BuildArtifacts(ctx, pluginsDir, stderr)
+	if err != nil {
+		return err //nolint:wrapcheck // caller wraps.
+	}
+	return generatecli.WriteArtifacts(arts, outputDir) //nolint:wrapcheck // caller wraps.
 }
 
 type defaultCloner struct{}

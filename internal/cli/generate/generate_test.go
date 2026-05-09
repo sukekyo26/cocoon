@@ -2,6 +2,7 @@ package generatecli_test
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +10,22 @@ import (
 
 	generatecli "github.com/sukekyo26/cocoon/internal/cli/generate"
 )
+
+// runPipeline drives the LoadContext → BuildArtifacts → WriteArtifacts
+// sequence the same way `cocoon gen` does, used by every test below in
+// place of the long-gone `cocoon generate-all` cobra command.
+func runPipeline(t *testing.T, wsPath, pluginsDir, outDir string, stderr io.Writer) error {
+	t.Helper()
+	ctx, err := generatecli.LoadContext(wsPath, pluginsDir, stderr)
+	if err != nil {
+		return err
+	}
+	arts, err := generatecli.BuildArtifacts(ctx, pluginsDir, stderr)
+	if err != nil {
+		return err
+	}
+	return generatecli.WriteArtifacts(arts, outDir)
+}
 
 // TestRun_Variants exercises `wsd generate-all` end-to-end with a handful
 // of workspace.toml shapes and asserts substrings on the generated files.
@@ -214,10 +231,8 @@ packages = []
 				}
 			}
 
-			var out, errOut bytes.Buffer
-			cmd := generatecli.NewCommand(&out, &errOut)
-			cmd.SetArgs([]string{wsPath, pdir, work})
-			if err := cmd.Execute(); err != nil {
+			var errOut bytes.Buffer
+			if err := runPipeline(t, wsPath, pdir, work, &errOut); err != nil {
 				t.Fatalf("Run: %v\nstderr:\n%s", err, errOut.String())
 			}
 
@@ -296,10 +311,8 @@ enable = ["a", "b"]
 		t.Fatal(err)
 	}
 
-	var out, errOut bytes.Buffer
-	cmd := generatecli.NewCommand(&out, &errOut)
-	cmd.SetArgs([]string{wsPath, pluginsDir, work})
-	if err := cmd.Execute(); err == nil {
+	var errOut bytes.Buffer
+	if err := runPipeline(t, wsPath, pluginsDir, work, &errOut); err == nil {
 		t.Fatalf("expected conflict error, stderr=%q", errOut.String())
 	}
 }
@@ -320,12 +333,10 @@ enable = []
 	if err := os.WriteFile(wsPath, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	var out, errOut bytes.Buffer
-	cmd := generatecli.NewCommand(&out, &errOut)
+	var errOut bytes.Buffer
 	// Pluginsdir does not exist; LoadEnabled with empty enable list still
 	// succeeds, so this exercises the "no enabled plugins" no-op path.
-	cmd.SetArgs([]string{wsPath, filepath.Join(work, "no-such-plugins"), work})
-	if err := cmd.Execute(); err != nil {
+	if err := runPipeline(t, wsPath, filepath.Join(work, "no-such-plugins"), work, &errOut); err != nil {
 		t.Fatalf("expected success with no enabled plugins, got %v", err)
 	}
 }
@@ -347,11 +358,8 @@ func TestRun_BadTOMLFailsBeforeWriting(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 
-	var out, errOut bytes.Buffer
-	cmd := generatecli.NewCommand(&out, &errOut)
-	cmd.SetArgs([]string{wsPath, pluginsDir, work})
-	err := cmd.Execute()
-	if err == nil {
+	var errOut bytes.Buffer
+	if err := runPipeline(t, wsPath, pluginsDir, work, &errOut); err == nil {
 		t.Fatalf("expected error, got nil; stderr=%q", errOut.String())
 	}
 
