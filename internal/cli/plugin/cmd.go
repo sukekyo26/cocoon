@@ -65,7 +65,7 @@ func newScaffoldCmd(stdout, stderr io.Writer) *cobra.Command {
 	}
 	cmd := &cobra.Command{
 		Use:           "scaffold <id>",
-		Short:         "Create a <workspace>/.cocoon/plugins/<id>/ directory from a template",
+		Short:         "Create a new <id>/ plugin directory (default <workspace>/.cocoon/plugins; --plugins-dir overrides)",
 		Long:          scaffoldLong,
 		SilenceUsage:  true,
 		SilenceErrors: true,

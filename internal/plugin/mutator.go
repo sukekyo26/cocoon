@@ -44,16 +44,23 @@ var ErrPinBlockVersionsKeyAssign = errors.New(
 
 // UpsertPinBlock loads the workspace.toml at path, inserts (or replaces) a
 // `[plugins.versions.<id>]` block formatted by FormatPinBlock, and writes the
-// file back atomically. Comments and blank lines outside the target block are
+// file back atomically. Comments and blank lines outside the target block —
+// including whitespace-only lines and existing multi-blank tails — are
 // preserved verbatim.
 //
 // Behavior:
 //   - If `[plugins.versions.<id>]` already exists, its body (header through
-//     the line before the next section header or EOF) is replaced in place.
+//     the line before the next section header or EOF) is replaced in place;
+//     trailing blank lines that sat between the block and the next section
+//     are preserved unchanged.
 //   - Otherwise the new block is appended just after the last existing
-//     `[plugins.versions.*]` block, separated by one blank line.
-//   - If no `[plugins.versions.*]` block exists, the new block is appended at
-//     end-of-file, separated by one blank line.
+//     `[plugins.versions.*]` block; a fresh blank-line separator is inserted
+//     before the new block, and any blank lines that previously trailed the
+//     versions cluster move to sit after the new block (preserved verbatim).
+//   - If no `[plugins.versions.*]` block exists, the new block is appended
+//     at end-of-file. A single blank-line separator is added only when the
+//     file did not already end with one; existing trailing blank lines (any
+//     count, any whitespace contents) are preserved as-is.
 func UpsertPinBlock(path, id, ref, amd64Sum, arm64Sum string) error {
 	if id == "" {
 		return ErrPinBlockEmptyID
