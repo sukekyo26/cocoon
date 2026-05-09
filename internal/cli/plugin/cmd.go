@@ -9,16 +9,21 @@ import (
 	"github.com/sukekyo26/cocoon/internal/i18n"
 )
 
-const pluginLong = `wsd plugin — manage workspace-docker plugins
+const pluginLong = `cocoon plugin — manage cocoon plugins
 
 Subcommands:
-  scaffold   create a new plugins/<id>/ directory from a template`
+  list       list every plugin available in the layered view (project > user > embedded)
+  show       print the resolved manifest for one plugin id
+  add        copy an embedded plugin into ~/.cocoon/plugins (or .cocoon/plugins) for editing
+  remove     delete a user / project overlay copy
+  pin        print a workspace.toml [plugins.versions.<id>] block
+  scaffold   create a new <id>/ directory from a template`
 
-// NewCommand returns the cobra subtree for ` + "`wsd plugin`" + `.
+// NewCommand returns the cobra subtree for ` + "`cocoon plugin`" + `.
 func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "plugin",
-		Short:         "Plugin authoring helpers (scaffold, ...)",
+		Short:         "Manage cocoon plugins (list / show / add / remove / pin / scaffold)",
 		Long:          pluginLong,
 		Args:          rejectUnknownSubcommand,
 		SilenceUsage:  true,
@@ -32,7 +37,14 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 	cmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		return fmt.Errorf("%w: %w", ErrUsage, err)
 	})
-	cmd.AddCommand(newScaffoldCmd(stdout, stderr))
+	cmd.AddCommand(
+		newListCmd(stdout, stderr),
+		newShowCmd(stdout, stderr),
+		newAddCmd(stdout, stderr),
+		newRemoveCmd(stdout, stderr),
+		newPinCmd(stdout, stderr),
+		newScaffoldCmd(stdout, stderr),
+	)
 	return cmd
 }
 
