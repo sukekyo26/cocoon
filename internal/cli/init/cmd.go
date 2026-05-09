@@ -799,9 +799,12 @@ func parsePlugins(raw string, plugins map[string]*plugin.Plugin) ([]string, erro
 //     because the pin would silently never apply),
 //   - have `[version] version_capable = true` in its plugin.toml.
 //
-// Empty input returns (nil, nil). Whitespace around id / ref is trimmed.
-// Duplicate ids are rejected so a typo (`go=1.23,go=1.24`) cannot silently
-// pick the last value.
+// Empty / whitespace-only input returns an empty (non-nil) map. The writer
+// keys behavior on len(...) == 0, so the empty-vs-nil distinction is invisible
+// to callers; we keep the result non-nil to satisfy golangci-lint's `nilnil`
+// rule without inventing a sentinel error for "input parsed cleanly but was
+// empty." Whitespace around id / ref is trimmed. Duplicate ids are rejected
+// so a typo (`go=1.23,go=1.24`) cannot silently pick the last value.
 func parsePluginVersions(raw string, plugins map[string]*plugin.Plugin, enabled []string) (map[string]string, error) {
 	enabledSet := make(map[string]struct{}, len(enabled))
 	for _, id := range enabled {
