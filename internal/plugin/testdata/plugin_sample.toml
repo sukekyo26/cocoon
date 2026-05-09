@@ -1,0 +1,14 @@
+[metadata]
+name = "Sample"
+description = "Sample plugin"
+default = false
+
+[install]
+requires_root = true
+volumes = ["/home/${USERNAME}/.sample"]
+
+[install.env]
+SAMPLE_HOME = "/home/${USERNAME}/.sample"
+
+[version]
+version_capable = false

@@ -1,0 +1,10 @@
+[metadata]
+name = "Demo Generic"
+description = "Demo generic plugin (https://example.com/g)"
+default = false
+
+[install]
+requires_root = false
+
+[version]
+version_capable = false

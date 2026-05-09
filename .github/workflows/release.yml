@@ -1,0 +1,91 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths: [VERSION]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  check-version:
+    name: Check version change
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      changed: ${{ steps.version.outputs.changed }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Extract version from VERSION file
+        id: version
+        run: |
+          version=$(tr -d '[:space:]' < VERSION)
+          tag="v${version}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "Detected version: ${version} (tag: ${tag})"
+
+          if git tag -l "${tag}" | grep -q "${tag}"; then
+            echo "Tag ${tag} already exists — skipping"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "New version detected"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  ci:
+    name: CI
+    needs: [check-version]
+    if: needs.check-version.outputs.changed == 'true'
+    uses: ./.github/workflows/go-ci.yml
+
+  release:
+    name: Build release assets and create GitHub release
+    needs: [check-version, ci]
+    if: needs.check-version.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: taiki-e/install-action@b1fb785e72add1aaabe1e13115c2292ca8925d3f # just
+        with:
+          tool: just
+
+      - name: Build release assets
+        env:
+          VERSION: ${{ needs.check-version.outputs.version }}
+        run: just release-assets
+
+      - name: Create version tag
+        env:
+          TAG: ${{ needs.check-version.outputs.tag }}
+        run: |
+          git tag "$TAG"
+          git push origin "$TAG"
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@72f2c25fcb47643c292f7107632f7a47c1df5cd8 # v2.3.2
+        with:
+          tag_name: ${{ needs.check-version.outputs.tag }}
+          name: cocoon ${{ needs.check-version.outputs.tag }}
+          files: |
+            bin/cocoon-linux-amd64
+            bin/cocoon-linux-arm64
+            bin/cocoon-darwin-amd64
+            bin/cocoon-darwin-arm64
+            bin/SHA256SUMS
+            install.sh
+          generate_release_notes: true

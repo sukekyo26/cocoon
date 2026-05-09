@@ -1,0 +1,51 @@
+[container]
+service_name = "dev"
+username = "developer"
+os = "ubuntu"
+os_version = "24.04"
+
+[plugins]
+enable = ["go", "uv"]
+
+[ports]
+forward = [
+  "3000:3000",
+  "127.0.0.1:8080:8080/tcp",
+  { target = 9000, published = 9000, host_ip = "127.0.0.1", protocol = "udp" },
+]
+
+[apt]
+packages = ["ripgrep"]
+
+[volumes]
+cache = "/home/developer/.cache"
+
+[env]
+EDITOR = "vim"
+
+[locale]
+timezone = "Asia/Tokyo"
+lang = "en_US.UTF-8"
+
+[git]
+user_name = "Test User"
+user_email = "test@example.com"
+
+[container.shell]
+aliases = { ll = "ls -la" }
+env = { GOPATH = "/home/developer/go" }
+
+[[mounts]]
+source = "/etc/ssh"
+target = "/etc/ssh"
+readonly = true
+
+[repositories]
+clone = [
+  { url = "https://github.com/example/repo.git" },
+  { url = "https://github.com/example/other.git", path = "vendor/", branch = "main", depth = 1, recurse_submodules = true },
+]
+
+[devcontainer]
+forwardPorts = [9000]
+postCreateCommand = "echo hi"
