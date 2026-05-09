@@ -106,7 +106,7 @@ clone = []
 	}
 
 	var buf bytes.Buffer
-	doctor.Run(doctor.Options{Root: root, PluginsDir: filepath.Join(root, "plugins")}, &buf)
+	doctor.Run(doctor.Options{Root: root, PluginsDir: filepath.Join(root, "internal", "plugin", "catalog")}, &buf)
 	out := buf.String()
 	if !strings.Contains(out, "Summary:") {
 		t.Errorf("missing Summary line:\n%s", out)

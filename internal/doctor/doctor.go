@@ -111,7 +111,7 @@ func Run(opts Options, w io.Writer) bool {
 	}
 	pluginsDir := opts.PluginsDir
 	if pluginsDir == "" {
-		pluginsDir = filepath.Join(root, "plugins")
+		pluginsDir = filepath.Join(root, "internal", "plugin", "catalog")
 	}
 
 	runner := opts.Runner

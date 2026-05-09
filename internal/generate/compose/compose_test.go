@@ -17,7 +17,7 @@ func TestGenerate_Snapshot(t *testing.T) {
 
 	repoRoot := repoRoot(t)
 	wsPath := filepath.Join(repoRoot, "tests", "fixtures", "snapshot.workspace.toml")
-	pluginsDir := filepath.Join(repoRoot, "plugins")
+	pluginsDir := filepath.Join(repoRoot, "internal", "plugin", "catalog")
 
 	ws, err := config.LoadWorkspace(wsPath)
 	if err != nil {

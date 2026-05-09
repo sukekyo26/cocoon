@@ -85,7 +85,7 @@ func TestCmdVolumes(t *testing.T) {
 
 func TestCmdPluginGet(t *testing.T) {
 	t.Parallel()
-	dir := "../../../plugins/go"
+	dir := "../../../internal/plugin/catalog/go"
 	cases := []struct {
 		field string
 		want  string
@@ -111,7 +111,7 @@ func TestCmdPluginGet(t *testing.T) {
 
 func TestCmdPluginListAndVolumes(t *testing.T) {
 	t.Parallel()
-	dir := "../../../plugins/go"
+	dir := "../../../internal/plugin/catalog/go"
 	gotDirs, _, err := runCmd(t, "plugin-list", dir, "user-dirs")
 	if err != nil {
 		t.Fatalf("err=%v", err)
@@ -131,7 +131,7 @@ func TestCmdPluginListAndVolumes(t *testing.T) {
 
 func TestCmdPluginsTable(t *testing.T) {
 	t.Parallel()
-	got, stderr, err := runCmd(t, "plugins-table", "../../../plugins")
+	got, stderr, err := runCmd(t, "plugins-table", "../../../internal/plugin/catalog")
 	if err != nil {
 		t.Fatalf("err=%v stderr=%s", err, stderr)
 	}

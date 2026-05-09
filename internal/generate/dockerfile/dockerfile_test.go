@@ -47,7 +47,7 @@ func TestGenerate_Snapshot(t *testing.T) {
 
 			root := repoRoot(t)
 			wsPath := filepath.Join(root, "tests", "fixtures", "snapshot.workspace.toml")
-			pluginsDir := filepath.Join(root, "plugins")
+			pluginsDir := filepath.Join(root, "internal", "plugin", "catalog")
 
 			ws, err := config.LoadWorkspace(wsPath)
 			if err != nil {
@@ -177,7 +177,7 @@ func generateDebianWithMirrorURL(t *testing.T, mirrorURL string) string {
 
 	root := repoRoot(t)
 	wsPath := filepath.Join(root, "tests", "fixtures", "snapshot.workspace.toml")
-	pluginsDir := filepath.Join(root, "plugins")
+	pluginsDir := filepath.Join(root, "internal", "plugin", "catalog")
 
 	ws, err := config.LoadWorkspace(wsPath)
 	if err != nil {
@@ -323,7 +323,7 @@ func generateWithMirrorURLAndSources(t *testing.T, mirrorURL string, sources []c
 
 	root := repoRoot(t)
 	wsPath := filepath.Join(root, "tests", "fixtures", "snapshot.workspace.toml")
-	pluginsDir := filepath.Join(root, "plugins")
+	pluginsDir := filepath.Join(root, "internal", "plugin", "catalog")
 
 	ws, err := config.LoadWorkspace(wsPath)
 	if err != nil {
@@ -466,7 +466,7 @@ func generateInStagingRootWithProxy(t *testing.T, root, mirrorURL, httpProxy str
 	t.Helper()
 
 	wsPath := filepath.Join(repoRoot(t), "tests", "fixtures", "snapshot.workspace.toml")
-	pluginsDir := filepath.Join(repoRoot(t), "plugins")
+	pluginsDir := filepath.Join(repoRoot(t), "internal", "plugin", "catalog")
 
 	ws, err := config.LoadWorkspace(wsPath)
 	if err != nil {

@@ -40,7 +40,7 @@ func TestRun_Variants(t *testing.T) {
 	t.Parallel()
 
 	repoRoot := repoRoot(t)
-	pluginsDir := filepath.Join(repoRoot, "plugins")
+	pluginsDir := filepath.Join(repoRoot, "internal", "plugin", "catalog")
 
 	type expect struct {
 		path           string   // relative to outDir
@@ -349,7 +349,7 @@ func TestRun_BadTOMLFailsBeforeWriting(t *testing.T) {
 	t.Parallel()
 
 	repoRoot := repoRoot(t)
-	pluginsDir := filepath.Join(repoRoot, "plugins")
+	pluginsDir := filepath.Join(repoRoot, "internal", "plugin", "catalog")
 
 	work := t.TempDir()
 	wsPath := filepath.Join(work, "workspace.toml")

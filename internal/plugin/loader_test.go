@@ -28,7 +28,7 @@ func TestLoad_Sample(t *testing.T) {
 func TestLoadDir(t *testing.T) {
 	t.Parallel()
 
-	plugins, err := plugin.LoadDir("../../plugins")
+	plugins, err := plugin.LoadDir("../../internal/plugin/catalog")
 	require.NoError(t, err)
 	require.NotEmpty(t, plugins)
 	// Sanity: a few well-known plugins must be present.

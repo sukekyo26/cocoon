@@ -24,7 +24,7 @@ func TestPluginContracts(t *testing.T) {
 	t.Parallel()
 
 	repoRoot := repoRoot(t)
-	pluginsDir := filepath.Join(repoRoot, "plugins")
+	pluginsDir := filepath.Join(repoRoot, "internal", "plugin", "catalog")
 
 	type spec struct {
 		id             string
