@@ -81,3 +81,32 @@ func TestUpsertPinBlockRejectsEmptyArgs(t *testing.T) {
 		t.Errorf("empty ref: got %v, want ErrPinBlockEmptyRef", err)
 	}
 }
+
+// When workspace.toml uses the inline-table form (`[plugins.versions]` +
+// `<id> = { ... }`), the line-based mutator must refuse rather than append a
+// duplicate `[plugins.versions.<id>]` block (which would produce a TOML
+// duplicate-key error at gen time).
+func TestUpsertPinBlockRejectsInlineForm(t *testing.T) {
+	t.Parallel()
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "ws.toml")
+	body := []byte(`[plugins]
+enable = ["go"]
+
+[plugins.versions]
+go = { pin = "1.22.5" }
+`)
+	if err := os.WriteFile(path, body, 0o600); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if err := plugin.UpsertPinBlock(path, "go", "1.23.4", "", ""); !errors.Is(err, plugin.ErrPinBlockInlineForm) {
+		t.Errorf("inline form: got %v, want ErrPinBlockInlineForm", err)
+	}
+	got, err := os.ReadFile(path) //nolint:gosec // tmp path under t.TempDir
+	if err != nil {
+		t.Fatalf("read after refusal: %v", err)
+	}
+	if string(got) != string(body) {
+		t.Errorf("workspace.toml was modified despite refusal:\n--- got ---\n%s", got)
+	}
+}

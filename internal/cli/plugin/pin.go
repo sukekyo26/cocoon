@@ -1,6 +1,7 @@
 package plugincli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -70,6 +71,9 @@ func runPin(stdout, _ io.Writer, id, ref, amd64sum, arm64sum string, write bool)
 				ErrUsage)
 		}
 		if uErr := plugin.UpsertPinBlock(wsPath, id, ref, amd64sum, arm64sum); uErr != nil {
+			if errors.Is(uErr, plugin.ErrPinBlockInlineForm) {
+				return fmt.Errorf("%w: %w (in %s)", ErrUsage, uErr, wsPath)
+			}
 			return fmt.Errorf("%w: %w", ErrFailure, uErr)
 		}
 		fmt.Fprintf(stdout, "Updated %s: [plugins.versions.%s]\n", wsPath, id)

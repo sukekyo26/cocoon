@@ -249,6 +249,7 @@ Updated /home/alice/proj/workspace.toml: [plugins.versions.go]
 - `pin` only makes sense for plugins whose `[version].version_capable = true`. The pin block is ignored at `gen` time for non-version-capable plugins.
 - Checksum flags only matter when the plugin's `install.sh` actually reads `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` (i.e. `tarball` template plugins). They are silently inert for `curl-pipe` / `generic` templates.
 - `--write` requires a discoverable `workspace.toml` from cwd; without `--write`, the command works from anywhere because it only resolves the layered FS for id validation.
+- `--write` only edits the multi-line `[plugins.versions.<id>]` form. If `workspace.toml` uses the equivalent inline-table form (`[plugins.versions]` + `<id> = { pin = "..." }`, the style the `init` template suggests in commented-out lines), `--write` refuses with a usage error rather than appending a duplicate block. Convert the inline pins to multi-line form first, or edit `workspace.toml` manually.
 
 ### `cocoon plugin scaffold <id>`
 
