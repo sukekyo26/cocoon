@@ -42,8 +42,14 @@ jobs:
           mkdir -p e2e/test-project
           cd e2e/test-project
           git init -q
+          # service-name and the in-container username are kept identical
+          # ("dev") so the `docker compose exec dev` step below targets the
+          # right service. Using a different service-name (e.g. "e2e") would
+          # silently break exec because `exec <service>` resolves against
+          # the compose service id, which mirrors workspace.toml's
+          # [container].service_name.
           "$COCOON" init --yes \
-            --service-name e2e \
+            --service-name dev \
             --username dev \
             --os ubuntu \
             --os-version 22.04 \
