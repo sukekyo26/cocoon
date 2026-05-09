@@ -21,8 +21,11 @@ name: E2E
 # ubuntu-latest / ubuntu-24.04-arm both ship docker + buildx out of the box.
 
 on:
+  # Push fires for in-progress branches (pre-PR feedback). develop / main
+  # are deliberately excluded so a merge does not double up with the
+  # pull_request run that already gated it.
   push:
-    branches: [develop, main, "feature/*", "fix/*", "refactor/*"]
+    branches: ["feature/*", "fix/*", "refactor/*"]
   pull_request:
     branches: [develop, main]
   workflow_dispatch:
