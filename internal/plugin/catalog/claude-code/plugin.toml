@@ -1,0 +1,11 @@
+[metadata]
+name = "Claude Code"
+description = "Claude Code — AI-powered coding assistant by Anthropic (https://github.com/anthropics/claude-code)"
+default = false
+
+[install]
+requires_root = false
+volumes = ["/home/${USERNAME}/.claude"]
+
+[version]
+version_capable = false

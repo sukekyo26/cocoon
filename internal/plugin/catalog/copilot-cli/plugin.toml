@@ -1,0 +1,11 @@
+[metadata]
+name = "GitHub Copilot CLI"
+description = "GitHub Copilot in the CLI — AI-powered command-line assistant (https://github.com/github/copilot-cli)"
+default = false
+
+[install]
+requires_root = false
+volumes = ["/home/${USERNAME}/.copilot"]
+
+[version]
+version_capable = true

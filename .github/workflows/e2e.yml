@@ -1,0 +1,78 @@
+name: E2E
+
+# Real Docker round-trip: build the cocoon binary, init a fresh project,
+# generate .devcontainer/, then `docker compose build` + start + exec into
+# the container so generation drift breaks CI before it breaks users.
+# Local WSL2 cannot run this (gcc missing for `-race`); GitHub-hosted
+# ubuntu-latest ships docker + buildx out of the box.
+
+on:
+  push:
+    branches: [develop, main, "feature/*", "fix/*", "refactor/*"]
+  pull_request:
+    branches: [develop, main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  docker-roundtrip:
+    name: cocoon init + gen + docker compose up
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: taiki-e/install-action@b1fb785e72add1aaabe1e13115c2292ca8925d3f # just
+      - name: Build cocoon binary
+        run: just build
+      - name: cocoon init + gen + docker compose round-trip
+        env:
+          COCOON: ${{ github.workspace }}/bin/cocoon
+        run: |
+          set -euxo pipefail
+          mkdir -p e2e/test-project
+          cd e2e/test-project
+          git init -q
+          # service-name and the in-container username are kept identical
+          # ("dev") so the `docker compose exec dev` step below targets the
+          # right service. Using a different service-name (e.g. "e2e") would
+          # silently break exec because `exec <service>` resolves against
+          # the compose service id, which mirrors workspace.toml's
+          # [container].service_name.
+          # Match cocoon's full default-on apt category set so default-on
+          # plugins (e.g. docker-cli, which calls gpg in install.sh via the
+          # vcs category) build cleanly. Trimming this list in CI hides
+          # plugin-vs-category mismatches that real users would hit.
+          "$COCOON" init --yes \
+            --service-name dev \
+            --username dev \
+            --os ubuntu \
+            --os-version 22.04 \
+            --mount-root . \
+            --no-devcontainer \
+            --apt-categories=text-editors,vcs,utilities,compression,build
+          "$COCOON" gen
+          # The generated tree must land under .devcontainer/ exclusively;
+          # any leakage back into config/ or to the project root is a regression.
+          # The .env file is critical for compose interpolation (UID/GID/
+          # DOCKER_GID/CONTAINER_SERVICE_NAME/OS_IMAGE/OS_VERSION/USERNAME);
+          # without it `docker compose build` fails with
+          # `failed to parse stage name ":": invalid reference format`.
+          test -f .devcontainer/Dockerfile
+          test -f .devcontainer/docker-compose.yml
+          test -f .devcontainer/docker-entrypoint.sh
+          test -f .devcontainer/.env
+          test ! -d config
+          docker compose -f .devcontainer/docker-compose.yml build
+          docker compose -f .devcontainer/docker-compose.yml up -d
+          docker compose -f .devcontainer/docker-compose.yml exec -T dev bash -lc 'echo cocoon-e2e-ok'
+          docker compose -f .devcontainer/docker-compose.yml down -v

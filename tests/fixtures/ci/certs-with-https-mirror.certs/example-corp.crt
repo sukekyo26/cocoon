@@ -1,0 +1,5 @@
+-----BEGIN CERTIFICATE-----
+MIIBdummyCertificateContentForTestingFixtureOnlyDoNotUseInProduction
+ThisIsNotAValidCertificateItIsJustATextBlockThatTriggersTheGenerator
+PEMHeaderFooterMatchInGenerateCertificateInstall=
+-----END CERTIFICATE-----

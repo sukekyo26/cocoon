@@ -1,0 +1,103 @@
+package compose_test
+
+import (
+	"bytes"
+	"strings"
+	"testing"
+
+	"github.com/sukekyo26/cocoon/internal/config"
+	"github.com/sukekyo26/cocoon/internal/generate"
+	"github.com/sukekyo26/cocoon/internal/generate/compose"
+	"github.com/sukekyo26/cocoon/internal/plugin"
+)
+
+// TestGenerate_WithSidecars exercises buildSidecar / buildSidecarVolumes which
+// the snapshot fixture does not cover.
+func TestGenerate_WithSidecars(t *testing.T) {
+	t.Parallel()
+
+	restart := config.RestartUnlessStopped
+	ws := &config.Workspace{
+		Container: config.ContainerSpec{
+			ServiceName: "dev", Username: "dev", Os: "ubuntu", OsVersion: "24.04",
+		},
+		Plugins: config.PluginsSpec{Enable: []string{}},
+		Services: map[string]config.SidecarService{
+			"db": {
+				Image:   "postgres:16",
+				Ports:   []any{"5432:5432"},
+				Env:     map[string]string{"POSTGRES_DB": "app"},
+				Volumes: map[string]string{"pgdata": "/var/lib/postgresql/data"},
+				Healthcheck: config.HealthcheckSpec{
+					"test":     []any{"CMD-SHELL", "pg_isready"},
+					"interval": "5s",
+				},
+				Restart: &restart,
+			},
+			"cache": {
+				Image:     "redis:7-alpine",
+				Ports:     []any{6379},
+				DependsOn: []string{"db"},
+			},
+		},
+	}
+
+	var warns bytes.Buffer
+	ctx := &generate.WorkspaceContext{
+		WS: ws, PluginsDir: "", Plugins: map[string]*plugin.Plugin{}, Warnings: &warns,
+	}
+	got, err := compose.Generate(ctx, compose.Options{
+		Plugins: map[string]*plugin.Plugin{}, Warnings: &warns,
+	})
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	for _, sub := range []string{
+		"postgres:16",
+		"redis:7-alpine",
+		"depends_on:",
+		"healthcheck:",
+		"restart: unless-stopped",
+		"pgdata:", // named volume from sidecar volumes
+	} {
+		if !strings.Contains(got, sub) {
+			t.Errorf("missing %q in:\n%s", sub, got)
+		}
+	}
+}
+
+// TestGenerate_WithResources exercises applyResources which is partially
+// covered by the snapshot fixture but not for all field combinations.
+func TestGenerate_WithResources(t *testing.T) {
+	t.Parallel()
+	ptr := func(s string) *string { return &s }
+	cpus := 2.5
+	pids := 1024
+	nofileSoft, nofileHard := 4096, 8192
+	ws := &config.Workspace{
+		Container: config.ContainerSpec{
+			ServiceName: "dev", Username: "dev", Os: "ubuntu", OsVersion: "24.04",
+			Resources: &config.Resources{
+				ShmSize:         ptr("2g"),
+				PidsLimit:       &pids,
+				StopGracePeriod: ptr("30s"),
+				CPUs:            &cpus,
+				Memory:          ptr("8g"),
+				NofileSoft:      &nofileSoft,
+				NofileHard:      &nofileHard,
+			},
+		},
+		Plugins: config.PluginsSpec{Enable: []string{}},
+	}
+	var warns bytes.Buffer
+	ctx := &generate.WorkspaceContext{WS: ws, Plugins: map[string]*plugin.Plugin{}, Warnings: &warns}
+	got, err := compose.Generate(ctx, compose.Options{Plugins: map[string]*plugin.Plugin{}, Warnings: &warns})
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	for _, sub := range []string{"shm_size", "pids_limit", "stop_grace_period", "ulimits"} {
+		if !strings.Contains(got, sub) {
+			t.Errorf("missing %q in:\n%s", sub, got)
+		}
+	}
+}

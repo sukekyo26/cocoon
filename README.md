@@ -1,34 +1,56 @@
 # cocoon
 
-Project-aware container workspace generator. Run `cocoon init && cocoon up` from any project directory to spin up a Dev Container or plain Docker Compose stack tailored to that repository.
+[![Go CI](https://github.com/sukekyo26/cocoon/actions/workflows/go-ci.yml/badge.svg)](https://github.com/sukekyo26/cocoon/actions/workflows/go-ci.yml)
+[![E2E](https://github.com/sukekyo26/cocoon/actions/workflows/e2e.yml/badge.svg)](https://github.com/sukekyo26/cocoon/actions/workflows/e2e.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-`cocoon` is the successor of [workspace-docker](https://github.com/sukekyo26/workspace-docker). It replaces the "clone the base repo" workflow with a single binary you install once and use anywhere.
+[日本語版 README](docs/README.ja.md)
 
-## Status
-
-**Pre-release.** Targeting `v0.1.0` MVP.
-
-See [`docs/design.md`](docs/design.md) and the design plan for the full architecture.
+Project-aware container workspace **generator**. Run `cocoon init && cocoon gen` from any project directory to produce a `.devcontainer/` stack tailored to that repository, then start it with `docker compose` or VS Code's "Reopen in Container".
 
 ## Highlights
 
-- Single binary, installed via `curl | sh` or `go install`
-- `workspace.toml` per project (root or `.cocoon/workspace.toml` fallback)
-- Generates `.devcontainer/{Dockerfile,docker-compose.yml,devcontainer.json}` — IDE-neutral
-- Pluggable language/tool catalog (`go`, `uv`, `rust`, `aws-cli`, ...) shipped inside the binary via `go:embed`; user plugins live in `~/.cocoon/plugins/`
-- Mount the current project (`mount_root = "."`) or its parent (`mount_root = ".."`) for sibling-repo workflows — chosen interactively at `cocoon init`
-- apt packages picked from grouped checkboxes during `init`, written directly to `[apt] packages` for transparent later editing
+- **Single static binary** — every plugin ships inside the binary via `go:embed`; install once and use anywhere
+- **Generates** `.devcontainer/{Dockerfile, docker-compose.yml, devcontainer.json, docker-entrypoint.sh, .env}` from a single `workspace.toml`
+- VS Code Dev Containers and raw `docker compose` consume the same output
+- **Layered plugin overrides** — `<project>/.cocoon/plugins/` > `~/.cocoon/plugins/` > embedded catalog (20 plugins out of the box)
+- **Interactive `cocoon init`** — picks mount range, login shell, apt categories, plugins, alias bundles, and writes a self-documenting `workspace.toml`
+- **i18n** — every prompt, error message, and inline `workspace.toml` comment renders in English or Japanese based on `$LANG`
 
-## Quick start (planned)
+## Requirements
+
+- Linux, macOS, or WSL2
+- Docker 23+ with BuildKit, and `docker compose` v2.18+
+- Go 1.26+ (only when building from source)
+
+## Install
 
 ```bash
+# Recommended: prebuilt binary with SHA256 verification
 curl -fsSL https://raw.githubusercontent.com/sukekyo26/cocoon/main/install.sh | sh
-cd ~/projects/my-api
-cocoon init
-cocoon up
-cocoon exec
+
+# Alternative: from source (Go 1.26+)
+go install github.com/sukekyo26/cocoon/cmd/cocoon@latest
 ```
+
+## Quick start
+
+```bash
+cd ~/projects/my-api
+cocoon init                                              # generate workspace.toml interactively
+cocoon gen                                               # generate .devcontainer/
+docker compose -f .devcontainer/docker-compose.yml up -d # or open in VS Code → "Reopen in Container"
+```
+
+## Documentation
+
+| Topic | English | 日本語 |
+|---|---|---|
+| Architecture | [architecture.md](docs/architecture.md) | [architecture.ja.md](docs/architecture.ja.md) |
+| Configuration (`workspace.toml`) | [configuration.md](docs/configuration.md) | [configuration.ja.md](docs/configuration.ja.md) |
+| Commands | [commands.md](docs/commands.md) | [commands.ja.md](docs/commands.ja.md) |
+| Changelog | [CHANGELOG.md](CHANGELOG.md) | [CHANGELOG.ja.md](docs/CHANGELOG.ja.md) |
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE).
+MIT — see [LICENSE](LICENSE).

@@ -1,0 +1,53 @@
+# CI fixture: latest upstream versions (no pins) for weekly regression detection.
+# Used by .github/workflows/docker-build-latest.yml.
+# A failing build means an upstream installer or release artifact changed.
+#
+# Login shell: bash. Together with the pinned (zsh) and arm64-smoke (fish)
+# fixtures this gives the CI matrix coverage of all three supported shells.
+#
+# Ubuntu 26.04: this fixture is the only CI build that exercises 26.04 today
+# (pinned/arm64-smoke stay on 24.04 for reproducibility). Pairing the newest
+# advertised LTS with no-pin latest plugin versions is the intended use of
+# the weekly job — it catches both upstream installer regressions and
+# 26.04-specific apt / package-availability breakage on the same run.
+[container]
+service_name = "ci-latest"
+username = "testuser"
+os = "ubuntu"
+os_version = "26.04"
+
+[container.shell]
+default = "bash"
+
+[plugins]
+# All plugins enabled to exercise the full install surface against latest.
+# custom-ps1 is excluded because it conflicts with starship.
+enable = [
+    "docker-cli",
+    "aws-cli",
+    "aws-sam-cli",
+    "github-cli",
+    "claude-code",
+    "copilot-cli",
+    "proto",
+    "mise",
+    "uv",
+    "bun",
+    "zig",
+    "rust",
+    "go",
+    "lazygit",
+    "starship",
+    "nerd-fonts",
+    "google-chrome",
+    "terraform",
+    "opentofu",
+]
+
+# No [plugins.versions] block: every version_capable plugin uses fetch_latest.
+
+[ports]
+forward = ["3000:3000"]
+
+[devcontainer.customizations.vscode]
+extensions = ["ms-python.python"]

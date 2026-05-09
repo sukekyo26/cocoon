@@ -1,0 +1,55 @@
+// Command cocoon is the project-aware container workspace generator binary.
+//
+// It reads workspace.toml from the current project and generates Dockerfile,
+// docker-compose.yml and devcontainer.json tailored to that project.
+package main
+
+import (
+	"errors"
+	"fmt"
+	"io"
+	"os"
+
+	"github.com/sukekyo26/cocoon/internal/cli"
+	configcli "github.com/sukekyo26/cocoon/internal/cli/config"
+	gencli "github.com/sukekyo26/cocoon/internal/cli/gen"
+	generatecli "github.com/sukekyo26/cocoon/internal/cli/generate"
+	initcli "github.com/sukekyo26/cocoon/internal/cli/init"
+	plugincli "github.com/sukekyo26/cocoon/internal/cli/plugin"
+	selfupdatecli "github.com/sukekyo26/cocoon/internal/cli/selfupdate"
+	"github.com/sukekyo26/cocoon/internal/version"
+)
+
+func main() {
+	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
+}
+
+func run(args []string, stdout, stderr io.Writer) int {
+	app := cli.New(version.Get(), stdout, stderr)
+	return exitCode(app.Execute(args), stderr)
+}
+
+func exitCode(err error, stderr io.Writer) int {
+	if err == nil {
+		return 0
+	}
+	// Subcommands run with cobra's SilenceErrors=true, so it is the binary
+	// boundary's job to surface the message. Print first, then map to the
+	// numeric exit code expected by callers.
+	fmt.Fprintf(stderr, "cocoon: %v\n", err)
+	switch {
+	case errors.Is(err, plugincli.ErrCanceled):
+		return 130
+	case errors.Is(err, configcli.ErrUsage),
+		errors.Is(err, generatecli.ErrUsage),
+		errors.Is(err, gencli.ErrUsage),
+		errors.Is(err, plugincli.ErrUsage),
+		errors.Is(err, initcli.ErrUsage),
+		errors.Is(err, selfupdatecli.ErrUsage),
+		errors.Is(err, configcli.ErrUnknownField),
+		errors.Is(err, configcli.ErrUnknownPluginField):
+		return 2
+	default:
+		return 1
+	}
+}

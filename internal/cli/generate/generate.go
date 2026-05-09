@@ -1,0 +1,134 @@
+// Package generatecli implements the in-process generation pipeline used by
+// the `cocoon gen` command. It loads workspace.toml + the enabled plugin
+// TOMLs once and produces the generated artifacts (Dockerfile,
+// docker-compose.yml, devcontainer.json when enabled, docker-entrypoint.sh)
+// under .devcontainer/. Callers are responsible for atomic placement.
+package generatecli
+
+import (
+	"errors"
+	"fmt"
+	"io"
+	"io/fs"
+	"os"
+	"path/filepath"
+
+	"github.com/sukekyo26/cocoon/internal/config"
+	"github.com/sukekyo26/cocoon/internal/fsx"
+	"github.com/sukekyo26/cocoon/internal/generate"
+	"github.com/sukekyo26/cocoon/internal/generate/compose"
+	"github.com/sukekyo26/cocoon/internal/generate/devcontainerjson"
+	"github.com/sukekyo26/cocoon/internal/generate/dockerfile"
+	"github.com/sukekyo26/cocoon/internal/generate/envfile"
+	"github.com/sukekyo26/cocoon/internal/plugin"
+)
+
+// ErrUsage signals a usage error (missing argument). Maps to exit code 2.
+var ErrUsage = errors.New("usage error")
+
+// ErrFailure signals a runtime failure. Maps to exit code 1.
+var ErrFailure = errors.New("failure")
+
+// Artifact is one generated file produced by BuildArtifacts. Rel is the path
+// relative to the caller-supplied output directory; Body is its contents;
+// Mode is the file permission to write. A zero Mode falls back to 0o644 so
+// existing call sites that produce only text files do not need to set it.
+type Artifact struct {
+	Rel  string
+	Body string
+	Mode fs.FileMode
+}
+
+// LoadContext loads workspace.toml, the enabled plugins from
+// pluginsDir, and runs plugin conflict checks, returning a
+// WorkspaceContext ready for BuildArtifacts. Stderr receives
+// plugin-loader warnings.
+func LoadContext(wsPath, pluginsDir string, stderr io.Writer) (*generate.WorkspaceContext, error) {
+	ws, err := config.LoadWorkspace(wsPath)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrFailure, err)
+	}
+	plugins, err := plugin.LoadEnabled(pluginsDir, ws.Plugins.Enable, stderr)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrFailure, err)
+	}
+	if cerr := plugin.CheckConflicts(plugins); cerr != nil {
+		return nil, fmt.Errorf("%w: %w", ErrFailure, cerr)
+	}
+	return &generate.WorkspaceContext{
+		WS:         ws,
+		PluginsDir: pluginsDir,
+		ProjectDir: filepath.Dir(wsPath),
+		Plugins:    plugins,
+		Warnings:   stderr,
+	}, nil
+}
+
+// BuildArtifacts produces the in-memory list of generated files
+// (compose, Dockerfile, devcontainer.json when enabled, shellrc) for
+// the given loaded WorkspaceContext.
+func BuildArtifacts(ctx *generate.WorkspaceContext, pluginsDir string, stderr io.Writer) ([]Artifact, error) {
+	absPlugins, err := filepath.Abs(pluginsDir)
+	if err != nil {
+		return nil, fmt.Errorf("%w: abs(%s): %w", ErrFailure, pluginsDir, err)
+	}
+	wsRoot := filepath.Dir(absPlugins)
+	arts := make([]Artifact, 0, 5)
+
+	body, err := compose.Generate(ctx, compose.Options{Plugins: ctx.Plugins, Warnings: stderr})
+	if err != nil {
+		return nil, fmt.Errorf("%w: compose: %w", ErrFailure, err)
+	}
+	arts = append(arts, Artifact{Rel: ".devcontainer/docker-compose.yml", Body: body, Mode: 0})
+
+	body, err = dockerfile.Generate(ctx, dockerfile.Options{
+		WorkspaceRoot: wsRoot,
+		RepoDir:       "",
+		Plugins:       ctx.Plugins,
+		Warnings:      stderr,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("%w: dockerfile: %w", ErrFailure, err)
+	}
+	arts = append(arts, Artifact{Rel: ".devcontainer/Dockerfile", Body: body, Mode: 0})
+
+	if ctx.WS.Workspace.DevContainerOrDefault() {
+		body, err = devcontainerjson.Generate(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("%w: devcontainer.json: %w", ErrFailure, err)
+		}
+		arts = append(arts, Artifact{Rel: ".devcontainer/devcontainer.json", Body: body, Mode: 0})
+	}
+
+	arts = append(arts, Artifact{
+		Rel:  ".devcontainer/docker-entrypoint.sh",
+		Body: dockerfile.EntrypointScript(),
+		Mode: 0o755,
+	})
+
+	envBody, err := envfile.Generate(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("%w: envfile: %w", ErrFailure, err)
+	}
+	arts = append(arts, Artifact{Rel: ".devcontainer/.env", Body: envBody, Mode: 0o600})
+	return arts, nil
+}
+
+// WriteArtifacts atomically lays the artifact set down under outDir. Each
+// artifact uses its own Mode (defaulting to 0o644 when unset).
+func WriteArtifacts(arts []Artifact, outDir string) error {
+	for _, a := range arts {
+		target := filepath.Join(outDir, a.Rel)
+		if mkErr := os.MkdirAll(filepath.Dir(target), 0o755); mkErr != nil {
+			return fmt.Errorf("%w: mkdir %s: %w", ErrFailure, target, mkErr)
+		}
+		mode := a.Mode
+		if mode == 0 {
+			mode = 0o644
+		}
+		if wErr := fsx.AtomicWriteFile(target, []byte(a.Body), mode); wErr != nil {
+			return fmt.Errorf("%w: write %s: %w", ErrFailure, target, wErr)
+		}
+	}
+	return nil
+}
