@@ -7,7 +7,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
-	configcli "github.com/sukekyo26/cocoon/internal/cli/config"
 	gencli "github.com/sukekyo26/cocoon/internal/cli/gen"
 	initcli "github.com/sukekyo26/cocoon/internal/cli/init"
 	plugincli "github.com/sukekyo26/cocoon/internal/cli/plugin"
@@ -66,7 +65,6 @@ func newRootCommand(version string, stdout, stderr io.Writer) *cobra.Command {
 		gencli.NewCommand(stdout, stderr),
 		selfupdatecli.NewCommand(stdout, stderr),
 		// Noun groups
-		configcli.NewCommand(stdout, stderr),
 		plugincli.NewCommand(stdout, stderr),
 		newVersionSubcommand(version, stdout),
 	)

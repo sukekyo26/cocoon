@@ -14,21 +14,6 @@ Reference for every command exposed by the `cocoon` binary.
 | `cocoon plugin remove <id>` | Delete a user / project overlay copy |
 | `cocoon plugin pin <id> <ref>` | Print a `[plugins.versions.<id>]` block |
 | `cocoon plugin scaffold <id>` | Create a new `<id>/` directory from a template |
-| `cocoon config get <file> <field>` | Print scalar from `workspace.toml` |
-| `cocoon config list <file> <field>` | Print array from `workspace.toml` |
-| `cocoon config volumes <file>` | Print `[volumes]` entries |
-| `cocoon config plugin-get <dir-or-file> <field>` | Print scalar from `plugin.toml` |
-| `cocoon config plugin-list <dir-or-file> <field>` | Print array from `plugin.toml` |
-| `cocoon config plugin-volumes <dir-or-file>` | Print `plugin.install.volumes` |
-| `cocoon config plugins-table <dir>` | Print one plugin row per line |
-| `cocoon config validate-workspace <file> [plugins]` | Validate `workspace.toml` |
-| `cocoon config validate-plugins <dir>` | Validate every plugin under `<dir>` |
-| `cocoon config has-section <file> <section>` | Print true / false |
-| `cocoon config list-sidecars <file>` | Print one `[services.<name>]` key per line |
-| `cocoon config dump-devcontainer <file>` | Dump `[devcontainer]` as TOML |
-| `cocoon config dump-repositories <file>` | Dump `[repositories]` as TOML |
-| `cocoon config repositories <file>` | Emit `[repositories].clone` as JSON |
-| `cocoon config format-repositories <file\|->` | Format JSON entries as TOML |
 | `cocoon self-update` | Replace this binary with the latest GitHub release |
 | `cocoon version` | Print binary version |
 | `cocoon help [command]` | Print help (Cobra builtin) |
@@ -170,30 +155,6 @@ Create a new `<id>/` directory from a template (`curl-pipe` / `tarball` / `gener
 | `--with-install-user` | Also generate `install_user.sh`. |
 | `--non-interactive` | Skip prompts; require all fields above. |
 | `--force` | Overwrite `<id>/` if it already exists. |
-
----
-
-## `cocoon config`
-
-Parse and validate `workspace.toml` / `plugin.toml`. These subcommands exist for legacy bash-bridge integration; future versions may trim them.
-
-| Subcommand | Purpose |
-|---|---|
-| `get <file> <field>` | Print a scalar from `workspace.toml`. |
-| `list <file> <field>` | Print an array from `workspace.toml`, one entry per line. |
-| `volumes <file>` | Print `[volumes]` entries as `name<TAB>path`. |
-| `plugin-get <dir-or-file> <field>` | Print a scalar from `plugin.toml`. |
-| `plugin-list <dir-or-file> <field>` | Print an array from `plugin.toml`. |
-| `plugin-volumes <dir-or-file>` | Print `plugin.install.volumes` as `name<TAB>path`. |
-| `plugins-table <dir>` | Print one plugin row per line: `id<TAB>name<TAB>default<TAB>description`. |
-| `validate-workspace <file> [plugins]` | Validate `workspace.toml`; optional plugin dir for cross-checks. |
-| `validate-plugins <dir>` | Validate every `plugin.toml` under `<dir>`. |
-| `has-section <file> <section>` | Print `true` or `false`. |
-| `list-sidecars <file>` | Print one `[services.<name>]` key per line. |
-| `dump-devcontainer <file>` | Dump `[devcontainer]` as TOML. |
-| `dump-repositories <file>` | Dump `[repositories]` as TOML. |
-| `repositories <file>` | Emit `[repositories].clone` as JSON. |
-| `format-repositories <file\|->` | Format JSON entries as TOML (`-` reads stdin). |
 
 ---
 
