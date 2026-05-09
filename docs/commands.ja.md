@@ -249,7 +249,7 @@ Updated /home/alice/proj/workspace.toml: [plugins.versions.go]
 - `pin` は `[version].version_capable = true` のプラグインでのみ意味を持つ。それ以外では `gen` 時に無視される。
 - チェックサムフラグは `install.sh` が実際に `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` を読む場合 (= `tarball` テンプレート由来) のみ意味を持つ。`curl-pipe` / `generic` では無視される。
 - `--write` は cwd から `workspace.toml` を発見できる必要がある。`--write` 無しなら id 検証用に LayeredFS を解決するだけなので、どこからでも動く。
-- `--write` は multi-line `[plugins.versions.<id>]` 形式のみを編集する。等価な inline-table 形式 (`[plugins.versions]` + `<id> = { pin = "..." }`、`init` テンプレートがコメント行で示しているスタイル) を使っている場合、`--write` は重複ブロックを追加せず usage error で停止する。事前に multi-line 形式へ変換するか、`workspace.toml` を手動編集する。
+- `--write` は multi-line `[plugins.versions.<id>]` 形式のみを編集する。`[plugins.versions]` 直下に任意の key 代入がある場合 — `<id> = "1.23.4"` / `<id> = [..]` / inline-table `<id> = { pin = "..." }` (`init` テンプレートがコメント行で示しているスタイル) のいずれも — `--write` は重複ブロックを追加せず usage error で停止する。各エントリを `[plugins.versions.<id>]` ブロックへ変換するか、`workspace.toml` を手動編集する。
 
 ### `cocoon plugin scaffold <id>`
 
