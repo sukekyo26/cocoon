@@ -27,6 +27,9 @@ var messagesEN_plugin = map[string]string{
 	"plugin_scaffold_dir_exists":        "%s already exists; pass --force to overwrite",
 	"plugin_scaffold_validation_failed": "generated plugin.toml failed strict validation; rolled back",
 	"plugin_scaffold_done":              "OK: scaffolded %s (%d files)",
+	"plugin_scaffold_no_plugins_dir": "scaffold needs a writable plugins dir.\n" +
+		"  - run inside a cocoon project (workspace.toml discoverable from cwd), or\n" +
+		"  - pass --plugins-dir <path> explicitly.",
 }
 
 //nolint:gochecknoglobals,revive // catalog tables are file-scoped by design.
@@ -51,4 +54,7 @@ var messagesJA_plugin = map[string]string{
 	"plugin_scaffold_dir_exists":        "%s は既に存在します。上書きするには --force を指定してください",
 	"plugin_scaffold_validation_failed": "生成された plugin.toml が strict 検証に失敗したためロールバックしました",
 	"plugin_scaffold_done":              "OK: %s を生成 (%d ファイル)",
+	"plugin_scaffold_no_plugins_dir": "scaffold には書き込み可能なプラグインディレクトリが必要です。\n" +
+		"  - cocoon プロジェクト内 (cwd から workspace.toml が見える場所) で実行するか、\n" +
+		"  - --plugins-dir <path> を明示的に指定してください。",
 }

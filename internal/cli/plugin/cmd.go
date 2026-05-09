@@ -60,12 +60,12 @@ func rejectUnknownSubcommand(_ *cobra.Command, args []string) error {
 func newScaffoldCmd(stdout, stderr io.Writer) *cobra.Command {
 	//nolint:exhaustruct // setX flags populated post-parse from cmd.Flags().Changed
 	opts := &scaffoldOpts{
-		pluginsDir: "plugins",
+		pluginsDir: "",
 		template:   tmplGeneric,
 	}
 	cmd := &cobra.Command{
 		Use:           "scaffold <id>",
-		Short:         "Create a plugins/<id>/ directory from a template",
+		Short:         "Create a new <id>/ plugin directory (default <workspace>/.cocoon/plugins; --plugins-dir overrides)",
 		Long:          scaffoldLong,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -88,7 +88,8 @@ func newScaffoldCmd(stdout, stderr io.Writer) *cobra.Command {
 			return runScaffoldFlow(opts, stdout, stderr)
 		},
 	}
-	cmd.Flags().StringVar(&opts.pluginsDir, "plugins-dir", "plugins", "output directory")
+	cmd.Flags().StringVar(&opts.pluginsDir, "plugins-dir", "",
+		"output directory (default: <workspace>/.cocoon/plugins, auto-discovered from workspace.toml)")
 	cmd.Flags().StringVar(&opts.name, "name", "", "display name (e.g. \"GitHub CLI\")")
 	cmd.Flags().StringVar(&opts.description, "description", "",
 		"short description; URL must be embedded as \"(...)\"")
@@ -100,18 +101,22 @@ func newScaffoldCmd(stdout, stderr io.Writer) *cobra.Command {
 	cmd.Flags().BoolVar(&opts.withInstallUser, "with-install-user", false, "also generate install_user.sh")
 	cmd.Flags().BoolVar(&opts.nonInteractive, "non-interactive", false,
 		"skip interactive prompts; require all fields above")
-	cmd.Flags().BoolVar(&opts.force, "force", false, "overwrite plugins/<id>/ if it already exists")
+	cmd.Flags().BoolVar(&opts.force, "force", false, "overwrite <plugins-dir>/<id>/ if it already exists")
 	cmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		return fmt.Errorf("%w: %w", ErrUsage, err)
 	})
 	return cmd
 }
 
-const scaffoldLong = `wsd plugin scaffold — create a new plugins/<id>/ directory
+const scaffoldLong = `cocoon plugin scaffold — create a new <id>/ directory under the project plugins overlay
+
+By default the new directory is created under <workspace>/.cocoon/plugins/<id>/,
+auto-discovered from the nearest workspace.toml. Pass --plugins-dir <path> to
+override (the path is taken as-is, joined with <id>).
 
 The new directory contains a plugin.toml describing the plugin and an
 install.sh skeleton matching the chosen template (curl-pipe / tarball /
-generic).`
+generic). With --with-install-user a second install_user.sh hook is emitted.`
 
 func runScaffoldFlow(opts *scaffoldOpts, stdout, stderr io.Writer) error {
 	cat := i18n.New(i18n.Detect())

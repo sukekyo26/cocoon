@@ -1,6 +1,7 @@
 package plugincli
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -9,6 +10,13 @@ import (
 	"github.com/sukekyo26/cocoon/internal/config"
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
+
+// ErrWorkspaceNotFound is returned by projectPluginsDir when no workspace.toml
+// is reachable from cwd (the user is outside a cocoon project). System
+// failures during discovery (e.g. os.Getwd, filesystem stat errors) return a
+// wrapped error instead, so callers can map "not found" to ErrUsage and other
+// failures to ErrFailure.
+var ErrWorkspaceNotFound = errors.New("workspace.toml not found in tree")
 
 // resolveLayered builds the layered plugin FS from the embedded catalog plus
 // the project (.cocoon/plugins under the discovered workspace.toml) and user
@@ -24,11 +32,17 @@ func resolveLayered() (*plugin.LayeredFS, error) {
 		return nil, fmt.Errorf("%w: %w", ErrFailure, err)
 	}
 	projectDir, projErr := projectPluginsDir()
-	if projErr != nil {
-		// Discovery failure (no workspace.toml in tree) is expected outside
-		// a cocoon project and must not fail plugin commands; drop the layer
-		// silently, the user/embedded view stays valid.
+	switch {
+	case errors.Is(projErr, ErrWorkspaceNotFound):
+		// Running outside a cocoon project is expected for read-only views
+		// (`cocoon plugin list / show`); the user/embedded layers still
+		// satisfy the request. Drop the project layer silently.
 		projectDir = ""
+	case projErr != nil:
+		// A genuine system failure during discovery (Getwd / stat) should
+		// not be hidden — surface it instead of pretending no project layer
+		// exists.
+		return nil, fmt.Errorf("%w: project plugins dir: %w", ErrFailure, projErr)
 	}
 	return plugin.NewLayeredFS(embedded, userDir, projectDir), nil
 }
@@ -43,31 +57,47 @@ func userPluginsDir() (string, error) {
 }
 
 // projectPluginsDir locates the project-scope layer root by discovering
-// workspace.toml from cwd and joining .cocoon/plugins next to it. Returns
-// "" + error when discovery fails (no workspace.toml found, etc.); callers
-// treat both as "no project layer".
+// workspace.toml from cwd and joining .cocoon/plugins next to it.
+//
+// Error semantics:
+//   - (path, nil)                   on success
+//   - ("", ErrWorkspaceNotFound)   when discovery walks all the way up
+//     without finding workspace.toml (= caller is outside a cocoon project)
+//   - ("", wrapped err)             on filesystem-level failures (Getwd or
+//     Discover errored)
+//
+// Callers map ErrWorkspaceNotFound to ErrUsage with an actionable message,
+// and other errors to ErrFailure with the underlying context preserved.
 func projectPluginsDir() (string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return "", fmt.Errorf("getwd: %w", err)
 	}
 	wsPath, err := config.Discover(cwd)
-	if err != nil || wsPath == "" {
+	if err != nil {
 		return "", fmt.Errorf("discover workspace.toml: %w", err)
+	}
+	if wsPath == "" {
+		return "", ErrWorkspaceNotFound
 	}
 	return filepath.Join(filepath.Dir(wsPath), ".cocoon", "plugins"), nil
 }
 
 // scopeDir returns the absolute directory where `cocoon plugin add <id>`
-// places the copy for the requested scope.
+// places the copy for the requested scope. A missing workspace.toml when
+// --scope project is requested is a usage error; other discovery failures
+// (Getwd, filesystem stat) bubble up as ErrFailure with context preserved.
 func scopeDir(scope string) (string, error) {
 	switch scope {
 	case plugin.SourceUser:
 		return userPluginsDir()
 	case plugin.SourceProject:
 		dir, err := projectPluginsDir()
-		if err != nil || dir == "" {
+		switch {
+		case errors.Is(err, ErrWorkspaceNotFound):
 			return "", fmt.Errorf("%w: --scope project requires a discoverable workspace.toml", ErrUsage)
+		case err != nil:
+			return "", fmt.Errorf("%w: %w", ErrFailure, err)
 		}
 		return dir, nil
 	default:

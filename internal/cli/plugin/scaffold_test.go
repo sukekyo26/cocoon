@@ -129,6 +129,61 @@ func TestScaffoldRejectsInvalidID(t *testing.T) {
 	}
 }
 
+// Positive auto-discovery: when cwd is inside a cocoon project,
+// `cocoon plugin scaffold <id>` without --plugins-dir lands the new plugin at
+// <workspace>/.cocoon/plugins/<id>/. Locks the BREAKING default change so a
+// future refactor that re-introduces ./plugins/<id>/ is caught.
+//
+//nolint:paralleltest // t.Chdir mutates process-wide state; cannot run in parallel.
+func TestScaffoldAutoDiscoversWorkspace(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "workspace.toml"), []byte("[plugins]\nenable = []\n"), 0o600); err != nil {
+		t.Fatalf("seed workspace: %v", err)
+	}
+	t.Chdir(root)
+
+	_, stderr, err := runCmd(t,
+		"scaffold", "demo",
+		"--non-interactive",
+		"--name", "Demo",
+		"--description", "Demo (https://example.com)",
+		"--template", "generic",
+	)
+	if err != nil {
+		t.Fatalf("scaffold: err=%v stderr=%s", err, stderr)
+	}
+	wantDir := filepath.Join(root, ".cocoon", "plugins", "demo")
+	if _, statErr := os.Stat(filepath.Join(wantDir, "plugin.toml")); statErr != nil {
+		t.Errorf("expected plugin.toml at %s: %v", wantDir, statErr)
+	}
+	if _, statErr := os.Stat(filepath.Join(wantDir, "install.sh")); statErr != nil {
+		t.Errorf("expected install.sh at %s: %v", wantDir, statErr)
+	}
+}
+
+// When --plugins-dir is omitted and no workspace.toml is discoverable from
+// cwd, scaffold must surface an actionable error instead of silently writing
+// to ./plugins/<id>/. Regression guard for the v0.1.0 default that left
+// stray plugins directories at the cocoon repo root.
+//
+//nolint:paralleltest // t.Chdir mutates process-wide state; cannot run in parallel.
+func TestScaffoldRequiresPluginsDirOrWorkspace(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	_, stderr, err := runCmd(t,
+		"scaffold", "demo",
+		"--non-interactive",
+		"--name", "Demo",
+		"--description", "Demo (https://example.com)",
+	)
+	if !errors.Is(err, plugincli.ErrUsage) {
+		t.Fatalf("err = %v, want ErrUsage", err)
+	}
+	if !strings.Contains(stderr, "--plugins-dir") {
+		t.Errorf("stderr should mention --plugins-dir: %q", stderr)
+	}
+}
+
 func TestScaffoldRequiresIDArg(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -252,7 +307,7 @@ func TestScaffoldHelp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run err=%v", err)
 	}
-	if !strings.Contains(stdout, "wsd plugin scaffold") {
+	if !strings.Contains(stdout, "cocoon plugin scaffold") {
 		t.Errorf("help missing banner: %q", stdout)
 	}
 }

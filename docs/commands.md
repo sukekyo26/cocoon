@@ -12,7 +12,7 @@ Reference for every command exposed by the `cocoon` binary.
 | `cocoon plugin show <id>` | Print the resolved manifest for one plugin |
 | `cocoon plugin add <id>` | Copy a plugin into a user / project overlay |
 | `cocoon plugin remove <id>` | Delete a user / project overlay copy |
-| `cocoon plugin pin <id> <ref>` | Print a `[plugins.versions.<id>]` block |
+| `cocoon plugin pin <id> <ref>` | Emit a `[plugins.versions.<id>]` block (stdout, or in-place with `--write`) |
 | `cocoon plugin scaffold <id>` | Create a new `<id>/` directory from a template |
 | `cocoon self-update` | Replace this binary with the latest GitHub release |
 | `cocoon version` | Print binary version |
@@ -101,60 +101,200 @@ cocoon gen --workspace ./infra/workspace.toml --output ./infra
 
 ## `cocoon plugin`
 
-Manage cocoon plugins. The `LayeredFS` (project > user > embedded) determines which definition wins for a given plugin ID.
+Manage cocoon plugins. Plugins live in three layers, resolved with priority **project > user > embedded**:
+
+| Layer | Path | Source |
+|---|---|---|
+| project | `<workspace>/.cocoon/plugins/<id>/` | overlay copied via `add --scope project` or scaffolded in place |
+| user | `~/.cocoon/plugins/<id>/` | overlay copied via `add --scope user` (default) |
+| embedded | `internal/plugin/catalog/<id>/` (compiled into the binary) | shipped with cocoon |
+
+The typical workflow is:
+
+1. `cocoon plugin add <id>` → copy an embedded plugin into a writable overlay
+2. edit `plugin.toml` / `install.sh` in that overlay
+3. add `<id>` to `[plugins].enable` in `workspace.toml`
+4. `cocoon gen && docker compose up -d --build`
+
+Overlays are read at `gen` time only; placing files in `~/.cocoon/plugins/<id>/` does not enable a plugin on its own — `[plugins].enable` is the activation list.
 
 ### `cocoon plugin list`
 
+**Purpose:** show every plugin id reachable through the layered view, with the source layer that wins for each id.
+
+**Example:**
+
+```console
+$ cocoon plugin list
+ID            SOURCE    DEFAULT  DESCRIPTION
+claude-code   embedded  false    Claude Code — AI-powered coding assistant ...
+go            embedded  false    Go programming language ...
+my-internal   user      true     internal CLI ...
+```
+
+**Flags:**
+
 | Flag | Description |
 |---|---|
-| `--source <embedded\|user\|project>` | Filter to plugins resolved from a single layer. |
+| `--source <embedded\|user\|project>` | Filter to plugins resolved from a single layer (single value only). |
+
+**Gotchas:** when the same id exists in multiple layers, only the highest-priority layer is shown. Use `cocoon plugin remove --scope <layer>` to peel back overlays and reveal the next layer.
 
 ### `cocoon plugin show <id>`
 
-Print the resolved `plugin.toml` plus its source layer.
+**Purpose:** print the resolved `plugin.toml` (parsed and re-rendered into a stable diff-friendly form) plus the source layer that owns it.
+
+**Example:**
+
+```console
+$ cocoon plugin show go
+id: go
+source: embedded
+name: Go
+description: Go programming language ...
+default: false
+requires_root: true
+version_capable: true
+apt_packages: [build-essential]
+env:
+  GOPATH=/home/${USERNAME}/go
+  PATH=/usr/local/go/bin:$GOPATH/bin:$PATH
+volumes: [/home/${USERNAME}/go]
+```
+
+**Gotchas:** errors with `plugin "<id>" not found in any layer` if the id is unknown. `apt_packages` and `env` are sorted alphabetically for stable diffs — the order does not match `plugin.toml` source order.
 
 ### `cocoon plugin add <id>`
 
-Copy an embedded plugin into a writable overlay so it can be edited.
+**Purpose:** copy an embedded plugin into a writable overlay so its `plugin.toml` / `install.sh` can be edited locally.
+
+**Example:**
+
+```console
+$ cocoon plugin add starship --scope user
+Plugin "starship" copied to /home/alice/.cocoon/plugins/starship (user overlay)
+$ $EDITOR ~/.cocoon/plugins/starship/install.sh
+```
+
+**Flags:**
 
 | Flag | Description |
 |---|---|
-| `--scope <user\|project>` | Where to copy. Default `user` (`~/.cocoon/plugins/<id>/`). |
-| `--force` | Overwrite an existing overlay copy. |
+| `--scope <user\|project>` | Where to copy. Default `user` (`~/.cocoon/plugins/<id>/`); `project` uses `<workspace>/.cocoon/plugins/<id>/`. |
+| `--force` | Overwrite an existing overlay copy (without `--force` an existing target is an error). |
+
+**Gotchas:**
+
+- An overlay copy is **not auto-enabled** — add `<id>` to `[plugins].enable` in `workspace.toml` and re-run `cocoon gen` for the change to take effect.
+- `--scope project` requires a discoverable `workspace.toml` from cwd; otherwise the command refuses with a usage error.
+- `*.sh` files are restored to mode `0755` even if the source umask was stricter.
 
 ### `cocoon plugin remove <id>`
 
-Delete an overlay copy. The embedded version is never affected.
+**Purpose:** delete a user- or project-scope overlay copy. The embedded catalog is never touched.
+
+**Example:**
+
+```console
+$ cocoon plugin remove starship --scope user
+Plugin "starship" removed from /home/alice/.cocoon/plugins/starship
+```
+
+**Flags:**
 
 | Flag | Description |
 |---|---|
-| `--scope <user\|project>` | Which overlay to delete (required). |
+| `--scope <user\|project>` | Which overlay to delete (**required**, no default). |
+
+**Gotchas:**
+
+- `--scope` is mandatory so you always confirm whether the user or project overlay is being deleted.
+- After removal, `cocoon plugin list` will surface the next-priority layer (or the embedded version) for the same id.
 
 ### `cocoon plugin pin <id> <ref>`
 
-Print a `[plugins.versions.<id>]` snippet for `workspace.toml`. Stdout-only — does not edit the file (preserves any existing comments).
+**Purpose:** record an upstream version (and optional per-arch checksums) for a `version_capable` plugin in `workspace.toml` under `[plugins.versions.<id>]`. The block declares `pin = "<ref>"` plus optional `checksum_amd64` / `checksum_arm64` lines that `install.sh` reads via `$PIN` and `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64`.
+
+**Example (default — stdout, manual paste):**
+
+```console
+$ cocoon plugin pin go 1.23.4 --amd64-checksum abc123 --arm64-checksum def456
+# Append the following block to workspace.toml under [plugins.versions]:
+
+[plugins.versions.go]
+pin = "1.23.4"
+checksum_amd64 = "abc123"
+checksum_arm64 = "def456"
+```
+
+**Example (`--write` — in-place mutation):**
+
+```console
+$ cocoon plugin pin go 1.23.4 --write
+Updated /home/alice/proj/workspace.toml: [plugins.versions.go]
+```
+
+`--write` parses `workspace.toml` line-by-line and replaces the existing block (if any) or appends a new one after the last `[plugins.versions.*]` block. Comments and blank lines outside the target block are preserved.
+
+**Flags:**
 
 | Flag | Description |
 |---|---|
 | `--amd64-checksum <sha256>` | SHA256 of the amd64 artifact. |
 | `--arm64-checksum <sha256>` | SHA256 of the arm64 artifact. |
+| `--write` | Insert (or replace) the block in `workspace.toml` (auto-discovered from cwd). |
+
+**Gotchas:**
+
+- `pin` only makes sense for plugins whose `[version].version_capable = true`. The pin block is ignored at `gen` time for non-version-capable plugins.
+- Checksum flags only matter when the plugin's `install.sh` actually reads `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` (i.e. `tarball` template plugins). They are silently inert for `curl-pipe` / `generic` templates.
+- `--write` requires a discoverable `workspace.toml` from cwd; without `--write`, the command works from anywhere because it only resolves the layered FS for id validation.
+- `--write` only edits the multi-line `[plugins.versions.<id>]` form. If `workspace.toml` has any per-id key assignment directly under `[plugins.versions]` — `<id> = "1.23.4"`, `<id> = [..]`, or the inline-table `<id> = { pin = "..." }` style the `init` template suggests in commented-out lines — `--write` refuses with a usage error rather than appending a duplicate block. Convert each entry to a `[plugins.versions.<id>]` block first, or edit `workspace.toml` manually.
 
 ### `cocoon plugin scaffold <id>`
 
-Create a new `<id>/` directory from a template (`curl-pipe` / `tarball` / `generic`).
+**Purpose:** create a new `<id>/` directory containing a `plugin.toml` and an `install.sh` skeleton from one of three templates. Use it to bootstrap a new project- or user-scope plugin without copying boilerplate by hand.
+
+**Example:**
+
+```console
+$ cd ~/projects/myapp
+$ cocoon plugin scaffold gh-cli \
+    --template curl-pipe --version-capable \
+    --name "GitHub CLI" --description "GitHub CLI (https://cli.github.com)" \
+    --non-interactive
+OK: scaffolded /home/alice/projects/myapp/.cocoon/plugins/gh-cli (2 files)
+```
+
+**Templates:**
+
+| Template | Use when | Boilerplate |
+|---|---|---|
+| `curl-pipe` | upstream ships `curl ... \| bash` (uv, proto) | `$PIN` env-var-driven version; no checksum verification |
+| `tarball` | upstream ships GitHub Release tarballs (starship, go) | `$PIN` + `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` + `dpkg --print-architecture` switch (forces `--version-capable`) |
+| `generic` | apt packages or freeform install | minimal skeleton, no `$PIN` plumbing |
+
+**Flags:**
 
 | Flag | Description |
 |---|---|
-| `--plugins-dir <path>` | Output directory. Default `plugins`. |
+| `--plugins-dir <path>` | Output directory. Default: `<workspace>/.cocoon/plugins` (auto-discovered from `workspace.toml`). |
 | `--name <name>` | Display name (e.g. `"GitHub CLI"`). |
-| `--description <text>` | Short description. |
+| `--description <text>` | Short description. Must embed an upstream URL in parentheses. |
 | `--default` | Mark plugin enabled by default. |
 | `--requires-root` | `install.sh` runs as root. |
 | `--version-capable` | Generate `$PIN` / `$CHECKSUM_*` boilerplate. |
 | `--template <kind>` | `curl-pipe` \| `tarball` \| `generic`. |
-| `--with-install-user` | Also generate `install_user.sh`. |
+| `--with-install-user` | Also generate `install_user.sh` (runs as the unprivileged user after `install.sh`). |
 | `--non-interactive` | Skip prompts; require all fields above. |
-| `--force` | Overwrite `<id>/` if it already exists. |
+| `--force` | Overwrite `<plugins-dir>/<id>/` if it already exists. |
+
+**Gotchas:**
+
+- Without `--plugins-dir` and outside a cocoon project (no discoverable `workspace.toml`), scaffold refuses with an actionable error rather than silently writing to `./plugins/<id>/`.
+- `--template tarball` implies `--version-capable`; the scaffold rejects the combination of `tarball` without `--version-capable`.
+- After scaffolding, the generated `plugin.toml` is reloaded under the same strict validator the runtime uses; if it fails (bad name, missing URL in description, etc.), the directory is rolled back.
+- Like overlays from `add`, a scaffolded plugin still needs to be listed in `[plugins].enable` to take effect at `gen` time.
 
 ---
 
