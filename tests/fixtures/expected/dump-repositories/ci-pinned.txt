@@ -1,5 +1,0 @@
-[repositories]
-clone = [
-  { url = 'https://example.invalid/org/frontend.git' },
-  { url = 'https://example.invalid/org/backend.git', path = 'services/backend', branch = 'main', depth = 1, recurse_submodules = true },
-]

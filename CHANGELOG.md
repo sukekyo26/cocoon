@@ -9,6 +9,7 @@ adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 
 - Mount a named Docker volume `cocoon` at `/home/<user>/.cocoon` inside the dev container so per-user shell tweaks survive container rebuilds. The container's rc file (bash / zsh / fish) sources `~/.cocoon/.shellrc` (or `~/.cocoon/.shellrc.fish` for fish) automatically; edit those files from inside the container and they persist across `docker compose down && up --build` (only `down -v` resets them).
+- Add `cocoon init --plugin-versions=<id>=<ref>,...` so a single command emits both `[plugins] enable` and `[plugins.versions]` blocks. Each `<id>` must already appear in `--plugins`, must be `version_capable`, and may not repeat. Replaces the prior workflow of pasting `cocoon plugin pin` output by hand.
 
 ### Removed
 

@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	"github.com/sukekyo26/cocoon/internal/plugin"
 )
 
 const pinLong = `cocoon plugin pin — print a [plugins.versions.<id>] block to paste into workspace.toml
@@ -55,14 +57,7 @@ func runPin(stdout, _ io.Writer, id, ref, amd64sum, arm64sum string) error {
 	var b strings.Builder
 	fmt.Fprintln(&b, "# Append the following block to workspace.toml under [plugins.versions]:")
 	fmt.Fprintln(&b)
-	fmt.Fprintf(&b, "[plugins.versions.%s]\n", id)
-	fmt.Fprintf(&b, "pin = %q\n", ref)
-	if amd64sum != "" {
-		fmt.Fprintf(&b, "checksum_amd64 = %q\n", amd64sum)
-	}
-	if arm64sum != "" {
-		fmt.Fprintf(&b, "checksum_arm64 = %q\n", arm64sum)
-	}
+	b.WriteString(plugin.FormatPinBlock(id, ref, amd64sum, arm64sum))
 	fmt.Fprint(stdout, b.String())
 	return nil
 }

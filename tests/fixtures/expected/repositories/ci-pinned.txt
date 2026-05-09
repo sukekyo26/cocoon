@@ -1,1 +1,0 @@
-[{"url": "https://example.invalid/org/frontend.git", "path": "frontend"}, {"url": "https://example.invalid/org/backend.git", "path": "services/backend", "branch": "main", "depth": 1, "recurse_submodules": true}]
