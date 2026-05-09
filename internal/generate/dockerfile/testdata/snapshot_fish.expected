@@ -62,7 +62,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     && rm -rf /tmp/* /var/tmp/*
 
 # Dotfiles seeded into the new user's home via /etc/skel
-COPY config/shell_custom.example /etc/skel/.shell_skel_example
+COPY .cocoon/skel/example.bashrc /etc/skel/.shell_skel_example
 
 RUN existing_user="$(getent passwd ${UID} | cut -d: -f1)" && \
     if [ -n "$existing_user" ] && [ "$existing_user" != "${USERNAME}" ]; then \
@@ -211,16 +211,9 @@ RUN mkdir -p ~/.local
 # Setup persistent shell history
 RUN mkdir -p ~/.local/share/fish && touch ~/.local/share/fish/fish_history
 
-# Custom configuration file support (config/shell_custom and optional config/config.fish_custom.generated)
-RUN echo '' >> "$HOME/.config/fish/config.fish" && \
-    echo '# Load auto-generated shell config from [container.shell] of workspace.toml' >> "$HOME/.config/fish/config.fish" && \
-    echo '[ -f "$HOME/workspace/cocoon/config/config.fish_custom.generated" ] && . "$HOME/workspace/cocoon/config/config.fish_custom.generated"' >> "$HOME/.config/fish/config.fish" && \
-    echo '# Load user-editable custom configuration from config/shell_custom' >> "$HOME/.config/fish/config.fish" && \
-    echo '[ -f "$HOME/workspace/cocoon/config/shell_custom" ] && . "$HOME/workspace/cocoon/config/shell_custom"' >> "$HOME/.config/fish/config.fish"
-
 # Entrypoint: sync image files to volume-mounted ~/.local
 USER root
-COPY config/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+COPY .devcontainer/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 USER ${USERNAME}
 

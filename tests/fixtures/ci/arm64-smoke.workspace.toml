@@ -76,5 +76,5 @@ no_new_privileges = true
 # OS-13: a single COPY into /etc/skel. Uses an existing repo file so the
 # arm64 QEMU build does not need any additional fixture data.
 [[container.skel]]
-source = "config/shell_custom.example"
+source = ".cocoon/skel/example.bashrc"
 target = ".shell_skel_example"

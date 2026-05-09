@@ -1,16 +1,15 @@
-// Package generatecli implements the `wsd generate-all` subcommand.
-//
-// generate-all loads workspace.toml + the enabled plugin TOMLs once and
-// writes every generated artifact (Dockerfile, docker-compose.yml,
-// devcontainer files, the per-shell rc fragment) into <output_dir>. The
-// caller is responsible for atomic placement (write to staging dir, then
-// move into the final location) — see lib/generators.sh.
+// Package generatecli implements the in-process generation pipeline used by
+// the `cocoon gen` command. It loads workspace.toml + the enabled plugin
+// TOMLs once and produces the generated artifacts (Dockerfile,
+// docker-compose.yml, devcontainer.json when enabled, docker-entrypoint.sh)
+// under .devcontainer/. Callers are responsible for atomic placement.
 package generatecli
 
 import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 
@@ -20,7 +19,6 @@ import (
 	"github.com/sukekyo26/cocoon/internal/generate/compose"
 	"github.com/sukekyo26/cocoon/internal/generate/devcontainerjson"
 	"github.com/sukekyo26/cocoon/internal/generate/dockerfile"
-	"github.com/sukekyo26/cocoon/internal/generate/shellrc"
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
 
@@ -30,14 +28,14 @@ var ErrUsage = errors.New("usage error")
 // ErrFailure signals a runtime failure. Maps to exit code 1.
 var ErrFailure = errors.New("failure")
 
-// Artifact is one generated file produced by BuildArtifacts. Rel is
-// the path relative to the caller-supplied output directory; Body is
-// its contents. The type is exported so in-process callers (like
-// `cocoon up`) can run the generation pipeline without the cobra
-// command surface.
+// Artifact is one generated file produced by BuildArtifacts. Rel is the path
+// relative to the caller-supplied output directory; Body is its contents;
+// Mode is the file permission to write. A zero Mode falls back to 0o644 so
+// existing call sites that produce only text files do not need to set it.
 type Artifact struct {
 	Rel  string
 	Body string
+	Mode fs.FileMode
 }
 
 // LoadContext loads workspace.toml, the enabled plugins from
@@ -79,7 +77,7 @@ func BuildArtifacts(ctx *generate.WorkspaceContext, pluginsDir string, stderr io
 	if err != nil {
 		return nil, fmt.Errorf("%w: compose: %w", ErrFailure, err)
 	}
-	arts = append(arts, Artifact{Rel: ".devcontainer/docker-compose.yml", Body: body})
+	arts = append(arts, Artifact{Rel: ".devcontainer/docker-compose.yml", Body: body, Mode: 0})
 
 	body, err = dockerfile.Generate(ctx, dockerfile.Options{
 		WorkspaceRoot: wsRoot,
@@ -90,51 +88,38 @@ func BuildArtifacts(ctx *generate.WorkspaceContext, pluginsDir string, stderr io
 	if err != nil {
 		return nil, fmt.Errorf("%w: dockerfile: %w", ErrFailure, err)
 	}
-	arts = append(arts, Artifact{Rel: ".devcontainer/Dockerfile", Body: body})
+	arts = append(arts, Artifact{Rel: ".devcontainer/Dockerfile", Body: body, Mode: 0})
 
 	if ctx.WS.Workspace.DevContainerOrDefault() {
 		body, err = devcontainerjson.Generate(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("%w: devcontainer.json: %w", ErrFailure, err)
 		}
-		arts = append(arts, Artifact{Rel: ".devcontainer/devcontainer.json", Body: body})
+		arts = append(arts, Artifact{Rel: ".devcontainer/devcontainer.json", Body: body, Mode: 0})
 	}
 
-	rcRel, body, err := shellrc.Generate(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("%w: shellrc: %w", ErrFailure, err)
-	}
-	arts = append(arts, Artifact{Rel: rcRel, Body: body})
+	arts = append(arts, Artifact{
+		Rel:  ".devcontainer/docker-entrypoint.sh",
+		Body: dockerfile.EntrypointScript(),
+		Mode: 0o755,
+	})
 	return arts, nil
 }
 
-// WriteArtifacts atomically lays the artifact set down under outDir.
-// Stale per-shell rc fragments left over from a previous shell choice
-// are removed so a `bash → zsh → bash` flip does not leave an
-// orphaned .zshrc_custom.generated next to the new bash file.
+// WriteArtifacts atomically lays the artifact set down under outDir. Each
+// artifact uses its own Mode (defaulting to 0o644 when unset).
 func WriteArtifacts(arts []Artifact, outDir string) error {
-	written := make(map[string]struct{}, len(arts))
 	for _, a := range arts {
 		target := filepath.Join(outDir, a.Rel)
 		if mkErr := os.MkdirAll(filepath.Dir(target), 0o755); mkErr != nil {
 			return fmt.Errorf("%w: mkdir %s: %w", ErrFailure, target, mkErr)
 		}
-		if wErr := fsx.AtomicWriteFile(target, []byte(a.Body), 0o644); wErr != nil {
+		mode := a.Mode
+		if mode == 0 {
+			mode = 0o644
+		}
+		if wErr := fsx.AtomicWriteFile(target, []byte(a.Body), mode); wErr != nil {
 			return fmt.Errorf("%w: write %s: %w", ErrFailure, target, wErr)
-		}
-		written[a.Rel] = struct{}{}
-	}
-	// Sweep stale per-shell rc fragments left over from a previous default
-	// (e.g. user switched [container.shell].default = "bash" → "zsh"). The
-	// user-editable companion files (without .generated suffix) are never
-	// touched.
-	for _, rel := range shellrc.KnownGeneratedRelPaths() {
-		if _, ok := written[rel]; ok {
-			continue
-		}
-		stale := filepath.Join(outDir, rel)
-		if _, err := os.Stat(stale); err == nil {
-			_ = os.Remove(stale)
 		}
 	}
 	return nil

@@ -12,9 +12,9 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
 
+	"github.com/sukekyo26/cocoon/internal/aptcategories"
 	"github.com/sukekyo26/cocoon/internal/config"
 	"github.com/sukekyo26/cocoon/internal/i18n"
-	"github.com/sukekyo26/cocoon/internal/setup"
 )
 
 const initLong = `cocoon init — generate workspace.toml in the current directory
@@ -160,7 +160,7 @@ func runInit(cmd *cobra.Command, stdout, _ io.Writer, flags *initFlags) error {
 		return err
 	}
 
-	pkgs := setup.ExpandAptCategories(ans.AptCategories)
+	pkgs := aptcategories.ExpandAptCategories(ans.AptCategories)
 	content := renderWorkspaceToml(containerSpec{
 		ServiceName:  ans.ServiceName,
 		Username:     ans.Username,
@@ -293,7 +293,7 @@ func applyDefaults(ans initAnswers) (initAnswers, error) {
 		ans.Devcontainer, ans.DevcontainerSet = true, true
 	}
 	if !ans.AptSet {
-		ans.AptCategories, ans.AptSet = setup.DefaultAptCategoryIDs(), true
+		ans.AptCategories, ans.AptSet = aptcategories.DefaultAptCategoryIDs(), true
 	}
 	return ans, nil
 }
@@ -367,7 +367,7 @@ func promptForMissing(ans initAnswers, cat *i18n.Catalog) (initAnswers, error) {
 		ans.DevcontainerSet = true
 	}
 	if !ans.AptSet {
-		ans.AptCategories = setup.DefaultAptCategoryIDs()
+		ans.AptCategories = aptcategories.DefaultAptCategoryIDs()
 		if err := runSingleFieldForm(aptMultiSelect(cat, &ans.AptCategories)); err != nil {
 			return ans, err
 		}
@@ -493,8 +493,8 @@ func devcontainerConfirm(cat *i18n.Catalog, target *bool) *huh.Confirm {
 }
 
 func aptMultiSelect(cat *i18n.Catalog, target *[]string) *huh.MultiSelect[string] {
-	options := make([]huh.Option[string], len(setup.AptCategories))
-	for i, c := range setup.AptCategories {
+	options := make([]huh.Option[string], len(aptcategories.AptCategories))
+	for i, c := range aptcategories.AptCategories {
 		options[i] = huh.NewOption(fmt.Sprintf("%s (%s)", c.Label, c.Description), c.ID)
 	}
 	return huh.NewMultiSelect[string]().
@@ -534,7 +534,7 @@ func parseAptCategories(raw string) ([]string, error) {
 		if id == "" {
 			continue
 		}
-		if setup.AptCategoryByID(id) == nil {
+		if aptcategories.AptCategoryByID(id) == nil {
 			return nil, fmt.Errorf("%w: unknown apt category %q (run `cocoon init --help` for the list)",
 				ErrUsage, id)
 		}

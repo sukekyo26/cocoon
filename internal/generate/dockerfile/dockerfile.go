@@ -2,6 +2,7 @@
 package dockerfile
 
 import (
+	_ "embed"
 	"errors"
 	"fmt"
 	"io"
@@ -17,6 +18,19 @@ import (
 	"github.com/sukekyo26/cocoon/internal/generate/tmplx"
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
+
+// entrypointScript is the contents of docker-entrypoint.sh that the generator
+// writes alongside the generated Dockerfile (.devcontainer/docker-entrypoint.sh).
+// It is embedded so cocoon ships as a single binary with no host-side script
+// dependency.
+//
+//go:embed entrypoint.sh
+var entrypointScript string
+
+// EntrypointScript returns the docker-entrypoint.sh contents that should be
+// written next to the generated Dockerfile. Callers (cocoon gen) add it to
+// the artifact set with mode 0o755.
+func EntrypointScript() string { return entrypointScript }
 
 // ErrInvalidVersionOverride is returned when [plugins.versions] references an
 // unknown plugin or one whose install method does not allow pinning.
@@ -54,8 +68,7 @@ type templateData struct {
 	RepoDir                string
 	LoginShellPath         string
 	RCFilePath             string
-	GeneratedRCName        string
-	UserRCRelPath          string
+	CustomShellRC          string
 	ShellCompletionInit    string
 	ShellHistoryInit       string
 	DockerfilePreUserSetup string
@@ -188,16 +201,13 @@ RUN mkdir -p ~/.local
 # Setup persistent shell history
 {{ .ShellHistoryInit }}
 
-# Custom configuration file support ({{ .UserRCRelPath }} and optional config/{{ .GeneratedRCName }})
-RUN echo '' >> "$HOME/{{ .RCFilePath }}" && \
-    echo '# Load auto-generated shell config from [container.shell] of workspace.toml' >> "$HOME/{{ .RCFilePath }}" && \
-    echo '[ -f "$HOME/workspace/{{ .RepoDir }}/config/{{ .GeneratedRCName }}" ] && . "$HOME/workspace/{{ .RepoDir }}/config/{{ .GeneratedRCName }}"' >> "$HOME/{{ .RCFilePath }}" && \
-    echo '# Load user-editable custom configuration from {{ .UserRCRelPath }}' >> "$HOME/{{ .RCFilePath }}" && \
-    echo '[ -f "$HOME/workspace/{{ .RepoDir }}/{{ .UserRCRelPath }}" ] && . "$HOME/workspace/{{ .RepoDir }}/{{ .UserRCRelPath }}"' >> "$HOME/{{ .RCFilePath }}"
+{{ with .CustomShellRC -}}
+{{ . }}
 
+{{ end -}}
 # Entrypoint: sync image files to volume-mounted ~/.local
 USER root
-COPY config/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+COPY .devcontainer/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 USER ${USERNAME}
 
@@ -267,6 +277,11 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 	rcPath := ctx.RCFilePath()
 	aptShellList := filterShellPackages(ctx.LoginShellAptPackages(), basePkgNames)
 
+	customShellRC, err := shellrc.RenderDockerfileBlock(ctx)
+	if err != nil {
+		return "", fmt.Errorf("dockerfile: %w", err)
+	}
+
 	data := templateData{
 		OsImage:                ctx.WS.Container.Os,
 		OsVersion:              ctx.WS.Container.OsVersion,
@@ -287,8 +302,7 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 		RepoDir:                pickRepoDir(opts.RepoDir, root),
 		LoginShellPath:         ctx.LoginShellPath(),
 		RCFilePath:             rcPath,
-		GeneratedRCName:        filepath.Base(shellrc.RelPathFor(loginShell)),
-		UserRCRelPath:          shellrc.UserRCRelPath,
+		CustomShellRC:          customShellRC,
 		ShellCompletionInit:    buildShellCompletionInit(loginShell, rcPath),
 		ShellHistoryInit:       buildShellHistoryInit(loginShell, rcPath),
 		DockerfilePreUserSetup: preUser,

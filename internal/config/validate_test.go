@@ -468,7 +468,7 @@ func TestValidate_ContainerSecurityOptRejectsEmptySeccomp(t *testing.T) {
 func TestValidate_ContainerSkelAcceptsValid(t *testing.T) {
 	t.Parallel()
 	body := minimalWorkspace() +
-		"\n[[container.skel]]\nsource = \"config/dotfiles/.editorconfig\"\ntarget = \".editorconfig\"\n"
+		"\n[[container.skel]]\nsource = \".cocoon/skel/.editorconfig\"\ntarget = \".editorconfig\"\n"
 	require.NoError(t, loadWS(t, body))
 }
 

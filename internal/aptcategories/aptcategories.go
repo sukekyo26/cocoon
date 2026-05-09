@@ -1,4 +1,8 @@
-package setup
+// Package aptcategories defines the curated apt package groups offered by
+// `cocoon init`'s interactive bootstrap. Categories are presented as a
+// multi-select; selected categories are expanded into [apt] packages in the
+// generated workspace.toml.
+package aptcategories
 
 // AptCategory groups commonly-bundled apt packages so `cocoon init` can
 // present them as a single checkbox during the interactive bootstrap.

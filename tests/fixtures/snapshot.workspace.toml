@@ -35,7 +35,7 @@ seccomp = "unconfined"
 no_new_privileges = true
 
 [[container.skel]]
-source = "config/shell_custom.example"
+source = ".cocoon/skel/example.bashrc"
 target = ".shell_skel_example"
 
 [apt.mirror]

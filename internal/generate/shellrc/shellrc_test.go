@@ -1,8 +1,6 @@
 package shellrc_test
 
 import (
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -13,106 +11,85 @@ import (
 
 func ptr(s string) *string { return &s }
 
-func TestGenerateEmpty(t *testing.T) {
+func TestRenderEmpty(t *testing.T) {
 	t.Parallel()
-	ctx := &generate.WorkspaceContext{WS: &config.Workspace{}}
-	rel, got, err := shellrc.Generate(ctx)
+	got, err := shellrc.RenderDockerfileBlock(&generate.WorkspaceContext{WS: &config.Workspace{}})
 	if err != nil {
-		t.Fatalf("Generate: %v", err)
+		t.Fatalf("RenderDockerfileBlock: %v", err)
 	}
-	if rel != "config/.bashrc_custom.generated" {
-		t.Errorf("default rel: got %q", rel)
-	}
-	if got != shellrc.HeaderFor("bash") {
-		t.Errorf("empty shell: got %q want header", got)
+	if got != "" {
+		t.Errorf("expected empty block when no env/aliases, got %q", got)
 	}
 }
 
-func TestGenerateNilContext(t *testing.T) {
+func TestRenderNilContext(t *testing.T) {
 	t.Parallel()
-	rel, got, err := shellrc.Generate(nil)
+	got, err := shellrc.RenderDockerfileBlock(nil)
 	if err != nil {
-		t.Fatalf("Generate: %v", err)
+		t.Fatalf("RenderDockerfileBlock: %v", err)
 	}
-	if rel != "config/.bashrc_custom.generated" {
-		t.Errorf("nil-ctx rel: got %q", rel)
-	}
-	if got != shellrc.HeaderFor("bash") {
-		t.Errorf("nil ctx: got %q", got)
+	if got != "" {
+		t.Errorf("nil ctx must produce empty block, got %q", got)
 	}
 }
 
-func TestRelPathFor(t *testing.T) {
+func TestRenderBash(t *testing.T) {
 	t.Parallel()
-	cases := map[string]string{
-		"bash":    "config/.bashrc_custom.generated",
-		"zsh":     "config/.zshrc_custom.generated",
-		"fish":    "config/config.fish_custom.generated",
-		"unknown": "config/.bashrc_custom.generated",
+	got, err := shellrc.RenderDockerfileBlock(bashCtx())
+	if err != nil {
+		t.Fatalf("RenderDockerfileBlock: %v", err)
 	}
-	for shell, want := range cases {
-		if got := shellrc.RelPathFor(shell); got != want {
-			t.Errorf("RelPathFor(%q) = %q, want %q", shell, got, want)
+	wants := []string{
+		"# Inject [container.shell] env/aliases from workspace.toml",
+		`RUN <<COCOON_RC_BLOCK`,
+		`cat >>"$HOME/.bashrc" <<'COCOON_RC'`,
+		"export EDITOR=vim",
+		"export PAGER='less -R'",
+		"alias gs='git status'",
+		"COCOON_RC",
+		"COCOON_RC_BLOCK",
+	}
+	for _, w := range wants {
+		if !strings.Contains(got, w) {
+			t.Errorf("missing %q in:\n%s", w, got)
 		}
 	}
 }
 
-func TestGenerateGoldenBash(t *testing.T) {
-	t.Parallel()
-	ctx := bashCtx()
-	rel, got, err := shellrc.Generate(ctx)
-	if err != nil {
-		t.Fatalf("Generate: %v", err)
-	}
-	if rel != "config/.bashrc_custom.generated" {
-		t.Errorf("rel: got %q", rel)
-	}
-	want, err := os.ReadFile(filepath.Join("testdata", "bashrc_full.expected"))
-	if err != nil {
-		t.Fatalf("read golden: %v", err)
-	}
-	if got != string(want) {
-		t.Errorf("golden mismatch:\n--- got ---\n%s\n--- want ---\n%s", got, string(want))
-	}
-}
-
-func TestGenerateGoldenZsh(t *testing.T) {
+func TestRenderZshTargetsZshrc(t *testing.T) {
 	t.Parallel()
 	ctx := bashCtx()
 	ctx.WS.Container.Shell.Default = ptr("zsh")
-	rel, got, err := shellrc.Generate(ctx)
+	got, err := shellrc.RenderDockerfileBlock(ctx)
 	if err != nil {
-		t.Fatalf("Generate: %v", err)
+		t.Fatalf("RenderDockerfileBlock: %v", err)
 	}
-	if rel != "config/.zshrc_custom.generated" {
-		t.Errorf("rel: got %q", rel)
-	}
-	want, err := os.ReadFile(filepath.Join("testdata", "zshrc_full.expected"))
-	if err != nil {
-		t.Fatalf("read golden: %v", err)
-	}
-	if got != string(want) {
-		t.Errorf("golden mismatch:\n--- got ---\n%s\n--- want ---\n%s", got, string(want))
+	if !strings.Contains(got, `cat >>"$HOME/.zshrc"`) {
+		t.Errorf("zsh target missing in:\n%s", got)
 	}
 }
 
-func TestGenerateGoldenFish(t *testing.T) {
+func TestRenderFishUsesSetGxAndFishConfig(t *testing.T) {
 	t.Parallel()
 	ctx := bashCtx()
 	ctx.WS.Container.Shell.Default = ptr("fish")
-	rel, got, err := shellrc.Generate(ctx)
+	got, err := shellrc.RenderDockerfileBlock(ctx)
 	if err != nil {
-		t.Fatalf("Generate: %v", err)
+		t.Fatalf("RenderDockerfileBlock: %v", err)
 	}
-	if rel != "config/config.fish_custom.generated" {
-		t.Errorf("rel: got %q", rel)
+	wants := []string{
+		`cat >>"$HOME/.config/fish/config.fish"`,
+		"set -gx EDITOR 'vim'",
+		"set -gx PAGER 'less -R'",
+		"alias gs 'git status'",
 	}
-	want, err := os.ReadFile(filepath.Join("testdata", "config_fish_full.expected"))
-	if err != nil {
-		t.Fatalf("read golden: %v", err)
+	for _, w := range wants {
+		if !strings.Contains(got, w) {
+			t.Errorf("missing %q in:\n%s", w, got)
+		}
 	}
-	if got != string(want) {
-		t.Errorf("golden mismatch:\n--- got ---\n%s\n--- want ---\n%s", got, string(want))
+	if strings.Contains(got, "export ") {
+		t.Errorf("fish output must not contain POSIX export:\n%s", got)
 	}
 }
 
@@ -133,9 +110,9 @@ func TestPosixQuotingPolicy(t *testing.T) {
 			},
 		},
 	}
-	_, got, err := shellrc.Generate(ctx)
+	got, err := shellrc.RenderDockerfileBlock(ctx)
 	if err != nil {
-		t.Fatalf("Generate: %v", err)
+		t.Fatalf("RenderDockerfileBlock: %v", err)
 	}
 	wants := []string{
 		"export DOLLAR='$HOME'",
@@ -170,9 +147,9 @@ func TestFishQuotingPolicy(t *testing.T) {
 			},
 		},
 	}
-	_, got, err := shellrc.Generate(ctx)
+	got, err := shellrc.RenderDockerfileBlock(ctx)
 	if err != nil {
-		t.Fatalf("Generate: %v", err)
+		t.Fatalf("RenderDockerfileBlock: %v", err)
 	}
 	// fish: $-expansion does not happen inside single quotes so $HOME is
 	// emitted verbatim; a quote becomes \' and a backslash becomes \\.

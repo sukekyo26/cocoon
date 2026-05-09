@@ -44,7 +44,7 @@ no_new_privileges = true
 # OS-13: seed a dotfile via /etc/skel. Uses an existing repo file as source so
 # the docker build COPY step succeeds without extra fixtures.
 [[container.skel]]
-source = "config/shell_custom.example"
+source = ".cocoon/skel/example.bashrc"
 target = ".shell_skel_example"
 
 [plugins]

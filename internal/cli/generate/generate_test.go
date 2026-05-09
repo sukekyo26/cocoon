@@ -79,7 +79,7 @@ packages = []
 				}},
 				{path: ".devcontainer/devcontainer.json", mustContain: []string{"svc-all", "alice"}, mustNotContain: []string{"{{"}},
 				{path: ".devcontainer/docker-compose.yml", mustContain: []string{"svc-all"}, mustNotContain: []string{"{{"}},
-				{path: "config/.bashrc_custom.generated", mustContain: nil, mustNotContain: []string{"{{"}},
+				{path: ".devcontainer/docker-entrypoint.sh", mustContain: []string{"#!/bin/bash", "$HOME/.image-local"}},
 			},
 		},
 		{

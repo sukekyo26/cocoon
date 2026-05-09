@@ -167,12 +167,14 @@ type DNSSpec struct {
 	Search  []string `toml:"search,omitempty"`
 }
 
-// ContainerShellSpec mirrors the [container.shell] table introduced in v8.0.0.
+// ContainerShellSpec mirrors the [container.shell] table.
 //
 // Default selects the login shell ("bash" | "zsh" | "fish"); unset/empty falls
-// back to "bash". Aliases and Env are written into the chosen shell's rc file
-// (config/.bashrc_custom.generated, .zshrc_custom.generated, or
-// config.fish_custom.generated) using shell-appropriate syntax.
+// back to "bash". Aliases and Env are appended directly into the chosen
+// login shell's rc file inside the container at image build time using
+// shell-appropriate syntax (bash/zsh: `export K=V` / `alias k='v'`;
+// fish: `set -gx K V` / `alias k 'v'`). No host-side companion file is
+// written — see internal/generate/shellrc.
 type ContainerShellSpec struct {
 	Default *string           `toml:"default,omitempty"`
 	Aliases map[string]string `toml:"aliases,omitempty"`
