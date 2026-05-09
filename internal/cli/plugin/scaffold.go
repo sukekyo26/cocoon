@@ -251,17 +251,19 @@ func finalizeOpts(opts *scaffoldOpts, cat *i18n.Catalog, stderr io.Writer) error
 }
 
 // resolvePluginsDir returns opts.pluginsDir verbatim when set, or
-// auto-discovers <workspace>/.cocoon/plugins from cwd. An empty result
-// signals an actionable usage error.
-func resolvePluginsDir(opts scaffoldOpts) (string, bool) {
+// auto-discovers <workspace>/.cocoon/plugins from cwd.
+//
+// Error semantics mirror projectPluginsDir:
+//   - (path, nil)                   when --plugins-dir was set or discovery succeeded
+//   - ("", ErrWorkspaceNotFound)   when running outside a cocoon project — the
+//     caller turns this into an actionable ErrUsage with a localized message
+//   - ("", wrapped err)             on filesystem-level failures, mapped to
+//     ErrFailure by the caller so context is preserved
+func resolvePluginsDir(opts scaffoldOpts) (string, error) {
 	if opts.pluginsDir != "" {
-		return opts.pluginsDir, true
+		return opts.pluginsDir, nil
 	}
-	resolved, err := projectPluginsDir()
-	if err != nil || resolved == "" {
-		return "", false
-	}
-	return resolved, true
+	return projectPluginsDir()
 }
 
 // renderAndWrite renders a single scaffold file via render and writes it under
@@ -289,10 +291,14 @@ func renderAndWrite(
 
 func runScaffold(opts scaffoldOpts, cat *i18n.Catalog, stdout, stderr io.Writer) error {
 	log := logx.New(stdout, stderr)
-	pluginsDir, ok := resolvePluginsDir(opts)
-	if !ok {
+	pluginsDir, err := resolvePluginsDir(opts)
+	switch {
+	case errors.Is(err, ErrWorkspaceNotFound):
 		log.Error("ERROR: " + cat.Msg("plugin_scaffold_no_plugins_dir"))
 		return ErrUsage
+	case err != nil:
+		log.Errorf("ERROR: resolve plugins dir: %s", err)
+		return ErrFailure
 	}
 	opts.pluginsDir = pluginsDir
 	dir := filepath.Join(opts.pluginsDir, opts.id)
