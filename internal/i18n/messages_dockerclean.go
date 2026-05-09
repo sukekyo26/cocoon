@@ -1,3 +1,4 @@
+//nolint:dupl // each catalog file shares the same boilerplate by design.
 package i18n
 
 func init() {
