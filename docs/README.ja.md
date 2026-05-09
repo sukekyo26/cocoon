@@ -15,6 +15,7 @@
 - VS Code Dev Containers と素の `docker compose` が同じ出力を共有
 - **レイヤード上書き** — `<project>/.cocoon/plugins/` > `~/.cocoon/plugins/` > 埋め込みカタログ (標準 20 プラグイン)
 - **対話的な `cocoon init`** — マウント範囲、ログインシェル、apt カテゴリ、プラグイン、エイリアスバンドルを選び、自己説明的な `workspace.toml` を出力
+- **個人シェル設定の永続化** — コンテナ内 `~/.cocoon/.shellrc` (fish は `~/.cocoon/.shellrc.fish`) が named volume にバックされており、`docker compose down && up --build` を跨いでもユーザー個別の alias / PATH が残ります
 - **国際化対応** — プロンプト・エラーメッセージ・生成 `workspace.toml` のインラインコメントが `$LANG` に応じて英語 / 日本語に切替
 
 ## 動作要件

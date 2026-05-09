@@ -23,8 +23,16 @@ import (
 const header = "# Auto-generated from workspace.toml — do not edit directly.\n"
 
 // ErrVolumeNameConflict is returned when a workspace.toml [volumes] entry
-// shares a name with an auto-derived plugin volume.
+// shares a name with an auto-derived plugin volume or with a name cocoon
+// reserves at the compose level (see reservedVolumeNames).
 var ErrVolumeNameConflict = errors.New("compose: volume name conflicts with enabled plugin")
+
+// reservedVolumeNames are volume keys cocoon emits unconditionally in the
+// generated compose. Plugins and workspace.toml [volumes] cannot reuse them.
+var reservedVolumeNames = map[string]struct{}{
+	"local":  {}, // /home/<user>/.local persistence
+	"cocoon": {}, // /home/<user>/.cocoon persistence (.shellrc, history, etc.)
+}
 
 // Defaults applied to [container.resources] when the workspace.toml omits a
 // field.
@@ -91,6 +99,11 @@ func mergeVolumes(
 	pathToSrc := map[string]src{}
 
 	for _, pv := range pluginVols {
+		if _, reserved := reservedVolumeNames[pv.VolumeName]; reserved {
+			return nil, nil, fmt.Errorf(
+				"%w: '%s' is reserved by cocoon (plugin '%s')",
+				ErrVolumeNameConflict, pv.VolumeName, pv.PluginName)
+		}
 		if existing, dup := pathToSrc[pv.MountPath]; dup {
 			if warnings != nil {
 				fmt.Fprintf(warnings,
@@ -110,6 +123,11 @@ func mergeVolumes(
 
 	customNames := sortedKeys(customVols)
 	for _, name := range customNames {
+		if _, reserved := reservedVolumeNames[name]; reserved {
+			return nil, nil, fmt.Errorf(
+				"%w: '%s' is reserved by cocoon (remove it from workspace.toml [volumes])",
+				ErrVolumeNameConflict, name)
+		}
 		if _, conflict := pluginVolNames[name]; conflict {
 			return nil, nil, fmt.Errorf(
 				"%w: '%s' (remove it from workspace.toml or disable the plugin)",
@@ -166,6 +184,7 @@ func buildVolumeMounts(
 	mounts = append(mounts,
 		yamlx.QuotedIfSpecial(workspaceBindMount(ctx)),
 		yamlx.QuotedIfSpecial("local:/home/${USERNAME}/.local"),
+		yamlx.QuotedIfSpecial("cocoon:/home/${USERNAME}/.cocoon"),
 	)
 	if ctx.WS.Container.DockerSocketEnabled() {
 		mounts = append(mounts, yamlx.QuotedIfSpecial("/var/run/docker.sock:/var/run/docker.sock"))
@@ -332,11 +351,17 @@ func applyResources(ctx *generate.WorkspaceContext) []yamlx.Pair {
 }
 
 func buildVolDefs(plugin []plugin.Volume, custom []volPair) []yamlx.Pair {
-	out := make([]yamlx.Pair, 0, 1+len(plugin)+len(custom))
-	out = append(out, yamlx.Pair{
-		Key:   "local",
-		Value: namedVolume("${COMPOSE_PROJECT_NAME}_${CONTAINER_SERVICE_NAME}_local"),
-	})
+	out := make([]yamlx.Pair, 0, 2+len(plugin)+len(custom))
+	out = append(out,
+		yamlx.Pair{
+			Key:   "local",
+			Value: namedVolume("${COMPOSE_PROJECT_NAME}_${CONTAINER_SERVICE_NAME}_local"),
+		},
+		yamlx.Pair{
+			Key:   "cocoon",
+			Value: namedVolume("${COMPOSE_PROJECT_NAME}_${CONTAINER_SERVICE_NAME}_cocoon"),
+		},
+	)
 	for _, pv := range plugin {
 		out = append(out, yamlx.Pair{
 			Key:   pv.VolumeName,

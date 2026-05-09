@@ -20,6 +20,7 @@ services:
     volumes:
       - "..:/home/${USERNAME}/workspace:cached"
       - "local:/home/${USERNAME}/.local"
+      - "cocoon:/home/${USERNAME}/.cocoon"
       - "proto:/home/${USERNAME}/.proto"
       - "aws:/home/${USERNAME}/.aws"
       - "config:/home/${USERNAME}/.config"
@@ -63,6 +64,8 @@ services:
 volumes:
   local:
     name: "${COMPOSE_PROJECT_NAME}_${CONTAINER_SERVICE_NAME}_local"
+  cocoon:
+    name: "${COMPOSE_PROJECT_NAME}_${CONTAINER_SERVICE_NAME}_cocoon"
   proto:
     name: "${COMPOSE_PROJECT_NAME}_${CONTAINER_SERVICE_NAME}_proto"
   aws:

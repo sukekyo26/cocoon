@@ -92,6 +92,17 @@ ENV LC_ALL=en_US.UTF-8
 # ~/.config/fish/, a path useradd does not pre-create.
 RUN mkdir -p "$(dirname "$HOME/.bashrc")" && touch "$HOME/.bashrc"
 
+# Seed ~/.cocoon with placeholder rc files so the cocoon named volume
+# (mounted at /home/${USERNAME}/.cocoon at runtime) inherits these comment
+# headers on first start. Edits inside the container persist across
+# 'docker compose down' + 'up --build' because the named volume keeps the
+# writable layer; only 'down -v' resets it.
+RUN mkdir -p "$HOME/.cocoon" && \
+    printf '# cocoon: persisted shell rc (bash/zsh). Edit freely; survives container rebuild.\n' \
+        > "$HOME/.cocoon/.shellrc" && \
+    printf '# cocoon: persisted shell rc (fish). Edit freely; survives container rebuild.\n' \
+        > "$HOME/.cocoon/.shellrc.fish"
+
 # Enable bash completion
 RUN echo 'if [ -f /usr/share/bash-completion/bash_completion ]; then' >> "$HOME/.bashrc" && \
     echo '  . /usr/share/bash-completion/bash_completion' >> "$HOME/.bashrc" && \
@@ -218,6 +229,16 @@ RUN echo 'export HISTFILE=~/.local/state/.bash_history_docker' >> "$HOME/.bashrc
     echo 'export HISTSIZE=10000' >> "$HOME/.bashrc" && \
     echo 'export HISTFILESIZE=20000' >> "$HOME/.bashrc" && \
     mkdir -p ~/.local/state && touch ~/.local/state/.bash_history_docker
+
+# Inject [container.shell] env/aliases plus persistent shellrc bootstrap
+RUN <<COCOON_RC_BLOCK
+cat >>"$HOME/.bashrc" <<'COCOON_RC'
+# Auto-generated from [container.shell] of workspace.toml.
+
+# Source persistent user shellrc from the cocoon named volume
+[ -f "$HOME/.cocoon/.shellrc" ] && . "$HOME/.cocoon/.shellrc"
+COCOON_RC
+COCOON_RC_BLOCK
 
 # Entrypoint: sync image files to volume-mounted ~/.local
 USER root

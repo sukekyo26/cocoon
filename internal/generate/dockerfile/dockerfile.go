@@ -172,6 +172,17 @@ ENV LC_ALL={{ .LocaleLang }}
 # ~/.config/fish/, a path useradd does not pre-create.
 RUN mkdir -p "$(dirname "$HOME/{{ .RCFilePath }}")" && touch "$HOME/{{ .RCFilePath }}"
 
+# Seed ~/.cocoon with placeholder rc files so the cocoon named volume
+# (mounted at /home/${USERNAME}/.cocoon at runtime) inherits these comment
+# headers on first start. Edits inside the container persist across
+# 'docker compose down' + 'up --build' because the named volume keeps the
+# writable layer; only 'down -v' resets it.
+RUN mkdir -p "$HOME/.cocoon" && \
+    printf '# cocoon: persisted shell rc (bash/zsh). Edit freely; survives container rebuild.\n' \
+        > "$HOME/.cocoon/.shellrc" && \
+    printf '# cocoon: persisted shell rc (fish). Edit freely; survives container rebuild.\n' \
+        > "$HOME/.cocoon/.shellrc.fish"
+
 {{ with .ShellCompletionInit -}}
 {{ . }}
 

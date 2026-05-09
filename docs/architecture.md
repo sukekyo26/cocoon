@@ -101,9 +101,22 @@ Each artifact is rendered into memory first, then written atomically through `in
 
 `devcontainer.json::workspaceFolder` follows the same choice so VS Code lands in the right directory.
 
+### Persistent state volumes
+
+Two named Docker volumes are mounted unconditionally so user-writable state survives container rebuilds:
+
+| Volume | Container path | Holds |
+|---|---|---|
+| `local` | `/home/$USER/.local` | XDG runtime / state — shell history, language tooling caches, etc. |
+| `cocoon` | `/home/$USER/.cocoon` | User shellrc additions: `.shellrc` (POSIX) and `.shellrc.fish`. |
+
+The image seeds `~/.cocoon/.shellrc{,.fish}` with comment-only placeholders; on first `docker compose up` Docker copies them into the empty named volume and from then on the volume is the source of truth. `docker compose down -v` resets it. The host directory `~/.cocoon/` is unrelated — that path holds the cocoon CLI's plugin overlays, build-context cache, and certificates, none of which are bind-mounted into the container.
+
 ## Shell injection
 
 `[container.shell] env` and `aliases` are written directly into the container's rc file (`~/.bashrc`, `~/.zshrc`, or `~/.config/fish/config.fish`) at image build time using a Dockerfile heredoc. `bash` / `zsh` / `fish` syntax differences (`alias k='v'` vs `alias k 'v'`, `export K=V` vs `set -gx K V`) are handled automatically.
+
+The same heredoc also appends a final line that sources the user's persistent shellrc from the `cocoon` named volume (see "Persistent state volumes" above), so per-user edits survive container rebuilds without the user having to wire it up:
 
 ```dockerfile
 RUN <<COCOON_RC_BLOCK
@@ -111,9 +124,14 @@ cat >>"$HOME/.bashrc" <<'COCOON_RC'
 # Auto-generated from [container.shell] of workspace.toml.
 export EDITOR='vim'
 alias gs='git status'
+
+# Source persistent user shellrc from the cocoon named volume
+[ -f "$HOME/.cocoon/.shellrc" ] && . "$HOME/.cocoon/.shellrc"
 COCOON_RC
 COCOON_RC_BLOCK
 ```
+
+Bash / zsh source `~/.cocoon/.shellrc`; fish sources `~/.cocoon/.shellrc.fish`. The bootstrap is unconditional (it always emits, even when `[container.shell]` is unset), so the user can always edit the persistent file without re-generating.
 
 ## i18n
 

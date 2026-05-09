@@ -123,6 +123,14 @@ env     = { EDITOR = "vim", PAGER = "less -R" }
 
 > `EDITOR=vim` / `nano` requires the `text-editors` apt category. `EDITOR=code` works when the container is launched from VS Code Dev Containers (which injects the `code` shim). `PAGER=less` requires the `utilities` apt category.
 
+`[container.shell]` is for project-level settings checked into the repo. For **per-user, container-rebuild-persistent** edits, the rc file additionally sources `~/.cocoon/.shellrc` (or `~/.cocoon/.shellrc.fish` for fish) on every shell start. That path is backed by a Docker named volume (`cocoon`), so user edits survive `docker compose down && up --build`. Edit it from inside the container:
+
+```bash
+docker compose -f .devcontainer/docker-compose.yml exec dev "$EDITOR" ~/.cocoon/.shellrc
+```
+
+The volume is reset only by `docker compose down -v`. The path lives **inside the container only** — host `~/.cocoon/` is unrelated (it is cocoon CLI's local working area for plugin overlays, build-context cache, certificates).
+
 ### `[container.hosts]`
 
 Extra `/etc/hosts` entries. Keys are hostnames (RFC 1123); values are IPv4 / IPv6 addresses or the literal `"host-gateway"` (resolves to the host machine).

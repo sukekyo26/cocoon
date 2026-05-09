@@ -6,6 +6,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Mount a named Docker volume `cocoon` at `/home/<user>/.cocoon` inside the dev container so per-user shell tweaks survive container rebuilds. The container's rc file (bash / zsh / fish) sources `~/.cocoon/.shellrc` (or `~/.cocoon/.shellrc.fish` for fish) automatically; edit those files from inside the container and they persist across `docker compose down && up --build` (only `down -v` resets them).
+
 ### Removed
 
 - **BREAKING**: drop the `cocoon config` noun group (`get`, `list`, `volumes`, `plugin-get`, `plugin-list`, `plugin-volumes`, `plugins-table`, `validate-workspace`, `validate-plugins`, `has-section`, `list-sidecars`, `dump-devcontainer`, `dump-repositories`, `repositories`, `format-repositories`). The group existed to feed bash entry-point scripts that were retired in v0.1.0; nothing inside cocoon depends on it. External scripts that scraped `workspace.toml` via `cocoon config` should switch to a dedicated TOML parser (e.g., `tomlq`, `taplo`, or a small Go / Python helper).
