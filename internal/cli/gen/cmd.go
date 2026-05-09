@@ -103,7 +103,14 @@ func runGen(stdout, stderr io.Writer, workspaceFlag, outputFlag string) error {
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrFailure, err)
 	}
-	if matErr := plugin.Materialize(catalog, ws.Plugins.Enable, cacheDir); matErr != nil {
+	userPluginDir, err := userPluginsDir()
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrFailure, err)
+	}
+	projectPluginDir := filepath.Join(filepath.Dir(wsPath), ".cocoon", "plugins")
+	layered := plugin.NewLayeredFS(catalog, userPluginDir, projectPluginDir)
+	layered.LogOverrides(stderr)
+	if matErr := plugin.Materialize(layered, ws.Plugins.Enable, cacheDir); matErr != nil {
 		return fmt.Errorf("%w: materialize plugins: %w", ErrFailure, matErr)
 	}
 
@@ -175,6 +182,15 @@ func defaultBuildContextDir() (string, error) {
 		return "", fmt.Errorf("resolve home dir: %w", err)
 	}
 	return filepath.Join(home, ".cocoon", "cache", "build-context"), nil
+}
+
+// userPluginsDir returns ~/.cocoon/plugins, the LayeredFS user layer root.
+func userPluginsDir() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("resolve home dir: %w", err)
+	}
+	return filepath.Join(home, ".cocoon", "plugins"), nil
 }
 
 func printNextSteps(stdout io.Writer, cat *i18n.Catalog, devcontainer bool) {
