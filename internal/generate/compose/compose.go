@@ -36,6 +36,17 @@ var reservedVolumeNames = map[string]struct{}{
 	"cocoon": {}, // /home/<user>/.cocoon persistence (.shellrc, history, etc.)
 }
 
+// reservedMountPaths are container target paths cocoon owns. A plugin or
+// workspace.toml [volumes] entry that maps to one of these targets — even
+// under a different volume name — would collide with the unconditional
+// `local:`/`cocoon:` mounts emitted by buildVolumeMounts and break
+// `docker compose up`. We reject them at gen time so the user sees a clear
+// error rather than a runtime mount conflict.
+var reservedMountPaths = map[string]struct{}{
+	"/home/${USERNAME}/.local":  {},
+	"/home/${USERNAME}/.cocoon": {},
+}
+
 // Defaults applied to [container.resources] when the workspace.toml omits a
 // field.
 const (
@@ -91,20 +102,51 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 	return header + string(body), nil
 }
 
+// volSrc tracks who introduced a given mount path so we can emit precise
+// dedup warnings.
+type volSrc struct{ label, volName string }
+
 // mergeVolumes mirrors ComposeGenerator's de-duplication and conflict checks.
 func mergeVolumes(
 	pluginVols []plugin.Volume,
 	customVols map[string]string,
 	warnings io.Writer,
 ) (mergedPlugin []plugin.Volume, mergedCustom []volPair, err error) {
-	type src struct{ label, volName string }
-	pathToSrc := map[string]src{}
+	pathToSrc := map[string]volSrc{}
 
+	mergedPlugin, err = mergePluginVolumes(pluginVols, pathToSrc, warnings)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	pluginVolNames := map[string]struct{}{}
+	for _, pv := range mergedPlugin {
+		pluginVolNames[pv.VolumeName] = struct{}{}
+	}
+
+	mergedCustom, err = mergeCustomVolumes(customVols, pluginVolNames, pathToSrc, warnings)
+	if err != nil {
+		return nil, nil, err
+	}
+	return mergedPlugin, mergedCustom, nil
+}
+
+func mergePluginVolumes(
+	pluginVols []plugin.Volume,
+	pathToSrc map[string]volSrc,
+	warnings io.Writer,
+) ([]plugin.Volume, error) {
+	out := make([]plugin.Volume, 0, len(pluginVols))
 	for _, pv := range pluginVols {
 		if _, reserved := reservedVolumeNames[pv.VolumeName]; reserved {
-			return nil, nil, fmt.Errorf(
+			return nil, fmt.Errorf(
 				"%w: '%s' is reserved by cocoon (plugin '%s')",
 				ErrVolumeNameConflict, pv.VolumeName, pv.PluginName)
+		}
+		if _, reserved := reservedMountPaths[pv.MountPath]; reserved {
+			return nil, fmt.Errorf(
+				"%w: plugin '%s' targets reserved mount path '%s'",
+				ErrVolumeNameConflict, pv.PluginName, pv.MountPath)
 		}
 		if existing, dup := pathToSrc[pv.MountPath]; dup {
 			if warnings != nil {
@@ -114,31 +156,40 @@ func mergeVolumes(
 			}
 			continue
 		}
-		pathToSrc[pv.MountPath] = src{label: "plugin '" + pv.PluginName + "'", volName: pv.VolumeName}
-		mergedPlugin = append(mergedPlugin, pv)
+		pathToSrc[pv.MountPath] = volSrc{label: "plugin '" + pv.PluginName + "'", volName: pv.VolumeName}
+		out = append(out, pv)
 	}
+	return out, nil
+}
 
-	pluginVolNames := map[string]struct{}{}
-	for _, pv := range mergedPlugin {
-		pluginVolNames[pv.VolumeName] = struct{}{}
-	}
-
+func mergeCustomVolumes(
+	customVols map[string]string,
+	pluginVolNames map[string]struct{},
+	pathToSrc map[string]volSrc,
+	warnings io.Writer,
+) ([]volPair, error) {
 	customNames := sortedKeys(customVols)
 	for _, name := range customNames {
 		if _, reserved := reservedVolumeNames[name]; reserved {
-			return nil, nil, fmt.Errorf(
+			return nil, fmt.Errorf(
 				"%w: '%s' is reserved by cocoon (remove it from workspace.toml [volumes])",
 				ErrVolumeNameConflict, name)
 		}
 		if _, conflict := pluginVolNames[name]; conflict {
-			return nil, nil, fmt.Errorf(
+			return nil, fmt.Errorf(
 				"%w: '%s' (remove it from workspace.toml or disable the plugin)",
 				ErrVolumeNameConflict, name)
 		}
 	}
 
+	out := make([]volPair, 0, len(customNames))
 	for _, name := range customNames {
 		path := customVols[name]
+		if _, reserved := reservedMountPaths[path]; reserved {
+			return nil, fmt.Errorf(
+				"%w: workspace.toml [volumes].%s targets reserved mount path '%s'",
+				ErrVolumeNameConflict, name, path)
+		}
 		if existing, dup := pathToSrc[path]; dup {
 			if warnings != nil {
 				fmt.Fprintf(warnings,
@@ -147,10 +198,10 @@ func mergeVolumes(
 			}
 			continue
 		}
-		pathToSrc[path] = src{label: "workspace.toml volume '" + name + "'", volName: name}
-		mergedCustom = append(mergedCustom, volPair{Name: name, Path: path})
+		pathToSrc[path] = volSrc{label: "workspace.toml volume '" + name + "'", volName: name}
+		out = append(out, volPair{Name: name, Path: path})
 	}
-	return mergedPlugin, mergedCustom, nil
+	return out, nil
 }
 
 type volPair struct {
