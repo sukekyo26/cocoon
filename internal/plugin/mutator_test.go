@@ -82,6 +82,32 @@ func TestUpsertPinBlockRejectsEmptyArgs(t *testing.T) {
 	}
 }
 
+// Whitespace-only "blank" lines (e.g. "  " or "\t") between the target
+// block and the next section must round-trip verbatim through the replace
+// path. The earlier replaceTargetBlock counted blank lines and re-emitted
+// them as "", losing the original whitespace.
+func TestUpsertPinBlockReplacePreservesWhitespaceBlankLines(t *testing.T) {
+	t.Parallel()
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "ws.toml")
+	// "  " (two-space) and "\t" (tab) lines between go's block and [mounts].
+	body := []byte("[plugins.versions.go]\npin = \"1.22.0\"\n  \n\t\n[mounts]\nhost = \"./src\"\n")
+	if err := os.WriteFile(path, body, 0o600); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if err := plugin.UpsertPinBlock(path, "go", "1.23.4", "", ""); err != nil {
+		t.Fatalf("UpsertPinBlock: %v", err)
+	}
+	got, err := os.ReadFile(path) //nolint:gosec // tmp path under t.TempDir
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	want := "[plugins.versions.go]\npin = \"1.23.4\"\n  \n\t\n[mounts]\nhost = \"./src\"\n"
+	if string(got) != want {
+		t.Errorf("whitespace-only blank lines were not preserved verbatim\n--- got ---\n%q\n--- want ---\n%q", got, want)
+	}
+}
+
 // Trailing blank lines outside the target block must be preserved verbatim.
 // The earlier appendAtEOF stripped them, normalizing multi-blank tails to a
 // single separator, which contradicts the "preserved verbatim" contract.

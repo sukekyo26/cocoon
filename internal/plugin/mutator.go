@@ -122,20 +122,19 @@ func findPinSpans(lines []string, target, prefix string) (targetSpan, lastVersio
 
 // replaceTargetBlock returns lines with the target span swapped for repl,
 // preserving any trailing blank lines that previously sat between the block
-// and the next section.
+// and the next section. The original blank-line slice is reused (not
+// regenerated as ""), so whitespace-only blank lines like "  " or "\t"
+// round-trip verbatim.
 func replaceTargetBlock(lines []string, target *pinSpan, repl []string) []string {
 	end := target.end
-	trailingBlanks := 0
 	for end > target.start && strings.TrimSpace(lines[end-1]) == "" {
 		end--
-		trailingBlanks++
 	}
-	out := make([]string, 0, len(lines)-(end-target.start)+len(repl)+trailingBlanks)
+	trailingBlanks := lines[end:target.end]
+	out := make([]string, 0, len(lines)-(end-target.start)+len(repl)+len(trailingBlanks))
 	out = append(out, lines[:target.start]...)
 	out = append(out, repl...)
-	for i := 0; i < trailingBlanks; i++ {
-		out = append(out, "")
-	}
+	out = append(out, trailingBlanks...)
 	out = append(out, lines[target.end:]...)
 	return out
 }
