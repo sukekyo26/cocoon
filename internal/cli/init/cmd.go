@@ -15,6 +15,7 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
 
+	"github.com/sukekyo26/cocoon/internal/aliasbundles"
 	"github.com/sukekyo26/cocoon/internal/aptcategories"
 	"github.com/sukekyo26/cocoon/internal/config"
 	"github.com/sukekyo26/cocoon/internal/i18n"
@@ -40,8 +41,8 @@ scrolled under it.)
 
 Use --yes plus --service-name / --username (both required when --yes
 is set) and any of --os / --os-version / --shell / --mount-root /
---devcontainer / --apt-categories / --plugins to drive non-interactively
-from CI.`
+--devcontainer / --apt-categories / --plugins / --alias-bundles to drive
+non-interactively from CI.`
 
 var (
 	rxServiceName = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
@@ -84,6 +85,12 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 		"",
 		"comma-separated plugin IDs to enable (skips the plugin multi-select prompt)",
 	)
+	cmd.Flags().StringVar(
+		&flags.AliasBundles,
+		"alias-bundles",
+		"",
+		"comma-separated shell-alias bundle IDs (skips the bundles multi-select prompt; e.g. git,ls)",
+	)
 	cmd.Flags().BoolVar(&flags.Force, "force", false, "overwrite an existing workspace.toml")
 	return cmd
 }
@@ -100,6 +107,7 @@ type initFlags struct {
 	NoDevcontainer bool
 	AptCategories  string
 	Plugins        string
+	AliasBundles   string
 	Force          bool
 }
 
@@ -116,6 +124,7 @@ func zeroFlags() initFlags {
 		NoDevcontainer: false,
 		AptCategories:  "",
 		Plugins:        "",
+		AliasBundles:   "",
 		Force:          false,
 	}
 }
@@ -142,6 +151,8 @@ type initAnswers struct {
 	AptSet          bool
 	Plugins         []string
 	PluginsSet      bool
+	AliasBundles    []string
+	AliasBundlesSet bool
 }
 
 func zeroAnswers() initAnswers {
@@ -162,6 +173,8 @@ func zeroAnswers() initAnswers {
 		AptSet:          false,
 		Plugins:         nil,
 		PluginsSet:      false,
+		AliasBundles:    nil,
+		AliasBundlesSet: false,
 	}
 }
 
@@ -191,17 +204,19 @@ func runInit(cmd *cobra.Command, stdout, _ io.Writer, flags *initFlags) error {
 	}
 
 	pkgs := aptcategories.ExpandAptCategories(ans.AptCategories)
+	aliases := aliasbundles.ExpandAliasBundles(ans.AliasBundles)
 	content := renderWorkspaceToml(containerSpec{
 		ServiceName:  ans.ServiceName,
 		Username:     ans.Username,
 		OS:           ans.OS,
 		OSVersion:    ans.OSVersion,
 		Shell:        ans.Shell,
+		Aliases:      aliases,
 		MountRoot:    ans.MountRoot,
 		Devcontainer: ans.Devcontainer,
 		Packages:     pkgs,
 		Plugins:      ans.Plugins,
-	})
+	}, cat)
 	if err := os.WriteFile(target, []byte(content), 0o644); err != nil { //nolint:gosec // workspace.toml is user-readable.
 		return fmt.Errorf("%w: write %s: %w", ErrFailure, target, err)
 	}
@@ -315,6 +330,13 @@ func applyFlags(flags *initFlags, plugins map[string]*plugin.Plugin) (initAnswer
 		}
 		ans.Plugins, ans.PluginsSet = ids, true
 	}
+	if flags.AliasBundles != "" {
+		ids, err := parseAliasBundles(flags.AliasBundles)
+		if err != nil {
+			return ans, err
+		}
+		ans.AliasBundles, ans.AliasBundlesSet = ids, true
+	}
 	return ans, nil
 }
 
@@ -349,6 +371,9 @@ func applyDefaults(ans initAnswers, plugins map[string]*plugin.Plugin) (initAnsw
 	}
 	if !ans.PluginsSet {
 		ans.Plugins, ans.PluginsSet = defaultPluginIDs(plugins), true
+	}
+	if !ans.AliasBundlesSet {
+		ans.AliasBundles, ans.AliasBundlesSet = aliasbundles.DefaultAliasBundleIDs(), true
 	}
 	return ans, nil
 }
@@ -413,6 +438,13 @@ func promptForMissing(ans initAnswers, cat *i18n.Catalog, plugins map[string]*pl
 			return ans, err
 		}
 		ans.ShellSet = true
+	}
+	if !ans.AliasBundlesSet {
+		ans.AliasBundles = aliasbundles.DefaultAliasBundleIDs()
+		if err := runSingleFieldForm(aliasBundlesMultiSelect(cat, &ans.AliasBundles)); err != nil {
+			return ans, err
+		}
+		ans.AliasBundlesSet = true
 	}
 	if !ans.MountRootSet {
 		ans.MountRoot = "."
@@ -608,6 +640,18 @@ func aptMultiSelect(cat *i18n.Catalog, target *[]string) *huh.MultiSelect[string
 		Value(target)
 }
 
+func aliasBundlesMultiSelect(cat *i18n.Catalog, target *[]string) *huh.MultiSelect[string] {
+	options := make([]huh.Option[string], len(aliasbundles.AliasBundles))
+	for i, b := range aliasbundles.AliasBundles {
+		options[i] = huh.NewOption(fmt.Sprintf("%s (%s)", b.Label, b.Description), b.ID)
+	}
+	return huh.NewMultiSelect[string]().
+		Title(cat.Msg("init_prompt_alias_bundles")).
+		Description(cat.Msg("init_desc_alias_bundles")).
+		Options(options...).
+		Value(target)
+}
+
 // pluginsMultiSelect renders the embedded plugin catalog as a single
 // multi-select. Options are sorted by id so the order is stable across
 // runs (LoadDir returns a map so iteration order is otherwise random).
@@ -683,6 +727,24 @@ func parseAptCategories(raw string) ([]string, error) {
 		if aptcategories.AptCategoryByID(id) == nil {
 			return nil, fmt.Errorf("%w: unknown apt category %q (run `cocoon init --help` for the list)",
 				ErrUsage, id)
+		}
+		ids = append(ids, id)
+	}
+	return ids, nil
+}
+
+// parseAliasBundles splits a comma-separated alias-bundle id list and
+// validates each against the AliasBundles catalog. Used by the
+// --alias-bundles flag path.
+func parseAliasBundles(raw string) ([]string, error) {
+	var ids []string
+	for _, part := range strings.Split(raw, ",") {
+		id := strings.TrimSpace(part)
+		if id == "" {
+			continue
+		}
+		if aliasbundles.AliasBundleByID(id) == nil {
+			return nil, fmt.Errorf("%w: unknown alias bundle %q", ErrUsage, id)
 		}
 		ids = append(ids, id)
 	}
@@ -816,32 +878,50 @@ type containerSpec struct {
 	OS           string
 	OSVersion    string
 	Shell        string
+	Aliases      map[string]string
 	MountRoot    string
 	Devcontainer bool
 	Packages     []string
 	Plugins      []string
 }
 
-func renderWorkspaceToml(s containerSpec) string {
+// renderWorkspaceToml emits the workspace.toml body. Section comments come
+// from the i18n catalog so users see ja or en text matching their $LANG;
+// because the file is committed and shared, the locale snapshot is whatever
+// the original `cocoon init` runner had — re-run with --force under a
+// different LANG to switch.
+func renderWorkspaceToml(s containerSpec, cat *i18n.Catalog) string {
 	var sb strings.Builder
-	sb.WriteString("# workspace.toml — cocoon configuration (generated by `cocoon init`)\n")
-	sb.WriteString("# Edit freely; re-run `cocoon gen` to regenerate .devcontainer/.\n\n")
+	sb.WriteString(cat.Msg("init_toml_header"))
+	sb.WriteByte('\n')
 
+	sb.WriteString(cat.Msg("init_toml_section_workspace"))
+	sb.WriteByte('\n')
 	sb.WriteString("[workspace]\n")
 	fmt.Fprintf(&sb, "mount_root = %q\n", s.MountRoot)
 	fmt.Fprintf(&sb, "devcontainer = %t\n\n", s.Devcontainer)
 
+	sb.WriteString(cat.Msg("init_toml_section_container"))
+	sb.WriteByte('\n')
 	sb.WriteString("[container]\n")
 	fmt.Fprintf(&sb, "service_name = %q\n", s.ServiceName)
 	fmt.Fprintf(&sb, "username = %q\n", s.Username)
 	fmt.Fprintf(&sb, "os = %q\n", s.OS)
 	fmt.Fprintf(&sb, "os_version = %q\n\n", s.OSVersion)
 
-	// [container.shell] is always written (even for the bash default) so a
-	// reader of the generated file sees where to switch to zsh / fish.
+	sb.WriteString(cat.Msg("init_toml_section_container_shell"))
+	sb.WriteByte('\n')
 	sb.WriteString("[container.shell]\n")
-	fmt.Fprintf(&sb, "default = %q\n\n", s.Shell)
+	fmt.Fprintf(&sb, "default = %q\n", s.Shell)
+	if len(s.Aliases) > 0 {
+		sb.WriteString("aliases = ")
+		writeInlineTable(&sb, s.Aliases)
+		sb.WriteByte('\n')
+	}
+	sb.WriteByte('\n')
 
+	sb.WriteString(cat.Msg("init_toml_section_plugins"))
+	sb.WriteByte('\n')
 	sb.WriteString("[plugins]\n")
 	if len(s.Plugins) == 0 {
 		sb.WriteString("enable = []\n\n")
@@ -853,6 +933,8 @@ func renderWorkspaceToml(s containerSpec) string {
 		sb.WriteString("]\n\n")
 	}
 
+	sb.WriteString(cat.Msg("init_toml_section_apt"))
+	sb.WriteByte('\n')
 	sb.WriteString("[apt]\n")
 	if len(s.Packages) == 0 {
 		sb.WriteString("packages = []\n")
@@ -864,4 +946,26 @@ func renderWorkspaceToml(s containerSpec) string {
 	}
 	sb.WriteString("]\n")
 	return sb.String()
+}
+
+// writeInlineTable emits a TOML inline-table value (`{ k = "v", ... }`)
+// with keys sorted so the output is deterministic across runs. Used for
+// `[container.shell] aliases = { ... }` so the generated workspace.toml
+// stays diff-friendly when the user re-runs `cocoon init --force`.
+func writeInlineTable(sb *strings.Builder, m map[string]string) {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	sb.WriteByte('{')
+	for i, k := range keys {
+		if i > 0 {
+			sb.WriteString(", ")
+		} else {
+			sb.WriteByte(' ')
+		}
+		fmt.Fprintf(sb, "%s = %q", k, m[k])
+	}
+	sb.WriteString(" }")
 }

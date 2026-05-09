@@ -417,10 +417,11 @@ func TestParseAptCategories(t *testing.T) {
 
 func TestRenderWorkspaceToml_NoPackages(t *testing.T) {
 	t.Parallel()
+	cat := i18n.New(i18n.LangEN)
 	got := renderWorkspaceToml(containerSpec{
 		ServiceName: "svc", Username: "dev", OS: "ubuntu", OSVersion: "24.04",
 		Shell: "bash", MountRoot: ".", Devcontainer: true, Packages: nil,
-	})
+	}, cat)
 	for _, want := range []string{
 		`mount_root = "."`,
 		`devcontainer = true`,
@@ -440,11 +441,12 @@ func TestRenderWorkspaceToml_NoPackages(t *testing.T) {
 
 func TestRenderWorkspaceToml_WithPackages(t *testing.T) {
 	t.Parallel()
+	cat := i18n.New(i18n.LangEN)
 	got := renderWorkspaceToml(containerSpec{
 		ServiceName: "svc", Username: "dev", OS: "debian", OSVersion: "13",
 		Shell: "zsh", MountRoot: "..", Devcontainer: false,
 		Packages: []string{"vim", "tmux"},
-	})
+	}, cat)
 	for _, want := range []string{
 		`mount_root = ".."`,
 		`devcontainer = false`,
@@ -461,11 +463,12 @@ func TestRenderWorkspaceToml_WithPackages(t *testing.T) {
 
 func TestRenderWorkspaceToml_WithPlugins(t *testing.T) {
 	t.Parallel()
+	cat := i18n.New(i18n.LangEN)
 	got := renderWorkspaceToml(containerSpec{
 		ServiceName: "svc", Username: "dev", OS: "ubuntu", OSVersion: "24.04",
 		Shell: "bash", MountRoot: ".", Devcontainer: true,
 		Plugins: []string{"go", "uv", "github-cli"},
-	})
+	}, cat)
 	want := "[plugins]\nenable = [\n    \"go\",\n    \"uv\",\n    \"github-cli\",\n]"
 	if !strings.Contains(got, want) {
 		t.Errorf("output missing %q\n--- got ---\n%s", want, got)
@@ -474,13 +477,108 @@ func TestRenderWorkspaceToml_WithPlugins(t *testing.T) {
 
 func TestRenderWorkspaceToml_FishShell(t *testing.T) {
 	t.Parallel()
+	cat := i18n.New(i18n.LangEN)
 	got := renderWorkspaceToml(containerSpec{
 		ServiceName: "svc", Username: "dev", OS: "ubuntu", OSVersion: "24.04",
 		Shell: "fish", MountRoot: ".", Devcontainer: true,
-	})
+	}, cat)
 	want := "[container.shell]\ndefault = \"fish\""
 	if !strings.Contains(got, want) {
 		t.Errorf("output missing %q\n--- got ---\n%s", want, got)
+	}
+}
+
+func TestRenderWorkspaceToml_WithAliases(t *testing.T) {
+	t.Parallel()
+	cat := i18n.New(i18n.LangEN)
+	got := renderWorkspaceToml(containerSpec{
+		ServiceName: "svc", Username: "dev", OS: "ubuntu", OSVersion: "24.04",
+		Shell: "bash", MountRoot: ".", Devcontainer: true,
+		Aliases: map[string]string{"gs": "git status", "ll": "ls -lah"},
+	}, cat)
+	// Inline-table format with sorted keys (gs before ll alphabetically).
+	want := `aliases = { gs = "git status", ll = "ls -lah" }`
+	if !strings.Contains(got, want) {
+		t.Errorf("output missing %q\n--- got ---\n%s", want, got)
+	}
+}
+
+func TestRenderWorkspaceToml_NoAliases_OmitsLine(t *testing.T) {
+	t.Parallel()
+	cat := i18n.New(i18n.LangEN)
+	got := renderWorkspaceToml(containerSpec{
+		ServiceName: "svc", Username: "dev", OS: "ubuntu", OSVersion: "24.04",
+		Shell: "bash", MountRoot: ".", Devcontainer: true,
+		Aliases: nil,
+	}, cat)
+	if strings.Contains(got, "aliases =") {
+		t.Errorf("expected no aliases line when Aliases is nil, got:\n%s", got)
+	}
+}
+
+// TestRenderWorkspaceToml_LocalizedComments_EN pins the English section
+// header line. The full block is allowed to evolve, but this prefix is the
+// load-bearing self-documentation for users opening workspace.toml.
+func TestRenderWorkspaceToml_LocalizedComments_EN(t *testing.T) {
+	t.Parallel()
+	cat := i18n.New(i18n.LangEN)
+	got := renderWorkspaceToml(containerSpec{
+		ServiceName: "svc", Username: "dev", OS: "ubuntu", OSVersion: "24.04",
+		Shell: "bash", MountRoot: ".", Devcontainer: true,
+	}, cat)
+	for _, want := range []string{
+		"# workspace.toml — cocoon configuration",
+		"# [workspace] — generation-wide knobs.",
+		"# [container] — image identity.",
+		"# [container.shell] — login shell + per-shell rc injection.",
+		"# [plugins] — enable cocoon plugins",
+		"# [apt] — extra apt packages",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("EN comment missing %q\n--- got ---\n%s", want, got)
+		}
+	}
+}
+
+func TestRenderWorkspaceToml_LocalizedComments_JA(t *testing.T) {
+	t.Parallel()
+	cat := i18n.New(i18n.LangJA)
+	got := renderWorkspaceToml(containerSpec{
+		ServiceName: "svc", Username: "dev", OS: "ubuntu", OSVersion: "24.04",
+		Shell: "bash", MountRoot: ".", Devcontainer: true,
+	}, cat)
+	for _, want := range []string{
+		"# workspace.toml — cocoon 設定",
+		"# [workspace] — 生成全体の挙動。",
+		"# [container] — イメージの素性。",
+		"# [container.shell] — ログインシェル",
+		"# [plugins] — cocoon プラグインの有効化",
+		"# [apt] — cocoon の最小ベース",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("JA comment missing %q\n--- got ---\n%s", want, got)
+		}
+	}
+}
+
+// TestRenderWorkspaceToml_ContainerShellEnvCaveats pins the EDITOR/PAGER
+// caveats next to [container.shell]. EDITOR/PAGER are intentionally NOT
+// init prompts because the values silently break when the prerequisite
+// apt category or VS Code is missing — so the comment block must keep
+// surfacing those prerequisites in both locales.
+func TestRenderWorkspaceToml_ContainerShellEnvCaveats(t *testing.T) {
+	t.Parallel()
+	for _, lang := range []i18n.Lang{i18n.LangEN, i18n.LangJA} {
+		cat := i18n.New(lang)
+		got := renderWorkspaceToml(containerSpec{
+			ServiceName: "svc", Username: "dev", OS: "ubuntu", OSVersion: "24.04",
+			Shell: "bash", MountRoot: ".", Devcontainer: true,
+		}, cat)
+		for _, want := range []string{"text-editors", "VS Code", "utilities"} {
+			if !strings.Contains(got, want) {
+				t.Errorf("[%s] caveat keyword %q missing\n--- got ---\n%s", lang, want, got)
+			}
+		}
 	}
 }
 
@@ -855,5 +953,94 @@ func TestRunInit_DefaultsShellToBash(t *testing.T) {
 	want := "[container.shell]\ndefault = \"bash\""
 	if !strings.Contains(string(body), want) {
 		t.Errorf("workspace.toml missing %q\n--- got ---\n%s", want, body)
+	}
+}
+
+// ---------------------------------------------------------------------
+// Alias bundles: --alias-bundles flag, parsing, render output.
+// ---------------------------------------------------------------------
+
+func TestParseAliasBundles(t *testing.T) {
+	t.Parallel()
+	out, err := parseAliasBundles("git,ls,docker")
+	if err != nil || len(out) != 3 {
+		t.Errorf("got %v %v", out, err)
+	}
+	out, err = parseAliasBundles("")
+	if err != nil || len(out) != 0 {
+		t.Errorf("empty string -> empty list, got %v %v", out, err)
+	}
+	out, err = parseAliasBundles(" git , ls , ")
+	if err != nil || len(out) != 2 || out[0] != "git" || out[1] != "ls" {
+		t.Errorf("whitespace handling: got %v %v", out, err)
+	}
+	if _, err := parseAliasBundles("k8s"); !errors.Is(err, ErrUsage) {
+		t.Errorf("unknown bundle should be ErrUsage, got %v", err)
+	}
+}
+
+//nolint:paralleltest // t.Chdir
+func TestRunInit_AliasBundlesFlagWritesShellAliases(t *testing.T) {
+	pinEnglish(t)
+	work := t.TempDir()
+	t.Chdir(work)
+	cmd := NewCommand(io.Discard, io.Discard)
+	cmd.SetArgs([]string{
+		"--yes", "--service-name", "x", "--username", "y",
+		"--alias-bundles", "git,ls",
+	})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("init --alias-bundles: %v", err)
+	}
+	body, err := os.ReadFile(filepath.Join(work, "workspace.toml"))
+	if err != nil {
+		t.Fatalf("read workspace.toml: %v", err)
+	}
+	for _, want := range []string{
+		`ga = "git add"`,
+		`gs = "git status"`,
+		`ll = "ls -lah"`,
+		`la = "ls -A"`,
+	} {
+		if !strings.Contains(string(body), want) {
+			t.Errorf("workspace.toml missing %q\n--- got ---\n%s", want, body)
+		}
+	}
+	if !strings.Contains(string(body), "aliases = {") {
+		t.Errorf("expected inline-table aliases line, got:\n%s", body)
+	}
+}
+
+//nolint:paralleltest // t.Chdir
+func TestRunInit_NoAliasBundles_OmitsAliasesLine(t *testing.T) {
+	pinEnglish(t)
+	work := t.TempDir()
+	t.Chdir(work)
+	cmd := NewCommand(io.Discard, io.Discard)
+	cmd.SetArgs([]string{"--yes", "--service-name", "x", "--username", "y"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("init --yes: %v", err)
+	}
+	body, err := os.ReadFile(filepath.Join(work, "workspace.toml"))
+	if err != nil {
+		t.Fatalf("read workspace.toml: %v", err)
+	}
+	if strings.Contains(string(body), "aliases =") {
+		t.Errorf("expected no aliases line when --alias-bundles unset, got:\n%s", body)
+	}
+}
+
+//nolint:paralleltest // t.Chdir
+func TestRunInit_AliasBundlesFlagRejectsUnknown(t *testing.T) {
+	pinEnglish(t)
+	work := t.TempDir()
+	t.Chdir(work)
+	cmd := NewCommand(io.Discard, io.Discard)
+	cmd.SetArgs([]string{
+		"--yes", "--service-name", "x", "--username", "y",
+		"--alias-bundles", "k8s",
+	})
+	if err := cmd.Execute(); !errors.Is(err, ErrUsage) {
+		t.Errorf("--alias-bundles k8s should be ErrUsage, got %v", err)
 	}
 }

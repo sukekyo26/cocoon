@@ -13,36 +13,63 @@ func init() {
 //nolint:gochecknoglobals,revive // catalog tables are file-scoped by design.
 var messagesEN_init = map[string]string{
 	// init prompts
-	"init_prompt_service_name":      "Service name",
-	"init_desc_service_name":        "Compose service name (e.g. \"my-api\").",
-	"init_err_service_name_fmt":     "must start with a lowercase letter; only lowercase letters, digits, _ and - allowed",
-	"init_prompt_username":          "Username",
-	"init_desc_username":            "In-container user account (e.g. \"dev\").",
-	"init_err_username_fmt":         "must start with a lowercase letter or _; only lowercase letters, digits, _ and - allowed",
-	"init_err_required":             "required — please enter a value",
-	"init_prompt_os":                "Base OS",
-	"init_desc_os":                  "Linux distribution that backs the container image (FROM <os>:<os_version>).",
-	"init_prompt_os_version":        "%s version",
-	"init_desc_os_version":          "Pulled as FROM %s:<version> in the generated Dockerfile.",
-	"init_prompt_os_version_static": "OS version",
-	"init_desc_os_version_static":   "Pulled as FROM <os>:<version> in the generated Dockerfile.",
-	"init_prompt_shell":             "Login shell",
-	"init_desc_shell":               "Container login shell. bash is the cocoon default; zsh / fish drive shellrc generation differently.",
-	"init_prompt_mount_root":        "Mount range",
-	"init_desc_mount_root":          "How much of your filesystem should be visible inside the container?",
-	"init_option_mount_cwd":         "Just this project (.)",
-	"init_option_mount_parent":      "Parent directory — sibling repos visible (..)",
-	"init_prompt_devcontainer":      "Generate .devcontainer/devcontainer.json for VS Code Dev Containers?",
-	"init_desc_devcontainer":        "Says yes if you ever open this repo in VS Code Dev Containers; harmless otherwise.",
-	"init_confirm_yes":              "Yes",
-	"init_confirm_no":               "No",
-	"init_prompt_apt":               "Select common apt packages to install",
-	"init_desc_apt":                 "Pre-checked categories are installed by default; uncheck what you do not need.",
-	"init_prompt_plugins":           "Select plugins to enable",
-	"init_desc_plugins":             "Space toggles, Enter confirms. Pre-checked plugins are enabled by default.",
-	"init_err_plugin_unknown_fmt":   "unknown plugin %q (run `cocoon plugin list` for the catalog)",
-	"init_err_plugin_conflict_fmt":  "%s conflicts with %s — pick one",
-	"init_err_plugin_load_fmt":      "load plugin catalog: %s",
+	"init_prompt_service_name":          "Service name",
+	"init_desc_service_name":            "Compose service name (e.g. \"my-api\").",
+	"init_err_service_name_fmt":         "must start with a lowercase letter; only lowercase letters, digits, _ and - allowed",
+	"init_prompt_username":              "Username",
+	"init_desc_username":                "In-container user account (e.g. \"dev\").",
+	"init_err_username_fmt":             "must start with a lowercase letter or _; only lowercase letters, digits, _ and - allowed",
+	"init_err_required":                 "required — please enter a value",
+	"init_prompt_os":                    "Base OS",
+	"init_desc_os":                      "Linux distribution that backs the container image (FROM <os>:<os_version>).",
+	"init_prompt_os_version":            "%s version",
+	"init_desc_os_version":              "Pulled as FROM %s:<version> in the generated Dockerfile.",
+	"init_prompt_os_version_static":     "OS version",
+	"init_desc_os_version_static":       "Pulled as FROM <os>:<version> in the generated Dockerfile.",
+	"init_prompt_shell":                 "Login shell",
+	"init_desc_shell":                   "Container login shell. bash is the cocoon default; zsh / fish drive shellrc generation differently.",
+	"init_prompt_mount_root":            "Mount range",
+	"init_desc_mount_root":              "How much of your filesystem should be visible inside the container?",
+	"init_option_mount_cwd":             "Just this project (.)",
+	"init_option_mount_parent":          "Parent directory — sibling repos visible (..)",
+	"init_prompt_devcontainer":          "Generate .devcontainer/devcontainer.json for VS Code Dev Containers?",
+	"init_desc_devcontainer":            "Says yes if you ever open this repo in VS Code Dev Containers; harmless otherwise.",
+	"init_confirm_yes":                  "Yes",
+	"init_confirm_no":                   "No",
+	"init_prompt_apt":                   "Select common apt packages to install",
+	"init_desc_apt":                     "Pre-checked categories are installed by default; uncheck what you do not need.",
+	"init_prompt_plugins":               "Select plugins to enable",
+	"init_desc_plugins":                 "Space toggles, Enter confirms. Pre-checked plugins are enabled by default.",
+	"init_err_plugin_unknown_fmt":       "unknown plugin %q (run `cocoon plugin list` for the catalog)",
+	"init_err_plugin_conflict_fmt":      "%s conflicts with %s — pick one",
+	"init_err_plugin_load_fmt":          "load plugin catalog: %s",
+	"init_prompt_alias_bundles":         "Select shell alias bundles",
+	"init_desc_alias_bundles":           "Pre-canned alias sets merged into [container.shell].aliases. All start unchecked — opt in only what you want.",
+	"init_err_alias_bundle_unknown_fmt": "unknown alias bundle %q",
+	// workspace.toml inline comments (rendered into the generated file)
+	"init_toml_header": "# workspace.toml — cocoon configuration (generated by `cocoon init`)\n# Edit freely; re-run `cocoon gen` to regenerate .devcontainer/.\n",
+	"init_toml_section_workspace": "# [workspace] — generation-wide knobs.\n" +
+		"#   mount_root: how much of your filesystem to expose. \".\" = cwd only, \"..\" = parent (siblings visible).\n" +
+		"#   devcontainer: emit .devcontainer/devcontainer.json for VS Code Reopen-in-Container.",
+	"init_toml_section_container": "# [container] — image identity.\n" +
+		"#   service_name: docker-compose `services:` <key>. Used by `docker compose exec <name>`.\n" +
+		"#   username / os / os_version: in-container account and FROM <os>:<os_version>.",
+	"init_toml_section_container_shell": "# [container.shell] — login shell + per-shell rc injection.\n" +
+		"#   default: bash | zsh | fish. The generator picks ~/.bashrc / ~/.zshrc / ~/.config/fish/config.fish.\n" +
+		"#   aliases / env: appended to the rc file inside the image at build time.\n" +
+		"#   bash & zsh use POSIX syntax (alias k='v', export K=V); fish translation is automatic.\n" +
+		"#\n" +
+		"# env example (uncomment + edit):\n" +
+		"#   env = { EDITOR = \"vim\", PAGER = \"less -R\" }\n" +
+		"# Caveats:\n" +
+		"#   - EDITOR=vim / nano needs the `text-editors` apt category enabled.\n" +
+		"#   - EDITOR=code only works when launched from VS Code Dev Containers (the `code` shim is\n" +
+		"#     injected by VS Code, not by cocoon).\n" +
+		"#   - PAGER=less / less -R needs the `utilities` apt category (less is not in cocoon's minimal base).",
+	"init_toml_section_plugins": "# [plugins] — enable cocoon plugins (run `cocoon plugin list` for the catalog).\n" +
+		"#   Pin versions in [plugins.versions] when you need reproducible builds.",
+	"init_toml_section_apt": "# [apt] — extra apt packages installed on top of cocoon's minimal base + selected categories.\n" +
+		"#   Re-run `cocoon init --force` to change category checkboxes, or edit this list directly.",
 	// init result + next steps
 	"init_wrote":             "wrote %s",
 	"init_next_header":       "Next steps:",
@@ -63,36 +90,63 @@ var messagesEN_init = map[string]string{
 //nolint:gochecknoglobals,revive // catalog tables are file-scoped by design.
 var messagesJA_init = map[string]string{
 	// init prompts
-	"init_prompt_service_name":      "サービス名",
-	"init_desc_service_name":        "Compose のサービス名 (例: \"my-api\")。",
-	"init_err_service_name_fmt":     "英小文字で始め、英小文字・数字・_・- のみ使用可です",
-	"init_prompt_username":          "ユーザー名",
-	"init_desc_username":            "コンテナ内ユーザーのアカウント名 (例: \"dev\")。",
-	"init_err_username_fmt":         "英小文字または _ で始め、英小文字・数字・_・- のみ使用可です",
-	"init_err_required":             "必須項目です。値を入力してください",
-	"init_prompt_os":                "ベース OS",
-	"init_desc_os":                  "コンテナイメージのベース Linux ディストリビューション (FROM <os>:<os_version>)。",
-	"init_prompt_os_version":        "%s のバージョン",
-	"init_desc_os_version":          "生成される Dockerfile の FROM %s:<version> に展開されます。",
-	"init_prompt_os_version_static": "OS バージョン",
-	"init_desc_os_version_static":   "生成される Dockerfile の FROM <os>:<version> に展開されます。",
-	"init_prompt_shell":             "ログインシェル",
-	"init_desc_shell":               "コンテナ内のログインシェル。bash が cocoon のデフォルト。zsh / fish は shellrc 生成が分岐します。",
-	"init_prompt_mount_root":        "マウント範囲",
-	"init_desc_mount_root":          "コンテナ内に見せるファイルシステムの範囲を選んでください。",
-	"init_option_mount_cwd":         "このプロジェクトのみ (.)",
-	"init_option_mount_parent":      "親ディレクトリ — 兄弟リポジトリも見える (..)",
-	"init_prompt_devcontainer":      ".devcontainer/devcontainer.json を VS Code Dev Containers 用に生成しますか？",
-	"init_desc_devcontainer":        "VS Code Dev Containers で開く可能性があれば Yes。そうでなくても害はありません。",
-	"init_confirm_yes":              "はい",
-	"init_confirm_no":               "いいえ",
-	"init_prompt_apt":               "インストールする apt パッケージのカテゴリを選択",
-	"init_desc_apt":                 "プリチェック済みのカテゴリがデフォルトでインストールされます。不要なものはチェックを外してください。",
-	"init_prompt_plugins":           "有効化するプラグインを選択",
-	"init_desc_plugins":             "スペースでトグル、Enter で確定します。プリチェック済みのプラグインがデフォルトで有効になります。",
-	"init_err_plugin_unknown_fmt":   "未知のプラグイン %q (`cocoon plugin list` で一覧を確認してください)",
-	"init_err_plugin_conflict_fmt":  "%s と %s は併用できません — どちらか一方を選んでください",
-	"init_err_plugin_load_fmt":      "プラグインカタログの読み込みに失敗: %s",
+	"init_prompt_service_name":          "サービス名",
+	"init_desc_service_name":            "Compose のサービス名 (例: \"my-api\")。",
+	"init_err_service_name_fmt":         "英小文字で始め、英小文字・数字・_・- のみ使用可です",
+	"init_prompt_username":              "ユーザー名",
+	"init_desc_username":                "コンテナ内ユーザーのアカウント名 (例: \"dev\")。",
+	"init_err_username_fmt":             "英小文字または _ で始め、英小文字・数字・_・- のみ使用可です",
+	"init_err_required":                 "必須項目です。値を入力してください",
+	"init_prompt_os":                    "ベース OS",
+	"init_desc_os":                      "コンテナイメージのベース Linux ディストリビューション (FROM <os>:<os_version>)。",
+	"init_prompt_os_version":            "%s のバージョン",
+	"init_desc_os_version":              "生成される Dockerfile の FROM %s:<version> に展開されます。",
+	"init_prompt_os_version_static":     "OS バージョン",
+	"init_desc_os_version_static":       "生成される Dockerfile の FROM <os>:<version> に展開されます。",
+	"init_prompt_shell":                 "ログインシェル",
+	"init_desc_shell":                   "コンテナ内のログインシェル。bash が cocoon のデフォルト。zsh / fish は shellrc 生成が分岐します。",
+	"init_prompt_mount_root":            "マウント範囲",
+	"init_desc_mount_root":              "コンテナ内に見せるファイルシステムの範囲を選んでください。",
+	"init_option_mount_cwd":             "このプロジェクトのみ (.)",
+	"init_option_mount_parent":          "親ディレクトリ — 兄弟リポジトリも見える (..)",
+	"init_prompt_devcontainer":          ".devcontainer/devcontainer.json を VS Code Dev Containers 用に生成しますか？",
+	"init_desc_devcontainer":            "VS Code Dev Containers で開く可能性があれば Yes。そうでなくても害はありません。",
+	"init_confirm_yes":                  "はい",
+	"init_confirm_no":                   "いいえ",
+	"init_prompt_apt":                   "インストールする apt パッケージのカテゴリを選択",
+	"init_desc_apt":                     "プリチェック済みのカテゴリがデフォルトでインストールされます。不要なものはチェックを外してください。",
+	"init_prompt_plugins":               "有効化するプラグインを選択",
+	"init_desc_plugins":                 "スペースでトグル、Enter で確定します。プリチェック済みのプラグインがデフォルトで有効になります。",
+	"init_err_plugin_unknown_fmt":       "未知のプラグイン %q (`cocoon plugin list` で一覧を確認してください)",
+	"init_err_plugin_conflict_fmt":      "%s と %s は併用できません — どちらか一方を選んでください",
+	"init_err_plugin_load_fmt":          "プラグインカタログの読み込みに失敗: %s",
+	"init_prompt_alias_bundles":         "シェルエイリアスバンドルを選択",
+	"init_desc_alias_bundles":           "プリセットの alias セットを [container.shell].aliases にマージします。初期チェックは全部 OFF — 欲しいものだけ選んでください。",
+	"init_err_alias_bundle_unknown_fmt": "未知のエイリアスバンドル %q",
+	// workspace.toml inline comments (rendered into the generated file)
+	"init_toml_header": "# workspace.toml — cocoon 設定 (cocoon init で生成)\n# 自由に編集してください。cocoon gen で .devcontainer/ を再生成します。\n",
+	"init_toml_section_workspace": "# [workspace] — 生成全体の挙動。\n" +
+		"#   mount_root: コンテナへ見せるホスト範囲。\".\" = cwd のみ、\"..\" = 親ディレクトリ（兄弟リポも見える）。\n" +
+		"#   devcontainer: VS Code Reopen-in-Container 用の devcontainer.json を生成するか。",
+	"init_toml_section_container": "# [container] — イメージの素性。\n" +
+		"#   service_name: docker-compose の `services:` <キー>。`docker compose exec <名前>` で使う。\n" +
+		"#   username / os / os_version: コンテナ内ユーザー名と FROM <os>:<os_version>。",
+	"init_toml_section_container_shell": "# [container.shell] — ログインシェル + シェル別 rc 注入。\n" +
+		"#   default: bash | zsh | fish。生成系が ~/.bashrc / ~/.zshrc / ~/.config/fish/config.fish を選ぶ。\n" +
+		"#   aliases / env: イメージビルド時に rc ファイルへ追記される。\n" +
+		"#   bash と zsh は POSIX 記法 (alias k='v', export K=V)、fish は自動翻訳。\n" +
+		"#\n" +
+		"# env の設定例（コメントアウトを外して編集）:\n" +
+		"#   env = { EDITOR = \"vim\", PAGER = \"less -R\" }\n" +
+		"# 注意:\n" +
+		"#   - EDITOR=vim / nano は apt カテゴリ `text-editors` の有効化が前提。\n" +
+		"#   - EDITOR=code は VS Code Dev Containers で開いたときのみ動く（`code` シムは\n" +
+		"#     VS Code が注入するもので、cocoon は関与しない）。\n" +
+		"#   - PAGER=less / less -R は apt カテゴリ `utilities` が前提（less は cocoon の最小ベースに含まれない）。",
+	"init_toml_section_plugins": "# [plugins] — cocoon プラグインの有効化（一覧は `cocoon plugin list`）。\n" +
+		"#   再現性が必要なら [plugins.versions] でバージョン固定。",
+	"init_toml_section_apt": "# [apt] — cocoon の最小ベース + 選択カテゴリに追加する apt パッケージ。\n" +
+		"#   カテゴリのチェックを変えるなら `cocoon init --force` を再実行、または直接このリストを編集。",
 	// init result + next steps
 	"init_wrote":             "%s を書き出しました",
 	"init_next_header":       "次のステップ:",
