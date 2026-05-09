@@ -80,7 +80,7 @@ jobs:
         uses: softprops/action-gh-release@72f2c25fcb47643c292f7107632f7a47c1df5cd8 # v2.3.2
         with:
           tag_name: ${{ needs.check-version.outputs.tag }}
-          name: cocoon ${{ needs.check-version.outputs.tag }}
+          name: ${{ needs.check-version.outputs.tag }}
           files: |
             bin/cocoon-linux-amd64
             bin/cocoon-linux-arm64
