@@ -85,6 +85,51 @@ func TestPin_WriteAppendsBlockInPlace(t *testing.T) {
 	}
 }
 
+// --write on a workspace.toml that already has [plugins.versions.<other>]
+// must append the new block alongside (appendAfterVersions path), not at EOF.
+// This locks the layout `pin uv 0.5.7 --write` produces when go is already
+// pinned: both blocks live together, the new one inserted right after the
+// existing versions cluster.
+//
+//nolint:paralleltest // t.Chdir mutates process cwd.
+func TestPin_WriteAppendsAlongsideExisting(t *testing.T) {
+	withIsolatedHome(t)
+	dir := t.TempDir()
+	path := seedWorkspace(t, dir, `[plugins]
+enable = ["go", "uv"]
+
+[plugins.versions.go]
+pin = "1.23.4"
+
+[mounts]
+host = "./src"
+`)
+	t.Chdir(dir)
+
+	if _, stderr, err := runPinCmd(t, "uv", "0.5.7", "--write"); err != nil {
+		t.Fatalf("pin --write: err=%v stderr=%s", err, stderr)
+	}
+	got, rerr := os.ReadFile(path) //nolint:gosec // tmp under t.TempDir
+	if rerr != nil {
+		t.Fatalf("read: %v", rerr)
+	}
+	body := string(got)
+	// Both blocks must be present, in the order go → uv (uv inserted after
+	// the existing versions cluster).
+	goIdx := strings.Index(body, "[plugins.versions.go]")
+	uvIdx := strings.Index(body, "[plugins.versions.uv]")
+	mountsIdx := strings.Index(body, "[mounts]")
+	if goIdx < 0 || uvIdx < 0 {
+		t.Fatalf("expected both blocks present:\n%s", body)
+	}
+	if goIdx >= uvIdx || uvIdx >= mountsIdx {
+		t.Errorf("expected order: go < uv < mounts; got %d / %d / %d\n%s", goIdx, uvIdx, mountsIdx, body)
+	}
+	if !strings.Contains(body, "host = \"./src\"") {
+		t.Errorf("[mounts] body lost in append:\n%s", body)
+	}
+}
+
 // --write on a workspace.toml that already has [plugins.versions.go] must
 // replace the existing block (pin/checksums) rather than append a duplicate.
 //
