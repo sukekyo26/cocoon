@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-05-09
+
 ### Added
 
 - Add `cocoon init` for interactive `workspace.toml` generation with prompts for service name, username, OS, OS version, login shell, mount range, devcontainer toggle, alias bundles, apt categories, and plugins.
@@ -21,3 +23,6 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Add Dockerfile-heredoc shell rc injection so `[container.shell] env` and `aliases` flow directly into `~/.bashrc` / `~/.zshrc` / `~/.config/fish/config.fish` at image build time.
 - Add `COMPOSE_PROJECT_NAME` derivation from the project directory basename so docker compose namespacing matches the host directory.
 - Add i18n catalog (English / Japanese) covering every CLI prompt, error message, and inline `workspace.toml` comment, switched via `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG`.
+
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/sukekyo26/cocoon/releases/tag/v0.1.0
