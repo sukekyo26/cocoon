@@ -136,6 +136,13 @@ func mergePluginVolumes(
 	pathToSrc map[string]volSrc,
 	warnings io.Writer,
 ) ([]plugin.Volume, error) {
+	// nameToPlugin tracks the first plugin that claimed a derived volume
+	// name. DeriveVolumeName uses the path's basename, so two plugins with
+	// different paths that share a basename (e.g. /foo/cache + /bar/cache)
+	// would both emit the same `cache:` key in compose's volumes: section.
+	// That collides at YAML render and at `docker compose up` time, so we
+	// reject it at gen time.
+	nameToPlugin := map[string]string{}
 	out := make([]plugin.Volume, 0, len(pluginVols))
 	for _, pv := range pluginVols {
 		if _, reserved := reservedVolumeNames[pv.VolumeName]; reserved {
@@ -156,6 +163,13 @@ func mergePluginVolumes(
 			}
 			continue
 		}
+		if firstOwner, dup := nameToPlugin[pv.VolumeName]; dup {
+			return nil, fmt.Errorf(
+				"%w: plugins '%s' and '%s' both derive volume name '%s' "+
+					"(rename one path so its basename differs)",
+				ErrVolumeNameConflict, firstOwner, pv.PluginName, pv.VolumeName)
+		}
+		nameToPlugin[pv.VolumeName] = pv.PluginName
 		pathToSrc[pv.MountPath] = volSrc{label: "plugin '" + pv.PluginName + "'", volName: pv.VolumeName}
 		out = append(out, pv)
 	}
