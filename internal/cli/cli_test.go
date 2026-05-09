@@ -72,7 +72,7 @@ func TestExecuteSubcommandDispatch(t *testing.T) {
 		// Generator commands.
 		"init", "gen", "self-update",
 		// Noun groups
-		"config", "plugin",
+		"plugin",
 	}
 	for _, sub := range subs {
 		t.Run(sub, func(t *testing.T) {

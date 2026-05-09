@@ -14,21 +14,6 @@
 | `cocoon plugin remove <id>` | 上書き層のコピーを削除 |
 | `cocoon plugin pin <id> <ref>` | `[plugins.versions.<id>]` ブロックを stdout 出力 |
 | `cocoon plugin scaffold <id>` | テンプレートから新規 `<id>/` ディレクトリを作成 |
-| `cocoon config get <file> <field>` | `workspace.toml` のスカラーを表示 |
-| `cocoon config list <file> <field>` | `workspace.toml` の配列を表示 |
-| `cocoon config volumes <file>` | `[volumes]` エントリを表示 |
-| `cocoon config plugin-get <dir-or-file> <field>` | `plugin.toml` のスカラーを表示 |
-| `cocoon config plugin-list <dir-or-file> <field>` | `plugin.toml` の配列を表示 |
-| `cocoon config plugin-volumes <dir-or-file>` | `plugin.install.volumes` を表示 |
-| `cocoon config plugins-table <dir>` | プラグイン 1 件 1 行で表示 |
-| `cocoon config validate-workspace <file> [plugins]` | `workspace.toml` を検証 |
-| `cocoon config validate-plugins <dir>` | `<dir>` 配下の全プラグインを検証 |
-| `cocoon config has-section <file> <section>` | true / false を表示 |
-| `cocoon config list-sidecars <file>` | `[services.<name>]` キーを 1 行 1 件で表示 |
-| `cocoon config dump-devcontainer <file>` | `[devcontainer]` を TOML で出力 |
-| `cocoon config dump-repositories <file>` | `[repositories]` を TOML で出力 |
-| `cocoon config repositories <file>` | `[repositories].clone` を JSON で出力 |
-| `cocoon config format-repositories <file\|->` | JSON エントリを TOML へ整形 |
 | `cocoon self-update` | 最新 GitHub リリースで自分自身を置換 |
 | `cocoon version` | バイナリのバージョンを表示 |
 | `cocoon help [command]` | ヘルプを表示 (Cobra 標準) |
@@ -170,30 +155,6 @@ cocoon プラグインの管理。`LayeredFS` (project > user > embedded) によ
 | `--with-install-user` | `install_user.sh` も生成。 |
 | `--non-interactive` | プロンプトをスキップ (上記すべて要指定)。 |
 | `--force` | 既存 `<id>/` を上書き。 |
-
----
-
-## `cocoon config`
-
-`workspace.toml` / `plugin.toml` のパースと検証。これらのサブコマンドは旧来の bash 連携用で、将来削減される可能性があります。
-
-| サブコマンド | 役割 |
-|---|---|
-| `get <file> <field>` | `workspace.toml` のスカラー値を表示。 |
-| `list <file> <field>` | `workspace.toml` の配列を 1 件 1 行で表示。 |
-| `volumes <file>` | `[volumes]` エントリを `name<TAB>path` 形式で表示。 |
-| `plugin-get <dir-or-file> <field>` | `plugin.toml` のスカラーを表示。 |
-| `plugin-list <dir-or-file> <field>` | `plugin.toml` の配列を表示。 |
-| `plugin-volumes <dir-or-file>` | `plugin.install.volumes` を `name<TAB>path` で表示。 |
-| `plugins-table <dir>` | プラグイン 1 件 1 行で `id<TAB>name<TAB>default<TAB>description`。 |
-| `validate-workspace <file> [plugins]` | `workspace.toml` を検証 (プラグインディレクトリ任意)。 |
-| `validate-plugins <dir>` | `<dir>` 配下の `plugin.toml` を全件検証。 |
-| `has-section <file> <section>` | `true` / `false` を表示。 |
-| `list-sidecars <file>` | `[services.<name>]` キーを 1 行 1 件で表示。 |
-| `dump-devcontainer <file>` | `[devcontainer]` を TOML で出力。 |
-| `dump-repositories <file>` | `[repositories]` を TOML で出力。 |
-| `repositories <file>` | `[repositories].clone` を JSON で出力。 |
-| `format-repositories <file\|->` | JSON エントリを TOML へ整形 (`-` で stdin)。 |
 
 ---
 
