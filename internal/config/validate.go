@@ -373,11 +373,11 @@ func validateExtraHosts(a *errAccumulator, hosts map[string]string) {
 
 func (s *ContainerShellSpec) validate(a *errAccumulator) {
 	if s.Default != nil {
-		switch *s.Default {
-		case "", "bash", "zsh", "fish":
-			// ok; "" treated as bash by the generator
-		default:
-			a.add(`default must be one of "bash", "zsh", "fish"`, "default")
+		v := *s.Default
+		// "" is treated as bash by the generator; anything else must be in
+		// the SupportedShells closed set.
+		if v != "" && !slices.Contains(SupportedShells, v) {
+			a.add(`default must be one of "`+strings.Join(SupportedShells, `", "`)+`"`, "default")
 		}
 	}
 	checkMapKeys(a.at("aliases"), s.Aliases, rxAliasKey, "container.shell.aliases")

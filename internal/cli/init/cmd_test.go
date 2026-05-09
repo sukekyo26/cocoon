@@ -324,6 +324,9 @@ func TestApplyDefaults_FillsMissingDefaults(t *testing.T) {
 	if !ans.AptSet || len(ans.AptCategories) == 0 {
 		t.Errorf("AptCategories default empty: %v", ans.AptCategories)
 	}
+	if ans.Shell != "bash" || !ans.ShellSet {
+		t.Errorf("Shell default = %q ShellSet=%v", ans.Shell, ans.ShellSet)
+	}
 }
 
 func TestApplyDefaults_PreservesExplicitSettings(t *testing.T) {
@@ -416,7 +419,7 @@ func TestRenderWorkspaceToml_NoPackages(t *testing.T) {
 	t.Parallel()
 	got := renderWorkspaceToml(containerSpec{
 		ServiceName: "svc", Username: "dev", OS: "ubuntu", OSVersion: "24.04",
-		MountRoot: ".", Devcontainer: true, Packages: nil,
+		Shell: "bash", MountRoot: ".", Devcontainer: true, Packages: nil,
 	})
 	for _, want := range []string{
 		`mount_root = "."`,
@@ -425,6 +428,7 @@ func TestRenderWorkspaceToml_NoPackages(t *testing.T) {
 		`username = "dev"`,
 		`os = "ubuntu"`,
 		`os_version = "24.04"`,
+		"[container.shell]\ndefault = \"bash\"",
 		`enable = []`,
 		`packages = []`,
 	} {
@@ -438,14 +442,16 @@ func TestRenderWorkspaceToml_WithPackages(t *testing.T) {
 	t.Parallel()
 	got := renderWorkspaceToml(containerSpec{
 		ServiceName: "svc", Username: "dev", OS: "debian", OSVersion: "13",
-		MountRoot: "..", Devcontainer: false, Packages: []string{"vim", "tmux"},
+		Shell: "zsh", MountRoot: "..", Devcontainer: false,
+		Packages: []string{"vim", "tmux"},
 	})
 	for _, want := range []string{
 		`mount_root = ".."`,
 		`devcontainer = false`,
 		`os = "debian"`,
 		`os_version = "13"`,
-		"packages = [\n  \"vim\",\n  \"tmux\",\n]",
+		"[container.shell]\ndefault = \"zsh\"",
+		"packages = [\n    \"vim\",\n    \"tmux\",\n]",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("output missing %q\n--- got ---\n%s", want, got)
@@ -457,10 +463,22 @@ func TestRenderWorkspaceToml_WithPlugins(t *testing.T) {
 	t.Parallel()
 	got := renderWorkspaceToml(containerSpec{
 		ServiceName: "svc", Username: "dev", OS: "ubuntu", OSVersion: "24.04",
-		MountRoot: ".", Devcontainer: true,
+		Shell: "bash", MountRoot: ".", Devcontainer: true,
 		Plugins: []string{"go", "uv", "github-cli"},
 	})
-	want := "[plugins]\nenable = [\n  \"go\",\n  \"uv\",\n  \"github-cli\",\n]"
+	want := "[plugins]\nenable = [\n    \"go\",\n    \"uv\",\n    \"github-cli\",\n]"
+	if !strings.Contains(got, want) {
+		t.Errorf("output missing %q\n--- got ---\n%s", want, got)
+	}
+}
+
+func TestRenderWorkspaceToml_FishShell(t *testing.T) {
+	t.Parallel()
+	got := renderWorkspaceToml(containerSpec{
+		ServiceName: "svc", Username: "dev", OS: "ubuntu", OSVersion: "24.04",
+		Shell: "fish", MountRoot: ".", Devcontainer: true,
+	})
+	want := "[container.shell]\ndefault = \"fish\""
 	if !strings.Contains(got, want) {
 		t.Errorf("output missing %q\n--- got ---\n%s", want, got)
 	}
@@ -685,7 +703,7 @@ func TestRunInit_PluginsFlagWritesEnable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read workspace.toml: %v", err)
 	}
-	want := "[plugins]\nenable = [\n  \"go\",\n  \"uv\",\n  \"github-cli\",\n]"
+	want := "[plugins]\nenable = [\n    \"go\",\n    \"uv\",\n    \"github-cli\",\n]"
 	if !strings.Contains(string(body), want) {
 		t.Errorf("workspace.toml missing %q\n--- got ---\n%s", want, body)
 	}
@@ -744,7 +762,97 @@ func TestRunInit_YesDefaultsToDockerCli(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read workspace.toml: %v", err)
 	}
-	want := "[plugins]\nenable = [\n  \"docker-cli\",\n]"
+	want := "[plugins]\nenable = [\n    \"docker-cli\",\n]"
+	if !strings.Contains(string(body), want) {
+		t.Errorf("workspace.toml missing %q\n--- got ---\n%s", want, body)
+	}
+}
+
+// ---------------------------------------------------------------------
+// Shell selection: --shell flag, validation, defaults, render output.
+// ---------------------------------------------------------------------
+
+func TestApplyFlags_ShellValid(t *testing.T) {
+	t.Parallel()
+	plugins := loadPluginsForTest(t)
+	for _, sh := range []string{"bash", "zsh", "fish"} {
+		ans, err := applyFlags(&initFlags{Shell: sh}, plugins)
+		if err != nil {
+			t.Errorf("--shell %q: %v", sh, err)
+			continue
+		}
+		if ans.Shell != sh || !ans.ShellSet {
+			t.Errorf("--shell %q: ans.Shell=%q ShellSet=%v", sh, ans.Shell, ans.ShellSet)
+		}
+	}
+}
+
+func TestApplyFlags_InvalidShell(t *testing.T) {
+	t.Parallel()
+	plugins := loadPluginsForTest(t)
+	for _, bad := range []string{"csh", "tcsh", "sh", "BASH"} {
+		_, err := applyFlags(&initFlags{Shell: bad}, plugins)
+		if !errors.Is(err, ErrUsage) {
+			t.Errorf("--shell %q: expected ErrUsage, got %v", bad, err)
+		}
+	}
+}
+
+//nolint:paralleltest // t.Chdir
+func TestRunInit_ShellFlagWritesContainerShell(t *testing.T) {
+	pinEnglish(t)
+	work := t.TempDir()
+	t.Chdir(work)
+
+	cmd := NewCommand(io.Discard, io.Discard)
+	cmd.SetArgs([]string{
+		"--yes", "--service-name", "x", "--username", "y", "--shell", "fish",
+	})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("init --shell fish: %v", err)
+	}
+	body, err := os.ReadFile(filepath.Join(work, "workspace.toml"))
+	if err != nil {
+		t.Fatalf("read workspace.toml: %v", err)
+	}
+	want := "[container.shell]\ndefault = \"fish\""
+	if !strings.Contains(string(body), want) {
+		t.Errorf("workspace.toml missing %q\n--- got ---\n%s", want, body)
+	}
+}
+
+//nolint:paralleltest // t.Chdir
+func TestRunInit_ShellFlagRejectsInvalid(t *testing.T) {
+	pinEnglish(t)
+	work := t.TempDir()
+	t.Chdir(work)
+	cmd := NewCommand(io.Discard, io.Discard)
+	cmd.SetArgs([]string{
+		"--yes", "--service-name", "x", "--username", "y", "--shell", "csh",
+	})
+	if err := cmd.Execute(); !errors.Is(err, ErrUsage) {
+		t.Errorf("--shell csh should be ErrUsage, got %v", err)
+	}
+}
+
+//nolint:paralleltest // t.Chdir
+func TestRunInit_DefaultsShellToBash(t *testing.T) {
+	// `--yes` without --shell should bake the bash default into the
+	// generated `[container.shell]` block, mirroring the other defaults
+	// that always materialize literally.
+	pinEnglish(t)
+	work := t.TempDir()
+	t.Chdir(work)
+	cmd := NewCommand(io.Discard, io.Discard)
+	cmd.SetArgs([]string{"--yes", "--service-name", "x", "--username", "y"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("init --yes: %v", err)
+	}
+	body, err := os.ReadFile(filepath.Join(work, "workspace.toml"))
+	if err != nil {
+		t.Fatalf("read workspace.toml: %v", err)
+	}
+	want := "[container.shell]\ndefault = \"bash\""
 	if !strings.Contains(string(body), want) {
 		t.Errorf("workspace.toml missing %q\n--- got ---\n%s", want, body)
 	}

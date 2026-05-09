@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -38,8 +39,9 @@ that caused the cursor indicator to stay pinned while options
 scrolled under it.)
 
 Use --yes plus --service-name / --username (both required when --yes
-is set) and any of --os / --os-version / --mount-root / --devcontainer
-/ --apt-categories / --plugins to drive non-interactively from CI.`
+is set) and any of --os / --os-version / --shell / --mount-root /
+--devcontainer / --apt-categories / --plugins to drive non-interactively
+from CI.`
 
 var (
 	rxServiceName = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
@@ -65,6 +67,8 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 	cmd.Flags().StringVar(&flags.Username, "username", "", "in-container user (required with --yes)")
 	cmd.Flags().StringVar(&flags.OS, "os", "", fmt.Sprintf("base OS: %s", strings.Join(config.SupportedOSes, ", ")))
 	cmd.Flags().StringVar(&flags.OSVersion, "os-version", "", "base OS version (must match --os)")
+	cmd.Flags().StringVar(&flags.Shell, "shell", "",
+		fmt.Sprintf("container login shell: %s (default: bash)", strings.Join(config.SupportedShells, ", ")))
 	cmd.Flags().StringVar(&flags.MountRoot, "mount-root", "", `mount range: "." (cwd, default) or ".." (parent)`)
 	cmd.Flags().BoolVar(&flags.Devcontainer, "devcontainer", false, "force-enable .devcontainer/devcontainer.json output")
 	cmd.Flags().BoolVar(&flags.NoDevcontainer, "no-devcontainer", false, "skip .devcontainer/devcontainer.json output")
@@ -90,6 +94,7 @@ type initFlags struct {
 	Username       string
 	OS             string
 	OSVersion      string
+	Shell          string
 	MountRoot      string
 	Devcontainer   bool
 	NoDevcontainer bool
@@ -105,6 +110,7 @@ func zeroFlags() initFlags {
 		Username:       "",
 		OS:             "",
 		OSVersion:      "",
+		Shell:          "",
 		MountRoot:      "",
 		Devcontainer:   false,
 		NoDevcontainer: false,
@@ -126,6 +132,8 @@ type initAnswers struct {
 	OSSet           bool
 	OSVersion       string
 	OSVersionSet    bool
+	Shell           string
+	ShellSet        bool
 	MountRoot       string
 	MountRootSet    bool
 	Devcontainer    bool
@@ -144,6 +152,8 @@ func zeroAnswers() initAnswers {
 		OSSet:           false,
 		OSVersion:       "",
 		OSVersionSet:    false,
+		Shell:           "",
+		ShellSet:        false,
 		MountRoot:       "",
 		MountRootSet:    false,
 		Devcontainer:    false,
@@ -186,6 +196,7 @@ func runInit(cmd *cobra.Command, stdout, _ io.Writer, flags *initFlags) error {
 		Username:     ans.Username,
 		OS:           ans.OS,
 		OSVersion:    ans.OSVersion,
+		Shell:        ans.Shell,
 		MountRoot:    ans.MountRoot,
 		Devcontainer: ans.Devcontainer,
 		Packages:     pkgs,
@@ -268,6 +279,13 @@ func applyFlags(flags *initFlags, plugins map[string]*plugin.Plugin) (initAnswer
 		}
 		ans.OSVersion, ans.OSVersionSet = flags.OSVersion, true
 	}
+	if flags.Shell != "" {
+		if !slices.Contains(config.SupportedShells, flags.Shell) {
+			return ans, fmt.Errorf("%w: --shell %q not in %s",
+				ErrUsage, flags.Shell, strings.Join(config.SupportedShells, ", "))
+		}
+		ans.Shell, ans.ShellSet = flags.Shell, true
+	}
 	if flags.MountRoot != "" {
 		if flags.MountRoot != "." && flags.MountRoot != ".." {
 			return ans, fmt.Errorf(`%w: --mount-root must be "." or ".."`, ErrUsage)
@@ -316,6 +334,9 @@ func applyDefaults(ans initAnswers, plugins map[string]*plugin.Plugin) (initAnsw
 	}
 	if !ans.OSVersionSet {
 		ans.OSVersion, ans.OSVersionSet = defaultOSVersion(ans.OS), true
+	}
+	if !ans.ShellSet {
+		ans.Shell, ans.ShellSet = "bash", true
 	}
 	if !ans.MountRootSet {
 		ans.MountRoot, ans.MountRootSet = ".", true
@@ -385,6 +406,13 @@ func promptForMissing(ans initAnswers, cat *i18n.Catalog, plugins map[string]*pl
 			return ans, err
 		}
 		ans.OSVersionSet = true
+	}
+	if !ans.ShellSet {
+		ans.Shell = "bash"
+		if err := runSingleFieldForm(shellSelect(cat, &ans.Shell)); err != nil {
+			return ans, err
+		}
+		ans.ShellSet = true
 	}
 	if !ans.MountRootSet {
 		ans.MountRoot = "."
@@ -532,6 +560,18 @@ func osVersionSelect(cat *i18n.Catalog, versions []string, target *string) *huh.
 	return huh.NewSelect[string]().
 		Title(cat.Msg("init_prompt_os_version_static")).
 		Description(cat.Msg("init_desc_os_version_static")).
+		Options(options...).
+		Value(target)
+}
+
+func shellSelect(cat *i18n.Catalog, target *string) *huh.Select[string] {
+	options := make([]huh.Option[string], len(config.SupportedShells))
+	for i, id := range config.SupportedShells {
+		options[i] = huh.NewOption(id, id)
+	}
+	return huh.NewSelect[string]().
+		Title(cat.Msg("init_prompt_shell")).
+		Description(cat.Msg("init_desc_shell")).
 		Options(options...).
 		Value(target)
 }
@@ -782,6 +822,7 @@ type containerSpec struct {
 	Username     string
 	OS           string
 	OSVersion    string
+	Shell        string
 	MountRoot    string
 	Devcontainer bool
 	Packages     []string
@@ -803,13 +844,18 @@ func renderWorkspaceToml(s containerSpec) string {
 	fmt.Fprintf(&sb, "os = %q\n", s.OS)
 	fmt.Fprintf(&sb, "os_version = %q\n\n", s.OSVersion)
 
+	// [container.shell] is always written (even for the bash default) so a
+	// reader of the generated file sees where to switch to zsh / fish.
+	sb.WriteString("[container.shell]\n")
+	fmt.Fprintf(&sb, "default = %q\n\n", s.Shell)
+
 	sb.WriteString("[plugins]\n")
 	if len(s.Plugins) == 0 {
 		sb.WriteString("enable = []\n\n")
 	} else {
 		sb.WriteString("enable = [\n")
 		for _, id := range s.Plugins {
-			fmt.Fprintf(&sb, "  %q,\n", id)
+			fmt.Fprintf(&sb, "    %q,\n", id)
 		}
 		sb.WriteString("]\n\n")
 	}
@@ -821,7 +867,7 @@ func renderWorkspaceToml(s containerSpec) string {
 	}
 	sb.WriteString("packages = [\n")
 	for _, pkg := range s.Packages {
-		fmt.Fprintf(&sb, "  %q,\n", pkg)
+		fmt.Fprintf(&sb, "    %q,\n", pkg)
 	}
 	sb.WriteString("]\n")
 	return sb.String()

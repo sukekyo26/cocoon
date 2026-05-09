@@ -120,6 +120,13 @@ func (c *ContainerSpec) DockerSocketEnabled() bool {
 //nolint:gochecknoglobals // tabular configuration data, file-scoped by design.
 var SupportedOSes = []string{"ubuntu", "debian"}
 
+// SupportedShells is the closed set of login shells `cocoon init` can pick
+// and that [container.shell].default validates against. The Dockerfile and
+// shellrc generators already branch on these three.
+//
+//nolint:gochecknoglobals // tabular configuration data, file-scoped by design.
+var SupportedShells = []string{"bash", "zsh", "fish"}
+
 // SupportedOsVersions maps an OS id to the closed set of version values that
 // validation accepts. Keys must match SupportedOSes; the version strings are
 // what users put in `os_version = "..."` and what gets baked into the
