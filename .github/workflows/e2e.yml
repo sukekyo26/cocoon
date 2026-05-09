@@ -48,6 +48,10 @@ jobs:
           # silently break exec because `exec <service>` resolves against
           # the compose service id, which mirrors workspace.toml's
           # [container].service_name.
+          # Match cocoon's full default-on apt category set so default-on
+          # plugins (e.g. docker-cli, which calls gpg in install.sh via the
+          # vcs category) build cleanly. Trimming this list in CI hides
+          # plugin-vs-category mismatches that real users would hit.
           "$COCOON" init --yes \
             --service-name dev \
             --username dev \
@@ -55,7 +59,7 @@ jobs:
             --os-version 22.04 \
             --mount-root . \
             --no-devcontainer \
-            --apt-categories=text-editors,build
+            --apt-categories=text-editors,vcs,utilities,compression,build
           "$COCOON" gen
           # The generated tree must land under .devcontainer/ exclusively;
           # any leakage back into config/ or to the project root is a regression.
