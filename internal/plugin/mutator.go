@@ -155,14 +155,14 @@ func appendAfterVersions(lines []string, last *pinSpan, repl []string) []string 
 	return out
 }
 
-// appendAtEOF returns lines with repl appended at end-of-file, separated by a
-// blank line if the file was non-empty. Trailing blank lines on lines are
-// dropped first so blanks do not stack.
+// appendAtEOF returns lines with repl appended at end-of-file. Existing
+// trailing blank lines are preserved verbatim — they belong to the source
+// and the docstring on UpsertPinBlock promises blank lines outside the
+// target block stay untouched. A single blank-line separator is inserted
+// only when the source file did not already end with one (so the new
+// block does not collide with the last non-blank line).
 func appendAtEOF(lines, repl []string) []string {
-	for len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "" {
-		lines = lines[:len(lines)-1]
-	}
-	if len(lines) > 0 {
+	if len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) != "" {
 		lines = append(lines, "")
 	}
 	return append(lines, repl...)

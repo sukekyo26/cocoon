@@ -82,6 +82,30 @@ func TestUpsertPinBlockRejectsEmptyArgs(t *testing.T) {
 	}
 }
 
+// Trailing blank lines outside the target block must be preserved verbatim.
+// The earlier appendAtEOF stripped them, normalizing multi-blank tails to a
+// single separator, which contradicts the "preserved verbatim" contract.
+func TestUpsertPinBlockPreservesTrailingBlankLines(t *testing.T) {
+	t.Parallel()
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "ws.toml")
+	body := []byte("[plugins]\nenable = []\n\n\n") // two trailing blank lines
+	if err := os.WriteFile(path, body, 0o600); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if err := plugin.UpsertPinBlock(path, "go", "1.23.4", "", ""); err != nil {
+		t.Fatalf("UpsertPinBlock: %v", err)
+	}
+	got, err := os.ReadFile(path) //nolint:gosec // tmp path under t.TempDir
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	want := "[plugins]\nenable = []\n\n\n[plugins.versions.go]\npin = \"1.23.4\"\n"
+	if string(got) != want {
+		t.Errorf("trailing blank lines were not preserved\n--- got ---\n%q\n--- want ---\n%q", got, want)
+	}
+}
+
 // A workspace.toml that came in without a trailing newline must come back
 // without one. Regression guard for the original renderLines bug where the
 // "len(lines) > 0" branch unconditionally appended a final '\n'.
