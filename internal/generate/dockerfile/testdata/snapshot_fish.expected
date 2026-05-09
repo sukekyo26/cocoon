@@ -189,12 +189,14 @@ RUN --mount=type=bind,from=plugins,source=copilot-cli,target=/tmp/plugin \
     CHECKSUM_AMD64="" \
     CHECKSUM_ARM64="" \
     bash /tmp/plugin/install.sh
+ENV PATH="/home/${USERNAME}/.local/bin:$PATH"
 # Install Claude Code
 RUN --mount=type=bind,from=plugins,source=claude-code,target=/tmp/plugin \
     RC_FILE="$HOME/.config/fish/config.fish" \
     RC_SYNTAX="fish" \
     LOGIN_SHELL="fish" \
     bash /tmp/plugin/install.sh
+ENV PATH="/home/${USERNAME}/.local/bin:$PATH"
 # Install uv
 RUN --mount=type=bind,from=plugins,source=uv,target=/tmp/plugin \
     RC_FILE="$HOME/.config/fish/config.fish" \
