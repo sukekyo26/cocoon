@@ -92,6 +92,17 @@ ENV LC_ALL=en_US.UTF-8
 # ~/.config/fish/, a path useradd does not pre-create.
 RUN mkdir -p "$(dirname "$HOME/.config/fish/config.fish")" && touch "$HOME/.config/fish/config.fish"
 
+# Seed ~/.cocoon with placeholder rc files so the cocoon named volume
+# (mounted at /home/${USERNAME}/.cocoon at runtime) inherits these comment
+# headers on first start. Edits inside the container persist across
+# 'docker compose down' + 'up --build' because the named volume keeps the
+# writable layer; only 'down -v' resets it.
+RUN mkdir -p "$HOME/.cocoon" && \
+    printf '# cocoon: persisted shell rc (bash/zsh). Edit freely; survives container rebuild.\n' \
+        > "$HOME/.cocoon/.shellrc" && \
+    printf '# cocoon: persisted shell rc (fish). Edit freely; survives container rebuild.\n' \
+        > "$HOME/.cocoon/.shellrc.fish"
+
 # Prepare volume mount directories with correct ownership
 USER root
 RUN mkdir -p /home/${USERNAME}/.aws /home/${USERNAME}/.cargo /home/${USERNAME}/.claude /home/${USERNAME}/.config /home/${USERNAME}/.copilot /home/${USERNAME}/.deno /home/${USERNAME}/.proto /home/${USERNAME}/.rustup /home/${USERNAME}/go && \
@@ -210,6 +221,16 @@ RUN mkdir -p ~/.local
 
 # Setup persistent shell history
 RUN mkdir -p ~/.local/share/fish && touch ~/.local/share/fish/fish_history
+
+# Inject [container.shell] env/aliases plus persistent shellrc bootstrap
+RUN <<COCOON_RC_BLOCK
+cat >>"$HOME/.config/fish/config.fish" <<'COCOON_RC'
+# Auto-generated from [container.shell] of workspace.toml.
+
+# Source persistent user shellrc from the cocoon named volume
+test -f "$HOME/.cocoon/.shellrc.fish"; and source "$HOME/.cocoon/.shellrc.fish"
+COCOON_RC
+COCOON_RC_BLOCK
 
 # Entrypoint: sync image files to volume-mounted ~/.local
 USER root

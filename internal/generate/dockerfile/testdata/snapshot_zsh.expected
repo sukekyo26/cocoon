@@ -93,6 +93,17 @@ ENV LC_ALL=en_US.UTF-8
 # ~/.config/fish/, a path useradd does not pre-create.
 RUN mkdir -p "$(dirname "$HOME/.zshrc")" && touch "$HOME/.zshrc"
 
+# Seed ~/.cocoon with placeholder rc files so the cocoon named volume
+# (mounted at /home/${USERNAME}/.cocoon at runtime) inherits these comment
+# headers on first start. Edits inside the container persist across
+# 'docker compose down' + 'up --build' because the named volume keeps the
+# writable layer; only 'down -v' resets it.
+RUN mkdir -p "$HOME/.cocoon" && \
+    printf '# cocoon: persisted shell rc (bash/zsh). Edit freely; survives container rebuild.\n' \
+        > "$HOME/.cocoon/.shellrc" && \
+    printf '# cocoon: persisted shell rc (fish). Edit freely; survives container rebuild.\n' \
+        > "$HOME/.cocoon/.shellrc.fish"
+
 # Enable zsh completion + autosuggestions
 RUN echo 'autoload -Uz compinit && compinit' >> "$HOME/.zshrc" && \
     echo 'source /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh 2>/dev/null || true' >> "$HOME/.zshrc"
@@ -218,6 +229,16 @@ RUN echo 'export HISTFILE=~/.local/state/.zsh_history_docker' >> "$HOME/.zshrc" 
     echo 'export HISTSIZE=10000' >> "$HOME/.zshrc" && \
     echo 'export SAVEHIST=20000' >> "$HOME/.zshrc" && \
     mkdir -p ~/.local/state && touch ~/.local/state/.zsh_history_docker
+
+# Inject [container.shell] env/aliases plus persistent shellrc bootstrap
+RUN <<COCOON_RC_BLOCK
+cat >>"$HOME/.zshrc" <<'COCOON_RC'
+# Auto-generated from [container.shell] of workspace.toml.
+
+# Source persistent user shellrc from the cocoon named volume
+[ -f "$HOME/.cocoon/.shellrc" ] && . "$HOME/.cocoon/.shellrc"
+COCOON_RC
+COCOON_RC_BLOCK
 
 # Entrypoint: sync image files to volume-mounted ~/.local
 USER root

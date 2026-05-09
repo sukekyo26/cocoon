@@ -101,9 +101,22 @@ sequenceDiagram
 
 `devcontainer.json::workspaceFolder` も同じ選択に追従するので、VS Code が正しいディレクトリで開きます。
 
+### 永続化ボリューム
+
+ユーザー編集のファイルがコンテナリビルドで初期化されないよう、以下の named volume が常時マウントされます:
+
+| ボリューム | コンテナ側パス | 用途 |
+|---|---|---|
+| `local` | `/home/$USER/.local` | XDG runtime / state — シェル履歴、言語ツールチェーンのキャッシュなど |
+| `cocoon` | `/home/$USER/.cocoon` | ユーザー個人のシェル設定: `.shellrc` (POSIX) / `.shellrc.fish` |
+
+イメージは `~/.cocoon/.shellrc{,.fish}` をコメントだけのプレースホルダで焼き込んでおき、初回 `docker compose up` で Docker が空 volume にコピーします。以降は volume が永続層を担い、`docker compose down -v` でのみリセットされます。ホスト `~/.cocoon/` とは無関係 (ホスト側はプラグインオーバーレイ・ビルドコンテキスト・証明書置き場として cocoon CLI が使う作業領域)。
+
 ## シェル注入
 
 `[container.shell] env` と `aliases` は、イメージビルド時に Dockerfile heredoc でコンテナ内の rc ファイル (`~/.bashrc` / `~/.zshrc` / `~/.config/fish/config.fish`) に直接追記されます。`bash` / `zsh` / `fish` の構文差 (`alias k='v'` 対 `alias k 'v'`、`export K=V` 対 `set -gx K V`) はジェネレータが自動翻訳します。
+
+同じ heredoc の末尾に、`cocoon` named volume にある永続シェル設定を source する 1 行も常時追加されます。これによりユーザーごとの編集がコンテナリビルドを跨いでも残ります:
 
 ```dockerfile
 RUN <<COCOON_RC_BLOCK
@@ -111,9 +124,14 @@ cat >>"$HOME/.bashrc" <<'COCOON_RC'
 # Auto-generated from [container.shell] of workspace.toml.
 export EDITOR='vim'
 alias gs='git status'
+
+# Source persistent user shellrc from the cocoon named volume
+[ -f "$HOME/.cocoon/.shellrc" ] && . "$HOME/.cocoon/.shellrc"
 COCOON_RC
 COCOON_RC_BLOCK
 ```
+
+bash / zsh は `~/.cocoon/.shellrc`、fish は `~/.cocoon/.shellrc.fish` を source します。`[container.shell]` 未設定でも常に出力されるので、ユーザーは再生成なしで永続ファイルを編集できます。
 
 ## 国際化 (i18n)
 

@@ -123,6 +123,16 @@ env     = { EDITOR = "vim", PAGER = "less -R" }
 
 > `EDITOR=vim` / `nano` は apt カテゴリ `text-editors` の有効化が前提。`EDITOR=code` は VS Code Dev Containers から起動したとき (VS Code が `code` シムを注入) に使えます。`PAGER=less` は apt カテゴリ `utilities` が前提。
 
+`[container.shell]` はリポジトリにチェックインするプロジェクト共通設定向けです。**個人ごと、コンテナリビルドを跨いで永続化したい**設定は、起動時に rc ファイルから自動 source される `~/.cocoon/.shellrc` (fish の場合 `~/.cocoon/.shellrc.fish`) に書きます。このパスは Docker named volume (`cocoon`) でバックされており、`docker compose down && up --build` を跨いでも編集が残ります。コンテナ内から編集してください:
+
+```bash
+docker compose -f .devcontainer/docker-compose.yml exec dev bash -lc 'vim ~/.cocoon/.shellrc'
+```
+
+(エディタはイメージにインストールされているものを選んでください。`bash -lc` を経由することでコンテナ内の `EDITOR` / `PATH` が解決されます。`"$EDITOR"` を直接渡すとホスト側で展開されてしまいます。)
+
+`docker compose down -v` でのみリセットされます。このパスは**コンテナ内専用**で、ホスト `~/.cocoon/` とは無関係です (ホスト側は cocoon CLI のプラグインオーバーレイ・ビルドコンテキスト・証明書置き場として独立)。
+
 ### `[container.hosts]`
 
 `/etc/hosts` の追加エントリ。キーはホスト名 (RFC 1123)、値は IPv4 / IPv6 アドレスまたはリテラル `"host-gateway"` (ホスト機を指す)。

@@ -23,8 +23,29 @@ import (
 const header = "# Auto-generated from workspace.toml — do not edit directly.\n"
 
 // ErrVolumeNameConflict is returned when a workspace.toml [volumes] entry
-// shares a name with an auto-derived plugin volume.
-var ErrVolumeNameConflict = errors.New("compose: volume name conflicts with enabled plugin")
+// shares a name with an auto-derived plugin volume or with a name cocoon
+// reserves at the compose level (see reservedVolumeNames).
+var ErrVolumeNameConflict = errors.New(
+	"compose: volume name conflicts with an enabled plugin or a cocoon reserved name",
+)
+
+// reservedVolumeNames are volume keys cocoon emits unconditionally in the
+// generated compose. Plugins and workspace.toml [volumes] cannot reuse them.
+var reservedVolumeNames = map[string]struct{}{
+	"local":  {}, // /home/<user>/.local persistence
+	"cocoon": {}, // /home/<user>/.cocoon persistence (.shellrc, history, etc.)
+}
+
+// reservedMountPaths are container target paths cocoon owns. A plugin or
+// workspace.toml [volumes] entry that maps to one of these targets — even
+// under a different volume name — would collide with the unconditional
+// `local:`/`cocoon:` mounts emitted by buildVolumeMounts and break
+// `docker compose up`. We reject them at gen time so the user sees a clear
+// error rather than a runtime mount conflict.
+var reservedMountPaths = map[string]struct{}{
+	"/home/${USERNAME}/.local":  {},
+	"/home/${USERNAME}/.cocoon": {},
+}
 
 // Defaults applied to [container.resources] when the workspace.toml omits a
 // field.
@@ -81,16 +102,59 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 	return header + string(body), nil
 }
 
+// volSrc tracks who introduced a given mount path so we can emit precise
+// dedup warnings.
+type volSrc struct{ label, volName string }
+
 // mergeVolumes mirrors ComposeGenerator's de-duplication and conflict checks.
 func mergeVolumes(
 	pluginVols []plugin.Volume,
 	customVols map[string]string,
 	warnings io.Writer,
 ) (mergedPlugin []plugin.Volume, mergedCustom []volPair, err error) {
-	type src struct{ label, volName string }
-	pathToSrc := map[string]src{}
+	pathToSrc := map[string]volSrc{}
 
+	mergedPlugin, err = mergePluginVolumes(pluginVols, pathToSrc, warnings)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	pluginVolNames := map[string]struct{}{}
+	for _, pv := range mergedPlugin {
+		pluginVolNames[pv.VolumeName] = struct{}{}
+	}
+
+	mergedCustom, err = mergeCustomVolumes(customVols, pluginVolNames, pathToSrc, warnings)
+	if err != nil {
+		return nil, nil, err
+	}
+	return mergedPlugin, mergedCustom, nil
+}
+
+func mergePluginVolumes(
+	pluginVols []plugin.Volume,
+	pathToSrc map[string]volSrc,
+	warnings io.Writer,
+) ([]plugin.Volume, error) {
+	// nameToPlugin tracks the first plugin that claimed a derived volume
+	// name. DeriveVolumeName uses the path's basename, so two plugins with
+	// different paths that share a basename (e.g. /foo/cache + /bar/cache)
+	// would both emit the same `cache:` key in compose's volumes: section.
+	// That collides at YAML render and at `docker compose up` time, so we
+	// reject it at gen time.
+	nameToPlugin := map[string]string{}
+	out := make([]plugin.Volume, 0, len(pluginVols))
 	for _, pv := range pluginVols {
+		if _, reserved := reservedVolumeNames[pv.VolumeName]; reserved {
+			return nil, fmt.Errorf(
+				"%w: '%s' is reserved by cocoon (plugin '%s')",
+				ErrVolumeNameConflict, pv.VolumeName, pv.PluginName)
+		}
+		if _, reserved := reservedMountPaths[pv.MountPath]; reserved {
+			return nil, fmt.Errorf(
+				"%w: plugin '%s' targets reserved mount path '%s'",
+				ErrVolumeNameConflict, pv.PluginName, pv.MountPath)
+		}
 		if existing, dup := pathToSrc[pv.MountPath]; dup {
 			if warnings != nil {
 				fmt.Fprintf(warnings,
@@ -99,26 +163,47 @@ func mergeVolumes(
 			}
 			continue
 		}
-		pathToSrc[pv.MountPath] = src{label: "plugin '" + pv.PluginName + "'", volName: pv.VolumeName}
-		mergedPlugin = append(mergedPlugin, pv)
+		if firstOwner, dup := nameToPlugin[pv.VolumeName]; dup {
+			return nil, fmt.Errorf(
+				"%w: plugins '%s' and '%s' both derive volume name '%s' "+
+					"(rename one path so its basename differs)",
+				ErrVolumeNameConflict, firstOwner, pv.PluginName, pv.VolumeName)
+		}
+		nameToPlugin[pv.VolumeName] = pv.PluginName
+		pathToSrc[pv.MountPath] = volSrc{label: "plugin '" + pv.PluginName + "'", volName: pv.VolumeName}
+		out = append(out, pv)
 	}
+	return out, nil
+}
 
-	pluginVolNames := map[string]struct{}{}
-	for _, pv := range mergedPlugin {
-		pluginVolNames[pv.VolumeName] = struct{}{}
-	}
-
+func mergeCustomVolumes(
+	customVols map[string]string,
+	pluginVolNames map[string]struct{},
+	pathToSrc map[string]volSrc,
+	warnings io.Writer,
+) ([]volPair, error) {
 	customNames := sortedKeys(customVols)
 	for _, name := range customNames {
+		if _, reserved := reservedVolumeNames[name]; reserved {
+			return nil, fmt.Errorf(
+				"%w: '%s' is reserved by cocoon (remove it from workspace.toml [volumes])",
+				ErrVolumeNameConflict, name)
+		}
 		if _, conflict := pluginVolNames[name]; conflict {
-			return nil, nil, fmt.Errorf(
+			return nil, fmt.Errorf(
 				"%w: '%s' (remove it from workspace.toml or disable the plugin)",
 				ErrVolumeNameConflict, name)
 		}
 	}
 
+	out := make([]volPair, 0, len(customNames))
 	for _, name := range customNames {
 		path := customVols[name]
+		if _, reserved := reservedMountPaths[path]; reserved {
+			return nil, fmt.Errorf(
+				"%w: workspace.toml [volumes].%s targets reserved mount path '%s'",
+				ErrVolumeNameConflict, name, path)
+		}
 		if existing, dup := pathToSrc[path]; dup {
 			if warnings != nil {
 				fmt.Fprintf(warnings,
@@ -127,10 +212,10 @@ func mergeVolumes(
 			}
 			continue
 		}
-		pathToSrc[path] = src{label: "workspace.toml volume '" + name + "'", volName: name}
-		mergedCustom = append(mergedCustom, volPair{Name: name, Path: path})
+		pathToSrc[path] = volSrc{label: "workspace.toml volume '" + name + "'", volName: name}
+		out = append(out, volPair{Name: name, Path: path})
 	}
-	return mergedPlugin, mergedCustom, nil
+	return out, nil
 }
 
 type volPair struct {
@@ -161,11 +246,12 @@ func buildVolumeMounts(
 	mounts := make(
 		[]*yaml.Node,
 		0,
-		2+len(pluginVols)+len(customVols)+len(ctx.Mounts())+len(homeFiles),
+		3+len(pluginVols)+len(customVols)+len(ctx.Mounts())+len(homeFiles),
 	)
 	mounts = append(mounts,
 		yamlx.QuotedIfSpecial(workspaceBindMount(ctx)),
 		yamlx.QuotedIfSpecial("local:/home/${USERNAME}/.local"),
+		yamlx.QuotedIfSpecial("cocoon:/home/${USERNAME}/.cocoon"),
 	)
 	if ctx.WS.Container.DockerSocketEnabled() {
 		mounts = append(mounts, yamlx.QuotedIfSpecial("/var/run/docker.sock:/var/run/docker.sock"))
@@ -332,11 +418,17 @@ func applyResources(ctx *generate.WorkspaceContext) []yamlx.Pair {
 }
 
 func buildVolDefs(plugin []plugin.Volume, custom []volPair) []yamlx.Pair {
-	out := make([]yamlx.Pair, 0, 1+len(plugin)+len(custom))
-	out = append(out, yamlx.Pair{
-		Key:   "local",
-		Value: namedVolume("${COMPOSE_PROJECT_NAME}_${CONTAINER_SERVICE_NAME}_local"),
-	})
+	out := make([]yamlx.Pair, 0, 2+len(plugin)+len(custom))
+	out = append(out,
+		yamlx.Pair{
+			Key:   "local",
+			Value: namedVolume("${COMPOSE_PROJECT_NAME}_${CONTAINER_SERVICE_NAME}_local"),
+		},
+		yamlx.Pair{
+			Key:   "cocoon",
+			Value: namedVolume("${COMPOSE_PROJECT_NAME}_${CONTAINER_SERVICE_NAME}_cocoon"),
+		},
+	)
 	for _, pv := range plugin {
 		out = append(out, yamlx.Pair{
 			Key:   pv.VolumeName,

@@ -11,14 +11,28 @@ import (
 
 func ptr(s string) *string { return &s }
 
-func TestRenderEmpty(t *testing.T) {
+func TestRenderEmptyStillEmitsBootstrap(t *testing.T) {
 	t.Parallel()
 	got, err := shellrc.RenderDockerfileBlock(&generate.WorkspaceContext{WS: &config.Workspace{}})
 	if err != nil {
 		t.Fatalf("RenderDockerfileBlock: %v", err)
 	}
-	if got != "" {
-		t.Errorf("expected empty block when no env/aliases, got %q", got)
+	wants := []string{
+		`RUN <<COCOON_RC_BLOCK`,
+		`cat >>"$HOME/.bashrc" <<'COCOON_RC'`,
+		`[ -f "$HOME/.cocoon/.shellrc" ] && . "$HOME/.cocoon/.shellrc"`,
+		`COCOON_RC_BLOCK`,
+	}
+	for _, w := range wants {
+		if !strings.Contains(got, w) {
+			t.Errorf("missing %q in:\n%s", w, got)
+		}
+	}
+	if strings.Contains(got, "# Environment variables") {
+		t.Errorf("must not emit env section when env is empty:\n%s", got)
+	}
+	if strings.Contains(got, "# Aliases") {
+		t.Errorf("must not emit alias section when aliases are empty:\n%s", got)
 	}
 }
 
@@ -40,12 +54,13 @@ func TestRenderBash(t *testing.T) {
 		t.Fatalf("RenderDockerfileBlock: %v", err)
 	}
 	wants := []string{
-		"# Inject [container.shell] env/aliases from workspace.toml",
+		"# Inject [container.shell] env/aliases plus persistent shellrc bootstrap",
 		`RUN <<COCOON_RC_BLOCK`,
 		`cat >>"$HOME/.bashrc" <<'COCOON_RC'`,
 		"export EDITOR=vim",
 		"export PAGER='less -R'",
 		"alias gs='git status'",
+		`[ -f "$HOME/.cocoon/.shellrc" ] && . "$HOME/.cocoon/.shellrc"`,
 		"COCOON_RC",
 		"COCOON_RC_BLOCK",
 	}
@@ -82,6 +97,7 @@ func TestRenderFishUsesSetGxAndFishConfig(t *testing.T) {
 		"set -gx EDITOR 'vim'",
 		"set -gx PAGER 'less -R'",
 		"alias gs 'git status'",
+		`test -f "$HOME/.cocoon/.shellrc.fish"; and source "$HOME/.cocoon/.shellrc.fish"`,
 	}
 	for _, w := range wants {
 		if !strings.Contains(got, w) {

@@ -15,6 +15,7 @@ Project-aware container workspace **generator**. Run `cocoon init && cocoon gen`
 - VS Code Dev Containers and raw `docker compose` consume the same output
 - **Layered plugin overrides** — `<project>/.cocoon/plugins/` > `~/.cocoon/plugins/` > embedded catalog (20 plugins out of the box)
 - **Interactive `cocoon init`** — picks mount range, login shell, apt categories, plugins, alias bundles, and writes a self-documenting `workspace.toml`
+- **Persistent personal shellrc** — `~/.cocoon/.shellrc` (and `~/.cocoon/.shellrc.fish`) inside the container is backed by a named volume, so per-user aliases / PATH tweaks survive `docker compose down && up --build`
 - **i18n** — every prompt, error message, and inline `workspace.toml` comment renders in English or Japanese based on `$LANG`
 
 ## Requirements
