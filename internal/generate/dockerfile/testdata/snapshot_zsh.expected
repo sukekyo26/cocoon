@@ -158,7 +158,7 @@ curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-erro
   "${docker_repo}/gpg" | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
 
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] ${docker_repo} ${VERSION_CODENAME} stable" \
-  > /etc/apt/sources.list.d/docker.list
+  >/etc/apt/sources.list.d/docker.list
 
 apt-get update
 apt-get install -y --no-install-recommends docker-ce-cli docker-compose-plugin
@@ -186,7 +186,7 @@ curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-erro
 chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
 
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
-  > /etc/apt/sources.list.d/github-cli.list
+  >/etc/apt/sources.list.d/github-cli.list
 
 apt-get update
 apt-get install -y --no-install-recommends gh
@@ -209,17 +209,26 @@ set -euo pipefail
 
 ARCH="$(dpkg --print-architecture)"
 case "$ARCH" in
-  amd64) DOWNLOAD_ARCH="x86_64"  ; CHECKSUM="$CHECKSUM_AMD64" ;;
-  arm64) DOWNLOAD_ARCH="aarch64" ; CHECKSUM="$CHECKSUM_ARM64" ;;
-  *)     DOWNLOAD_ARCH="x86_64"  ; CHECKSUM="$CHECKSUM_AMD64" ;;
+  amd64)
+    DOWNLOAD_ARCH="x86_64"
+    CHECKSUM="$CHECKSUM_AMD64"
+    ;;
+  arm64)
+    DOWNLOAD_ARCH="aarch64"
+    CHECKSUM="$CHECKSUM_ARM64"
+    ;;
+  *)
+    DOWNLOAD_ARCH="x86_64"
+    CHECKSUM="$CHECKSUM_AMD64"
+    ;;
 esac
 echo "Detected architecture: $ARCH -> $DOWNLOAD_ARCH"
 
 VERSION_KEY="${PIN:-master}"
 
 ZIG_URL=$(curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
-  https://ziglang.org/download/index.json \
-  | jq -r --arg v "$VERSION_KEY" --arg a "$DOWNLOAD_ARCH" '.[$v][$a + "-linux"].tarball')
+  https://ziglang.org/download/index.json |
+  jq -r --arg v "$VERSION_KEY" --arg a "$DOWNLOAD_ARCH" '.[$v][$a + "-linux"].tarball')
 
 if [ -z "$ZIG_URL" ] || [ "$ZIG_URL" = "null" ]; then
   echo "ERROR: Could not resolve Zig tarball URL for version=$VERSION_KEY arch=$DOWNLOAD_ARCH" >&2
@@ -255,7 +264,7 @@ ARCH="$(dpkg --print-architecture)"
 case "$ARCH" in
   amd64) CHECKSUM="$CHECKSUM_AMD64" ;;
   arm64) CHECKSUM="$CHECKSUM_ARM64" ;;
-  *)     CHECKSUM="$CHECKSUM_AMD64" ;;
+  *) CHECKSUM="$CHECKSUM_AMD64" ;;
 esac
 
 if [ -n "$PIN" ]; then
@@ -292,17 +301,26 @@ set -euo pipefail
 
 ARCH="$(dpkg --print-architecture)"
 case "$ARCH" in
-  amd64) DOWNLOAD_ARCH="x86_64" ; CHECKSUM="$CHECKSUM_AMD64" ;;
-  arm64) DOWNLOAD_ARCH="arm64"  ; CHECKSUM="$CHECKSUM_ARM64" ;;
-  *)     DOWNLOAD_ARCH="x86_64" ; CHECKSUM="$CHECKSUM_AMD64" ;;
+  amd64)
+    DOWNLOAD_ARCH="x86_64"
+    CHECKSUM="$CHECKSUM_AMD64"
+    ;;
+  arm64)
+    DOWNLOAD_ARCH="arm64"
+    CHECKSUM="$CHECKSUM_ARM64"
+    ;;
+  *)
+    DOWNLOAD_ARCH="x86_64"
+    CHECKSUM="$CHECKSUM_AMD64"
+    ;;
 esac
 
 if [ -n "$PIN" ]; then
   VERSION="$PIN"
 else
   VERSION=$(curl -fsSLI --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
-    -o /dev/null -w '%{url_effective}' https://github.com/jesseduffield/lazygit/releases/latest \
-    | sed 's|.*/tag/v||')
+    -o /dev/null -w '%{url_effective}' https://github.com/jesseduffield/lazygit/releases/latest |
+    sed 's|.*/tag/v||')
 fi
 
 curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
@@ -345,7 +363,7 @@ fi
   echo 'GIT_PS1_SHOWUPSTREAM="auto"'
   # shellcheck disable=SC2016,SC2028
   echo 'PS1='\''\[\033[01;35m\][Docker $CONTAINER_SERVICE_NAME]\[\033[00m\] \[\033[01;32m\]\u@\h:\[\033[01;34m\]\w\[\033[00m\]$(__git_ps1 " \[\033[01;33m\](%s)\[\033[00m\]" 2>/dev/null) \$ '\'''
-} >> "$RC_FILE"
+} >>"$RC_FILE"
 COCOON_PLUGIN_EOF
 # Install proto
 RUN RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" PIN="0.46.1" CHECKSUM_AMD64="" CHECKSUM_ARM64="" bash <<'COCOON_PLUGIN_EOF'
@@ -372,14 +390,14 @@ if [ "${RC_SYNTAX:-posix}" = "fish" ]; then
     echo 'set -gx PROTO_HOME $HOME/.proto'
     # shellcheck disable=SC2016
     echo 'set -gx PATH $PROTO_HOME/shims $PROTO_HOME/bin $PATH'
-  } >> "$RC_FILE"
+  } >>"$RC_FILE"
 else
   {
     # shellcheck disable=SC2016
     echo 'export PROTO_HOME="$HOME/.proto"'
     # shellcheck disable=SC2016
     echo 'export PATH="$PROTO_HOME/shims:$PROTO_HOME/bin:$PATH"'
-  } >> "$RC_FILE"
+  } >>"$RC_FILE"
 fi
 COCOON_PLUGIN_EOF
 ENV PROTO_HOME="/home/${USERNAME}/.proto"
@@ -394,7 +412,7 @@ ARCH="$(dpkg --print-architecture)"
 case "$ARCH" in
   amd64) CLI_ARCH="x86_64" ;;
   arm64) CLI_ARCH="aarch64" ;;
-  *)     CLI_ARCH="x86_64" ;;
+  *) CLI_ARCH="x86_64" ;;
 esac
 
 curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
@@ -413,7 +431,7 @@ ARCH="$(dpkg --print-architecture)"
 case "$ARCH" in
   amd64) DOWNLOAD_ARCH="x86_64" ;;
   arm64) DOWNLOAD_ARCH="aarch64" ;;
-  *)     DOWNLOAD_ARCH="x86_64" ;;
+  *) DOWNLOAD_ARCH="x86_64" ;;
 esac
 echo "Detected architecture: $ARCH -> $DOWNLOAD_ARCH"
 
@@ -473,10 +491,10 @@ fi
 
 if [ "${RC_SYNTAX:-posix}" = "fish" ]; then
   # shellcheck disable=SC2016
-  echo 'set -gx PATH $HOME/.local/bin $PATH' >> "$RC_FILE"
+  echo 'set -gx PATH $HOME/.local/bin $PATH' >>"$RC_FILE"
 else
   # shellcheck disable=SC2016
-  echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$RC_FILE"
+  echo 'export PATH="$HOME/.local/bin:$PATH"' >>"$RC_FILE"
 fi
 COCOON_PLUGIN_EOF
 ENV PATH="/home/${USERNAME}/.local/bin:$PATH"
@@ -499,14 +517,14 @@ if [ "${RC_SYNTAX:-posix}" = "fish" ]; then
   # rustup versions.
   if [ -f "$HOME/.cargo/env.fish" ]; then
     # shellcheck disable=SC2016
-    echo 'source "$HOME/.cargo/env.fish"' >> "$RC_FILE"
+    echo 'source "$HOME/.cargo/env.fish"' >>"$RC_FILE"
   else
     # shellcheck disable=SC2016
-    echo 'set -gx PATH $HOME/.cargo/bin $PATH' >> "$RC_FILE"
+    echo 'set -gx PATH $HOME/.cargo/bin $PATH' >>"$RC_FILE"
   fi
 else
   # shellcheck disable=SC2016
-  echo '. "$HOME/.cargo/env"' >> "$RC_FILE"
+  echo '. "$HOME/.cargo/env"' >>"$RC_FILE"
 fi
 COCOON_PLUGIN_EOF
 ENV PATH="/home/${USERNAME}/.cargo/bin:$PATH"

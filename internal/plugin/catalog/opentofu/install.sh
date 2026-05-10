@@ -11,15 +11,15 @@ ARCH="$(dpkg --print-architecture)"
 case "$ARCH" in
   amd64) CHECKSUM="$CHECKSUM_AMD64" ;;
   arm64) CHECKSUM="$CHECKSUM_ARM64" ;;
-  *)     CHECKSUM="$CHECKSUM_AMD64" ;;
+  *) CHECKSUM="$CHECKSUM_AMD64" ;;
 esac
 
 if [ -n "$PIN" ]; then
   VERSION="$PIN"
 else
   VERSION=$(curl -fsSLI --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
-    -o /dev/null -w '%{url_effective}' https://github.com/opentofu/opentofu/releases/latest \
-    | sed 's|.*/tag/v||')
+    -o /dev/null -w '%{url_effective}' https://github.com/opentofu/opentofu/releases/latest |
+    sed 's|.*/tag/v||')
 fi
 
 curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \

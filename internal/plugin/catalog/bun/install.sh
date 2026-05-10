@@ -17,12 +17,12 @@ fi
 
 if [ "${RC_SYNTAX:-posix}" = "fish" ]; then
   # shellcheck disable=SC2016
-  echo 'set -gx BUN_INSTALL $HOME/.bun' >> "$RC_FILE"
+  echo 'set -gx BUN_INSTALL $HOME/.bun' >>"$RC_FILE"
   # shellcheck disable=SC2016
-  echo 'set -gx PATH $BUN_INSTALL/bin $PATH' >> "$RC_FILE"
+  echo 'set -gx PATH $BUN_INSTALL/bin $PATH' >>"$RC_FILE"
 else
   # shellcheck disable=SC2016
-  echo 'export BUN_INSTALL="$HOME/.bun"' >> "$RC_FILE"
+  echo 'export BUN_INSTALL="$HOME/.bun"' >>"$RC_FILE"
   # shellcheck disable=SC2016
-  echo 'export PATH="$BUN_INSTALL/bin:$PATH"' >> "$RC_FILE"
+  echo 'export PATH="$BUN_INSTALL/bin:$PATH"' >>"$RC_FILE"
 fi

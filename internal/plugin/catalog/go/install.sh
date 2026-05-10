@@ -11,7 +11,7 @@ ARCH="$(dpkg --print-architecture)"
 case "$ARCH" in
   amd64) CHECKSUM="$CHECKSUM_AMD64" ;;
   arm64) CHECKSUM="$CHECKSUM_ARM64" ;;
-  *)     CHECKSUM="$CHECKSUM_AMD64" ;;
+  *) CHECKSUM="$CHECKSUM_AMD64" ;;
 esac
 
 if [ -n "$PIN" ]; then

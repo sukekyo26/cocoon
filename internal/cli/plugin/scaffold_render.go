@@ -75,9 +75,18 @@ set -euo pipefail
 
 ARCH="$(dpkg --print-architecture)"
 case "$ARCH" in
-  amd64) DOWNLOAD_ARCH="x86_64"  ; CHECKSUM="$CHECKSUM_AMD64" ;;
-  arm64) DOWNLOAD_ARCH="aarch64" ; CHECKSUM="$CHECKSUM_ARM64" ;;
-  *)     DOWNLOAD_ARCH="x86_64"  ; CHECKSUM="$CHECKSUM_AMD64" ;;
+  amd64)
+    DOWNLOAD_ARCH="x86_64"
+    CHECKSUM="$CHECKSUM_AMD64"
+    ;;
+  arm64)
+    DOWNLOAD_ARCH="aarch64"
+    CHECKSUM="$CHECKSUM_ARM64"
+    ;;
+  *)
+    DOWNLOAD_ARCH="x86_64"
+    CHECKSUM="$CHECKSUM_AMD64"
+    ;;
 esac
 
 # TODO: replace OWNER/REPO and the asset name pattern with the upstream layout.
@@ -85,8 +94,8 @@ if [ -n "$PIN" ]; then
   VERSION="$PIN"
 else
   VERSION=$(curl -fsSLI --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
-    -o /dev/null -w '%{url_effective}' https://github.com/OWNER/REPO/releases/latest \
-    | sed 's|.*/tag/v||')
+    -o /dev/null -w '%{url_effective}' https://github.com/OWNER/REPO/releases/latest |
+    sed 's|.*/tag/v||')
 fi
 
 curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
