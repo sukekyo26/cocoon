@@ -186,14 +186,18 @@ timezone = "Asia/Tokyo"
 			},
 		},
 		{
-			// User cert install is now sourced from ~/.cocoon/certs/ via
-			// docker-compose's additional_contexts, not from <project>/certs/.
-			// The cert install RUN block is always emitted, so the assertion
-			// here is decoupled from any project-tree fixture.
-			name: "certificates_section",
+			// User cert install is sourced from ~/.cocoon/certs/ via
+			// docker-compose's additional_contexts, opt-in through
+			// [certificates] enable = true. The cert install RUN block is
+			// emitted only when the workspace opts in; the assertion here
+			// covers the enabled branch.
+			name: "certificates_section_enabled",
 			workspace: tomlBase("svc-cert", "u", nil) + `
 [apt]
 packages = []
+
+[certificates]
+enable = true
 `,
 			useEmptyPluginsDir: true,
 			assert: []expect{
@@ -205,10 +209,36 @@ packages = []
 				}},
 				{path: ".devcontainer/docker-compose.yml", mustContain: []string{
 					"additional_contexts:",
-					`cocoon_user_certs: "${HOME}/.cocoon/certs"`,
+					"cocoon_user_certs:",
+					"${HOME:?HOME must be set",
 				}},
 				{path: ".devcontainer/devcontainer.json", mustContain: []string{
-					`"initializeCommand": "mkdir -p ${HOME}/.cocoon/certs"`,
+					`"initializeCommand": "mkdir -p ${HOME:?HOME must be set`,
+				}},
+			},
+		},
+		{
+			// Default (no [certificates] section) → no cert wiring at all.
+			// Teams that never deal with corp CAs commit cert-free
+			// artifacts. Mirrors the explicit-disabled case below.
+			name: "certificates_section_default_off",
+			workspace: tomlBase("svc-no-cert", "u", nil) + `
+[apt]
+packages = []
+`,
+			useEmptyPluginsDir: true,
+			assert: []expect{
+				{path: ".devcontainer/Dockerfile", mustNotContain: []string{
+					"cocoon_user_certs",
+					"SSL_CERT_FILE",
+					"/usr/local/share/ca-certificates/cocoon-user",
+				}},
+				{path: ".devcontainer/docker-compose.yml", mustNotContain: []string{
+					"additional_contexts",
+					"cocoon_user_certs",
+				}},
+				{path: ".devcontainer/devcontainer.json", mustNotContain: []string{
+					"initializeCommand",
 				}},
 			},
 		},
