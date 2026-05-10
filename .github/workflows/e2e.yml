@@ -190,6 +190,20 @@ jobs:
             aarch64) arch=arm64 ;;
             *) printf 'unsupported runner arch: %s\n' "$(uname -m)" >&2; exit 1 ;;
           esac
+          # The generated docker-compose.yml declares
+          # `additional_contexts: cocoon_user_certs: ${HOME}/.cocoon/certs`
+          # so users can drop corp CA certs (e.g. Zscaler) into a host-side
+          # directory and have them auto-baked at build time. BuildKit
+          # resolves the named context path before the build starts and
+          # errors out if the directory does not exist. VS Code Dev
+          # Containers users get the directory created by
+          # devcontainer.json's initializeCommand; a plain `docker buildx
+          # bake` invocation (this CI step, or a developer running compose
+          # directly without VS Code) skips that hook and needs the
+          # one-time mkdir explicitly. The directory stays empty in CI so
+          # the Dockerfile's `if find ... ; then ... fi` branch no-ops and
+          # no certs are installed into the image.
+          mkdir -p "$HOME/.cocoon/certs"
           env_args=()
           while IFS= read -r line || [ -n "$line" ]; do
             case "$line" in
