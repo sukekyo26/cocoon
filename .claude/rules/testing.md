@@ -74,8 +74,8 @@ golden が全て同じ shape（末尾改行あり・middle に空行 1 個など
 
 `gh pr create` 直前に、新規 / 改修した公開関数を 5 軸 × 関数数の表で埋める。半分以上 N/A なら再考する。偽の ✅ より N/A の方が後で剥がれない。
 
-| 関数               | Contract | ErrClass | InputVar | Metadata | CLI |
-|--------------------|----------|----------|----------|----------|-----|
-| UpsertPinBlock     | ✅       | ✅       | ✅       | ✅       | ✅  |
-| resolvePluginsDir  | N/A      | ✅       | N/A      | N/A      | ✅  |
-| renderAndWrite     | N/A      | N/A      | N/A      | N/A      | ✅  |
+| 関数の類型              | Contract | ErrClass | InputVar | Metadata | CLI |
+|-------------------------|----------|----------|----------|----------|-----|
+| 公開ファイル mutator    | ✅       | ✅       | ✅       | ✅       | ✅  |
+| パス解決ヘルパ          | N/A      | ✅       | N/A      | N/A      | ✅  |
+| 内部 render 関数        | N/A      | N/A      | N/A      | N/A      | ✅  |
