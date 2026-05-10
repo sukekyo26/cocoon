@@ -18,7 +18,6 @@ Standing up a Docker-based dev environment by hand means writing all of this for
 - `Dockerfile` (60–120 lines) — base OS, apt, user creation, per-CLI install steps
 - `docker-compose.yml` (30–80 lines) — service / mounts / volumes / env / ports
 - `devcontainer.json` (20–40 lines) — VS Code Dev Containers wiring
-- `docker-entrypoint.sh` — first-boot setup script
 
 cocoon turns that into:
 
