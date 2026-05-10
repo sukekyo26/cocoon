@@ -25,6 +25,11 @@ INSTALL_DIR="${COCOON_INSTALL_DIR:-$HOME/.local/bin}"
 VERSION="${COCOON_VERSION:-latest}"
 API_BASE="${COCOON_API_BASE:-https://api.github.com}"
 RELEASE_BASE="${COCOON_RELEASE_BASE:-https://github.com}"
+# Strip a single trailing slash so callers may pass either ".../api/v3" or
+# ".../api/v3/" without producing "//<rest>" URLs that some mirrors / GHES
+# reverse proxies reject.
+API_BASE="${API_BASE%/}"
+RELEASE_BASE="${RELEASE_BASE%/}"
 API_TOKEN="${COCOON_API_TOKEN:-}"
 
 err() { printf "cocoon-install: %s\n" "$*" >&2; }

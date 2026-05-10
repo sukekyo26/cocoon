@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -203,16 +202,11 @@ func envSlice(m map[string]string) []string {
 	return out
 }
 
-// mustBaseURL returns the httptest server URL with the trailing slash trimmed
-// so install.sh can append `/repos/...` directly.
-func (m *mockServer) baseURL(t *testing.T) string {
-	t.Helper()
-	u, err := url.Parse(m.srv.URL)
-	if err != nil {
-		t.Fatalf("parse mock URL: %v", err)
-	}
-	return u.String()
-}
+// baseURL returns the underlying httptest.Server URL. httptest never
+// appends a trailing slash, so install.sh can concatenate "/repos/..."
+// directly. Trailing-slash and path-prefix variants are exercised by
+// dedicated test cases below.
+func (m *mockServer) baseURL() string { return m.srv.URL }
 
 // ---------------------------------------------------------------------------
 // Test cases (5-axis coverage per .claude/rules/testing.md)
@@ -225,8 +219,8 @@ func TestInstallSh_LatestHappyPath(t *testing.T) {
 
 	stderr, exit := runInstallSh(t, map[string]string{
 		"COCOON_REPO":         mockRepo,
-		"COCOON_API_BASE":     srv.baseURL(t),
-		"COCOON_RELEASE_BASE": srv.baseURL(t),
+		"COCOON_API_BASE":     srv.baseURL(),
+		"COCOON_RELEASE_BASE": srv.baseURL(),
 		"COCOON_INSTALL_DIR":  dst,
 	})
 	if exit != 0 {
@@ -247,11 +241,14 @@ func TestInstallSh_LatestHappyPath(t *testing.T) {
 	if perm := info.Mode().Perm(); perm&0o111 == 0 {
 		t.Errorf("binary not executable: mode=%v", perm)
 	}
-	if atomic.LoadInt32(srv.apiHits) != 1 {
-		t.Errorf("api endpoint hit count: got %d, want 1", *srv.apiHits)
+	apiHits := atomic.LoadInt32(srv.apiHits)
+	dlHits := atomic.LoadInt32(srv.dlHits)
+	sumsHits := atomic.LoadInt32(srv.sumsHits)
+	if apiHits != 1 {
+		t.Errorf("api endpoint hit count: got %d, want 1", apiHits)
 	}
-	if atomic.LoadInt32(srv.dlHits) != 1 || atomic.LoadInt32(srv.sumsHits) != 1 {
-		t.Errorf("download/sums hits: dl=%d sums=%d (want 1/1)", *srv.dlHits, *srv.sumsHits)
+	if dlHits != 1 || sumsHits != 1 {
+		t.Errorf("download/sums hits: dl=%d sums=%d (want 1/1)", dlHits, sumsHits)
 	}
 }
 
@@ -263,15 +260,15 @@ func TestInstallSh_PinnedVersion(t *testing.T) {
 	stderr, exit := runInstallSh(t, map[string]string{
 		"COCOON_REPO":         mockRepo,
 		"COCOON_VERSION":      "0.2.0", // no leading v
-		"COCOON_API_BASE":     srv.baseURL(t),
-		"COCOON_RELEASE_BASE": srv.baseURL(t),
+		"COCOON_API_BASE":     srv.baseURL(),
+		"COCOON_RELEASE_BASE": srv.baseURL(),
 		"COCOON_INSTALL_DIR":  dst,
 	})
 	if exit != 0 {
 		t.Fatalf("exit=%d, stderr=%q", exit, stderr)
 	}
-	if atomic.LoadInt32(srv.apiHits) != 0 {
-		t.Errorf("api endpoint should NOT be hit when COCOON_VERSION is pinned, got %d hits", *srv.apiHits)
+	if hits := atomic.LoadInt32(srv.apiHits); hits != 0 {
+		t.Errorf("api endpoint should NOT be hit when COCOON_VERSION is pinned, got %d hits", hits)
 	}
 	if _, err := os.Stat(filepath.Join(dst, "cocoon")); err != nil {
 		t.Fatalf("binary not installed: %v", err)
@@ -286,15 +283,15 @@ func TestInstallSh_PinnedVersion_VPrefix(t *testing.T) {
 	stderr, exit := runInstallSh(t, map[string]string{
 		"COCOON_REPO":         mockRepo,
 		"COCOON_VERSION":      "v0.2.0", // already has v prefix; must not double up
-		"COCOON_API_BASE":     srv.baseURL(t),
-		"COCOON_RELEASE_BASE": srv.baseURL(t),
+		"COCOON_API_BASE":     srv.baseURL(),
+		"COCOON_RELEASE_BASE": srv.baseURL(),
 		"COCOON_INSTALL_DIR":  dst,
 	})
 	if exit != 0 {
 		t.Fatalf("exit=%d, stderr=%q", exit, stderr)
 	}
-	if atomic.LoadInt32(srv.dlHits) != 1 {
-		t.Errorf("expected download path /v0.2.0/ to be hit exactly once, got %d", *srv.dlHits)
+	if hits := atomic.LoadInt32(srv.dlHits); hits != 1 {
+		t.Errorf("expected download path /v0.2.0/ to be hit exactly once, got %d", hits)
 	}
 }
 
@@ -306,8 +303,8 @@ func TestInstallSh_DefaultInstallDir(t *testing.T) {
 
 	stderr, exit := runInstallSh(t, map[string]string{
 		"COCOON_REPO":         mockRepo,
-		"COCOON_API_BASE":     srv.baseURL(t),
-		"COCOON_RELEASE_BASE": srv.baseURL(t),
+		"COCOON_API_BASE":     srv.baseURL(),
+		"COCOON_RELEASE_BASE": srv.baseURL(),
 		// COCOON_INSTALL_DIR deliberately unset → defaults to $HOME/.local/bin
 	})
 	if exit != 0 {
@@ -326,8 +323,8 @@ func TestInstallSh_APIError404(t *testing.T) {
 
 	stderr, exit := runInstallSh(t, map[string]string{
 		"COCOON_REPO":         mockRepo,
-		"COCOON_API_BASE":     srv.baseURL(t),
-		"COCOON_RELEASE_BASE": srv.baseURL(t),
+		"COCOON_API_BASE":     srv.baseURL(),
+		"COCOON_RELEASE_BASE": srv.baseURL(),
 		"COCOON_INSTALL_DIR":  dst,
 	})
 	if exit == 0 {
@@ -336,7 +333,7 @@ func TestInstallSh_APIError404(t *testing.T) {
 	if !strings.Contains(stderr, "failed to fetch release metadata") {
 		t.Errorf("stderr missing fail-fast message: %q", stderr)
 	}
-	expectedURL := fmt.Sprintf("%s/repos/%s/releases/latest", srv.baseURL(t), mockRepo)
+	expectedURL := fmt.Sprintf("%s/repos/%s/releases/latest", srv.baseURL(), mockRepo)
 	if !strings.Contains(stderr, expectedURL) {
 		t.Errorf("stderr missing failed URL %q: %q", expectedURL, stderr)
 	}
@@ -352,8 +349,8 @@ func TestInstallSh_TagParseFailure(t *testing.T) {
 
 	stderr, exit := runInstallSh(t, map[string]string{
 		"COCOON_REPO":         mockRepo,
-		"COCOON_API_BASE":     srv.baseURL(t),
-		"COCOON_RELEASE_BASE": srv.baseURL(t),
+		"COCOON_API_BASE":     srv.baseURL(),
+		"COCOON_RELEASE_BASE": srv.baseURL(),
 		"COCOON_INSTALL_DIR":  dst,
 	})
 	if exit == 0 {
@@ -375,8 +372,8 @@ func TestInstallSh_AssetMissingFromSums(t *testing.T) {
 
 	stderr, exit := runInstallSh(t, map[string]string{
 		"COCOON_REPO":         mockRepo,
-		"COCOON_API_BASE":     srv.baseURL(t),
-		"COCOON_RELEASE_BASE": srv.baseURL(t),
+		"COCOON_API_BASE":     srv.baseURL(),
+		"COCOON_RELEASE_BASE": srv.baseURL(),
 		"COCOON_INSTALL_DIR":  dst,
 	})
 	if exit == 0 {
@@ -395,8 +392,8 @@ func TestInstallSh_APITokenForwarded(t *testing.T) {
 
 	stderr, exit := runInstallSh(t, map[string]string{
 		"COCOON_REPO":         mockRepo,
-		"COCOON_API_BASE":     srv.baseURL(t),
-		"COCOON_RELEASE_BASE": srv.baseURL(t),
+		"COCOON_API_BASE":     srv.baseURL(),
+		"COCOON_RELEASE_BASE": srv.baseURL(),
 		"COCOON_API_TOKEN":    token,
 		"COCOON_INSTALL_DIR":  dst,
 	})
@@ -418,8 +415,8 @@ func TestInstallSh_NoTokenNoAuthHeader(t *testing.T) {
 
 	stderr, exit := runInstallSh(t, map[string]string{
 		"COCOON_REPO":         mockRepo,
-		"COCOON_API_BASE":     srv.baseURL(t),
-		"COCOON_RELEASE_BASE": srv.baseURL(t),
+		"COCOON_API_BASE":     srv.baseURL(),
+		"COCOON_RELEASE_BASE": srv.baseURL(),
 		"COCOON_INSTALL_DIR":  dst,
 		// COCOON_API_TOKEN deliberately unset
 	})
@@ -428,6 +425,83 @@ func TestInstallSh_NoTokenNoAuthHeader(t *testing.T) {
 	}
 	if got := srv.LastAPIAuth(); got != "" {
 		t.Errorf("expected no Authorization header without token, got %q", got)
+	}
+}
+
+// TestInstallSh_TrailingSlashOnBases pins the contract that a trailing `/`
+// on COCOON_API_BASE / COCOON_RELEASE_BASE does NOT produce `//<rest>` URLs.
+// install.sh must strip a single trailing slash so end users on GHES /
+// mirrors can configure either form interchangeably.
+func TestInstallSh_TrailingSlashOnBases(t *testing.T) {
+	t.Parallel()
+	srv := newMockServer(t, mockRelease{})
+	dst := t.TempDir()
+
+	stderr, exit := runInstallSh(t, map[string]string{
+		"COCOON_REPO":         mockRepo,
+		"COCOON_API_BASE":     srv.baseURL() + "/",
+		"COCOON_RELEASE_BASE": srv.baseURL() + "/",
+		"COCOON_INSTALL_DIR":  dst,
+	})
+	if exit != 0 {
+		t.Fatalf("exit=%d, stderr=%q", exit, stderr)
+	}
+	if _, err := os.Stat(filepath.Join(dst, "cocoon")); err != nil {
+		t.Fatalf("binary not installed despite trailing-slash bases: %v", err)
+	}
+	apiHits := atomic.LoadInt32(srv.apiHits)
+	dlHits := atomic.LoadInt32(srv.dlHits)
+	if apiHits != 1 || dlHits != 1 {
+		t.Errorf("expected exactly 1 hit on each endpoint (no double-slash drift); got api=%d dl=%d", apiHits, dlHits)
+	}
+}
+
+// TestInstallSh_GHESPathPrefix pins that COCOON_API_BASE accepts a path
+// prefix (e.g. GitHub Enterprise Server's `https://ghe.example/api/v3`)
+// without losing the prefix when constructing release URLs. The mock server
+// here serves the API under /api/v3 to mirror GHES; the release endpoints
+// stay at the root because GHES serves release downloads from the host root,
+// not the API prefix.
+func TestInstallSh_GHESPathPrefix(t *testing.T) {
+	t.Parallel()
+	binary := []byte("ghes binary payload\n")
+	asset := mockAssetName(t)
+	sum := sha256.Sum256(binary)
+	sumsBody := fmt.Sprintf("%s  %s\n", hex.EncodeToString(sum[:]), asset)
+
+	mux := http.NewServeMux()
+	var apiHits int32
+	mux.HandleFunc(fmt.Sprintf("/api/v3/repos/%s/releases/latest", mockRepo),
+		func(w http.ResponseWriter, _ *http.Request) {
+			atomic.AddInt32(&apiHits, 1)
+			writeMock(w, []byte(fmt.Sprintf(`{"tag_name":"%s"}`, mockTag)))
+		})
+	mux.HandleFunc(fmt.Sprintf("/%s/releases/download/%s/%s", mockRepo, mockTag, asset),
+		func(w http.ResponseWriter, _ *http.Request) { writeMock(w, binary) })
+	mux.HandleFunc(fmt.Sprintf("/%s/releases/download/%s/SHA256SUMS", mockRepo, mockTag),
+		func(w http.ResponseWriter, _ *http.Request) { writeMock(w, []byte(sumsBody)) })
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	dst := t.TempDir()
+	stderr, exit := runInstallSh(t, map[string]string{
+		"COCOON_REPO":         mockRepo,
+		"COCOON_API_BASE":     srv.URL + "/api/v3",
+		"COCOON_RELEASE_BASE": srv.URL,
+		"COCOON_INSTALL_DIR":  dst,
+	})
+	if exit != 0 {
+		t.Fatalf("exit=%d, stderr=%q", exit, stderr)
+	}
+	if hits := atomic.LoadInt32(&apiHits); hits != 1 {
+		t.Errorf("/api/v3 prefix not honoured: API endpoint hit %d times", hits)
+	}
+	got, err := os.ReadFile(filepath.Join(dst, "cocoon"))
+	if err != nil {
+		t.Fatalf("read installed binary: %v", err)
+	}
+	if !bytes.Equal(got, binary) {
+		t.Errorf("binary content mismatch under GHES prefix: got %q", got)
 	}
 }
 
@@ -444,8 +518,8 @@ func TestInstallSh_ChecksumMismatch(t *testing.T) {
 
 	stderr, exit := runInstallSh(t, map[string]string{
 		"COCOON_REPO":         mockRepo,
-		"COCOON_API_BASE":     srv.baseURL(t),
-		"COCOON_RELEASE_BASE": srv.baseURL(t),
+		"COCOON_API_BASE":     srv.baseURL(),
+		"COCOON_RELEASE_BASE": srv.baseURL(),
 		"COCOON_INSTALL_DIR":  dst,
 	})
 	if exit == 0 {
