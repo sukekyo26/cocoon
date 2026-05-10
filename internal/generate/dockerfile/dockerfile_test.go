@@ -408,27 +408,88 @@ func TestGenerate_CertInstallBeforeAptInstall(t *testing.T) {
 	}
 }
 
-// TestGenerate_CertInstallAlwaysEmitted verifies the cert install block
-// and ENV declarations land in the Dockerfile regardless of whether the
-// build host has populated ~/.cocoon/certs/. The block is built around a
-// shell-side conditional so the Dockerfile is byte-identical for every
-// team member; only what gets installed at build time depends on the
-// host's directory contents.
-func TestGenerate_CertInstallAlwaysEmitted(t *testing.T) {
+// TestGenerate_CertInstallEmittedWhenEnabled verifies the cert install
+// block and ENV declarations land in the Dockerfile when the workspace
+// opts in via [certificates] enable=true. The fixture used by all
+// staging-root tests now sets that flag through generateInStagingRoot's
+// path, so this test is the positive case for the gated emit.
+func TestGenerate_CertInstallEmittedWhenEnabled(t *testing.T) {
 	t.Parallel()
 
 	root := stagingRoot(t)
 	got := generateInStagingRoot(t, root, "http://archive.ubuntu.com/ubuntu/")
 
 	if !strings.Contains(got, certInstallHeader) {
-		t.Errorf("cert install block must always be emitted:\n%s", got)
+		t.Errorf("cert install block must be emitted when [certificates] enable=true:\n%s", got)
 	}
 	if !strings.Contains(got, "RUN --mount=type=bind,from=cocoon_user_certs") {
 		t.Errorf("cert install RUN must use the cocoon_user_certs build context:\n%s", got)
 	}
 	if !strings.Contains(got, "ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt") {
-		t.Errorf("ENV SSL_CERT_FILE must always be emitted:\n%s", got)
+		t.Errorf("ENV SSL_CERT_FILE must be emitted when certificates are enabled:\n%s", got)
 	}
+}
+
+// TestGenerate_CertInstallSuppressedWhenDisabled verifies that omitting
+// the [certificates] section (or setting enable=false) yields a
+// Dockerfile with zero cert-related content: no RUN block, no ENV
+// declarations, no /usr/local/share/ca-certificates/cocoon-user
+// references. This is the core opt-out invariant for cert-free teams.
+func TestGenerate_CertInstallSuppressedWhenDisabled(t *testing.T) {
+	t.Parallel()
+
+	got := generateWithCertificatesDisabled(t)
+
+	for _, mustNot := range []string{
+		certInstallHeader,
+		"cocoon_user_certs",
+		"/usr/local/share/ca-certificates/cocoon-user",
+		"ENV SSL_CERT_FILE",
+		"ENV CURL_CA_BUNDLE",
+		"ENV REQUESTS_CA_BUNDLE",
+		"ENV NODE_EXTRA_CA_CERTS",
+	} {
+		if strings.Contains(got, mustNot) {
+			t.Errorf("Dockerfile with [certificates] disabled must not contain %q\n--- got ---\n%s", mustNot, got)
+		}
+	}
+}
+
+// generateWithCertificatesDisabled loads the snapshot fixture, drops
+// any [certificates] section so the default-off path applies, and
+// returns the generated Dockerfile. Mirrors generateInStagingRoot's
+// shape but does not seed a staging root since the disabled branch
+// does not depend on host-side cert state.
+func generateWithCertificatesDisabled(t *testing.T) string {
+	t.Helper()
+	root := stagingRoot(t)
+	wsPath := filepath.Join(repoRoot(t), "tests", "fixtures", "snapshot.workspace.toml")
+	pluginsDir := filepath.Join(repoRoot(t), "internal", "plugin", "catalog")
+
+	ws, err := config.LoadWorkspace(wsPath)
+	if err != nil {
+		t.Fatalf("load workspace: %v", err)
+	}
+	ws.Apt.Sources = nil
+	ws.Certificates = nil
+
+	var warns bytes.Buffer
+	plugins, err := plugin.LoadEnabled(pluginsDir, ws.Plugins.Enable, &warns)
+	if err != nil {
+		t.Fatalf("load plugins: %v", err)
+	}
+
+	ctx := &generate.WorkspaceContext{WS: ws, PluginsFS: os.DirFS(pluginsDir), Plugins: plugins, Warnings: &warns}
+	got, err := dockerfile.Generate(ctx, dockerfile.Options{
+		WorkspaceRoot: root,
+		RepoDir:       "cocoon",
+		Plugins:       plugins,
+		Warnings:      &warns,
+	})
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	return got
 }
 
 // stagingRoot creates a temp workspace root with an empty config/ directory.

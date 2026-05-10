@@ -55,7 +55,6 @@ type templateData struct {
 	CertInstallRoot        string
 	AptCABootstrap         string
 	AptMirrorRewrite       string
-	AptProxyConf           string
 	AptThirdParty          string
 	AptBasePackages        string
 	AptShellPackages       string
@@ -106,10 +105,6 @@ ARG GID
 
 {{ end -}}
 {{ with .AptMirrorRewrite -}}
-{{ . }}
-
-{{ end -}}
-{{ with .AptProxyConf -}}
 {{ . }}
 
 {{ end -}}
@@ -249,16 +244,20 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	// cocoon_user_certs build context is declared by compose.go's
+	// The cocoon_user_certs build context is declared by compose.go's
 	// additional_contexts, sourced from ${HOME}/.cocoon/certs on the host.
-	// The cert install RUN always lands in the Dockerfile (shell-side
-	// conditional inside the RUN body skips the work when the directory
-	// is empty), so the generated artifacts are byte-identical regardless
-	// of whether the developer happens to have user certs configured.
-	certInstallRoot, certInstallEnv := generateCertificateInstall()
+	// The cert install RUN block + the SSL_CERT_FILE/etc. ENV exports
+	// only land in the Dockerfile when the workspace opts in via
+	// `[certificates] enable = true`. When disabled (or absent), all
+	// cert-related artifacts stay empty so the generated Dockerfile has
+	// no cert-related lines at all.
+	var certInstallRoot, certInstallEnv string
+	if ctx.CertificatesEnabled() {
+		certInstallRoot, certInstallEnv = generateCertificateInstall()
+	}
 	aptCABootstrap := buildAptCABootstrap(ctx)
 
-	mirrorRewritePre, mirrorRewrite, proxyConfPre, proxyConf := splitAptSetupForBootstrap(ctx)
+	mirrorRewritePre, mirrorRewrite, proxyConfPre := splitAptSetupForBootstrap(ctx)
 
 	aptBase := readAptPackages(configDir)
 	basePkgNames := parseBasePackages(aptBase)
@@ -296,7 +295,6 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 		CertInstallRoot:        certInstallRoot,
 		AptCABootstrap:         aptCABootstrap,
 		AptMirrorRewrite:       mirrorRewrite,
-		AptProxyConf:           proxyConf,
 		AptThirdParty:          buildAptThirdParty(ctx),
 		AptBasePackages:        strings.TrimRight(aptBase, "\n"),
 		AptShellPackages:       strings.TrimRight(formatAptContinuations(aptShellList), "\n"),
@@ -421,21 +419,24 @@ func sortedValues(m map[string]string) []string {
 	return out
 }
 
-// splitAptSetupForBootstrap decides whether [apt.mirror] / [apt.proxy] RUN
-// blocks should emit before the bootstrap apt activity (cert install RUN or
-// AptCABootstrap RUN) or after it. The bootstrap hits archive.ubuntu.com via
-// apt-get, so [apt.proxy] and an HTTP [apt.mirror] (which the build is
-// typically air-gapped behind) must be in place first. An HTTPS [apt.mirror]
-// is the opposite: the bootstrap can't TLS to it without the CA bundle yet,
-// so the rewrite stays in the post-bootstrap slot.
+// splitAptSetupForBootstrap decides whether [apt.mirror] should emit
+// before or after the bootstrap apt activity (cert install RUN or the
+// AptCABootstrap RUN). HTTP mirrors go pre-bootstrap so the bootstrap's
+// own apt-get update can reach the configured archive; HTTPS mirrors
+// stay post-bootstrap because the bootstrap cannot TLS to them without
+// ca-certificates in place yet.
 //
-// The cert install RUN block is always present in the generated Dockerfile
-// (it shell-side conditionally installs ca-certificates when the user has
-// populated ~/.cocoon/certs/), so we always treat the bootstrap as present
-// and place mirror/proxy in their pre-bootstrap slots accordingly.
+// [apt.proxy] is always pre-bootstrap: every flavor of bootstrap apt
+// activity (HTTP or HTTPS) needs the proxy to reach the archive. There
+// is no post-bootstrap slot for proxy — the function returns only
+// `proxyPre`.
+//
+// (Earlier revisions returned a `proxyPost` value that was always empty;
+// it was a vestige of a no-bootstrap branch that no longer exists, since
+// the cert install RUN now lands whenever [certificates] is enabled.)
 func splitAptSetupForBootstrap(
 	ctx *generate.WorkspaceContext,
-) (mirrorPre, mirrorPost, proxyPre, proxyPost string) {
+) (mirrorPre, mirrorPost, proxyPre string) {
 	proxyPre = buildAptProxyConf(ctx)
 	mirror := buildAptMirrorRewrite(ctx)
 	if mirror != "" {
@@ -445,7 +446,7 @@ func splitAptSetupForBootstrap(
 			mirrorPre = mirror
 		}
 	}
-	return mirrorPre, mirrorPost, proxyPre, proxyPost
+	return mirrorPre, mirrorPost, proxyPre
 }
 
 // buildAptCABootstrap returns a RUN block that installs ca-certificates
@@ -736,16 +737,18 @@ func generateCertificateInstall() (rootBlock, envBlock string) {
 }
 
 //nolint:lll // Dockerfile RUN/ENV lines embed shell semantics verbatim.
-const certInstallRootBlock = `# Install custom CA certificates from ~/.cocoon/certs/ (root stage; runs
-# before any apt-get update so HTTPS apt mirrors / sources signed by a
-# corporate CA can complete TLS handshake). The RUN body is a no-op when
-# ~/.cocoon/certs/ is empty on the build host. Certificates flow in via the
+var certInstallRootBlock = `# Install custom CA certificates from ~/.cocoon/certs/ (root stage; runs
+# before the main apt-get update so HTTPS apt mirrors / sources signed by
+# a corporate CA can complete TLS handshake). The RUN body itself runs
+# its own apt-get update inside the conditional to install ca-certificates
+# only when the user has dropped *.crt files into the host directory — the
+# block is a no-op otherwise. Certificates flow in via the
 # cocoon_user_certs named build context declared by docker-compose.yml's
 # additional_contexts (sourced from ${HOME}/.cocoon/certs). The apt cache
 # / lists mounts mirror buildAptCABootstrap and the main apt install RUN
 # so repeated builds reuse cached package indexes and the layer stays
 # clean (no /var/lib/apt/lists/* in the image).
-RUN --mount=type=bind,from=cocoon_user_certs,target=/tmp/cocoon-user-certs \
+RUN --mount=type=bind,from=` + generate.CertsBuildContextName + `,target=/tmp/cocoon-user-certs \
     --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     if [ -n "$(find /tmp/cocoon-user-certs -maxdepth 1 -name '*.crt' 2>/dev/null | head -n 1)" ]; then \

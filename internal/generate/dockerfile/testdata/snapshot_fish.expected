@@ -19,9 +19,11 @@ RUN sed -i \
 RUN { echo 'Acquire::http::Proxy "http://proxy.corp:8080";'; echo 'Acquire::https::Proxy "http://proxy.corp:8080";'; } > /etc/apt/apt.conf.d/95proxy
 
 # Install custom CA certificates from ~/.cocoon/certs/ (root stage; runs
-# before any apt-get update so HTTPS apt mirrors / sources signed by a
-# corporate CA can complete TLS handshake). The RUN body is a no-op when
-# ~/.cocoon/certs/ is empty on the build host. Certificates flow in via the
+# before the main apt-get update so HTTPS apt mirrors / sources signed by
+# a corporate CA can complete TLS handshake). The RUN body itself runs
+# its own apt-get update inside the conditional to install ca-certificates
+# only when the user has dropped *.crt files into the host directory — the
+# block is a no-op otherwise. Certificates flow in via the
 # cocoon_user_certs named build context declared by docker-compose.yml's
 # additional_contexts (sourced from ${HOME}/.cocoon/certs). The apt cache
 # / lists mounts mirror buildAptCABootstrap and the main apt install RUN
