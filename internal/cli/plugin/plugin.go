@@ -7,6 +7,11 @@
 //	pin        emit (or write in-place) a [plugins.versions.<id>] block
 //	scaffold   create a new <id>/ directory under .cocoon/plugins from a template
 //
+// To use an embedded plugin, add its id to [plugins].enable in
+// workspace.toml. To customise it, scaffold a new id or copy the
+// embedded source under ~/.cocoon/plugins/ (or <project>/.cocoon/plugins/)
+// with cp -r.
+//
 // Each handler writes its output to the supplied stdout/stderr writers and
 // returns sentinel errors that the binary boundary maps to exit codes.
 package plugincli

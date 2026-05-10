@@ -9,19 +9,24 @@ import (
 	"github.com/sukekyo26/cocoon/internal/i18n"
 )
 
-const pluginLong = `cocoon plugin — manage cocoon plugins
+const pluginLong = `cocoon plugin — inspect and author cocoon plugins
 
 Subcommands:
   list       list every plugin available in the layered view (project > user > embedded)
   show       print the resolved manifest for one plugin id
   pin        print a workspace.toml [plugins.versions.<id>] block
-  scaffold   create a new <id>/ directory from a template`
+  scaffold   create a new <id>/ directory from a template
+
+To use a plugin, add its id to [plugins].enable in workspace.toml — the
+embedded catalog is picked up automatically. To customise an embedded
+plugin, scaffold a new id or copy the embedded source under
+~/.cocoon/plugins/ (or <project>/.cocoon/plugins/) with cp -r.`
 
 // NewCommand returns the cobra subtree for ` + "`cocoon plugin`" + `.
 func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "plugin",
-		Short:         "Manage cocoon plugins (list / show / pin / scaffold)",
+		Short:         "Inspect and author cocoon plugins (list / show / pin / scaffold)",
 		Long:          pluginLong,
 		Args:          rejectUnknownSubcommand,
 		SilenceUsage:  true,
@@ -38,7 +43,6 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 	cmd.AddCommand(
 		newListCmd(stdout, stderr),
 		newShowCmd(stdout, stderr),
-		newAddCmd(stdout, stderr),
 		newPinCmd(stdout, stderr),
 		newScaffoldCmd(stdout, stderr),
 	)
