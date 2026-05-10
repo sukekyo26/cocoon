@@ -1,6 +1,7 @@
 package dockerfile
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -13,17 +14,54 @@ import (
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
 
+// installHeredocDelim is the bash heredoc terminator used to inline
+// plugin install scripts into the generated Dockerfile. It must match
+// the literal embedded in installRunTmpl. Plugin scripts that contain
+// a line equal to this delimiter would terminate the heredoc early and
+// silently truncate the install at build time, so the renderer rejects
+// them up front (see checkHeredocCollision).
+const installHeredocDelim = "COCOON_PLUGIN_EOF"
+
+// ErrHeredocCollision is returned when a plugin install script
+// contains a line that exactly matches installHeredocDelim. Exposed as
+// a sentinel so external callers (and tests) can match the failure
+// class with errors.Is without scraping the message.
+var ErrHeredocCollision = errors.New("dockerfile: plugin install script collides with heredoc delimiter")
+
 // fileExistsInFS reports whether name is a regular file inside fsys.
-// Returns false only on missing file or other stat errors; the caller
-// is responsible for ensuring fsys is non-nil (generatePluginInstalls
-// fails fast with plugin.ErrNilPluginsFS the moment any enabled plugin
-// is present without a wired-up PluginsFS).
-func fileExistsInFS(fsys fs.FS, name string) bool {
+// The bool/error split mirrors os.Stat semantics: a false / nil pair
+// means "not a regular file present at this path" (missing or
+// directory), while any other stat failure (permission, I/O, etc.) is
+// returned as-is so the caller can surface it instead of silently
+// dropping the affected plugin from the generated Dockerfile. fsys
+// must be non-nil; generatePluginInstalls fails fast with
+// plugin.ErrNilPluginsFS the moment any enabled plugin is present
+// without a wired-up PluginsFS.
+func fileExistsInFS(fsys fs.FS, name string) (bool, error) {
 	st, err := fs.Stat(fsys, name)
 	if err != nil {
-		return false
+		if errors.Is(err, fs.ErrNotExist) {
+			return false, nil
+		}
+		return false, fmt.Errorf("stat %s: %w", name, err)
 	}
-	return !st.IsDir()
+	return !st.IsDir(), nil
+}
+
+// checkHeredocCollision scans scriptBody for a line equal to
+// installHeredocDelim. The heredoc form `bash <<'EOF' … EOF` terminates
+// at the first line that exactly matches the closing delimiter, so a
+// third-party plugin whose install script happens to contain that
+// literal would be silently truncated mid-build. We reject it here so
+// the failure is loud and points at the offending plugin id.
+func checkHeredocCollision(pluginID string, scriptBody []byte) error {
+	for _, line := range strings.Split(string(scriptBody), "\n") {
+		if line == installHeredocDelim {
+			return fmt.Errorf("%w: plugin %q contains the literal %s; rename it in the script",
+				ErrHeredocCollision, pluginID, installHeredocDelim)
+		}
+	}
+	return nil
 }
 
 // readFileFromFS reads name out of fsys, wrapping errors with the
@@ -96,8 +134,14 @@ func buildPluginSnippets(
 
 	installPath := path.Join(id, "install.sh")
 	userPath := path.Join(id, "install_user.sh")
-	hasInstall := fileExistsInFS(pluginsFS, installPath)
-	hasUserInstall := fileExistsInFS(pluginsFS, userPath)
+	hasInstall, err := fileExistsInFS(pluginsFS, installPath)
+	if err != nil {
+		return pluginSnippets{}, false, err
+	}
+	hasUserInstall, err := fileExistsInFS(pluginsFS, userPath)
+	if err != nil {
+		return pluginSnippets{}, false, err
+	}
 	if !hasInstall && !hasUserInstall && len(install.BuildArgs) == 0 && len(install.Env) == 0 {
 		return pluginSnippets{install: "", userInstall: "", requiresRoot: false}, false, nil
 	}
@@ -192,6 +236,9 @@ func renderInstallSnippet(rs runSpec, hasInstall bool, installPath string) (stri
 		if err != nil {
 			return "", err
 		}
+		if err := checkHeredocCollision(rs.id, body); err != nil {
+			return "", err
+		}
 		snippet := renderInstallRun(rs.id, "# Install "+rs.comment, rs.argLines, body,
 			rs.versionCapable, rs.hasOverride, rs.override, rs.buildArgs, rs.sh)
 		if rs.envBlock != "" {
@@ -210,6 +257,9 @@ func renderInstallSnippet(rs runSpec, hasInstall bool, installPath string) (stri
 func renderUserInstallSnippet(rs runSpec, userPath string) (string, error) {
 	body, err := readFileFromFS(rs.pluginsFS, userPath)
 	if err != nil {
+		return "", err
+	}
+	if err := checkHeredocCollision(rs.id, body); err != nil {
 		return "", err
 	}
 	return renderInstallRun(rs.id, "# Configure "+rs.comment+" (user)", nil, body,

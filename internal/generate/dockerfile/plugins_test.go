@@ -3,14 +3,25 @@ package dockerfile //nolint:testpackage // exercises unexported generatePluginIn
 import (
 	"bytes"
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/sukekyo26/cocoon/internal/config"
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
+
+// errFS is a minimal fs.FS that fails every Open with the configured
+// error. fs.Stat falls back to opening the file when the underlying FS
+// does not implement StatFS, so this is enough to exercise non-ENOENT
+// error propagation in fileExistsInFS without needing a real
+// permission-denied fixture (hard to set up portably in CI).
+type errFS struct{ err error }
+
+func (e errFS) Open(string) (fs.File, error) { return nil, e.err }
 
 // TestGeneratePluginInstalls_NoRedundantUserToggle pins down the CODE-02 fix:
 // when the user-dirs mkdir block and a root-requiring plugin install run
@@ -256,6 +267,137 @@ func TestGeneratePluginInstalls_NilPluginsFSFailsFast(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 		})
+	}
+}
+
+// TestFileExistsInFS_Contract pins the (bool, error) contract added
+// in response to the PR #12 review: "not found" returns (false, nil)
+// like os.Stat's ENOENT branch, but every other stat failure
+// (permission, I/O, transient FS errors) is propagated up so the
+// renderer doesn't silently emit an incomplete Dockerfile.
+func TestFileExistsInFS_Contract(t *testing.T) {
+	t.Parallel()
+
+	t.Run("file_present_returns_true_nil", func(t *testing.T) {
+		t.Parallel()
+		fsys := fstest.MapFS{"plugins/foo/install.sh": &fstest.MapFile{Data: []byte("#!/bin/sh\n")}}
+		ok, err := fileExistsInFS(fsys, "plugins/foo/install.sh")
+		if err != nil || !ok {
+			t.Fatalf("got (%v, %v), want (true, nil)", ok, err)
+		}
+	})
+
+	t.Run("file_missing_returns_false_nil", func(t *testing.T) {
+		t.Parallel()
+		ok, err := fileExistsInFS(fstest.MapFS{}, "plugins/foo/install.sh")
+		if err != nil || ok {
+			t.Fatalf("got (%v, %v), want (false, nil)", ok, err)
+		}
+	})
+
+	t.Run("directory_returns_false_nil", func(t *testing.T) {
+		t.Parallel()
+		// A directory entry must report "not a regular file" without
+		// erroring — buildPluginSnippets relies on this to keep
+		// emit-decision logic linear.
+		fsys := fstest.MapFS{"plugins/foo/install.sh/marker": &fstest.MapFile{}}
+		ok, err := fileExistsInFS(fsys, "plugins/foo/install.sh")
+		if err != nil || ok {
+			t.Fatalf("got (%v, %v), want (false, nil)", ok, err)
+		}
+	})
+
+	t.Run("non_notexist_error_propagates", func(t *testing.T) {
+		t.Parallel()
+		ok, err := fileExistsInFS(errFS{err: fs.ErrPermission}, "plugins/foo/install.sh")
+		if ok {
+			t.Errorf("ok = true, want false")
+		}
+		if !errors.Is(err, fs.ErrPermission) {
+			t.Fatalf("err = %v, want errors.Is(.., fs.ErrPermission)", err)
+		}
+	})
+}
+
+// TestBuildPluginSnippets_HeredocCollisionFails covers the
+// checkHeredocCollision contract: an install script containing a line
+// that exactly matches the COCOON_PLUGIN_EOF terminator would silently
+// truncate the heredoc at docker build time, so the renderer must
+// reject it up front. Three input shapes lock the detection:
+//   - a delimiter-only line in the middle of the script (the actual
+//     truncation case)
+//   - a delimiter as the very last line, no trailing newline (boundary
+//     case the renderer normalises elsewhere)
+//   - a near-miss (delimiter prefix only) must NOT trip — the helper
+//     compares full lines, not substrings, so legitimate scripts that
+//     reference the literal in a comment or echo do not regress.
+func TestBuildPluginSnippets_HeredocCollisionFails(t *testing.T) {
+	t.Parallel()
+
+	good := "set -e\n# mentions COCOON_PLUGIN_EOF in a comment, fine\necho hi\n"
+	collidingMiddle := "set -e\nCOCOON_PLUGIN_EOF\necho hi\n"
+	collidingTrailing := "set -e\necho hi\nCOCOON_PLUGIN_EOF"
+
+	cases := []struct {
+		name      string
+		body      string
+		wantError bool
+	}{
+		{name: "no_collision_passes", body: good, wantError: false},
+		{name: "delimiter_in_middle_fails", body: collidingMiddle, wantError: true},
+		{name: "delimiter_as_last_line_fails", body: collidingTrailing, wantError: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			plugins := map[string]*plugin.Plugin{
+				"colliding": {
+					Metadata: plugin.Metadata{Name: "Colliding"}, //nolint:exhaustruct // unused
+					Install:  plugin.Install{},                   //nolint:exhaustruct // unused
+				}, //nolint:exhaustruct // Apt / Version unused
+			}
+			pluginsDir := t.TempDir()
+			seedPluginInstallBody(t, pluginsDir, "colliding", tc.body)
+
+			_, err := generatePluginInstalls(
+				plugins, []string{"colliding"}, os.DirFS(pluginsDir), nil,
+				map[string]config.PluginVersionOverride{},
+				&bytes.Buffer{},
+				shellEnv{rcFileAbs: "/home/${USERNAME}/.bashrc", rcSyntax: "posix", loginShell: "bash"},
+			)
+			if tc.wantError {
+				if !errors.Is(err, ErrHeredocCollision) {
+					t.Fatalf("err = %v, want errors.Is(.., ErrHeredocCollision)", err)
+				}
+				if !strings.Contains(err.Error(), "COCOON_PLUGIN_EOF") {
+					t.Errorf("error message must name the colliding literal: %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+// seedPluginInstallBody is the body-controlled twin of seedPluginInstall:
+// callers pass the literal install.sh contents so heredoc-collision
+// fixtures (and any future shape-sensitive tests) don't have to fight
+// the default "#!/usr/bin/env bash\n" stub.
+func seedPluginInstallBody(t *testing.T, pluginsDir, id, body string) {
+	t.Helper()
+	dir := filepath.Join(pluginsDir, id)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", dir, err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "plugin.toml"), []byte("# stub\n"), 0o600); err != nil {
+		t.Fatalf("write plugin.toml: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "install.sh"), []byte(body), 0o600); err != nil {
+		t.Fatalf("write install.sh: %v", err)
 	}
 }
 
