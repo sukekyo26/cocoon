@@ -372,11 +372,14 @@ func repoRoot(t *testing.T) string {
 // to incidental formatting tweaks.
 const certInstallHeader = "# Install custom CA certificates from ~/.cocoon/certs/"
 
-// TestGenerate_CertInstallBeforeAptInstall verifies the always-emitted
-// cert install RUN block lands before the main apt install RUN. This is
-// the core CERT-01 regression guard: HTTPS apt operations performed by
-// the main install must see any user-provided corporate CAs already in
-// the trust store.
+// TestGenerate_CertInstallBeforeAptInstall verifies that on the
+// enabled cert path (the snapshot fixture sets [certificates]
+// enable = true), the cert install RUN block lands before the main
+// apt install RUN. This is the core CERT-01 regression guard: HTTPS
+// apt operations performed by the main install must see any user-
+// provided corporate CAs already in the trust store. The disabled
+// branch is covered separately by
+// TestGenerate_CertInstallSuppressedWhenDisabled.
 func TestGenerate_CertInstallBeforeAptInstall(t *testing.T) {
 	t.Parallel()
 
@@ -397,10 +400,13 @@ func TestGenerate_CertInstallBeforeAptInstall(t *testing.T) {
 		t.Errorf("cert install must precede apt install (certIdx=%d aptIdx=%d)", certIdx, aptIdx)
 	}
 
-	// Env declarations live on the post-USER stage so they apply to the
-	// unprivileged user's shells. They must always be emitted (the bundle
-	// they reference is the merged system bundle which exists regardless
-	// of user-cert presence).
+	// Env declarations live on the post-USER stage so they apply to
+	// the unprivileged user's shells. On the enabled path the four
+	// ENV exports always land regardless of whether the host actually
+	// has *.crt files in ~/.cocoon/certs/ (the bundle they reference
+	// is the merged system bundle, which exists either way). On the
+	// disabled path they are suppressed entirely — covered by
+	// TestGenerate_CertInstallSuppressedWhenDisabled.
 	envIdx := strings.Index(got, "ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt")
 	userSwitchIdx := strings.Index(got, "USER ${USERNAME}\nWORKDIR")
 	if envIdx < 0 || userSwitchIdx < 0 || envIdx < userSwitchIdx {
