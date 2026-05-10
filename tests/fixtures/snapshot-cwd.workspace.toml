@@ -81,6 +81,9 @@ copilot-cli = { pin = "0.0.369" }
 [volumes]
 deno = "/home/${USERNAME}/.deno"
 
+[certificates]
+enable = true
+
 [devcontainer.customizations.vscode]
 extensions = [
     "MS-CEINTL.vscode-language-pack-ja",

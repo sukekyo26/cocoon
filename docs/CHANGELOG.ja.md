@@ -11,11 +11,17 @@ cocoon の主要な変更を記録します。フォーマットは
 - コンテナ内 `/home/<user>/.cocoon` に named volume `cocoon` をマウント。ユーザー個人のシェル設定をコンテナリビルドを跨いで永続化する。コンテナの rc (bash / zsh / fish) が起動時に `~/.cocoon/.shellrc` (fish は `~/.cocoon/.shellrc.fish`) を自動 source するので、コンテナ内で編集した内容は `docker compose down && up --build` を跨いでも残る (リセットは `down -v` のみ)。
 - `cocoon init --plugin-versions=<id>=<ref>,...` を追加。1 コマンドで `[plugins] enable` と `[plugins.versions]` の両方を出力できる。各 `<id>` は `--plugins` に含まれ、かつ `version_capable` である必要があり、重複は不可。これまで `cocoon plugin pin` の出力を手で貼り付けていた運用を置き換える。
 - `cocoon plugin pin --write` を追加。`workspace.toml` の `[plugins.versions.<id>]` ブロックを直接挿入・置換する。行ベースのミューテータが対象ブロック外のコメント・空行を保持するため、既存ファイルを安全に編集できる。`--write` 無しの stdout-only 動作はデフォルトのまま。`[plugins.versions]` 直下に任意の key 代入 (例: `<id> = "..."` や `<id> = { ... }`) がある場合は重複ブロック追加を避けるため usage error で停止する。
+- `workspace.toml` に新セクション `[certificates]` を追加。`enable = true` のとき `~/.cocoon/certs/*.crt` を build 時にコンテナイメージへ自動取り込み、デフォルト (セクション不在 or `enable = false`) では生成された `Dockerfile` / `docker-compose.yml` / `devcontainer.json` に **cert 関連の配線が一切乗らない** (additional_contexts も RUN --mount=type=bind も initializeCommand も SSL_CERT_FILE ENV も出ない)。社内 CA を扱わないチームは corp-CA 機構ゼロの成果物を commit できる。有効時は compose 側で `additional_contexts: cocoon_user_certs: ${HOME:?…}/.cocoon/certs`、Dockerfile 側で `RUN --mount=type=bind,from=cocoon_user_certs …` により他の apt 操作より前に trust store へマージするため、Zscaler 等の TLS インターセプトが行われる corp ネットワーク環境でも build が成立する。
+- `cocoon init --certificates` / `--no-certificates` フラグ + 対話プロンプトで上記セクションを切り替え可能。有効化時は生成 `workspace.toml` に `[certificates] enable = true` が出力され、無効時はセクション省略 + コメントテンプレートで後から有効化する手順を案内する。
+- 生成 `.devcontainer/devcontainer.json` の `initializeCommand: "mkdir -p ${HOME:?…}/.cocoon/certs"` は `[certificates]` 有効時のみ出力される。有効化済みワークスペースの VS Code Dev Containers ユーザーは cocoon バイナリ無しでもホスト側ディレクトリが build 前に自動作成される。`docker compose build` を直接実行するユーザー (CI 等) はこのフックを通らないため、初回のみホスト側で `mkdir -p ~/.cocoon/certs` を実行する必要がある。
+- `cocoon gen` 実行時にホスト側 `~/.cocoon/certs/` (パーミッション 0700) を不在なら自動作成し、社内 / プライベート CA の `.crt` 配置先を案内するメッセージを出力する — ただし `[certificates] enable = true` のときのみ。無効ワークスペースではホスト側への副作用も notice 出力も発生しない。
+- 生成 compose の `additional_contexts` と devcontainer の `initializeCommand` で `${HOME:?…}` パラメータ展開を使用。`HOME` 未設定環境では明示的なエラーで fail-fast し、`/.cocoon/certs` への path collapse による sub debug が発生しないようにした。
 
 ### 変更
 
 - `cocoon gen` がプラグインカタログを `~/.cocoon/cache/build-context/` に展開する処理を廃止。有効化された各プラグインの `install.sh` (および存在すれば `install_user.sh`) は生成 `.devcontainer/Dockerfile` 内へシングルクオートの bash heredoc で直接埋め込まれ、`docker-compose.yml` から `additional_contexts: plugins:` も削除した。これによりビルドはプロジェクトツリー以外を必要とせず、ホストでも dev コンテナ内でも同じように `cocoon gen` を実行できる (従来はキャッシュがホスト `$HOME` 配下に置かれる前提のためビルドは必ずホストで行う必要があった)。残存する `~/.cocoon/cache/build-context/` ディレクトリは再作成されないので、不要なら `rm -rf ~/.cocoon/cache/build-context` で手動削除できる。
 - **BREAKING**: `cocoon plugin scaffold` の `--plugins-dir` デフォルトを `./plugins` から `<workspace>/.cocoon/plugins` (`workspace.toml` から自動検出) に変更。`--plugins-dir` 未指定かつ cocoon プロジェクト外で実行した場合は `./plugins/<id>/` に黙って書き込む代わりに actionable error で停止する。明示的に上書きするには `--plugins-dir <path>` を渡す。
+- **BREAKING**: TLS 証明書自動取り込みの参照元を `<project>/certs/*.crt` から `~/.cocoon/certs/*.crt` に変更し、機能自体を `[certificates] enable = true` による opt-in 化 (デフォルト off)。移行手順: `workspace.toml` に `[certificates]\nenable = true` を追加し、`mkdir -p ~/.cocoon/certs && mv ./certs/*.crt ~/.cocoon/certs/` を実行、続いて `cocoon gen` を再実行。プロジェクト直下の `certs/` ディレクトリはもはやスキャンされず、ワークスペースが opt-in しない限り cert 配線も生成されない。
 
 ### 修正
 

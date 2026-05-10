@@ -123,6 +123,13 @@ jobs:
           # plugins (e.g. docker-cli, which calls gpg in install.sh via the
           # vcs category) build cleanly. Trimming this list in CI hides
           # plugin-vs-category mismatches that real users would hit.
+          # --certificates opts the workspace into TLS auto-bake from
+          # ~/.cocoon/certs/. Required here because the e2e matrix
+          # exercises the cert wiring path end-to-end (docker buildx bake
+          # consuming additional_contexts, the RUN --mount=type=bind, the
+          # downstream update-ca-certificates). Cert-free flows are
+          # covered by Go unit tests; the e2e overhead of running both
+          # branches through the full matrix is not worth it.
           "$COCOON" init --yes \
             --service-name dev \
             --username dev \
@@ -130,6 +137,7 @@ jobs:
             --os-version 22.04 \
             --mount-root . \
             --no-devcontainer \
+            --certificates \
             --apt-categories=text-editors,vcs,utilities,compression,build \
             "${extra[@]}"
           "$COCOON" gen
@@ -190,6 +198,27 @@ jobs:
             aarch64) arch=arm64 ;;
             *) printf 'unsupported runner arch: %s\n' "$(uname -m)" >&2; exit 1 ;;
           esac
+          # The generated docker-compose.yml declares
+          # `additional_contexts: cocoon_user_certs: ${HOME}/.cocoon/certs`
+          # so users can drop corp CA certs (e.g. Zscaler) into a host-side
+          # directory and have them auto-baked at build time.
+          #
+          # Two CI-side concerns we have to handle that end users don't:
+          #   1. Path existence — BuildKit resolves the named context path
+          #      before the build starts and errors if the directory does
+          #      not exist. VS Code Dev Containers users get this auto-
+          #      created via devcontainer.json's initializeCommand; bake
+          #      (this CI) and `docker compose build` directly don't run
+          #      that hook, so we mkdir explicitly. The directory stays
+          #      empty in CI, so the Dockerfile's `if find ... ; then ...
+          #      fi` branch no-ops and no certs land in the image.
+          #   2. Filesystem entitlement (bake-only) — `docker buildx bake`
+          #      treats build contexts outside the bake working dir as
+          #      privileged reads and refuses to start without an explicit
+          #      `--allow=fs.read=<path>` grant. `docker compose build`
+          #      does NOT enforce this, so end users running compose
+          #      directly are unaffected. We pass the flag below.
+          mkdir -p "$HOME/.cocoon/certs"
           env_args=()
           while IFS= read -r line || [ -n "$line" ]; do
             case "$line" in
@@ -199,6 +228,7 @@ jobs:
           done < .devcontainer/.env
           env "${env_args[@]}" docker buildx bake \
             -f .devcontainer/docker-compose.yml \
+            --allow="fs.read=$HOME/.cocoon/certs" \
             --load \
             --set "*.context=$PWD" \
             --set "*.dockerfile=$PWD/.devcontainer/Dockerfile" \

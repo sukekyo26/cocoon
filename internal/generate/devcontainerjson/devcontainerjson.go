@@ -35,6 +35,20 @@ func buildConfig(ctx *generate.WorkspaceContext) *orderedMap {
 	base.set("name", ctx.ServiceName())
 	base.set("dockerComposeFile", []string{"docker-compose.yml"})
 	base.set("service", ctx.ServiceName())
+	if ctx.CertificatesEnabled() {
+		// initializeCommand runs on the host (via /bin/sh on Linux/macOS)
+		// before container build/create. It idempotently creates the
+		// user cert directory referenced by docker-compose.yml's
+		// additional_contexts so VS Code Dev Containers users get a
+		// working build with no extra setup. Only emitted when the
+		// workspace opts into [certificates] enable=true; cert-free
+		// teams get a devcontainer.json without this hook.
+		//
+		// The argument uses POSIX shell parameter expansion
+		// (${HOME:?...}) so an unset HOME fails fast with a visible
+		// message instead of silently mkdir'ing /.cocoon/certs.
+		base.set("initializeCommand", "mkdir -p "+generate.CertsHostPath)
+	}
 	workspaceFolder := "/home/" + ctx.Username() + "/workspace"
 	if ctx.WS.Workspace.MountRootOrDefault() == "." {
 		// Match the compose working_dir so VS Code opens the same

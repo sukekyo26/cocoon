@@ -2,8 +2,10 @@ package compose_test
 
 import (
 	"bytes"
+	"flag"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/sukekyo26/cocoon/internal/config"
@@ -11,6 +13,13 @@ import (
 	"github.com/sukekyo26/cocoon/internal/generate/compose"
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
+
+// updateGolden, when set with `go test -update-golden`, rewrites the
+// testdata/*.expected files from the current generator output instead of
+// asserting against them. Mirrors the dockerfile package convention.
+//
+//nolint:gochecknoglobals // test-only flag scoped to compose_test.
+var updateGolden = flag.Bool("update-golden", false, "rewrite testdata/*.expected from current generator output")
 
 func TestGenerate_Snapshot(t *testing.T) {
 	t.Parallel()
@@ -65,7 +74,14 @@ func TestGenerate_Snapshot(t *testing.T) {
 				t.Fatalf("generate: %v", err)
 			}
 
-			wantBytes, err := os.ReadFile(filepath.Join("testdata", tc.expectation))
+			path := filepath.Join("testdata", tc.expectation)
+			if *updateGolden {
+				if werr := os.WriteFile(path, []byte(got), 0o600); werr != nil {
+					t.Fatalf("update golden: %v", werr)
+				}
+				return
+			}
+			wantBytes, err := os.ReadFile(path)
 			if err != nil {
 				t.Fatalf("read expected: %v", err)
 			}
@@ -73,6 +89,51 @@ func TestGenerate_Snapshot(t *testing.T) {
 				t.Errorf("output mismatch\n--- got ---\n%s\n--- want ---\n%s", got, string(wantBytes))
 			}
 		})
+	}
+}
+
+// TestGenerate_CertificatesDisabled_NoAdditionalContexts verifies that
+// when [certificates] is absent (or enable=false), the compose generator
+// emits no `additional_contexts` mapping at all. Cert-free teams commit
+// a compose file that has no cocoon_user_certs build context wiring.
+func TestGenerate_CertificatesDisabled_NoAdditionalContexts(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := repoRoot(t)
+	pluginsDir := filepath.Join(repoRoot, "internal", "plugin", "catalog")
+	wsPath := filepath.Join(repoRoot, "tests", "fixtures", "snapshot.workspace.toml")
+
+	ws, err := config.LoadWorkspace(wsPath)
+	if err != nil {
+		t.Fatalf("load workspace: %v", err)
+	}
+	ws.Certificates = nil
+
+	var warns bytes.Buffer
+	plugins, err := plugin.LoadEnabled(pluginsDir, ws.Plugins.Enable, &warns)
+	if err != nil {
+		t.Fatalf("load plugins: %v", err)
+	}
+	if cerr := plugin.CheckConflicts(plugins); cerr != nil {
+		t.Fatalf("plugin conflicts: %v", cerr)
+	}
+
+	ctx := &generate.WorkspaceContext{
+		WS: ws, PluginsFS: os.DirFS(pluginsDir), Plugins: plugins, Warnings: &warns,
+	}
+	got, err := compose.Generate(ctx, compose.Options{Plugins: plugins, Warnings: &warns})
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+
+	for _, mustNot := range []string{
+		"additional_contexts",
+		"cocoon_user_certs",
+		".cocoon/certs",
+	} {
+		if strings.Contains(got, mustNot) {
+			t.Errorf("compose with [certificates] disabled must not contain %q\n--- got ---\n%s", mustNot, got)
+		}
 	}
 }
 

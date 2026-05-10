@@ -186,19 +186,59 @@ timezone = "Asia/Tokyo"
 			},
 		},
 		{
-			name: "certificates_section",
+			// User cert install is sourced from ~/.cocoon/certs/ via
+			// docker-compose's additional_contexts, opt-in through
+			// [certificates] enable = true. The cert install RUN block is
+			// emitted only when the workspace opts in; the assertion here
+			// covers the enabled branch.
+			name: "certificates_section_enabled",
 			workspace: tomlBase("svc-cert", "u", nil) + `
+[apt]
+packages = []
+
+[certificates]
+enable = true
+`,
+			useEmptyPluginsDir: true,
+			assert: []expect{
+				{path: ".devcontainer/Dockerfile", mustContain: []string{
+					"# Install custom CA certificates from ~/.cocoon/certs/",
+					"--mount=type=bind,from=cocoon_user_certs",
+					"update-ca-certificates",
+					"SSL_CERT_FILE",
+				}},
+				{path: ".devcontainer/docker-compose.yml", mustContain: []string{
+					"additional_contexts:",
+					"cocoon_user_certs:",
+					"${HOME:?HOME must be set",
+				}},
+				{path: ".devcontainer/devcontainer.json", mustContain: []string{
+					`"initializeCommand": "mkdir -p ${HOME:?HOME must be set`,
+				}},
+			},
+		},
+		{
+			// Default (no [certificates] section) → no cert wiring at all.
+			// Teams that never deal with corp CAs commit cert-free
+			// artifacts. Mirrors the explicit-disabled case below.
+			name: "certificates_section_default_off",
+			workspace: tomlBase("svc-no-cert", "u", nil) + `
 [apt]
 packages = []
 `,
 			useEmptyPluginsDir: true,
-			extras: []seed{{
-				Rel:  "certs/test-ca.crt",
-				Body: "-----BEGIN CERTIFICATE-----\nMIIBoj\n-----END CERTIFICATE-----\n",
-			}},
 			assert: []expect{
-				{path: ".devcontainer/Dockerfile", mustContain: []string{
-					"COPY certs/test-ca.crt", "update-ca-certificates", "SSL_CERT_FILE",
+				{path: ".devcontainer/Dockerfile", mustNotContain: []string{
+					"cocoon_user_certs",
+					"SSL_CERT_FILE",
+					"/usr/local/share/ca-certificates/cocoon-user",
+				}},
+				{path: ".devcontainer/docker-compose.yml", mustNotContain: []string{
+					"additional_contexts",
+					"cocoon_user_certs",
+				}},
+				{path: ".devcontainer/devcontainer.json", mustNotContain: []string{
+					"initializeCommand",
 				}},
 			},
 		},

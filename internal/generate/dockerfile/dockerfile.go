@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -56,7 +55,6 @@ type templateData struct {
 	CertInstallRoot        string
 	AptCABootstrap         string
 	AptMirrorRewrite       string
-	AptProxyConf           string
 	AptThirdParty          string
 	AptBasePackages        string
 	AptShellPackages       string
@@ -107,10 +105,6 @@ ARG GID
 
 {{ end -}}
 {{ with .AptMirrorRewrite -}}
-{{ . }}
-
-{{ end -}}
-{{ with .AptProxyConf -}}
 {{ . }}
 
 {{ end -}}
@@ -235,7 +229,6 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 		root = ctx.ProjectDir
 	}
 	configDir := filepath.Join(root, "config")
-	certsDir := filepath.Join(root, "certs")
 
 	customVolPaths := sortedValues(ctx.CustomVolumes())
 	overrides := ctx.PluginVersionOverrides()
@@ -251,19 +244,20 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	certInstallRoot, certInstallEnv, err := generateCertificateInstall(certsDir, ctx)
-	if err != nil {
-		return "", err
+	// The cocoon_user_certs build context is declared by compose.go's
+	// additional_contexts, sourced from ${HOME}/.cocoon/certs on the host.
+	// The cert install RUN block + the SSL_CERT_FILE/etc. ENV exports
+	// only land in the Dockerfile when the workspace opts in via
+	// `[certificates] enable = true`. When disabled (or absent), all
+	// cert-related artifacts stay empty so the generated Dockerfile has
+	// no cert-related lines at all.
+	var certInstallRoot, certInstallEnv string
+	if ctx.CertificatesEnabled() {
+		certInstallRoot, certInstallEnv = generateCertificateInstall()
 	}
 	aptCABootstrap := buildAptCABootstrap(ctx)
-	if certInstallRoot != "" {
-		// The root-stage cert install already brings in ca-certificates,
-		// so the bootstrap RUN would be a redundant duplicate.
-		aptCABootstrap = ""
-	}
 
-	bootstrapPresent := certInstallRoot != "" || aptCABootstrap != ""
-	mirrorRewritePre, mirrorRewrite, proxyConfPre, proxyConf := splitAptSetupForBootstrap(ctx, bootstrapPresent)
+	mirrorRewritePre, mirrorRewrite, proxyConfPre := splitAptSetupForBootstrap(ctx)
 
 	aptBase := readAptPackages(configDir)
 	basePkgNames := parseBasePackages(aptBase)
@@ -301,7 +295,6 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 		CertInstallRoot:        certInstallRoot,
 		AptCABootstrap:         aptCABootstrap,
 		AptMirrorRewrite:       mirrorRewrite,
-		AptProxyConf:           proxyConf,
 		AptThirdParty:          buildAptThirdParty(ctx),
 		AptBasePackages:        strings.TrimRight(aptBase, "\n"),
 		AptShellPackages:       strings.TrimRight(formatAptContinuations(aptShellList), "\n"),
@@ -426,27 +419,34 @@ func sortedValues(m map[string]string) []string {
 	return out
 }
 
-// splitAptSetupForBootstrap decides whether [apt.mirror] / [apt.proxy] RUN
-// blocks should emit before the bootstrap apt activity (cert install RUN or
-// AptCABootstrap RUN) or after it. The bootstrap hits archive.ubuntu.com via
-// apt-get, so [apt.proxy] and an HTTP [apt.mirror] (which the build is
-// typically air-gapped behind) must be in place first. An HTTPS [apt.mirror]
-// is the opposite: the bootstrap can't TLS to it without the CA bundle yet,
-// so the rewrite stays in the post-bootstrap slot. bootstrapPresent is true
-// when either CertInstallRoot or AptCABootstrap is non-empty.
+// splitAptSetupForBootstrap decides whether [apt.mirror] should emit
+// before or after the bootstrap apt activity (cert install RUN or the
+// AptCABootstrap RUN). HTTP mirrors go pre-bootstrap so the bootstrap's
+// own apt-get update can reach the configured archive; HTTPS mirrors
+// stay post-bootstrap because the bootstrap cannot TLS to them without
+// ca-certificates in place yet.
+//
+// [apt.proxy] is always pre-bootstrap: every flavor of bootstrap apt
+// activity (HTTP or HTTPS) needs the proxy to reach the archive. There
+// is no post-bootstrap slot for proxy — the function returns only
+// `proxyPre`.
+//
+// (Earlier revisions returned a `proxyPost` value that was always empty;
+// it was a vestige of a no-bootstrap branch that no longer exists, since
+// the cert install RUN now lands whenever [certificates] is enabled.)
 func splitAptSetupForBootstrap(
-	ctx *generate.WorkspaceContext, bootstrapPresent bool,
-) (mirrorPre, mirrorPost, proxyPre, proxyPost string) {
-	mirrorPost = buildAptMirrorRewrite(ctx)
-	proxyPost = buildAptProxyConf(ctx)
-	if !bootstrapPresent {
-		return "", mirrorPost, "", proxyPost
+	ctx *generate.WorkspaceContext,
+) (mirrorPre, mirrorPost, proxyPre string) {
+	proxyPre = buildAptProxyConf(ctx)
+	mirror := buildAptMirrorRewrite(ctx)
+	if mirror != "" {
+		if strings.HasPrefix(ctx.AptMirrorURL(), "https://") {
+			mirrorPost = mirror
+		} else {
+			mirrorPre = mirror
+		}
 	}
-	proxyPre, proxyPost = proxyPost, ""
-	if mirrorPost != "" && !strings.HasPrefix(ctx.AptMirrorURL(), "https://") {
-		mirrorPre, mirrorPost = mirrorPost, ""
-	}
-	return mirrorPre, mirrorPost, proxyPre, proxyPost
+	return mirrorPre, mirrorPost, proxyPre
 }
 
 // buildAptCABootstrap returns a RUN block that installs ca-certificates
@@ -717,128 +717,58 @@ func collectPluginAptPackages(
 	return formatAptContinuations(packages)
 }
 
-func generateCertificateInstall(
-	certsDir string, ctx *generate.WorkspaceContext,
-) (rootBlock, envBlock string, err error) {
-	entries, err := os.ReadDir(certsDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return "", "", nil
-		}
-		return "", "", fmt.Errorf("read certs dir: %w", err)
-	}
-	var crtFiles []string
-	for _, e := range entries {
-		if !e.IsDir() && strings.HasSuffix(e.Name(), ".crt") {
-			crtFiles = append(crtFiles, e.Name())
-		}
-	}
-	sort.Strings(crtFiles)
-	var validCerts []string
-	for _, fname := range crtFiles {
-		data, readErr := os.ReadFile(filepath.Join(certsDir, fname))
-		if readErr != nil {
-			return "", "", fmt.Errorf("read cert %s: %w", fname, readErr)
-		}
-		s := string(data)
-		if strings.Contains(s, "-----BEGIN CERTIFICATE-----") &&
-			strings.Contains(s, "-----END CERTIFICATE-----") {
-			validCerts = append(validCerts, fname)
-		}
-	}
-	if len(validCerts) == 0 {
-		return "", "", nil
-	}
-	return renderCertInstallRoot(validCerts), renderCertInstallEnv(ctx), nil
+// generateCertificateInstall returns the static Dockerfile blocks that
+// wire up custom CA certificate installation from ~/.cocoon/certs/ via
+// BuildKit's named build context "cocoon_user_certs" (declared in the
+// generated docker-compose.yml's additional_contexts).
+//
+// Generate() calls this only when ctx.CertificatesEnabled() is true (the
+// workspace opted into [certificates] enable = true); cert-free
+// workspaces never see these blocks in their generated Dockerfile.
+//
+// rootBlock is a RUN that bind-mounts ${HOME}/.cocoon/certs at build
+// time and installs any *.crt files into the trust store. A shell-side
+// conditional inside the RUN body skips the work when the directory is
+// empty, so an opted-in Dockerfile builds successfully whether the
+// developer has actually populated ~/.cocoon/certs/ or not.
+//
+// envBlock is the post-USER ENV declaration block. SSL_CERT_FILE et al.
+// land here only on the enabled path; the cert-free Dockerfile contains
+// no SSL_CERT_FILE / CURL_CA_BUNDLE / REQUESTS_CA_BUNDLE /
+// NODE_EXTRA_CA_CERTS exports.
+func generateCertificateInstall() (rootBlock, envBlock string) {
+	return certInstallRootBlock, certInstallEnvBlock
 }
 
-// certEnvVars enumerates the CA-bundle env vars exported into the user's
-// rc-file. AWS CLI / boto3 reads REQUESTS_CA_BUNDLE; Node.js reads
-// NODE_EXTRA_CA_CERTS — these are not derived from the system CA bundle so
-// the explicit exports remain necessary alongside the ENV declarations.
-var certEnvVars = []string{
-	"SSL_CERT_FILE",
-	"CURL_CA_BUNDLE",
-	"REQUESTS_CA_BUNDLE",
-	"NODE_EXTRA_CA_CERTS",
-}
-
-const certBundlePath = "/etc/ssl/certs/ca-certificates.crt"
-
-//nolint:lll // Cert install templates embed Dockerfile RUN lines verbatim.
-var certInstallRootTmpl = tmplx.MustParse(
-	"dockerfile-cert-install-root",
-	`# Install custom CA certificates (root stage; runs before any apt-get update so
-# HTTPS apt mirrors / sources signed by a corporate CA can complete TLS handshake).
-{{ range .Files }}COPY certs/{{ . }} /tmp/certs/{{ . }}
-{{ end -}}
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+//nolint:lll // Dockerfile RUN/ENV lines embed shell semantics verbatim.
+var certInstallRootBlock = `# Install custom CA certificates from ~/.cocoon/certs/ (root stage; runs
+# before the main apt-get update so HTTPS apt mirrors / sources signed by
+# a corporate CA can complete TLS handshake). The RUN body itself runs
+# its own apt-get update inside the conditional to install ca-certificates
+# only when the user has dropped *.crt files into the host directory — the
+# block is a no-op otherwise. Certificates flow in via the
+# cocoon_user_certs named build context declared by docker-compose.yml's
+# additional_contexts (sourced from ${HOME}/.cocoon/certs). The apt cache
+# / lists mounts mirror buildAptCABootstrap and the main apt install RUN
+# so repeated builds reuse cached package indexes and the layer stays
+# clean (no /var/lib/apt/lists/* in the image).
+RUN --mount=type=bind,from=` + generate.CertsBuildContextName + `,target=/tmp/cocoon-user-certs \
+    --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates && \
-    mkdir -p /usr/local/share/ca-certificates && \
-{{ range $i, $f := .Files }}{{ if $i }} && \
-{{ end }}    cp /tmp/certs/{{ $f }} /usr/local/share/ca-certificates/{{ $f }}{{ end }} && \
-    update-ca-certificates && \
-    rm -rf /tmp/certs`,
-	nil,
-)
+    if [ -n "$(find /tmp/cocoon-user-certs -maxdepth 1 -name '*.crt' -print -quit)" ]; then \
+        apt-get update && \
+        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates && \
+        mkdir -p /usr/local/share/ca-certificates/cocoon-user && \
+        find /tmp/cocoon-user-certs -maxdepth 1 -name '*.crt' \
+            -exec cp {} /usr/local/share/ca-certificates/cocoon-user/ \; && \
+        update-ca-certificates; \
+    fi`
 
-//nolint:lll // Cert install templates embed Dockerfile RUN lines verbatim.
-var certInstallEnvTmpl = tmplx.MustParse(
-	"dockerfile-cert-install-env",
-	`# Set certificate environment variables for various tools
-RUN {{ range $i, $line := .RCExports }}{{ if $i }} && \
-    {{ end }}{{ $line }}{{ end }}
+//nolint:lll // ENV declarations are single Dockerfile lines.
+const certInstallEnvBlock = `# CA bundle env vars for various tools. These point at the merged system
+# bundle which always exists regardless of whether ~/.cocoon/certs/ was
+# populated, so emitting them unconditionally is safe.
 ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 ENV CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
 ENV REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
-ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt`,
-	nil,
-)
-
-func renderCertInstallRoot(files []string) string {
-	out, err := tmplx.Render(certInstallRootTmpl, struct {
-		Files []string
-	}{Files: files})
-	if err != nil {
-		// Static template, well-formed input — unreachable in practice.
-		return ""
-	}
-	return out
-}
-
-func renderCertInstallEnv(ctx *generate.WorkspaceContext) string {
-	out, err := tmplx.Render(certInstallEnvTmpl, struct {
-		RCExports []string
-	}{RCExports: buildCertRCExports(ctx)})
-	if err != nil {
-		// Static template, well-formed input — unreachable in practice.
-		return ""
-	}
-	return out
-}
-
-// buildCertRCExports returns the per-shell `echo 'set -gx ...' >> rc` lines
-// that re-assert the CA-bundle env vars in interactive shells. Keeping these
-// alongside the ENV declarations ensures coverage even if a downstream
-// process strips ENV or the user unsets+restarts a shell.
-func buildCertRCExports(ctx *generate.WorkspaceContext) []string {
-	rc := `/home/${USERNAME}/.bashrc`
-	syntax := "posix"
-	if ctx != nil {
-		rc = "/home/${USERNAME}/" + ctx.RCFilePath()
-		syntax = ctx.RCSyntax()
-	}
-	out := make([]string, 0, len(certEnvVars))
-	for _, name := range certEnvVars {
-		var line string
-		if syntax == "fish" {
-			line = "echo 'set -gx " + name + " " + certBundlePath + "' >> " + rc
-		} else {
-			line = "echo 'export " + name + "=" + certBundlePath + "' >> " + rc
-		}
-		out = append(out, line)
-	}
-	return out
-}
+ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt`

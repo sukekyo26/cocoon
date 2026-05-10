@@ -1,6 +1,7 @@
 package devcontainerjson_test
 
 import (
+	"flag"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,13 @@ import (
 	"github.com/sukekyo26/cocoon/internal/generate"
 	"github.com/sukekyo26/cocoon/internal/generate/devcontainerjson"
 )
+
+// updateGolden, when set with `go test -update-golden`, rewrites the
+// testdata/*.expected files from the current generator output instead of
+// asserting against them. Mirrors the dockerfile package convention.
+//
+//nolint:gochecknoglobals // test-only flag scoped to devcontainerjson_test.
+var updateGolden = flag.Bool("update-golden", false, "rewrite testdata/*.expected from current generator output")
 
 func TestGenerateGoldenSnapshot(t *testing.T) {
 	t.Parallel()
@@ -22,12 +30,48 @@ func TestGenerateGoldenSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate: %v", err)
 	}
-	want, err := os.ReadFile(filepath.Join("testdata", "snapshot.expected"))
+	path := filepath.Join("testdata", "snapshot.expected")
+	if *updateGolden {
+		if werr := os.WriteFile(path, []byte(got), 0o600); werr != nil {
+			t.Fatalf("update golden: %v", werr)
+		}
+		return
+	}
+	want, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read golden: %v", err)
 	}
 	if got != string(want) {
 		t.Errorf("golden mismatch:\n--- got ---\n%s\n--- want ---\n%s", got, string(want))
+	}
+}
+
+// TestGenerateCertificatesDisabledNoInitializeCommand verifies that
+// when [certificates] is absent (or enable=false), the devcontainer.json
+// generator emits no `initializeCommand` key. Cert-free workspaces get
+// no host-side mkdir hook in their VS Code dev container config.
+func TestGenerateCertificatesDisabledNoInitializeCommand(t *testing.T) {
+	t.Parallel()
+	ws, err := config.LoadWorkspace(filepath.Join("..", "..", "..", "tests", "fixtures", "snapshot.workspace.toml"))
+	if err != nil {
+		t.Fatalf("load fixture: %v", err)
+	}
+	ws.Certificates = nil
+
+	ctx := &generate.WorkspaceContext{WS: ws}
+	got, err := devcontainerjson.Generate(ctx)
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+
+	for _, mustNot := range []string{
+		"initializeCommand",
+		"mkdir -p",
+		".cocoon/certs",
+	} {
+		if strings.Contains(got, mustNot) {
+			t.Errorf("devcontainer.json with [certificates] disabled must not contain %q\n--- got ---\n%s", mustNot, got)
+		}
 	}
 }
 

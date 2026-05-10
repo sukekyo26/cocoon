@@ -52,6 +52,19 @@ func TestRunInit_Snapshot(t *testing.T) {
 			},
 		},
 		{
+			// Same shape as `default` but with --certificates so the live
+			// [certificates] enable=true section is emitted instead of the
+			// commented template. Pins the opt-in branch end-to-end.
+			name:   "default-with-certificates",
+			golden: "default-with-certificates.workspace.toml",
+			args: []string{
+				"--yes", "--service-name", "dev", "--username", "dev",
+				"--os", "ubuntu", "--os-version", "22.04",
+				"--mount-root", ".", "--no-devcontainer", "--certificates",
+				"--apt-categories", "text-editors,vcs,utilities,compression,build",
+			},
+		},
+		{
 			name:   "plugins-amd64-full",
 			golden: "plugins-amd64-full.workspace.toml",
 			args: []string{

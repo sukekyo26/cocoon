@@ -116,6 +116,9 @@ func (w *Workspace) runValidate(a *errAccumulator) {
 	if w.Locale != nil {
 		w.Locale.validate(a.at("locale"))
 	}
+	if w.Certificates != nil {
+		w.Certificates.validate(a.at("certificates"))
+	}
 	if w.Git != nil {
 		w.Git.validate(a.at("git"))
 	}
@@ -511,6 +514,14 @@ func (g *GitIdentitySpec) validate(a *errAccumulator) {
 		a.add("user_email does not match "+rxEmail.String(), "user_email")
 	}
 }
+
+// validate is a no-op today: the only field is `enable` (a bool, with
+// `nil ⇒ false` default applied by EnableOrDefault), and nothing about
+// it can fail validation. The method exists so the [certificates]
+// section is wired through Workspace.runValidate and ready to grow new
+// fields (e.g. `path`) without callers having to remember to add the
+// hook.
+func (*CertificatesSpec) validate(_ *errAccumulator) {}
 
 func (m *Mount) validate(a *errAccumulator) {
 	if m.Source == "" {
