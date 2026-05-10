@@ -42,7 +42,7 @@ func TestGenerateGoldenSnapshot(t *testing.T) {
 		t.Fatalf("read golden: %v", err)
 	}
 	if got != string(want) {
-		t.Errorf("golden mismatch:\n--- got ---\n%s\n--- want ---\n%s", got, string(want))
+		t.Errorf("golden mismatch (run with -update-golden to refresh)\n--- got ---\n%s\n--- want ---\n%s", got, string(want))
 	}
 }
 

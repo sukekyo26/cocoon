@@ -62,6 +62,18 @@ cover-check:
 vuln:
     govulncheck ./...
 
+# Run after intentional changes to generators, plugin mutators, or
+# `cocoon init` output, then commit the updated testdata/*.expected
+# (and testdata/init/*.workspace.toml) along with the source change.
+# CI runs without -update-golden, so any drift fails the test job.
+# Regenerate all golden / snapshot files in one shot.
+regen-snapshots:
+    go test ./internal/generate/dockerfile       -update-golden
+    go test ./internal/generate/compose          -update-golden
+    go test ./internal/generate/devcontainerjson -update-golden
+    go test ./internal/plugin                    -update-golden
+    go test ./internal/cli/init                  -update-golden
+
 # Build a cocoon binary for the host OS/arch.
 build:
     @mkdir -p bin

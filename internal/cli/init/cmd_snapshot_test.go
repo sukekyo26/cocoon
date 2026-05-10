@@ -9,14 +9,14 @@ import (
 	"testing"
 )
 
-// updateInitGolden, when set via `go test ./internal/cli/init -update-golden`,
+// updateGolden, when set via `go test ./internal/cli/init -update-golden`,
 // rewrites the testdata/init/*.workspace.toml golden files from the live
 // `cocoon init` writer instead of asserting against them. Mirrors the
 // dockerfile generator's `-update-golden` flag (internal/generate/dockerfile/
 // dockerfile_test.go) so the cocoon-wide regen workflow stays consistent.
 //
 //nolint:gochecknoglobals // test-only flag scoped to this test file.
-var updateInitGolden = flag.Bool("update-golden", false, "rewrite testdata/init/*.workspace.toml from current init output")
+var updateGolden = flag.Bool("update-golden", false, "rewrite testdata/init/*.workspace.toml from current init output")
 
 // TestRunInit_Snapshot exercises representative `cocoon init --yes` flag
 // combinations end-to-end and pins the generated workspace.toml as a golden
@@ -138,7 +138,7 @@ func TestRunInit_Snapshot(t *testing.T) {
 			}
 
 			goldenPath := filepath.Join(goldenDir, tc.golden)
-			if *updateInitGolden {
+			if *updateGolden {
 				if mkErr := os.MkdirAll(goldenDir, 0o755); mkErr != nil {
 					t.Fatalf("mkdir golden: %v", mkErr)
 				}
