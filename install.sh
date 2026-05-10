@@ -8,6 +8,9 @@
 #   COCOON_VERSION       Pin to a specific version (e.g. "0.1.0"); default "latest".
 #   COCOON_INSTALL_DIR   Where to drop the binary; default "$HOME/.local/bin".
 #   COCOON_REPO          GitHub repository slug; default "sukekyo26/cocoon".
+#   COCOON_API_BASE      GitHub API base URL; default "https://api.github.com".
+#                        Useful for GitHub Enterprise Server or test mocks.
+#   COCOON_RELEASE_BASE  GitHub release host; default "https://github.com".
 #
 # The script verifies the binary's SHA-256 against the SHA256SUMS asset
 # from the same release before installing.
@@ -17,6 +20,8 @@ set -eu
 REPO="${COCOON_REPO:-sukekyo26/cocoon}"
 INSTALL_DIR="${COCOON_INSTALL_DIR:-$HOME/.local/bin}"
 VERSION="${COCOON_VERSION:-latest}"
+API_BASE="${COCOON_API_BASE:-https://api.github.com}"
+RELEASE_BASE="${COCOON_RELEASE_BASE:-https://github.com}"
 
 err() { printf "cocoon-install: %s\n" "$*" >&2; }
 die() {
@@ -50,7 +55,7 @@ if [ "$VERSION" = "latest" ]; then
   # Capture curl output first so a network/API failure dies with a specific
   # message instead of being masked by the pipeline's last-command exit
   # status (POSIX sh has no `pipefail`).
-  releases_url="https://api.github.com/repos/$REPO/releases/latest"
+  releases_url="$API_BASE/repos/$REPO/releases/latest"
   api_response=$(curl -fsSL "$releases_url") ||
     die "failed to fetch release metadata: $releases_url"
   tag=$(printf '%s' "$api_response" |
@@ -68,7 +73,7 @@ fi
 version=${tag#v}
 
 asset="cocoon-$os-$arch"
-base="https://github.com/$REPO/releases/download/$tag"
+base="$RELEASE_BASE/$REPO/releases/download/$tag"
 
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT

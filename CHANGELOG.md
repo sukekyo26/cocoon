@@ -8,6 +8,7 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `install.sh` accepts `COCOON_API_BASE` (default `https://api.github.com`) and `COCOON_RELEASE_BASE` (default `https://github.com`) overrides so the public installer can target GitHub Enterprise Server or local mirrors.
 - Mount a named Docker volume `cocoon` at `/home/<user>/.cocoon` inside the dev container so per-user shell tweaks survive container rebuilds. The container's rc file (bash / zsh / fish) sources `~/.cocoon/.shellrc` (or `~/.cocoon/.shellrc.fish` for fish) automatically; edit those files from inside the container and they persist across `docker compose down && up --build` (only `down -v` resets them).
 - Add `cocoon init --plugin-versions=<id>=<ref>,...` so a single command emits both `[plugins] enable` and `[plugins.versions]` blocks. Each `<id>` must already appear in `--plugins`, must be `version_capable`, and may not repeat. Replaces the prior workflow of pasting `cocoon plugin pin` output by hand.
 - Add `cocoon plugin pin --write` to insert (or replace) a `[plugins.versions.<id>]` block directly in `workspace.toml`. The line-based mutator preserves comments and blank lines outside the target block; the existing stdout-only behavior remains the default. If `workspace.toml` has any per-id key assignment under `[plugins.versions]` (e.g. `<id> = "..."` or `<id> = { ... }`), `--write` refuses with a usage error instead of appending a duplicate block.
