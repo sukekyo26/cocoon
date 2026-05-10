@@ -123,6 +123,13 @@ jobs:
           # plugins (e.g. docker-cli, which calls gpg in install.sh via the
           # vcs category) build cleanly. Trimming this list in CI hides
           # plugin-vs-category mismatches that real users would hit.
+          # --certificates opts the workspace into TLS auto-bake from
+          # ~/.cocoon/certs/. Required here because the e2e matrix
+          # exercises the cert wiring path end-to-end (docker buildx bake
+          # consuming additional_contexts, the RUN --mount=type=bind, the
+          # downstream update-ca-certificates). Cert-free flows are
+          # covered by Go unit tests; the e2e overhead of running both
+          # branches through the full matrix is not worth it.
           "$COCOON" init --yes \
             --service-name dev \
             --username dev \
@@ -130,6 +137,7 @@ jobs:
             --os-version 22.04 \
             --mount-root . \
             --no-devcontainer \
+            --certificates \
             --apt-categories=text-editors,vcs,utilities,compression,build \
             "${extra[@]}"
           "$COCOON" gen

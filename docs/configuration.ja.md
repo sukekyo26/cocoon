@@ -41,6 +41,7 @@
 | `[[mounts]]` | optional | 追加バインドマウント |
 | `[home_files]` | optional | `~/` 配下のファイル単位 bind mount |
 | `[locale]` | optional | タイムゾーンと言語 |
+| `[certificates]` | optional | `~/.cocoon/certs/` からの TLS 自動取り込み opt-in（デフォルト off） |
 | `[dockerfile]` | optional | Dockerfile への独自フラグメント注入 |
 | `[services.<name>]` | optional | サイドカーサービス |
 | `[devcontainer.*]` | optional | `devcontainer.json` への pass-through |
@@ -310,9 +311,18 @@ readonly = true
 
 ---
 
-## TLS 証明書 (`~/.cocoon/certs/`)
+## TLS 証明書 (`[certificates]` + `~/.cocoon/certs/`)
 
-社内 CA (Zscaler、企業プロキシ、開発用自己署名 CA 等) をコンテナで信頼させたい場合、PEM 形式の `.crt` ファイルを **`~/.cocoon/certs/`** に置きます。コンテナビルド時に自動的にトラストストアへ取り込まれます。
+TLS 証明書の自動取り込みは **opt-in** です。ワークスペース単位で以下のセクションを追加 (または `cocoon init --certificates`) して有効化します:
+
+```toml
+[certificates]
+enable = true
+```
+
+セクション不在 / `enable = false` のときは、生成される `Dockerfile` / `docker-compose.yml` / `devcontainer.json` に **cert 関連の配線は一切乗りません** (`additional_contexts` / `RUN --mount=type=bind` / `initializeCommand` / `SSL_CERT_FILE` ENV のいずれも出力されない)。社内 CA を扱わないチームは、corp-CA 機構ゼロの成果物を commit できます。
+
+有効化時、社内 CA (Zscaler、企業プロキシ、開発用自己署名 CA 等) をコンテナで信頼させたい場合、PEM 形式の `.crt` ファイルを **`~/.cocoon/certs/`** に置きます。コンテナビルド時に自動的にトラストストアへ取り込まれます。
 
 ```sh
 mkdir -p ~/.cocoon/certs
@@ -324,14 +334,15 @@ docker compose -f .devcontainer/docker-compose.yml build
 
 ### チーム運用シナリオ
 
-cocoon の生成物 `.devcontainer/*` は、証明書の有無に関わらず **常に同じ内容** です。1 人のメンバーが `cocoon gen` で生成・コミットすれば、他のメンバーは cocoon バイナリ無しでもそのまま dev container を利用できます。
+cocoon の生成物 `.devcontainer/*` は、ワークスペースが `[certificates]` を有効化しているかどうかで内容が変わります。有効化したワークスペースは team 全員で同じ cert 配線付き成果物を共有し、無効化 (デフォルト) のワークスペースは cert 配線ゼロの成果物を共有します。
 
 | メンバー | cocoon バイナリ | `~/.cocoon/certs/` 作成 | 必要な操作 |
 |---|---|---|---|
-| 生成担当 | あり | `cocoon gen` が自動作成 (0700) | `cocoon gen && commit` |
-| VS Code 利用者 (cert 不要) | 不要 | `initializeCommand` が自動作成 | なし。dev container を開くだけ |
-| VS Code 利用者 (cert 必要) | 不要 | `initializeCommand` が自動作成 | `cp corp.crt ~/.cocoon/certs/` して Rebuild Container |
-| `docker compose` 直接利用 / CI | 不要 | **手動 `mkdir -p ~/.cocoon/certs`** | 初回のみ手動 mkdir、cert 必要なら配置して build |
+| 生成担当 (有効化済み) | あり | `cocoon gen` が自動作成 (0700) | `cocoon gen && commit` |
+| 生成担当 (無効化) | あり | 作成されない | cert 関連は何もしなくて良い |
+| VS Code 利用者 (cert 不要) | 不要 | 有効化時のみ `initializeCommand` が自動作成 | なし。dev container を開くだけ |
+| VS Code 利用者 (cert 必要) | 不要 | 有効化時のみ `initializeCommand` が自動作成 | `cp corp.crt ~/.cocoon/certs/` して Rebuild Container |
+| `docker compose` 直接利用 / CI (有効化済み) | 不要 | **手動 `mkdir -p ~/.cocoon/certs`** | 初回のみ手動 mkdir、cert 必要なら配置して build |
 
 > **Note**: VS Code Dev Containers を使わずに `docker compose build` を直接実行する場合は、初回のみホスト側で `mkdir -p ~/.cocoon/certs` を実行してください。VS Code 経由のメンバーは `initializeCommand` により自動作成されます。CI 環境ではセットアップステップに `mkdir -p ~/.cocoon/certs` を 1 行追加してください。
 

@@ -38,6 +38,8 @@
 | `--mount-root <path>` | string | マウント範囲: `"."` (cwd) または `".."` (親)。 |
 | `--devcontainer` | bool | `.devcontainer/devcontainer.json` 出力を強制有効化。 |
 | `--no-devcontainer` | bool | `.devcontainer/devcontainer.json` をスキップ。 |
+| `--certificates` | bool | `[certificates] enable = true` を強制有効化（`~/.cocoon/certs/` の自動取り込み）。 |
+| `--no-certificates` | bool | `[certificates]` セクション省略を強制（デフォルト）。 |
 | `--apt-categories <ids>` | string | カンマ区切り apt カテゴリ ID (プロンプトをスキップ)。 |
 | `--plugins <ids>` | string | カンマ区切りで有効化するプラグイン ID。 |
 | `--alias-bundles <ids>` | string | カンマ区切りエイリアスバンドル ID (例: `git,ls`)。 |
@@ -99,7 +101,7 @@ cocoon gen --workspace ./infra/workspace.toml --output ./infra
 
 ### TLS 証明書
 
-生成される `Dockerfile` / `docker-compose.yml` / `devcontainer.json` には、ホスト `~/.cocoon/certs/*.crt` を build 時にコンテナのトラストストアへ取り込む配線が常時含まれる (証明書の有無で生成物が変化しないため、チームで commit して共有可能)。詳細は [`configuration.ja.md` の TLS 証明書セクション](configuration.ja.md#tls-証明書-cocooncerts) を参照。
+生成される `Dockerfile` / `docker-compose.yml` / `devcontainer.json` に cert 自動取り込み配線が乗るのは、ワークスペースが `[certificates] enable = true` (または `cocoon init --certificates`) で opt-in したときのみ。cert を扱わないワークスペースは cert-free 成果物 (`additional_contexts` なし、`RUN --mount=type=bind` なし、`initializeCommand` なし) を commit する。opt-in 時は `~/.cocoon/certs/*.crt` が build 時にトラストストアへマージされる。詳細は [`configuration.ja.md` の TLS 証明書セクション](configuration.ja.md#tls-証明書-certificates--cocooncerts) を参照。
 
 ---
 

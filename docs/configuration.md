@@ -41,6 +41,7 @@ The first match wins. Pass `--workspace <path>` to `cocoon gen` to override disc
 | `[[mounts]]` | optional | Extra host bind mounts |
 | `[home_files]` | optional | Per-file bind mounts under `~/` |
 | `[locale]` | optional | Timezone and language |
+| `[certificates]` | optional | Opt into TLS auto-bake from `~/.cocoon/certs/` (default off) |
 | `[dockerfile]` | optional | Custom Dockerfile fragments |
 | `[services.<name>]` | optional | Sidecar services |
 | `[devcontainer.*]` | optional | Pass-through fields for `devcontainer.json` |
@@ -310,9 +311,25 @@ readonly = true
 
 ---
 
-## TLS certificates (`~/.cocoon/certs/`)
+## TLS certificates (`[certificates]` + `~/.cocoon/certs/`)
 
-To trust a corporate CA (Zscaler, corporate proxy, dev self-signed CA, etc.) inside the container, drop the PEM-formatted `.crt` files into **`~/.cocoon/certs/`** on the host. They are picked up at container build time and merged into the trust store automatically.
+TLS certificate auto-bake is **opt-in**. Enable it per workspace by adding the
+section below (or running `cocoon init --certificates`):
+
+```toml
+[certificates]
+enable = true
+```
+
+When the section is absent or `enable = false`, the generated `Dockerfile`,
+`docker-compose.yml`, and `devcontainer.json` contain **no cert-related wiring
+at all** — no `additional_contexts`, no `RUN --mount=type=bind`, no
+`initializeCommand`, no `SSL_CERT_FILE` ENV exports. Cert-free teams commit
+artifacts that have zero corp-CA machinery.
+
+When enabled, drop PEM-formatted `.crt` files into **`~/.cocoon/certs/`** on
+the host. They are picked up at container build time and merged into the
+trust store automatically.
 
 ```sh
 mkdir -p ~/.cocoon/certs
@@ -320,7 +337,9 @@ cp /path/to/corp-ca.crt ~/.cocoon/certs/
 docker compose -f .devcontainer/docker-compose.yml build
 ```
 
-This directory is a host-side global location, not a `workspace.toml` section. **Multiple cocoon projects share the same corp CA bundle** — there is no need to copy the cert into each project.
+This directory is a host-side global location, not a `workspace.toml` section.
+**Multiple cocoon projects share the same corp CA bundle** — there is no need
+to copy the cert into each project.
 
 ### Team workflow
 
@@ -328,10 +347,11 @@ Generated `.devcontainer/*` artifacts are **identical** regardless of cert prese
 
 | Member | cocoon binary | `~/.cocoon/certs/` creation | Required action |
 |---|---|---|---|
-| Generator | yes | created by `cocoon gen` (mode 0700) | `cocoon gen && commit` |
-| VS Code user (no cert needed) | not needed | created by `initializeCommand` | nothing — just open dev container |
-| VS Code user (cert needed) | not needed | created by `initializeCommand` | `cp corp.crt ~/.cocoon/certs/` then Rebuild Container |
-| Plain `docker compose` / CI | not needed | **manual `mkdir -p ~/.cocoon/certs`** | one-time mkdir, drop cert if needed, build |
+| Generator (workspace opted in) | yes | created by `cocoon gen` (mode 0700) | `cocoon gen && commit` |
+| Generator (workspace opted out) | yes | not created — section is absent | nothing cert-related to do |
+| VS Code user (no cert needed) | not needed | created by `initializeCommand` when section enabled | nothing — just open dev container |
+| VS Code user (cert needed) | not needed | created by `initializeCommand` when section enabled | `cp corp.crt ~/.cocoon/certs/` then Rebuild Container |
+| Plain `docker compose` / CI (workspace opted in) | not needed | **manual `mkdir -p ~/.cocoon/certs`** | one-time mkdir, drop cert if needed, build |
 
 > **Note**: If you build the dev container without VS Code (e.g. `docker compose build` directly, CI), run `mkdir -p ~/.cocoon/certs` once on the host before the first build. VS Code Dev Containers users get this automatically via `initializeCommand`. In CI add a single `mkdir -p ~/.cocoon/certs` to the setup step.
 

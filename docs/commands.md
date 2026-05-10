@@ -38,6 +38,8 @@ Generate `workspace.toml` in the current directory.
 | `--mount-root <path>` | string | Mount range: `"."` (cwd) or `".."` (parent). |
 | `--devcontainer` | bool | Force-enable `.devcontainer/devcontainer.json` output. |
 | `--no-devcontainer` | bool | Skip `.devcontainer/devcontainer.json`. |
+| `--certificates` | bool | Force-enable `[certificates] enable = true` (host TLS auto-bake from `~/.cocoon/certs/`). |
+| `--no-certificates` | bool | Force-disable; omit the `[certificates]` section (default). |
 | `--apt-categories <ids>` | string | Comma-separated apt category IDs (skips the prompt). |
 | `--plugins <ids>` | string | Comma-separated plugin IDs to enable. |
 | `--alias-bundles <ids>` | string | Comma-separated shell-alias bundle IDs (e.g. `git,ls`). |
@@ -99,7 +101,7 @@ cocoon gen --workspace ./infra/workspace.toml --output ./infra
 
 ### TLS certificates
 
-The generated `Dockerfile` / `docker-compose.yml` / `devcontainer.json` always contain the wiring that bakes any `~/.cocoon/certs/*.crt` files into the container trust store at build time. The artifacts are byte-identical regardless of whether the developer has any certs configured, so teams can commit them and share. See [the TLS certificates section in `configuration.md`](configuration.md#tls-certificates-cocooncerts) for the full setup.
+The generated `Dockerfile` / `docker-compose.yml` / `devcontainer.json` carry cert auto-bake wiring **only when the workspace opts in** via `[certificates] enable = true` (or `cocoon init --certificates`). Cert-free workspaces commit cert-free artifacts (no `additional_contexts`, no `RUN --mount=type=bind`, no `initializeCommand`). When opted in, the trust store ingests any `~/.cocoon/certs/*.crt` files at build time. See [the TLS certificates section in `configuration.md`](configuration.md#tls-certificates-certificates--cocooncerts) for the full setup and team workflow.
 
 ---
 
