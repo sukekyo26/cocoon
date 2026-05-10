@@ -310,6 +310,46 @@ readonly = true
 
 ---
 
+## TLS certificates (`~/.cocoon/certs/`)
+
+To trust a corporate CA (Zscaler, corporate proxy, dev self-signed CA, etc.) inside the container, drop the PEM-formatted `.crt` files into **`~/.cocoon/certs/`** on the host. They are picked up at container build time and merged into the trust store automatically.
+
+```sh
+mkdir -p ~/.cocoon/certs
+cp /path/to/corp-ca.crt ~/.cocoon/certs/
+docker compose -f .devcontainer/docker-compose.yml build
+```
+
+This directory is a host-side global location, not a `workspace.toml` section. **Multiple cocoon projects share the same corp CA bundle** — there is no need to copy the cert into each project.
+
+### Team workflow
+
+Generated `.devcontainer/*` artifacts are **identical** regardless of cert presence. One team member can run `cocoon gen` and commit, and the rest of the team uses the dev container without needing the cocoon binary.
+
+| Member | cocoon binary | `~/.cocoon/certs/` creation | Required action |
+|---|---|---|---|
+| Generator | yes | run `mkdir -p ~/.cocoon/certs` | `cocoon gen && commit` |
+| VS Code user (no cert needed) | not needed | created by `initializeCommand` | nothing — just open dev container |
+| VS Code user (cert needed) | not needed | created by `initializeCommand` | `cp corp.crt ~/.cocoon/certs/` then Rebuild Container |
+| Plain `docker compose` / CI | not needed | **manual `mkdir -p ~/.cocoon/certs`** | one-time mkdir, drop cert if needed, build |
+
+> **Note**: If you build the dev container without VS Code (e.g. `docker compose build` directly, CI), run `mkdir -p ~/.cocoon/certs` once on the host before the first build. VS Code Dev Containers users get this automatically via `initializeCommand`. In CI add a single `mkdir -p ~/.cocoon/certs` to the setup step.
+
+### How it works
+
+- `.devcontainer/docker-compose.yml`: declares `additional_contexts: cocoon_user_certs: ${HOME}/.cocoon/certs` so the host directory is exposed to BuildKit as a named build context (no copy).
+- `.devcontainer/Dockerfile`: emits `RUN --mount=type=bind,from=cocoon_user_certs ... if find ... ; then ... update-ca-certificates ; fi` so any `*.crt` files are installed into the trust store at build time, before any apt operations. This lets the build complete on TLS-intercepting networks like Zscaler.
+- `.devcontainer/devcontainer.json`: emits `initializeCommand: "mkdir -p ${HOME}/.cocoon/certs"` so VS Code Dev Containers users have the host directory created before the build, with no cocoon binary required.
+
+`SSL_CERT_FILE` / `CURL_CA_BUNDLE` / `REQUESTS_CA_BUNDLE` / `NODE_EXTRA_CA_CERTS` are always set to point at the merged system bundle (`/etc/ssl/certs/ca-certificates.crt`); this is safe regardless of whether the directory has any certs.
+
+### Caveats
+
+- **All** files in `~/.cocoon/certs/` flow through to BuildKit as the build context, not just `.crt` files. Do not store private keys (`.key`) or other sensitive material in this directory.
+- After updating a certificate, rebuild the container. BuildKit hashes the bind-mount content into the layer cache key, so the relevant RUN layer rebuilds automatically.
+
+---
+
 ## `[home_files]`
 
 Files persisted via per-file bind mounts. Each path is relative to `~/` (no leading `/`, no `~`, no `..`). Use this to share host-side configs like `~/.gitconfig` into the container.

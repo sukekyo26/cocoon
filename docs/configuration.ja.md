@@ -310,6 +310,46 @@ readonly = true
 
 ---
 
+## TLS 証明書 (`~/.cocoon/certs/`)
+
+社内 CA (Zscaler、企業プロキシ、開発用自己署名 CA 等) をコンテナで信頼させたい場合、PEM 形式の `.crt` ファイルを **`~/.cocoon/certs/`** に置きます。コンテナビルド時に自動的にトラストストアへ取り込まれます。
+
+```sh
+mkdir -p ~/.cocoon/certs
+cp /path/to/corp-ca.crt ~/.cocoon/certs/
+docker compose -f .devcontainer/docker-compose.yml build
+```
+
+このディレクトリは `workspace.toml` のセクションではなくホスト側のグローバル設定です。**複数の cocoon プロジェクトで同じ corp CA を共有できます** (プロジェクトごとに証明書をコピーする必要はありません)。
+
+### チーム運用シナリオ
+
+cocoon の生成物 `.devcontainer/*` は、証明書の有無に関わらず **常に同じ内容** です。1 人のメンバーが `cocoon gen` で生成・コミットすれば、他のメンバーは cocoon バイナリ無しでもそのまま dev container を利用できます。
+
+| メンバー | cocoon バイナリ | `~/.cocoon/certs/` 作成 | 必要な操作 |
+|---|---|---|---|
+| 生成担当 | あり | 自身で `mkdir -p ~/.cocoon/certs` | `cocoon gen && commit` |
+| VS Code 利用者 (cert 不要) | 不要 | `initializeCommand` が自動作成 | なし。dev container を開くだけ |
+| VS Code 利用者 (cert 必要) | 不要 | `initializeCommand` が自動作成 | `cp corp.crt ~/.cocoon/certs/` して Rebuild Container |
+| `docker compose` 直接利用 / CI | 不要 | **手動 `mkdir -p ~/.cocoon/certs`** | 初回のみ手動 mkdir、cert 必要なら配置して build |
+
+> **Note**: VS Code Dev Containers を使わずに `docker compose build` を直接実行する場合は、初回のみホスト側で `mkdir -p ~/.cocoon/certs` を実行してください。VS Code 経由のメンバーは `initializeCommand` により自動作成されます。CI 環境ではセットアップステップに `mkdir -p ~/.cocoon/certs` を 1 行追加してください。
+
+### 仕組み
+
+- `.devcontainer/docker-compose.yml`: `additional_contexts: cocoon_user_certs: ${HOME}/.cocoon/certs` により `~/.cocoon/certs/` をビルドコンテキストとして直接参照 (コピー無し)。
+- `.devcontainer/Dockerfile`: `RUN --mount=type=bind,from=cocoon_user_certs ... if find ... ; then ... update-ca-certificates ; fi` により build 時に `*.crt` を取り込む。apt install より前に実行されるため、Zscaler 等の TLS インターセプト下でも build が通る。
+- `.devcontainer/devcontainer.json`: `initializeCommand: "mkdir -p ${HOME}/.cocoon/certs"` により VS Code Dev Containers がコンテナ作成前にホスト側ディレクトリを自動作成する。
+
+環境変数 `SSL_CERT_FILE` / `CURL_CA_BUNDLE` / `REQUESTS_CA_BUNDLE` / `NODE_EXTRA_CA_CERTS` は、マージ済み trust store (`/etc/ssl/certs/ca-certificates.crt`) を指すように常時設定されます (証明書の有無に依らず安全)。
+
+### 注意点
+
+- `~/.cocoon/certs/` 配下のファイルは **すべて** ビルドコンテキストとして BuildKit に渡されます。`.crt` 以外 (特に秘密鍵 `.key` 等) を置かないでください。
+- 証明書を更新したらコンテナを rebuild してください。BuildKit が bind-mount 内容ハッシュを cache key に含めるため、自動的に層が再構築されます。
+
+---
+
 ## `[home_files]`
 
 ファイル単位 bind mount による永続化。各パスは `~/` 相対 (先頭 `/` 不可、`~` 不可、`..` 不可)。ホスト側の `~/.gitconfig` 等をコンテナ内で共有する用途。

@@ -43,6 +43,8 @@ cocoon gen                                               # generate .devcontaine
 docker compose -f .devcontainer/docker-compose.yml up -d # or open in VS Code → "Reopen in Container"
 ```
 
+> **Need a corporate CA inside the container** (Zscaler, dev self-signed, etc.)? Drop the `.crt` files into `~/.cocoon/certs/` on the host. They are picked up automatically at container build time. See [TLS certificates](docs/configuration.md#tls-certificates-cocooncerts) for the team workflow.
+
 ## Documentation
 
 | Topic | English | 日本語 |
