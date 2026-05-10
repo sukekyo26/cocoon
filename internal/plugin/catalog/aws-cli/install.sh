@@ -6,7 +6,7 @@ ARCH="$(dpkg --print-architecture)"
 case "$ARCH" in
   amd64) CLI_ARCH="x86_64" ;;
   arm64) CLI_ARCH="aarch64" ;;
-  *)     CLI_ARCH="x86_64" ;;
+  *) CLI_ARCH="x86_64" ;;
 esac
 
 curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \

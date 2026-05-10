@@ -20,7 +20,7 @@ curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-erro
   "${docker_repo}/gpg" | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
 
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] ${docker_repo} ${VERSION_CODENAME} stable" \
-  > /etc/apt/sources.list.d/docker.list
+  >/etc/apt/sources.list.d/docker.list
 
 apt-get update
 apt-get install -y --no-install-recommends docker-ce-cli docker-compose-plugin

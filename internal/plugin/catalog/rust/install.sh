@@ -15,12 +15,12 @@ if [ "${RC_SYNTAX:-posix}" = "fish" ]; then
   # rustup versions.
   if [ -f "$HOME/.cargo/env.fish" ]; then
     # shellcheck disable=SC2016
-    echo 'source "$HOME/.cargo/env.fish"' >> "$RC_FILE"
+    echo 'source "$HOME/.cargo/env.fish"' >>"$RC_FILE"
   else
     # shellcheck disable=SC2016
-    echo 'set -gx PATH $HOME/.cargo/bin $PATH' >> "$RC_FILE"
+    echo 'set -gx PATH $HOME/.cargo/bin $PATH' >>"$RC_FILE"
   fi
 else
   # shellcheck disable=SC2016
-  echo '. "$HOME/.cargo/env"' >> "$RC_FILE"
+  echo '. "$HOME/.cargo/env"' >>"$RC_FILE"
 fi

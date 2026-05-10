@@ -17,8 +17,8 @@ fi
 
 if [ "${RC_SYNTAX:-posix}" = "fish" ]; then
   # shellcheck disable=SC2016
-  echo 'set -gx PATH $HOME/.local/bin $PATH' >> "$RC_FILE"
+  echo 'set -gx PATH $HOME/.local/bin $PATH' >>"$RC_FILE"
 else
   # shellcheck disable=SC2016
-  echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$RC_FILE"
+  echo 'export PATH="$HOME/.local/bin:$PATH"' >>"$RC_FILE"
 fi

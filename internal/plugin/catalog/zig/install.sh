@@ -12,17 +12,26 @@ set -euo pipefail
 
 ARCH="$(dpkg --print-architecture)"
 case "$ARCH" in
-  amd64) DOWNLOAD_ARCH="x86_64"  ; CHECKSUM="$CHECKSUM_AMD64" ;;
-  arm64) DOWNLOAD_ARCH="aarch64" ; CHECKSUM="$CHECKSUM_ARM64" ;;
-  *)     DOWNLOAD_ARCH="x86_64"  ; CHECKSUM="$CHECKSUM_AMD64" ;;
+  amd64)
+    DOWNLOAD_ARCH="x86_64"
+    CHECKSUM="$CHECKSUM_AMD64"
+    ;;
+  arm64)
+    DOWNLOAD_ARCH="aarch64"
+    CHECKSUM="$CHECKSUM_ARM64"
+    ;;
+  *)
+    DOWNLOAD_ARCH="x86_64"
+    CHECKSUM="$CHECKSUM_AMD64"
+    ;;
 esac
 echo "Detected architecture: $ARCH -> $DOWNLOAD_ARCH"
 
 VERSION_KEY="${PIN:-master}"
 
 ZIG_URL=$(curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
-  https://ziglang.org/download/index.json \
-  | jq -r --arg v "$VERSION_KEY" --arg a "$DOWNLOAD_ARCH" '.[$v][$a + "-linux"].tarball')
+  https://ziglang.org/download/index.json |
+  jq -r --arg v "$VERSION_KEY" --arg a "$DOWNLOAD_ARCH" '.[$v][$a + "-linux"].tarball')
 
 if [ -z "$ZIG_URL" ] || [ "$ZIG_URL" = "null" ]; then
   echo "ERROR: Could not resolve Zig tarball URL for version=$VERSION_KEY arch=$DOWNLOAD_ARCH" >&2

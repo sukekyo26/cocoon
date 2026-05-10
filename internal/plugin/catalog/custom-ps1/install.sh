@@ -22,4 +22,4 @@ fi
   echo 'GIT_PS1_SHOWUPSTREAM="auto"'
   # shellcheck disable=SC2016,SC2028
   echo 'PS1='\''\[\033[01;35m\][Docker $CONTAINER_SERVICE_NAME]\[\033[00m\] \[\033[01;32m\]\u@\h:\[\033[01;34m\]\w\[\033[00m\]$(__git_ps1 " \[\033[01;33m\](%s)\[\033[00m\]" 2>/dev/null) \$ '\'''
-} >> "$RC_FILE"
+} >>"$RC_FILE"

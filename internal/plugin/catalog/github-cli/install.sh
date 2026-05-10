@@ -10,7 +10,7 @@ curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-erro
 chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
 
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
-  > /etc/apt/sources.list.d/github-cli.list
+  >/etc/apt/sources.list.d/github-cli.list
 
 apt-get update
 apt-get install -y --no-install-recommends gh
