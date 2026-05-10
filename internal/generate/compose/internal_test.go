@@ -4,6 +4,9 @@ import (
 	"testing"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/sukekyo26/cocoon/internal/config"
+	"github.com/sukekyo26/cocoon/internal/generate"
 )
 
 func TestScalarString(t *testing.T) {
@@ -100,6 +103,62 @@ func TestSysctlNode(t *testing.T) {
 			t.Errorf("bool = %q", n.Value)
 		}
 	})
+}
+
+// TestWorkspaceBindMount locks the path-resolution rules documented on
+// workspaceBindMount: the generated bind mount source must be one
+// directory deeper than the user-facing mount_root value because
+// docker-compose resolves it relative to .devcontainer/ rather than the
+// project root.
+func TestWorkspaceBindMount(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name    string
+		wsSpec  *config.WorkspaceSpec
+		svcName string
+		want    string
+	}{
+		{
+			name:    "workspace_section_omitted_defaults_to_cwd_mount",
+			wsSpec:  nil,
+			svcName: "dev",
+			want:    "..:/home/${USERNAME}/workspace/dev:cached",
+		},
+		{
+			name:    "explicit_dot_mounts_project_under_named_subdir",
+			wsSpec:  &config.WorkspaceSpec{MountRoot: "."},
+			svcName: "myproj",
+			want:    "..:/home/${USERNAME}/workspace/myproj:cached",
+		},
+		{
+			name:    "double_dot_mounts_parent_so_sibling_repos_are_visible",
+			wsSpec:  &config.WorkspaceSpec{MountRoot: ".."},
+			svcName: "dev",
+			want:    "../..:/home/${USERNAME}/workspace:cached",
+		},
+		{
+			name:    "empty_mount_root_falls_back_to_default",
+			wsSpec:  &config.WorkspaceSpec{MountRoot: ""},
+			svcName: "dev",
+			want:    "..:/home/${USERNAME}/workspace/dev:cached",
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			ws := &config.Workspace{
+				Workspace: tc.wsSpec,
+				Container: config.ContainerSpec{ServiceName: tc.svcName},
+			}
+			ctx := &generate.WorkspaceContext{WS: ws}
+			if got := workspaceBindMount(ctx); got != tc.want {
+				t.Errorf("workspaceBindMount = %q, want %q", got, tc.want)
+			}
+		})
+	}
 }
 
 func TestAnyMap_SortsKeys(t *testing.T) {

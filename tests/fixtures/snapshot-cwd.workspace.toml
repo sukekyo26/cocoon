@@ -1,0 +1,96 @@
+# Snapshot test fixture (cwd mount variant) — same plugin set as
+# snapshot.workspace.toml but pins mount_root = "." so the snapshot
+# locks the project-only mount form (`..:/home/${USERNAME}/workspace/<svc>`)
+# and the working_dir override that comes with it.
+
+[workspace]
+mount_root = "."
+
+[container]
+service_name = "snapshot-test"
+username = "testuser"
+os = "ubuntu"
+os_version = "24.04"
+
+[container.hosts]
+"db.local" = "host-gateway"
+"corp.example" = "10.0.0.42"
+
+[container.dns]
+servers = ["10.0.0.53", "1.1.1.1"]
+search = ["corp.example.com"]
+
+[container.sysctls]
+"vm.max_map_count" = 262144
+"net.ipv4.ip_unprivileged_port_start" = 0
+
+[container.capabilities]
+add = ["SYS_PTRACE", "NET_ADMIN"]
+drop = ["AUDIT_WRITE"]
+
+[container.security_opt]
+seccomp = "unconfined"
+no_new_privileges = true
+
+[[container.skel]]
+source = ".cocoon/skel/example.bashrc"
+target = ".shell_skel_example"
+
+[apt.mirror]
+url = "http://jp.archive.ubuntu.com/ubuntu/"
+
+[apt.proxy]
+http = "http://proxy.corp:8080"
+https = "http://proxy.corp:8080"
+
+[[apt.sources]]
+name = "fish-stable"
+suite = "noble"
+components = ["main"]
+url = "https://download.opensuse.org/repositories/shells:fish:release:3/xUbuntu_24.04/"
+key_url = "https://download.opensuse.org/repositories/shells:fish:release:3/xUbuntu_24.04/Release.key"
+
+[plugins]
+enable = [
+    "custom-ps1",
+    "proto",
+    "docker-cli",
+    "aws-cli",
+    "aws-sam-cli",
+    "github-cli",
+    "copilot-cli",
+    "claude-code",
+    "zig",
+    "uv",
+    "rust",
+    "go",
+    "lazygit",
+]
+
+[ports]
+forward = ["3000:3000"]
+
+[plugins.versions]
+go = { pin = "1.26.1" }
+lazygit = { pin = "0.44.1" }
+uv = { pin = "0.5.7" }
+proto = { pin = "0.46.1" }
+zig = { pin = "0.14.0" }
+copilot-cli = { pin = "0.0.369" }
+
+[volumes]
+deno = "/home/${USERNAME}/.deno"
+
+[devcontainer.customizations.vscode]
+extensions = [
+    "MS-CEINTL.vscode-language-pack-ja",
+    "ms-azuretools.vscode-docker",
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "ms-vscode.vscode-typescript-next",
+    "eamodio.gitlens",
+    "github.copilot-chat",
+    "github.vscode-github-actions",
+    "oderwat.indent-rainbow",
+    "shardulm94.trailing-spaces",
+]
