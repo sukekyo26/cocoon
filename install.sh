@@ -47,10 +47,16 @@ case "$arch" in
 esac
 
 if [ "$VERSION" = "latest" ]; then
-  tag=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" |
+  # Capture curl output first so a network/API failure dies with a specific
+  # message instead of being masked by the pipeline's last-command exit
+  # status (POSIX sh has no `pipefail`).
+  releases_url="https://api.github.com/repos/$REPO/releases/latest"
+  api_response=$(curl -fsSL "$releases_url") ||
+    die "failed to fetch release metadata: $releases_url"
+  tag=$(printf '%s' "$api_response" |
     sed -n 's/.*"tag_name": *"\(v\{0,1\}[^"]*\)".*/\1/p' |
     head -n1)
-  [ -n "$tag" ] || die "could not resolve latest release for $REPO"
+  [ -n "$tag" ] || die "could not parse tag_name from GitHub API response for $REPO"
 else
   case "$VERSION" in
     v*) tag="$VERSION" ;;
