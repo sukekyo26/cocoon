@@ -35,7 +35,6 @@ func TestGeneratePluginInstalls_NoRedundantUserToggle(t *testing.T) {
 			Metadata: plugin.Metadata{Name: "Needs Root"}, //nolint:exhaustruct // unused metadata fields
 			Install: plugin.Install{ //nolint:exhaustruct // unused install fields
 				RequiresRoot: true,
-				UserDirs:     []string{"/home/${USERNAME}/.cache/needs-root"},
 			},
 		}, //nolint:exhaustruct // Apt / Version not exercised by this test
 	}
@@ -44,7 +43,8 @@ func TestGeneratePluginInstalls_NoRedundantUserToggle(t *testing.T) {
 	seedPluginInstall(t, pluginsDir, "needs-root")
 
 	out, err := generatePluginInstalls(
-		plugins, enabled, os.DirFS(pluginsDir), nil,
+		plugins, enabled, os.DirFS(pluginsDir),
+		[]string{"/home/${USERNAME}/.cache/needs-root"},
 		map[string]config.PluginVersionOverride{},
 		&bytes.Buffer{},
 		shellEnv{rcFileAbs: "/home/${USERNAME}/.bashrc", rcSyntax: "posix", loginShell: "bash"},
@@ -160,7 +160,7 @@ func TestGeneratePluginInstalls_EnvOnlyPluginEmitsEnv(t *testing.T) {
 	plugins := map[string]*plugin.Plugin{
 		"env-only": {
 			Metadata: plugin.Metadata{Name: "Env Only"}, //nolint:exhaustruct // unused metadata fields
-			Install: plugin.Install{ //nolint:exhaustruct // Volumes / UserDirs / BuildArgs unused
+			Install: plugin.Install{ //nolint:exhaustruct // Volumes / BuildArgs unused
 				Env: map[string]string{
 					"PATH":   "/opt/env-only/bin:$PATH",
 					"FOO":    "bar",

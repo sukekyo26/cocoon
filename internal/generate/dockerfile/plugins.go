@@ -268,9 +268,9 @@ func renderEnvBlock(env map[string]string, pluginsFS fs.FS, id string) (string, 
 	return strings.Join(envLines, "\n"), nil
 }
 
-// generatePluginInstalls renders the {{PLUGIN_INSTALLS}} block. enabled
-// preserves user-declared order (matches Python dict insertion order). Missing
-// plugin entries are silently skipped (callers warn elsewhere).
+// collectAllUserDirs collects every directory under /home/${USERNAME} that
+// the user-dirs mkdir block must own. enabled preserves user-declared order.
+// Missing plugin entries are silently skipped (callers warn elsewhere).
 func collectAllUserDirs(plugins map[string]*plugin.Plugin, enabled, extra []string) []string {
 	out := make([]string, 0)
 	for _, id := range enabled {
@@ -278,7 +278,6 @@ func collectAllUserDirs(plugins map[string]*plugin.Plugin, enabled, extra []stri
 		if !ok {
 			continue
 		}
-		out = append(out, p.Install.UserDirs...)
 		out = append(out, p.Install.Volumes...)
 	}
 	out = append(out, extra...)

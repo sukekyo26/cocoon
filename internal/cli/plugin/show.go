@@ -59,9 +59,6 @@ func runShow(stdout, _ io.Writer, id string) error {
 		sort.Strings(pkgs)
 		fmt.Fprintf(stdout, "apt_packages: %s\n", strings.Join(pkgs, ", "))
 	}
-	if len(p.Install.UserDirs) > 0 {
-		fmt.Fprintf(stdout, "user_dirs:    %s\n", strings.Join(p.Install.UserDirs, ", "))
-	}
 	if len(p.Install.BuildArgs) > 0 {
 		fmt.Fprintf(stdout, "build_args:   %s\n", strings.Join(p.Install.BuildArgs, ", "))
 	}

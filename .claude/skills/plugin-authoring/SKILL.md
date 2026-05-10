@@ -61,7 +61,6 @@ packages = ["dep1", "dep2"]   # 任意
 [install]
 requires_root = true            # install.sh を root で実行するか
 volumes = ["/home/${USERNAME}/.tool"]   # 任意。自動的に mkdir + chown される
-# user_dirs = []   # volumes でカバーしないが chown が必要なケースのみ
 # build_args = ["MY_ARG"]   # ARG として宣言、env で install.sh に渡す
 
 # RUN 後に出力する ENV
@@ -76,7 +75,6 @@ version_capable = false
 ### 必須ルール
 - `description` には上流リンクを `(URL)` 形式で含める
 - `requires_root = true` のとき install.sh で手動 `USER` 切替は書かない（ジェネレータが包む）
-- `volumes` に書いたパスは `user_dirs` に重複記述しない（自動マージされる）
 - `build_args` の名前は `^[A-Z_][A-Z0-9_]*$`
 
 ## install.sh の書き方
