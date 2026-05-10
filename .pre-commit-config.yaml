@@ -9,6 +9,7 @@ repos:
         entry: shellcheck --severity=style
         language: system
         types: [shell]
+        exclude: ^bin/
         require_serial: false
 
       - id: shfmt
@@ -16,4 +17,5 @@ repos:
         entry: shfmt -i 2 -ci -d
         language: system
         types: [shell]
+        exclude: ^bin/
         require_serial: false

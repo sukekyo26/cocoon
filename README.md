@@ -63,7 +63,7 @@ pip install pre-commit  # or `brew install pre-commit`
 pre-commit install      # shellcheck + shfmt fire on each `git commit`
 ```
 
-`shellcheck` and `shfmt` must be on `$PATH` (`apt-get install shellcheck` / download `shfmt` from <https://github.com/mvdan/sh/releases>).
+`shellcheck` and `shfmt` must be on `$PATH`. macOS: `brew install shellcheck shfmt`. Linux/WSL: `apt-get install shellcheck` + download `shfmt` from <https://github.com/mvdan/sh/releases>.
 
 ## License
 
