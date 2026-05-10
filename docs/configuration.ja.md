@@ -328,7 +328,7 @@ cocoon の生成物 `.devcontainer/*` は、証明書の有無に関わらず **
 
 | メンバー | cocoon バイナリ | `~/.cocoon/certs/` 作成 | 必要な操作 |
 |---|---|---|---|
-| 生成担当 | あり | 自身で `mkdir -p ~/.cocoon/certs` | `cocoon gen && commit` |
+| 生成担当 | あり | `cocoon gen` が自動作成 (0700) | `cocoon gen && commit` |
 | VS Code 利用者 (cert 不要) | 不要 | `initializeCommand` が自動作成 | なし。dev container を開くだけ |
 | VS Code 利用者 (cert 必要) | 不要 | `initializeCommand` が自動作成 | `cp corp.crt ~/.cocoon/certs/` して Rebuild Container |
 | `docker compose` 直接利用 / CI | 不要 | **手動 `mkdir -p ~/.cocoon/certs`** | 初回のみ手動 mkdir、cert 必要なら配置して build |

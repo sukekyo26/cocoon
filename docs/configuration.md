@@ -328,7 +328,7 @@ Generated `.devcontainer/*` artifacts are **identical** regardless of cert prese
 
 | Member | cocoon binary | `~/.cocoon/certs/` creation | Required action |
 |---|---|---|---|
-| Generator | yes | run `mkdir -p ~/.cocoon/certs` | `cocoon gen && commit` |
+| Generator | yes | created by `cocoon gen` (mode 0700) | `cocoon gen && commit` |
 | VS Code user (no cert needed) | not needed | created by `initializeCommand` | nothing — just open dev container |
 | VS Code user (cert needed) | not needed | created by `initializeCommand` | `cp corp.crt ~/.cocoon/certs/` then Rebuild Container |
 | Plain `docker compose` / CI | not needed | **manual `mkdir -p ~/.cocoon/certs`** | one-time mkdir, drop cert if needed, build |

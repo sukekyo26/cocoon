@@ -13,6 +13,7 @@ cocoon の主要な変更を記録します。フォーマットは
 - `cocoon plugin pin --write` を追加。`workspace.toml` の `[plugins.versions.<id>]` ブロックを直接挿入・置換する。行ベースのミューテータが対象ブロック外のコメント・空行を保持するため、既存ファイルを安全に編集できる。`--write` 無しの stdout-only 動作はデフォルトのまま。`[plugins.versions]` 直下に任意の key 代入 (例: `<id> = "..."` や `<id> = { ... }`) がある場合は重複ブロック追加を避けるため usage error で停止する。
 - `~/.cocoon/certs/*.crt` に置いた TLS 証明書を build 時にコンテナイメージへ自動取り込みする。compose 側で `additional_contexts: cocoon_user_certs: ${HOME}/.cocoon/certs` を宣言し、Dockerfile 側で `RUN --mount=type=bind,from=cocoon_user_certs ...` により他の apt 操作より前に trust store へマージする。これにより Zscaler 等の TLS インターセプトが行われる corp ネットワーク環境でも build が成立する。RUN 内部はシェルレベルの条件分岐になっているため、ユーザー証明書の有無にかかわらず Dockerfile の生成内容は同一。
 - 生成 `.devcontainer/devcontainer.json` に `initializeCommand: "mkdir -p ${HOME}/.cocoon/certs"` を追加。VS Code Dev Containers ユーザーは cocoon バイナリ無しでも、ホスト側にディレクトリが build 前に自動作成される。`docker compose build` を直接実行するユーザー (CI 等) はこのフックを通らないため、初回のみホスト側で `mkdir -p ~/.cocoon/certs` を実行する必要がある。
+- `cocoon gen` 実行時にホスト側 `~/.cocoon/certs/` (パーミッション 0700) を不在なら自動作成し、社内 / プライベート CA の `.crt` 配置先を案内するメッセージを出力する。VS Code Dev Containers を介さない `docker compose build` 直接利用者 (CI 等) が手動 mkdir を要する点もメッセージ内で明示するため、ドキュメントを読まなくても要件が見える。
 - 生成された `.devcontainer/Dockerfile` / `docker-compose.yml` / `devcontainer.json` は、証明書の有無に関わらず常に同一。チームで commit して共有可能。実際にインストールされる証明書は各開発者の `~/.cocoon/certs/` の状態で決まる。
 
 ### 変更
