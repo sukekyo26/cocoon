@@ -12,13 +12,16 @@ import (
 	"github.com/sukekyo26/cocoon/internal/config"
 )
 
-// Load parses and validates a single plugin TOML file.
-func Load(path string) (*Plugin, error) {
-	data, err := os.ReadFile(path) //nolint:gosec // path provided by trusted caller.
+// Load parses and validates a single plugin TOML file. The parameter
+// is named tomlPath (not path) so it does not shadow the imported
+// "path" package — `path.Join` calls inside this function would
+// otherwise refer to the string argument and stop compiling.
+func Load(tomlPath string) (*Plugin, error) {
+	data, err := os.ReadFile(tomlPath) //nolint:gosec // path provided by trusted caller.
 	if err != nil {
-		return nil, config.WrapIO(path, err) //nolint:wrapcheck // wrapper preserves the renderer-friendly format.
+		return nil, config.WrapIO(tomlPath, err) //nolint:wrapcheck // wrapper preserves the renderer-friendly format.
 	}
-	return parsePluginTOML(path, data)
+	return parsePluginTOML(tomlPath, data)
 }
 
 // loadFromFS reads <id>/plugin.toml out of src and validates it. The

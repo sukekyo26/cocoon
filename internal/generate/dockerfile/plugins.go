@@ -1,7 +1,6 @@
 package dockerfile
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -14,19 +13,12 @@ import (
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
 
-// errPluginsFSNil is returned when a Dockerfile renderer is asked to
-// read a plugin asset but the WorkspaceContext was constructed without
-// a PluginsFS. Wrapped (rather than emitted as a dynamic errors.New)
-// so callers can identify the cause via errors.Is.
-var errPluginsFSNil = errors.New("plugins fs is nil")
-
 // fileExistsInFS reports whether name is a regular file inside fsys.
-// Returns false on missing file, missing fs, or any other stat error
-// (callers treat plugins without an install.sh as a no-op).
+// Returns false only on missing file or other stat errors; the caller
+// is responsible for ensuring fsys is non-nil (generatePluginInstalls
+// fails fast with plugin.ErrNilPluginsFS the moment any enabled plugin
+// is present without a wired-up PluginsFS).
 func fileExistsInFS(fsys fs.FS, name string) bool {
-	if fsys == nil {
-		return false
-	}
 	st, err := fs.Stat(fsys, name)
 	if err != nil {
 		return false
@@ -34,10 +26,10 @@ func fileExistsInFS(fsys fs.FS, name string) bool {
 	return !st.IsDir()
 }
 
+// readFileFromFS reads name out of fsys, wrapping errors with the
+// fs-relative path so renderer failures point at the offending file.
+// fsys must be non-nil; see fileExistsInFS for the contract.
 func readFileFromFS(fsys fs.FS, name string) ([]byte, error) {
-	if fsys == nil {
-		return nil, errPluginsFSNil
-	}
 	data, err := fs.ReadFile(fsys, name)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", name, err)
@@ -306,6 +298,21 @@ func generatePluginInstalls(
 	warnings io.Writer,
 	sh shellEnv,
 ) (string, error) {
+	// Fail fast when any enabled plugin actually got loaded but the
+	// caller forgot to wire up PluginsFS. Without this check, downstream
+	// fileExistsInFS calls would silently report "no install.sh" for
+	// every plugin and emit a Dockerfile that ignores the plugin set
+	// entirely. Plugins listed in enabled but absent from `plugins`
+	// (already warned about elsewhere) do not trip the check, so a
+	// project that lists no plugins keeps working with PluginsFS = nil.
+	if pluginsFS == nil {
+		for _, id := range enabled {
+			if _, ok := plugins[id]; ok {
+				return "", fmt.Errorf("dockerfile: %w", plugin.ErrNilPluginsFS)
+			}
+		}
+	}
+
 	if len(overrides) > 0 {
 		if err := validateVersionOverrides(plugins, overrides, warnings); err != nil {
 			return "", err

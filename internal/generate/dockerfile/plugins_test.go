@@ -2,6 +2,7 @@ package dockerfile //nolint:testpackage // exercises unexported generatePluginIn
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -186,6 +187,75 @@ func TestGeneratePluginInstalls_EnvOnlyPluginEmitsEnv(t *testing.T) {
 	// has no script).
 	if strings.Contains(out, "bash <<'COCOON_PLUGIN_EOF'") {
 		t.Errorf("env-only plugin should not produce a bash heredoc:\n%s", out)
+	}
+}
+
+// TestGeneratePluginInstalls_NilPluginsFSFailsFast pins down the
+// fail-fast contract added after PR #12 review: a misconfigured
+// WorkspaceContext (PluginsFS = nil) used to make every fileExistsInFS
+// call silently report "no install.sh", emitting a Dockerfile that
+// ignored the entire plugin set. Now generatePluginInstalls bails
+// with plugin.ErrNilPluginsFS the moment any enabled plugin is also
+// loaded into the plugins map.
+//
+// Two negative-control cases ensure the check is *narrow*:
+//   - empty enable list — nil PluginsFS is fine when nothing needs it.
+//   - enabled-but-not-loaded id — the existing "warn and skip" path
+//     for a missing plugin TOML must still work, so the error fires
+//     only when there is an actual plugin to render.
+func TestGeneratePluginInstalls_NilPluginsFSFailsFast(t *testing.T) {
+	t.Parallel()
+
+	loaded := map[string]*plugin.Plugin{
+		"loaded": {
+			Metadata: plugin.Metadata{Name: "Loaded"}, //nolint:exhaustruct // unused fields
+			Install:  plugin.Install{},                //nolint:exhaustruct // unused fields
+		}, //nolint:exhaustruct // Apt / Version not exercised by this test
+	}
+	cases := []struct {
+		name      string
+		plugins   map[string]*plugin.Plugin
+		enabled   []string
+		wantError bool
+	}{
+		{
+			name:      "loaded_plugin_with_nil_fs_errors",
+			plugins:   loaded,
+			enabled:   []string{"loaded"},
+			wantError: true,
+		},
+		{
+			name:      "empty_enable_list_with_nil_fs_is_fine",
+			plugins:   loaded,
+			enabled:   nil,
+			wantError: false,
+		},
+		{
+			name:      "enabled_but_unloaded_id_with_nil_fs_is_fine",
+			plugins:   map[string]*plugin.Plugin{},
+			enabled:   []string{"missing"},
+			wantError: false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := generatePluginInstalls(
+				tc.plugins, tc.enabled, nil, nil,
+				map[string]config.PluginVersionOverride{},
+				&bytes.Buffer{},
+				shellEnv{rcFileAbs: "/home/${USERNAME}/.bashrc", rcSyntax: "posix", loginShell: "bash"},
+			)
+			if tc.wantError {
+				if !errors.Is(err, plugin.ErrNilPluginsFS) {
+					t.Fatalf("err = %v, want errors.Is(.., plugin.ErrNilPluginsFS)", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
 	}
 }
 
