@@ -26,6 +26,7 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ### 修正
 
+- `[install].build_args` を `install.sh` と `install_user.sh` で対称に扱うよう修正。これまでジェネレータは `ARG <name>` 行を `install.sh` の RUN の直前にしか出力していなかったため、`install_user.sh` のみのプラグイン（`install.sh` なし）+ `build_args` の組み合わせでは `${<name>}` がビルド時に空文字に展開されていた。修正後はプラグインごとに 1 回 `ARG <name>` を「先に走る hook」の直前に出力し、両 hook の per-RUN env prefix から build-arg 値を参照できるようにした。ARG のスコープは stage 全体なので 1 回の宣言で両 RUN をカバーでき、両 hook を持つプラグインで重複宣言は発生しない。
 - 生成される `docker-compose.yml` の `[workspace] mount_root` 解決を修正。docker-compose は bind mount の相対パスを compose ファイルがあるディレクトリ (`.devcontainer/`) 基準で解決するため、従来の出力は 1 段浅かった。`mount_root = ".."` ではプロジェクトルートしかマウントされず兄弟リポジトリが見えていなかったし、`mount_root = "."` では `.devcontainer/` 自身がマウントされていた。両ケースとも `..` を 1 段足した形で出力されるようになり、本来の対象ディレクトリにマウントされるようになった。
 - `install.sh` を持たず `[install.env]` のみを定義したプラグイン (env-only プラグイン) で `ENV` ディレクティブが生成 Dockerfile から silently drop されていた問題を修正。env ブロックを独立したスニペットとして出力し、env 変数が確実にイメージに反映されるようにした。
 - カタログプラグイン `claude-code` / `copilot-cli` が `[install.env]` で `~/.local/bin` を `PATH` に追加するように修正。これにより、`uv` 等の他プラグインに依存することなくインストールされた CLI が対話シェルから即時利用可能になる。

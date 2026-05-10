@@ -76,7 +76,7 @@ one must be present.
 | `[metadata]` | `conflicts`       | list of strings    | `[]`  |   | Plugin ids that must not be enabled at the same time. |
 | `[apt]`      | `packages`        | list of strings    | `[]`  |   | Apt packages installed before `install.sh` runs. |
 | `[install]`  | `requires_root`   | bool               | —     | ✓ | If true, `install.sh` runs as root; otherwise as the unprivileged user. |
-| `[install]`  | `build_args`      | list of strings    | `[]`  |   | Names of build-time variables (e.g. `DOCKER_GID`) the plugin consumes. The generator emits matching `ARG <name>` lines **next to the `install.sh` RUN** and threads `<name>="${<name>}"` into its per-RUN env prefix, so `install.sh` reads `$<name>` as a normal env var. **Plugins without `install.sh` do not currently get the `ARG` declarations**, so a plugin built around only `install_user.sh` or only `[install.env]` cannot rely on `build_args`. Names match `^[A-Z_][A-Z0-9_]*$`. |
+| `[install]`  | `build_args`      | list of strings    | `[]`  |   | Names of build-time variables (e.g. `DOCKER_GID`) the plugin consumes. The generator emits matching `ARG <name>` lines once per plugin (next to whichever of `install.sh` / `install_user.sh` runs first) and threads `<name>="${<name>}"` into the per-RUN env prefix of every hook, so both `install.sh` and `install_user.sh` can read `$<name>` as a normal env var. ARG scope is stage-wide, so a single declaration covers both RUNs. Names match `^[A-Z_][A-Z0-9_]*$`. |
 | `[install]`  | `env`             | map<string,string> | `{}`  |   | `ENV` lines emitted after the install runs. Values can reference earlier `ENV`/`ARG` vars. |
 | `[install]`  | `volumes`         | list of strings    | `[]`  |   | Per-user paths under `/home/${USERNAME}/<dir>`; each one is `mkdir -p`'d, `chown`'d, and declared as a docker named volume so its contents persist across rebuilds. |
 | `[version]`  | `version_capable` | bool               | —     | ✓ | If true, `install.sh` accepts `$PIN` and optionally `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` (see §7). |
@@ -155,7 +155,7 @@ bash's environment for that step is composed from two sources:
 | `PIN`            | per-RUN env, only when `[version].version_capable = true` | Version string from `[plugins.versions.<id>].pin` in `workspace.toml`. Empty means "use upstream latest". |
 | `CHECKSUM_AMD64` | per-RUN env, only when `[version].version_capable = true` | `sha256` of the amd64 artifact, or empty (script must skip verification with a warning). |
 | `CHECKSUM_ARM64` | same as above | `sha256` of the arm64 artifact. |
-| `<BUILD_ARG>`    | per-RUN env (also declared as `ARG`), only when listed in `[install].build_args` **and the plugin has `install.sh`** | The generator emits an `ARG <name>` line right before the `install.sh` RUN and threads `<name>="${<name>}"` into that step's per-RUN prefix. The Dockerfile substitutes the value on the prefix line at build time. Example: `docker-cli` reads `DOCKER_GID`. |
+| `<BUILD_ARG>`    | per-RUN env (also declared as `ARG`), only when listed in `[install].build_args` | The generator emits one `ARG <name>` line per plugin (next to whichever hook runs first) and threads `<name>="${<name>}"` into the per-RUN prefix of every hook. The Dockerfile substitutes the value on each prefix line at build time. Example: `docker-cli` reads `DOCKER_GID`. |
 
 Nothing on the developer's host machine evaluates the script — bash
 runs the body inside the build environment, with the env composed as
