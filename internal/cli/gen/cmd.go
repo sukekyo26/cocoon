@@ -35,6 +35,13 @@ var ErrUsage = errors.New("usage error")
 // ErrFailure signals a runtime failure during generation.
 var ErrFailure = errors.New("gen failed")
 
+// errCertsPathNotDirectory is returned by ensureUserCertsDir when the
+// target ~/.cocoon/certs path exists but is not a directory (a stray
+// regular file, a broken symlink, etc.). Kept package-private because
+// it is not part of the public surface — callers map runtime failures
+// to ErrFailure at the wrap site.
+var errCertsPathNotDirectory = errors.New("cocoon certs path exists but is not a directory")
+
 const genLong = `cocoon gen — generate .devcontainer/{Dockerfile, docker-compose.yml, devcontainer.json}
 
 Discovers workspace.toml from the current directory (walking parent
@@ -217,9 +224,10 @@ func ensureUserCertsDir(stdout io.Writer, cat *i18n.Catalog) error {
 	case err == nil && !info.IsDir():
 		// A non-directory at the cert path (a stray file, a symlink, etc.)
 		// would silently break BuildKit's additional_contexts resolution
-		// at build time. Surface it now via the package's existing failure
-		// sentinel so callers can map it to the right exit code.
-		return fmt.Errorf("%w: %s exists but is not a directory", ErrFailure, dir)
+		// at build time. Surface it as a plain error; the caller wraps
+		// once with ErrFailure so we do not double-wrap and produce a
+		// `gen failed: gen failed: …` user-facing prefix.
+		return fmt.Errorf("%s: %w", dir, errCertsPathNotDirectory)
 	case !os.IsNotExist(err):
 		return fmt.Errorf("stat %s: %w", dir, err)
 	}
