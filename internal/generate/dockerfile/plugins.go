@@ -14,12 +14,9 @@ import (
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
 
-// installHeredocDelim is the bash heredoc terminator used to inline
-// plugin install scripts into the generated Dockerfile. It must match
-// the literal embedded in installRunTmpl. Plugin scripts that contain
-// a line equal to this delimiter would terminate the heredoc early and
-// silently truncate the install at build time, so the renderer rejects
-// them up front (see checkHeredocCollision).
+// installHeredocDelim must match the literal in installRunTmpl. A plugin
+// script line equal to this would silently truncate the heredoc, hence
+// the up-front check in checkHeredocCollision.
 const installHeredocDelim = "COCOON_PLUGIN_EOF"
 
 // ErrHeredocCollision is returned when a plugin install script
@@ -28,15 +25,9 @@ const installHeredocDelim = "COCOON_PLUGIN_EOF"
 // class with errors.Is without scraping the message.
 var ErrHeredocCollision = errors.New("dockerfile: plugin install script collides with heredoc delimiter")
 
-// fileExistsInFS reports whether name is a regular file inside fsys.
-// The bool/error split mirrors os.Stat semantics: a false / nil pair
-// means "not a regular file present at this path" (missing or
-// directory), while any other stat failure (permission, I/O, etc.) is
-// returned as-is so the caller can surface it instead of silently
-// dropping the affected plugin from the generated Dockerfile. fsys
-// must be non-nil; generatePluginInstalls fails fast with
-// plugin.ErrNilPluginsFS the moment any enabled plugin is present
-// without a wired-up PluginsFS.
+// fileExistsInFS returns (false, nil) when name is missing or a directory,
+// and (false, err) for permission / I/O failures so the caller can surface
+// them instead of silently dropping the plugin. fsys must be non-nil.
 func fileExistsInFS(fsys fs.FS, name string) (bool, error) {
 	st, err := fs.Stat(fsys, name)
 	if err != nil {
@@ -219,17 +210,10 @@ func resolveOverride(
 	return o, true
 }
 
-// renderInstallSnippet returns the snippet that goes into the
-// "# Install" bucket. It handles three cases in one place so the
-// caller stays linear:
-//
-//  1. install.sh present — render the heredoc RUN and append the env
-//     block (if any) to the same snippet.
-//  2. no install.sh but [install.env] is set — emit the env block on
-//     its own with a "(env)" comment so the ENV directives still land
-//     in the image. ENV is unaffected by the active USER, so this
-//     entry can sit in either bucket without changing semantics.
-//  3. neither — return "".
+// renderInstallSnippet emits the heredoc RUN + env block when install.sh
+// exists, or just the env block (with an "(env)" marker) when only
+// [install.env] is set. ENV is USER-agnostic, so an env-only entry can
+// land in either bucket without changing semantics.
 func renderInstallSnippet(rs runSpec, hasInstall bool, installPath string) (string, error) {
 	if hasInstall {
 		body, err := readFileFromFS(rs.pluginsFS, installPath)
@@ -422,10 +406,8 @@ var installRunTmpl = tmplx.MustParse("dockerfile-plugin-install", `{{ .Comment }
 RUN {{ range .EnvPairs }}{{ . }} {{ end }}bash <<'COCOON_PLUGIN_EOF'
 {{ .ScriptBody }}COCOON_PLUGIN_EOF`, nil)
 
-// renderInstallRun returns the rendered RUN block. scriptBody is the
-// raw install.sh contents and should end with a newline so the closing
-// COCOON_PLUGIN_EOF starts on its own line; renderInstallRun normalises
-// the trailing newline so callers can pass either flavour.
+// renderInstallRun normalises the trailing newline so the closing
+// COCOON_PLUGIN_EOF lands on its own line regardless of input shape.
 func renderInstallRun(
 	pluginID, comment string,
 	argLines []string,

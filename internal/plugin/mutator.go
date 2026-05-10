@@ -42,25 +42,15 @@ var ErrPinBlockVersionsKeyAssign = errors.New(
 		"(e.g. `<id> = \"...\"` or `<id> = { ... }`); " +
 		"convert each to a [plugins.versions.<id>] block before using --write")
 
-// UpsertPinBlock loads the workspace.toml at path, inserts (or replaces) a
-// `[plugins.versions.<id>]` block formatted by FormatPinBlock, and writes the
-// file back atomically. Comments and blank lines outside the target block —
-// including whitespace-only lines and existing multi-blank tails — are
-// preserved verbatim.
+// UpsertPinBlock atomically inserts or replaces a `[plugins.versions.<id>]`
+// block in the workspace.toml at path. Comments and blank lines outside
+// the target block are preserved verbatim.
 //
-// Behavior:
-//   - If `[plugins.versions.<id>]` already exists, its body (header through
-//     the line before the next section header or EOF) is replaced in place;
-//     trailing blank lines that sat between the block and the next section
-//     are preserved unchanged.
-//   - Otherwise the new block is appended just after the last existing
-//     `[plugins.versions.*]` block; a fresh blank-line separator is inserted
-//     before the new block, and any blank lines that previously trailed the
-//     versions cluster move to sit after the new block (preserved verbatim).
-//   - If no `[plugins.versions.*]` block exists, the new block is appended
-//     at end-of-file. A single blank-line separator is added only when the
-//     file did not already end with one; existing trailing blank lines (any
-//     count, any whitespace contents) are preserved as-is.
+//   - existing block: body replaced in place; surrounding blanks intact.
+//   - other versions blocks present: new block appended after the last
+//     `[plugins.versions.*]`, with a fresh blank separator before it.
+//   - no versions blocks: new block appended at EOF, single blank
+//     separator only if the file did not already end with one.
 func UpsertPinBlock(path, id, ref, amd64Sum, arm64Sum string) error {
 	if id == "" {
 		return ErrPinBlockEmptyID
