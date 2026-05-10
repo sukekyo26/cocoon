@@ -41,6 +41,7 @@ cocoon の主要な変更を記録します。フォーマットは
 - `docs/configuration.{md,ja.md}` の `[container.shell]` 節にあった永続シェル rc の実装詳細（重複説明）を 1 文に圧縮し、単一情報源として `architecture.md#shell-injection` へリンクするようにした。
 - `docs/commands.{md,ja.md}` 末尾に「削除済みコマンド」節を追加。撤去された `cocoon config` ノウングループと `cocoon plugin add` / `cocoon plugin remove` を 1 行ずつの移行案内付きで列挙し、古いコマンドを探して辿り着いた読者がすぐに代替手段を見つけられるようにした。
 - `cocoon init` の対話フロー一覧に社内 CA プロンプト (ステップ 9) を追加 (`README.md` / `docs/README.ja.md` / `docs/commands.md` / `docs/commands.ja.md`)。実際のプロンプト順序とドキュメントの記載が一致するようになった。これまで一覧は 10 ステップで certificates opt-in が抜けていた。
+- `docs/commands.{md,ja.md}` の `cocoon init` フラグ表に `--plugin-versions` を追加。`[plugins.versions]` 書き込みを導入したリリース以降フラグ自体は存在していたが、表が `--plugins` から `--alias-bundles` へ飛んでいた。
 
 ### 削除
 

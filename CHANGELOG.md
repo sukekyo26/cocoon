@@ -41,6 +41,7 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Dedupe the persistent-shellrc explanation in `docs/configuration.{md,ja.md}` (`[container.shell]` section): collapse the repeated implementation walkthrough to one sentence and link to `architecture.md#shell-injection` as the single source of truth.
 - Append a "Removed commands" section to `docs/commands.{md,ja.md}` listing the retired `cocoon config` noun group plus `cocoon plugin add` / `cocoon plugin remove`, with one-line migration pointers, so readers searching for an old command find the replacement immediately.
 - Add the corporate-CA prompt (step 9) to the `cocoon init` interactive-flow lists in `README.md`, `docs/README.ja.md`, `docs/commands.md`, and `docs/commands.ja.md` so the docs match the actual prompt order. Previously the list stopped at 10 steps and skipped the certificates opt-in.
+- Document the `--plugin-versions` flag in the `cocoon init` flag table in `docs/commands.{md,ja.md}`. The flag has shipped since the same release that introduced `[plugins.versions]` writing, but the table jumped straight from `--plugins` to `--alias-bundles`.
 
 ### Removed
 

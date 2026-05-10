@@ -43,6 +43,7 @@ Generate `workspace.toml` in the current directory.
 | `--no-certificates` | bool | Force-disable; omit the `[certificates]` section (default). |
 | `--apt-categories <ids>` | string | Comma-separated apt category IDs (skips the prompt). |
 | `--plugins <ids>` | string | Comma-separated plugin IDs to enable. |
+| `--plugin-versions <id>=<ref>,...` | string | Comma-separated `<id>=<ref>` pins for `version_capable` plugins. Each `<id>` must also appear in `--plugins`, must be `version_capable`, and may not repeat. Emits a `[plugins.versions]` block directly in the generated `workspace.toml`. |
 | `--alias-bundles <ids>` | string | Comma-separated shell-alias bundle IDs (e.g. `git,ls`). |
 | `--force` | bool | Overwrite an existing `workspace.toml`. |
 

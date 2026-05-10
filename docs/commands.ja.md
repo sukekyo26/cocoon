@@ -43,6 +43,7 @@
 | `--no-certificates` | bool | `[certificates]` セクション省略を強制（デフォルト）。 |
 | `--apt-categories <ids>` | string | カンマ区切り apt カテゴリ ID (プロンプトをスキップ)。 |
 | `--plugins <ids>` | string | カンマ区切りで有効化するプラグイン ID。 |
+| `--plugin-versions <id>=<ref>,...` | string | カンマ区切りの `<id>=<ref>` でプラグインを pin する。各 `<id>` は `--plugins` にも含まれ、かつ `version_capable = true` である必要があり、重複は不可。`[plugins.versions]` ブロックを生成 `workspace.toml` に直接書き込む。 |
 | `--alias-bundles <ids>` | string | カンマ区切りエイリアスバンドル ID (例: `git,ls`)。 |
 | `--force` | bool | 既存 `workspace.toml` を上書き。 |
 
