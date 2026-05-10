@@ -113,7 +113,7 @@ rc 編集も user 所有 config の書き込みも要らないなら `install_us
 
 ## 6. install スクリプトに渡される環境変数
 
-`install.sh` も `install_user.sh` も `bash <<'COCOON_PLUGIN_EOF' … EOF`
+`install.sh` も `install_user.sh` も `bash <<'COCOON_PLUGIN_EOF' … COCOON_PLUGIN_EOF`
 の中で実行される。スクリプト本体から参照できる名前は次の 2 経路で
 解決される:
 

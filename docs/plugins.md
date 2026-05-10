@@ -121,8 +121,8 @@ is the only plugin that uses it.
 
 ## 6. Environment variables passed to install scripts
 
-Both scripts run inside `bash <<'COCOON_PLUGIN_EOF' … EOF`. The
-following names resolve in the script body, with two distinct
+Both scripts run inside `bash <<'COCOON_PLUGIN_EOF' … COCOON_PLUGIN_EOF`.
+The following names resolve in the script body, with two distinct
 mechanisms:
 
 - **Per-RUN env prefix (real bash env vars)**: emitted as

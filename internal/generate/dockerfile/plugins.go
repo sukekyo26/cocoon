@@ -268,8 +268,12 @@ func renderEnvBlock(env map[string]string, pluginsFS fs.FS, id string) (string, 
 	return strings.Join(envLines, "\n"), nil
 }
 
-// collectAllUserDirs collects every directory under /home/${USERNAME} that
-// the user-dirs mkdir block must own. enabled preserves user-declared order.
+// collectAllUserDirs collects every container-side directory the user-dirs
+// mkdir block must own. Plugin entries contribute their [install].volumes
+// (validated to live under /home/${USERNAME}/...), and the caller-supplied
+// `extra` slice carries `[volumes]` targets from workspace.toml — those can
+// point anywhere inside the container, including paths outside the user
+// home (e.g. /var/cache/...). enabled preserves user-declared order.
 // Missing plugin entries are silently skipped (callers warn elsewhere).
 func collectAllUserDirs(plugins map[string]*plugin.Plugin, enabled, extra []string) []string {
 	out := make([]string, 0)
