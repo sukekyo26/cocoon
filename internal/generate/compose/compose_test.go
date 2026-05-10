@@ -86,7 +86,7 @@ func TestGenerate_Snapshot(t *testing.T) {
 				t.Fatalf("read expected: %v", err)
 			}
 			if got != string(wantBytes) {
-				t.Errorf("output mismatch\n--- got ---\n%s\n--- want ---\n%s", got, string(wantBytes))
+				t.Errorf("output mismatch (run with -update-golden to refresh)\n--- got ---\n%s\n--- want ---\n%s", got, string(wantBytes))
 			}
 		})
 	}
