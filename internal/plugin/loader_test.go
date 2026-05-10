@@ -2,6 +2,7 @@ package plugin_test
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -67,4 +68,33 @@ func TestLoadEnabled_NilWarnings(t *testing.T) {
 	// nil warnings writer must not panic; missing plugins still skip.
 	_, err := plugin.LoadEnabled(dir, []string{"missing"}, nil)
 	require.NoError(t, err)
+}
+
+// TestLoadEnabledFromFS_NilSrcReturnsSentinel pins the contract
+// documented on LoadEnabledFromFS: a nil source surfaces ErrNilPluginsFS
+// instead of panicking inside fs.Stat. Both an empty and a non-empty
+// enable list are exercised so the early return short-circuits in both
+// cases (a nil fs is a programming error regardless of what was asked).
+func TestLoadEnabledFromFS_NilSrcReturnsSentinel(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name    string
+		enabled []string
+	}{
+		{name: "empty_enable_list", enabled: nil},
+		{name: "non_empty_enable_list", enabled: []string{"foo"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			out, err := plugin.LoadEnabledFromFS(nil, tc.enabled, nil, "")
+			if !errors.Is(err, plugin.ErrNilPluginsFS) {
+				t.Fatalf("err = %v, want errors.Is(.., ErrNilPluginsFS)", err)
+			}
+			if out != nil {
+				t.Errorf("out = %v, want nil on error", out)
+			}
+		})
+	}
 }

@@ -114,110 +114,380 @@ RUN mkdir -p /home/${USERNAME}/.aws /home/${USERNAME}/.cargo /home/${USERNAME}/.
     chown ${USERNAME}:${USERNAME} /home/${USERNAME}/.aws /home/${USERNAME}/.cargo /home/${USERNAME}/.claude /home/${USERNAME}/.config /home/${USERNAME}/.copilot /home/${USERNAME}/.deno /home/${USERNAME}/.proto /home/${USERNAME}/.rustup /home/${USERNAME}/go
 # Install Docker CLI
 ARG DOCKER_GID
-RUN --mount=type=bind,from=plugins,source=docker-cli,target=/tmp/plugin \
-    RC_FILE="$HOME/.zshrc" \
-    RC_SYNTAX="posix" \
-    LOGIN_SHELL="zsh" \
-    DOCKER_GID="${DOCKER_GID}" \
-    bash /tmp/plugin/install.sh
+RUN RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" DOCKER_GID="${DOCKER_GID}" bash <<'COCOON_PLUGIN_EOF'
+#!/usr/bin/env bash
+# Install Docker CLI (client only, to use host Docker daemon via socket mount)
+# https://github.com/docker/cli
+#
+# Inputs (env):
+#   DOCKER_GID : host docker group GID (passed via Dockerfile ARG -> --build-arg)
+#   USERNAME   : container username
+set -euo pipefail
+
+mkdir -p /etc/apt/keyrings
+
+# shellcheck disable=SC1091
+. /etc/os-release
+
+# Docker publishes its apt repository at /linux/<distro> for both Ubuntu and
+# Debian. Use the /etc/os-release ID directly so the same install.sh works
+# for either base image without a hard-coded distro path.
+docker_repo="https://download.docker.com/linux/${ID}"
+curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+  "${docker_repo}/gpg" | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] ${docker_repo} ${VERSION_CODENAME} stable" \
+  > /etc/apt/sources.list.d/docker.list
+
+apt-get update
+apt-get install -y --no-install-recommends docker-ce-cli docker-compose-plugin
+apt-get clean
+rm -rf /var/lib/apt/lists/* /var/tmp/*
+
+docker_group=$(getent group "${DOCKER_GID}" 2>/dev/null | cut -d: -f1 || true)
+if [ -z "$docker_group" ]; then
+  groupadd -g "${DOCKER_GID}" docker
+  docker_group=docker
+fi
+usermod -aG "$docker_group" "${USERNAME}"
+COCOON_PLUGIN_EOF
 # Install GitHub CLI
-RUN --mount=type=bind,from=plugins,source=github-cli,target=/tmp/plugin \
-    RC_FILE="$HOME/.zshrc" \
-    RC_SYNTAX="posix" \
-    LOGIN_SHELL="zsh" \
-    bash /tmp/plugin/install.sh
+RUN RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" bash <<'COCOON_PLUGIN_EOF'
+#!/usr/bin/env bash
+# Install GitHub CLI (https://github.com/cli/cli)
+set -euo pipefail
+
+mkdir -p /etc/apt/keyrings
+chmod 755 /etc/apt/keyrings
+curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+  https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+  -o /etc/apt/keyrings/githubcli-archive-keyring.gpg
+chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
+
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+  > /etc/apt/sources.list.d/github-cli.list
+
+apt-get update
+apt-get install -y --no-install-recommends gh
+apt-get clean
+rm -rf /var/lib/apt/lists/* /var/tmp/*
+COCOON_PLUGIN_EOF
 # Install Zig
-RUN --mount=type=bind,from=plugins,source=zig,target=/tmp/plugin \
-    RC_FILE="$HOME/.zshrc" \
-    RC_SYNTAX="posix" \
-    LOGIN_SHELL="zsh" \
-    PIN="0.14.0" \
-    CHECKSUM_AMD64="" \
-    CHECKSUM_ARM64="" \
-    bash /tmp/plugin/install.sh
+RUN RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" PIN="0.14.0" CHECKSUM_AMD64="" CHECKSUM_ARM64="" bash <<'COCOON_PLUGIN_EOF'
+#!/usr/bin/env bash
+# Install Zig (required for cargo-lambda cross-compilation) (https://github.com/ziglang/zig)
+#
+# Inputs (env):
+#   PIN              : Zig version (e.g. "0.14.0") or "master"; empty = master
+#   CHECKSUM_AMD64   : sha256 of amd64 tarball; empty to skip verification
+#   CHECKSUM_ARM64   : sha256 of arm64 tarball; empty to skip verification
+#
+# The download URL is resolved through ziglang.org's index.json so we stay
+# compatible with both pre-0.14 and 0.14+ asset naming.
+set -euo pipefail
+
+ARCH="$(dpkg --print-architecture)"
+case "$ARCH" in
+  amd64) DOWNLOAD_ARCH="x86_64"  ; CHECKSUM="$CHECKSUM_AMD64" ;;
+  arm64) DOWNLOAD_ARCH="aarch64" ; CHECKSUM="$CHECKSUM_ARM64" ;;
+  *)     DOWNLOAD_ARCH="x86_64"  ; CHECKSUM="$CHECKSUM_AMD64" ;;
+esac
+echo "Detected architecture: $ARCH -> $DOWNLOAD_ARCH"
+
+VERSION_KEY="${PIN:-master}"
+
+ZIG_URL=$(curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+  https://ziglang.org/download/index.json \
+  | jq -r --arg v "$VERSION_KEY" --arg a "$DOWNLOAD_ARCH" '.[$v][$a + "-linux"].tarball')
+
+if [ -z "$ZIG_URL" ] || [ "$ZIG_URL" = "null" ]; then
+  echo "ERROR: Could not resolve Zig tarball URL for version=$VERSION_KEY arch=$DOWNLOAD_ARCH" >&2
+  exit 1
+fi
+
+curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+  "$ZIG_URL" -o /tmp/zig.tar.xz
+
+if [ -n "$CHECKSUM" ]; then
+  echo "${CHECKSUM}  /tmp/zig.tar.xz" | sha256sum -c -
+else
+  echo "WARNING: SHA256 verification skipped for Zig (no checksum provided in [plugins.versions.zig])" >&2
+fi
+
+mkdir -p /usr/local/zig
+tar -xf /tmp/zig.tar.xz -C /usr/local/zig --strip-components=1
+ln -sf /usr/local/zig/zig /usr/local/bin/zig
+rm /tmp/zig.tar.xz
+COCOON_PLUGIN_EOF
 # Install Go
-RUN --mount=type=bind,from=plugins,source=go,target=/tmp/plugin \
-    RC_FILE="$HOME/.zshrc" \
-    RC_SYNTAX="posix" \
-    LOGIN_SHELL="zsh" \
-    PIN="1.26.1" \
-    CHECKSUM_AMD64="" \
-    CHECKSUM_ARM64="" \
-    bash /tmp/plugin/install.sh
+RUN RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" PIN="1.26.1" CHECKSUM_AMD64="" CHECKSUM_ARM64="" bash <<'COCOON_PLUGIN_EOF'
+#!/usr/bin/env bash
+# Install Go (https://github.com/golang/go)
+#
+# Inputs (env):
+#   PIN              : Go version to install (e.g. "1.23.0"); empty = latest
+#   CHECKSUM_AMD64   : sha256 of amd64 tarball; empty to skip verification
+#   CHECKSUM_ARM64   : sha256 of arm64 tarball; empty to skip verification
+set -euo pipefail
+
+ARCH="$(dpkg --print-architecture)"
+case "$ARCH" in
+  amd64) CHECKSUM="$CHECKSUM_AMD64" ;;
+  arm64) CHECKSUM="$CHECKSUM_ARM64" ;;
+  *)     CHECKSUM="$CHECKSUM_AMD64" ;;
+esac
+
+if [ -n "$PIN" ]; then
+  VERSION="$PIN"
+else
+  VERSION=$(curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+    https://go.dev/VERSION?m=text | head -1 | sed 's/^go//')
+fi
+
+curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+  "https://go.dev/dl/go${VERSION}.linux-${ARCH}.tar.gz" -o /tmp/go.tar.gz
+
+if [ -n "$CHECKSUM" ]; then
+  echo "${CHECKSUM}  /tmp/go.tar.gz" | sha256sum -c -
+else
+  echo "WARNING: SHA256 verification skipped for Go (no checksum provided in [plugins.versions.go])" >&2
+fi
+
+tar -C /usr/local -xzf /tmp/go.tar.gz
+rm /tmp/go.tar.gz
+COCOON_PLUGIN_EOF
 ENV GOPATH="/home/${USERNAME}/go"
 ENV PATH="/usr/local/go/bin:$GOPATH/bin:$PATH"
 # Install lazygit
-RUN --mount=type=bind,from=plugins,source=lazygit,target=/tmp/plugin \
-    RC_FILE="$HOME/.zshrc" \
-    RC_SYNTAX="posix" \
-    LOGIN_SHELL="zsh" \
-    PIN="0.44.1" \
-    CHECKSUM_AMD64="" \
-    CHECKSUM_ARM64="" \
-    bash /tmp/plugin/install.sh
+RUN RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" PIN="0.44.1" CHECKSUM_AMD64="" CHECKSUM_ARM64="" bash <<'COCOON_PLUGIN_EOF'
+#!/usr/bin/env bash
+# Install lazygit (https://github.com/jesseduffield/lazygit)
+#
+# Inputs (env):
+#   PIN              : lazygit version (without leading "v"); empty = latest
+#   CHECKSUM_AMD64   : sha256 of amd64 tarball; empty to skip verification
+#   CHECKSUM_ARM64   : sha256 of arm64 tarball; empty to skip verification
+set -euo pipefail
+
+ARCH="$(dpkg --print-architecture)"
+case "$ARCH" in
+  amd64) DOWNLOAD_ARCH="x86_64" ; CHECKSUM="$CHECKSUM_AMD64" ;;
+  arm64) DOWNLOAD_ARCH="arm64"  ; CHECKSUM="$CHECKSUM_ARM64" ;;
+  *)     DOWNLOAD_ARCH="x86_64" ; CHECKSUM="$CHECKSUM_AMD64" ;;
+esac
+
+if [ -n "$PIN" ]; then
+  VERSION="$PIN"
+else
+  VERSION=$(curl -fsSLI --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+    -o /dev/null -w '%{url_effective}' https://github.com/jesseduffield/lazygit/releases/latest \
+    | sed 's|.*/tag/v||')
+fi
+
+curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+  "https://github.com/jesseduffield/lazygit/releases/download/v${VERSION}/lazygit_${VERSION}_linux_${DOWNLOAD_ARCH}.tar.gz" \
+  -o /tmp/lazygit.tar.gz
+
+if [ -n "$CHECKSUM" ]; then
+  echo "${CHECKSUM}  /tmp/lazygit.tar.gz" | sha256sum -c -
+else
+  echo "WARNING: SHA256 verification skipped for lazygit (no checksum provided in [plugins.versions.lazygit])" >&2
+fi
+
+tar -xzf /tmp/lazygit.tar.gz -C /usr/local/bin lazygit
+rm /tmp/lazygit.tar.gz
+COCOON_PLUGIN_EOF
 USER ${USERNAME}
 # Install Custom PS1
-RUN --mount=type=bind,from=plugins,source=custom-ps1,target=/tmp/plugin \
-    RC_FILE="$HOME/.zshrc" \
-    RC_SYNTAX="posix" \
-    LOGIN_SHELL="zsh" \
-    bash /tmp/plugin/install.sh
+RUN RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" bash <<'COCOON_PLUGIN_EOF'
+#!/usr/bin/env bash
+# Custom PS1 with Docker container name, user/host, working directory, and git status.
+#
+# Bash-only: the prompt uses bash-specific escapes (\h, \u, $(__git_ps1 ...))
+# that don't translate cleanly to zsh's PROMPT or fish's fish_prompt function.
+# Use the `starship` plugin for a cross-shell prompt instead.
+#
+# Inputs (env):
+#   RC_FILE     : absolute path to the user's login-shell rc file
+#   LOGIN_SHELL : "bash" / "zsh" / "fish"
+set -euo pipefail
+
+if [ "${LOGIN_SHELL:-bash}" != "bash" ]; then
+  echo "WARN: custom-ps1 plugin is bash-only; skipping on ${LOGIN_SHELL}." >&2
+  echo "      Use the 'starship' plugin for a cross-shell prompt." >&2
+  exit 0
+fi
+
+{
+  echo 'GIT_PS1_SHOWDIRTYSTATE=1'
+  echo 'GIT_PS1_SHOWUNTRACKEDFILES=1'
+  echo 'GIT_PS1_SHOWUPSTREAM="auto"'
+  # shellcheck disable=SC2016,SC2028
+  echo 'PS1='\''\[\033[01;35m\][Docker $CONTAINER_SERVICE_NAME]\[\033[00m\] \[\033[01;32m\]\u@\h:\[\033[01;34m\]\w\[\033[00m\]$(__git_ps1 " \[\033[01;33m\](%s)\[\033[00m\]" 2>/dev/null) \$ '\'''
+} >> "$RC_FILE"
+COCOON_PLUGIN_EOF
 # Install proto
-RUN --mount=type=bind,from=plugins,source=proto,target=/tmp/plugin \
-    RC_FILE="$HOME/.zshrc" \
-    RC_SYNTAX="posix" \
-    LOGIN_SHELL="zsh" \
-    PIN="0.46.1" \
-    CHECKSUM_AMD64="" \
-    CHECKSUM_ARM64="" \
-    bash /tmp/plugin/install.sh
+RUN RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" PIN="0.46.1" CHECKSUM_AMD64="" CHECKSUM_ARM64="" bash <<'COCOON_PLUGIN_EOF'
+#!/usr/bin/env bash
+# Install proto (multi-language version manager) (https://github.com/moonrepo/proto)
+#
+# Inputs (env):
+#   PIN       : proto version to install; empty = latest
+#   RC_FILE   : absolute path to the user's login-shell rc file
+#   RC_SYNTAX : "posix" (bash/zsh) or "fish"
+set -euo pipefail
+
+if [ -n "$PIN" ]; then
+  curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+    https://moonrepo.dev/install/proto.sh | bash -s -- "$PIN" --no-profile --yes
+else
+  curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+    https://moonrepo.dev/install/proto.sh | bash -s -- --no-profile --yes
+fi
+
+if [ "${RC_SYNTAX:-posix}" = "fish" ]; then
+  {
+    # shellcheck disable=SC2016
+    echo 'set -gx PROTO_HOME $HOME/.proto'
+    # shellcheck disable=SC2016
+    echo 'set -gx PATH $PROTO_HOME/shims $PROTO_HOME/bin $PATH'
+  } >> "$RC_FILE"
+else
+  {
+    # shellcheck disable=SC2016
+    echo 'export PROTO_HOME="$HOME/.proto"'
+    # shellcheck disable=SC2016
+    echo 'export PATH="$PROTO_HOME/shims:$PROTO_HOME/bin:$PATH"'
+  } >> "$RC_FILE"
+fi
+COCOON_PLUGIN_EOF
 ENV PROTO_HOME="/home/${USERNAME}/.proto"
 ENV PATH="$PROTO_HOME/shims:$PROTO_HOME/bin:$PATH"
 # Install AWS CLI v2
-RUN --mount=type=bind,from=plugins,source=aws-cli,target=/tmp/plugin \
-    RC_FILE="$HOME/.zshrc" \
-    RC_SYNTAX="posix" \
-    LOGIN_SHELL="zsh" \
-    bash /tmp/plugin/install.sh
+RUN RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" bash <<'COCOON_PLUGIN_EOF'
+#!/usr/bin/env bash
+# Install AWS CLI v2 (https://github.com/aws/aws-cli)
+set -euo pipefail
+
+ARCH="$(dpkg --print-architecture)"
+case "$ARCH" in
+  amd64) CLI_ARCH="x86_64" ;;
+  arm64) CLI_ARCH="aarch64" ;;
+  *)     CLI_ARCH="x86_64" ;;
+esac
+
+curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+  "https://awscli.amazonaws.com/awscli-exe-linux-${CLI_ARCH}.zip" -o awscliv2.zip
+unzip awscliv2.zip
+sudo ./aws/install
+rm -rf aws awscliv2.zip
+COCOON_PLUGIN_EOF
 # Install AWS SAM CLI
-RUN --mount=type=bind,from=plugins,source=aws-sam-cli,target=/tmp/plugin \
-    RC_FILE="$HOME/.zshrc" \
-    RC_SYNTAX="posix" \
-    LOGIN_SHELL="zsh" \
-    bash /tmp/plugin/install.sh
+RUN RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" bash <<'COCOON_PLUGIN_EOF'
+#!/usr/bin/env bash
+# Install AWS SAM CLI (https://github.com/aws/aws-sam-cli)
+set -euo pipefail
+
+ARCH="$(dpkg --print-architecture)"
+case "$ARCH" in
+  amd64) DOWNLOAD_ARCH="x86_64" ;;
+  arm64) DOWNLOAD_ARCH="aarch64" ;;
+  *)     DOWNLOAD_ARCH="x86_64" ;;
+esac
+echo "Detected architecture: $ARCH -> $DOWNLOAD_ARCH"
+
+curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+  "https://github.com/aws/aws-sam-cli/releases/latest/download/aws-sam-cli-linux-${DOWNLOAD_ARCH}.zip" \
+  -o aws-sam-cli.zip
+unzip aws-sam-cli.zip -d sam-installation
+sudo ./sam-installation/install
+rm -rf sam-installation aws-sam-cli.zip
+COCOON_PLUGIN_EOF
 # Install GitHub Copilot CLI
-RUN --mount=type=bind,from=plugins,source=copilot-cli,target=/tmp/plugin \
-    RC_FILE="$HOME/.zshrc" \
-    RC_SYNTAX="posix" \
-    LOGIN_SHELL="zsh" \
-    PIN="0.0.369" \
-    CHECKSUM_AMD64="" \
-    CHECKSUM_ARM64="" \
-    bash /tmp/plugin/install.sh
+RUN RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" PIN="0.0.369" CHECKSUM_AMD64="" CHECKSUM_ARM64="" bash <<'COCOON_PLUGIN_EOF'
+#!/usr/bin/env bash
+# Install GitHub Copilot CLI (https://github.com/github/copilot-cli)
+#
+# Inputs (env):
+#   PIN              : Copilot CLI version (without leading "v"); empty = latest
+set -euo pipefail
+
+if [ -n "$PIN" ]; then
+  curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+    https://gh.io/copilot-install | VERSION="v${PIN}" PREFIX="$HOME/.local" bash
+else
+  curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+    https://gh.io/copilot-install | PREFIX="$HOME/.local" bash
+fi
+COCOON_PLUGIN_EOF
 ENV PATH="/home/${USERNAME}/.local/bin:$PATH"
 # Install Claude Code
-RUN --mount=type=bind,from=plugins,source=claude-code,target=/tmp/plugin \
-    RC_FILE="$HOME/.zshrc" \
-    RC_SYNTAX="posix" \
-    LOGIN_SHELL="zsh" \
-    bash /tmp/plugin/install.sh
+RUN RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" bash <<'COCOON_PLUGIN_EOF'
+#!/usr/bin/env bash
+# Install Claude Code (https://github.com/anthropics/claude-code)
+set -euo pipefail
+
+curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+  https://claude.ai/install.sh | bash
+COCOON_PLUGIN_EOF
 ENV PATH="/home/${USERNAME}/.local/bin:$PATH"
 # Install uv
-RUN --mount=type=bind,from=plugins,source=uv,target=/tmp/plugin \
-    RC_FILE="$HOME/.zshrc" \
-    RC_SYNTAX="posix" \
-    LOGIN_SHELL="zsh" \
-    PIN="0.5.7" \
-    CHECKSUM_AMD64="" \
-    CHECKSUM_ARM64="" \
-    bash /tmp/plugin/install.sh
+RUN RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" PIN="0.5.7" CHECKSUM_AMD64="" CHECKSUM_ARM64="" bash <<'COCOON_PLUGIN_EOF'
+#!/usr/bin/env bash
+# Install uv (fast Python package and project manager) (https://github.com/astral-sh/uv)
+#
+# Inputs (env):
+#   PIN       : uv version to install; empty = latest
+#   RC_FILE   : absolute path to the user's login-shell rc file
+#   RC_SYNTAX : "posix" (bash/zsh) or "fish"
+set -euo pipefail
+
+if [ -n "$PIN" ]; then
+  curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+    "https://astral.sh/uv/${PIN}/install.sh" | bash
+else
+  curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+    https://astral.sh/uv/install.sh | bash
+fi
+
+if [ "${RC_SYNTAX:-posix}" = "fish" ]; then
+  # shellcheck disable=SC2016
+  echo 'set -gx PATH $HOME/.local/bin $PATH' >> "$RC_FILE"
+else
+  # shellcheck disable=SC2016
+  echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$RC_FILE"
+fi
+COCOON_PLUGIN_EOF
 ENV PATH="/home/${USERNAME}/.local/bin:$PATH"
 # Install Rust
-RUN --mount=type=bind,from=plugins,source=rust,target=/tmp/plugin \
-    RC_FILE="$HOME/.zshrc" \
-    RC_SYNTAX="posix" \
-    LOGIN_SHELL="zsh" \
-    bash /tmp/plugin/install.sh
+RUN RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" bash <<'COCOON_PLUGIN_EOF'
+#!/usr/bin/env bash
+# Install Rust toolchain via rustup (https://github.com/rust-lang/rustup)
+#
+# Inputs (env):
+#   RC_FILE   : absolute path to the user's login-shell rc file
+#   RC_SYNTAX : "posix" (bash/zsh) or "fish"
+set -euo pipefail
+
+curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+  https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --component clippy --component rustfmt
+
+if [ "${RC_SYNTAX:-posix}" = "fish" ]; then
+  # rustup writes both env (POSIX) and env.fish. Fall back to a literal PATH
+  # extension if env.fish is somehow absent so the plugin stays robust across
+  # rustup versions.
+  if [ -f "$HOME/.cargo/env.fish" ]; then
+    # shellcheck disable=SC2016
+    echo 'source "$HOME/.cargo/env.fish"' >> "$RC_FILE"
+  else
+    # shellcheck disable=SC2016
+    echo 'set -gx PATH $HOME/.cargo/bin $PATH' >> "$RC_FILE"
+  fi
+else
+  # shellcheck disable=SC2016
+  echo '. "$HOME/.cargo/env"' >> "$RC_FILE"
+fi
+COCOON_PLUGIN_EOF
 ENV PATH="/home/${USERNAME}/.cargo/bin:$PATH"
 
 # Backup image-installed files for volume-mount resilience

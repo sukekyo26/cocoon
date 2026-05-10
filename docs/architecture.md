@@ -2,7 +2,7 @@
 
 ## Design philosophy
 
-cocoon reads a project-local `workspace.toml`, materializes the relevant plugin assets, and writes a `.devcontainer/` stack. Container lifecycle (build / up / down / exec) is handled by `docker compose` or VS Code Dev Containers.
+cocoon reads a project-local `workspace.toml`, assembles the relevant plugin assets via a layered file source, and writes a `.devcontainer/` stack. Container lifecycle (build / up / down / exec) is handled by `docker compose` or VS Code Dev Containers.
 
 Three rules drive the design:
 
@@ -34,8 +34,7 @@ flowchart LR
 |---|---|---|
 | Discovery | `internal/config/discovery.go` | Walks cwd → `.cocoon/` → parents to locate `workspace.toml`, stopping at `.git` or `$HOME`. |
 | Plugin LayeredFS | `internal/plugin/layered.go` | Overlays project / user / embedded plugin trees with priority `project > user > embedded`. |
-| Plugin Materialize | `internal/plugin/materialize.go` | Stages the resolved plugin tree to `~/.cocoon/cache/build-context/` so Docker BuildKit can mount it. |
-| Generators | `internal/generate/{dockerfile,compose,devcontainerjson,envfile,shellrc}` | Emit each artifact under `.devcontainer/`. |
+| Generators | `internal/generate/{dockerfile,compose,devcontainerjson,envfile,shellrc}` | Emit each artifact under `.devcontainer/`. Plugin install scripts are read directly from the LayeredFS and inlined into the generated Dockerfile via a quoted bash heredoc. |
 | i18n catalog | `internal/i18n/` | Switches CLI prompts and inline `workspace.toml` comments between English and Japanese. |
 
 ## Plugin system
@@ -48,13 +47,12 @@ flowchart TB
     layered -->|1st priority| project["&lt;project&gt;/.cocoon/plugins/"]
     layered -->|2nd priority| usr["~/.cocoon/plugins/"]
     layered -->|3rd priority| embedded["go:embed catalog"]
-    project --> mat["Materialize → ~/.cocoon/cache/build-context"]
-    usr --> mat
-    embedded --> mat
-    mat --> dockerfile["Dockerfile RUN --mount=type=bind,from=plugins,..."]
+    project --> dockerfile["Dockerfile RUN bash &lt;&lt;'COCOON_PLUGIN_EOF' ..."]
+    usr --> dockerfile
+    embedded --> dockerfile
 ```
 
-The materialized cache is referenced by Docker Compose via `additional_contexts`, and the generated Dockerfile mounts it through `RUN --mount=type=bind,from=plugins,source=<id>,target=/tmp/plugin`.
+The generator reads each enabled plugin's `install.sh` (and `install_user.sh`, when present) directly from the LayeredFS and inlines the verbatim contents into the Dockerfile under a single-quoted heredoc (`bash <<'COCOON_PLUGIN_EOF' … COCOON_PLUGIN_EOF`). Per-script env vars (PIN / CHECKSUM_* / RC_FILE / etc.) live on the same `RUN` line so they stay scoped to that step. No host cache directory is created — the build needs nothing beyond the project tree itself, which is what makes `cocoon gen` work the same way from inside the dev container as from the host.
 
 ## Generator pipeline
 
@@ -63,14 +61,12 @@ sequenceDiagram
     participant cli as cocoon gen
     participant cfg as config.Discover
     participant fs as plugin.LayeredFS
-    participant mat as plugin.Materialize
     participant gen as Generators
     cli->>cfg: find workspace.toml
     cfg-->>cli: WorkspaceContext
     cli->>fs: build LayeredFS (project ∪ user ∪ embedded)
     fs-->>cli: fs.FS
-    cli->>mat: stage enabled plugins to cache dir
-    cli->>gen: dockerfile / compose / devcontainerjson / envfile / shellrc
+    cli->>gen: dockerfile / compose / devcontainerjson / envfile / shellrc (read install.sh through fs.FS)
     gen-->>cli: artifacts
     cli->>cli: write to .devcontainer/
 ```
@@ -110,7 +106,7 @@ Two named Docker volumes are mounted unconditionally so user-writable state surv
 | `local` | `/home/$USER/.local` | XDG runtime / state — shell history, language tooling caches, etc. |
 | `cocoon` | `/home/$USER/.cocoon` | User shellrc additions: `.shellrc` (POSIX) and `.shellrc.fish`. |
 
-The image seeds `~/.cocoon/.shellrc{,.fish}` with comment-only placeholders; on first `docker compose up` Docker copies them into the empty named volume and from then on the volume is the source of truth. `docker compose down -v` resets it. The host directory `~/.cocoon/` is unrelated — that path holds the cocoon CLI's plugin overlays, build-context cache, and certificates, none of which are bind-mounted into the container.
+The image seeds `~/.cocoon/.shellrc{,.fish}` with comment-only placeholders; on first `docker compose up` Docker copies them into the empty named volume and from then on the volume is the source of truth. `docker compose down -v` resets it. The host directory `~/.cocoon/` is unrelated — that path holds the cocoon CLI's plugin overlays and certificates, neither of which are bind-mounted into the container.
 
 ## Shell injection
 

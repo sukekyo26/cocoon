@@ -131,7 +131,7 @@ docker compose -f .devcontainer/docker-compose.yml exec dev bash -lc 'vim ~/.coc
 
 (Pick whichever editor your image has installed; `bash -lc` ensures the in-container `EDITOR` / `PATH` resolve, which would not happen if the editor were named via `"$EDITOR"` at the host shell.)
 
-The volume is reset only by `docker compose down -v`. The path lives **inside the container only** — host `~/.cocoon/` is unrelated (it is cocoon CLI's local working area for plugin overlays, build-context cache, certificates).
+The volume is reset only by `docker compose down -v`. The path lives **inside the container only** — host `~/.cocoon/` is unrelated (it is cocoon CLI's local working area for plugin overlays and certificates).
 
 ### `[container.hosts]`
 

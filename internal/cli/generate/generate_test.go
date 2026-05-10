@@ -16,11 +16,11 @@ import (
 // place of the long-gone `cocoon generate-all` cobra command.
 func runPipeline(t *testing.T, wsPath, pluginsDir, outDir string, stderr io.Writer) error {
 	t.Helper()
-	ctx, err := generatecli.LoadContext(wsPath, pluginsDir, stderr)
+	ctx, err := generatecli.LoadContext(wsPath, os.DirFS(pluginsDir), pluginsDir, stderr)
 	if err != nil {
 		return err
 	}
-	arts, err := generatecli.BuildArtifacts(ctx, pluginsDir, stderr)
+	arts, err := generatecli.BuildArtifacts(ctx, stderr)
 	if err != nil {
 		return err
 	}

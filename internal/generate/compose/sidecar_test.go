@@ -44,7 +44,7 @@ func TestGenerate_WithSidecars(t *testing.T) {
 
 	var warns bytes.Buffer
 	ctx := &generate.WorkspaceContext{
-		WS: ws, PluginsDir: "", Plugins: map[string]*plugin.Plugin{}, Warnings: &warns,
+		WS: ws, PluginsFS: nil, Plugins: map[string]*plugin.Plugin{}, Warnings: &warns,
 	}
 	got, err := compose.Generate(ctx, compose.Options{
 		Plugins: map[string]*plugin.Plugin{}, Warnings: &warns,
