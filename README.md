@@ -54,6 +54,17 @@ docker compose -f .devcontainer/docker-compose.yml up -d # or open in VS Code â†
 | Commands | [commands.md](docs/commands.md) | [commands.ja.md](docs/commands.ja.md) |
 | Changelog | [CHANGELOG.md](CHANGELOG.md) | [CHANGELOG.ja.md](docs/CHANGELOG.ja.md) |
 
+## Developing
+
+`just ci` is the single pre-push gate (Go fmt/vet/lint/test/vuln/mod-verify + `shellcheck` + `shfmt-check`). Optional pre-commit integration runs the same shell hooks at commit time:
+
+```bash
+pip install pre-commit  # or `brew install pre-commit`
+pre-commit install      # shellcheck + shfmt fire on each `git commit`
+```
+
+`shellcheck` and `shfmt` must be on `$PATH`. macOS: `brew install shellcheck shfmt`. Linux/WSL: `apt-get install shellcheck` + download `shfmt` from <https://github.com/mvdan/sh/releases>.
+
 ## License
 
 MIT â€” see [LICENSE](LICENSE).
