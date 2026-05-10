@@ -83,28 +83,6 @@ func projectPluginsDir() (string, error) {
 	return filepath.Join(filepath.Dir(wsPath), ".cocoon", "plugins"), nil
 }
 
-// scopeDir returns the absolute directory where `cocoon plugin add <id>`
-// places the copy for the requested scope. A missing workspace.toml when
-// --scope project is requested is a usage error; other discovery failures
-// (Getwd, filesystem stat) bubble up as ErrFailure with context preserved.
-func scopeDir(scope string) (string, error) {
-	switch scope {
-	case plugin.SourceUser:
-		return userPluginsDir()
-	case plugin.SourceProject:
-		dir, err := projectPluginsDir()
-		switch {
-		case errors.Is(err, ErrWorkspaceNotFound):
-			return "", fmt.Errorf("%w: --scope project requires a discoverable workspace.toml", ErrUsage)
-		case err != nil:
-			return "", fmt.Errorf("%w: %w", ErrFailure, err)
-		}
-		return dir, nil
-	default:
-		return "", fmt.Errorf("%w: --scope must be %q or %q", ErrUsage, plugin.SourceUser, plugin.SourceProject)
-	}
-}
-
 // loadPluginFromLayer reads <id>/plugin.toml from layered for parsing /
 // inspection. Returns fs.ErrNotExist (wrapped) when the id is unknown.
 func loadPluginFromLayer(layered fs.FS, id string) (*plugin.Plugin, error) {

@@ -28,7 +28,7 @@ const (
 // Same-id directories are not merged: the highest-priority layer wins
 // completely. The empty/absent layers are skipped silently. The receiver
 // implements [fs.FS] and [fs.ReadDirFS] so it can be passed directly to
-// [Materialize] and [fs.WalkDir].
+// [fs.WalkDir].
 type LayeredFS struct {
 	// layers is in priority order (highest first). Always ends with the
 	// embedded catalog.

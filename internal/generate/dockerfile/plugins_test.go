@@ -35,7 +35,6 @@ func TestGeneratePluginInstalls_NoRedundantUserToggle(t *testing.T) {
 			Metadata: plugin.Metadata{Name: "Needs Root"}, //nolint:exhaustruct // unused metadata fields
 			Install: plugin.Install{ //nolint:exhaustruct // unused install fields
 				RequiresRoot: true,
-				UserDirs:     []string{"/home/${USERNAME}/.cache/needs-root"},
 			},
 		}, //nolint:exhaustruct // Apt / Version not exercised by this test
 	}
@@ -44,7 +43,8 @@ func TestGeneratePluginInstalls_NoRedundantUserToggle(t *testing.T) {
 	seedPluginInstall(t, pluginsDir, "needs-root")
 
 	out, err := generatePluginInstalls(
-		plugins, enabled, os.DirFS(pluginsDir), nil,
+		plugins, enabled, os.DirFS(pluginsDir),
+		[]string{"/home/${USERNAME}/.cache/needs-root"},
 		map[string]config.PluginVersionOverride{},
 		&bytes.Buffer{},
 		shellEnv{rcFileAbs: "/home/${USERNAME}/.bashrc", rcSyntax: "posix", loginShell: "bash"},
@@ -160,7 +160,7 @@ func TestGeneratePluginInstalls_EnvOnlyPluginEmitsEnv(t *testing.T) {
 	plugins := map[string]*plugin.Plugin{
 		"env-only": {
 			Metadata: plugin.Metadata{Name: "Env Only"}, //nolint:exhaustruct // unused metadata fields
-			Install: plugin.Install{ //nolint:exhaustruct // Volumes / UserDirs / BuildArgs unused
+			Install: plugin.Install{ //nolint:exhaustruct // Volumes / BuildArgs unused
 				Env: map[string]string{
 					"PATH":   "/opt/env-only/bin:$PATH",
 					"FOO":    "bar",
@@ -198,6 +198,126 @@ func TestGeneratePluginInstalls_EnvOnlyPluginEmitsEnv(t *testing.T) {
 	// has no script).
 	if strings.Contains(out, "bash <<'COCOON_PLUGIN_EOF'") {
 		t.Errorf("env-only plugin should not produce a bash heredoc:\n%s", out)
+	}
+}
+
+// TestGeneratePluginInstalls_BuildArgsWithoutInstallSh pins the
+// install_user.sh + build_args path: when a plugin declares
+// build_args but ships only install_user.sh (no install.sh), the
+// generator must still emit the matching `ARG <name>` line so the
+// per-RUN env prefix `<name>="${<name>}"` resolves to the build-arg
+// value. This was previously broken — renderUserInstallSnippet
+// passed nil for argLines so ARGs declared by build_args-only
+// plugins or install_user.sh-only plugins never reached the
+// Dockerfile.
+func TestGeneratePluginInstalls_BuildArgsWithoutInstallSh(t *testing.T) {
+	t.Parallel()
+
+	plugins := map[string]*plugin.Plugin{
+		"user-only-with-arg": {
+			Metadata: plugin.Metadata{Name: "User Only With Arg"}, //nolint:exhaustruct // unused metadata fields
+			Install: plugin.Install{ //nolint:exhaustruct // Volumes / Env unused
+				RequiresRoot: false,
+				BuildArgs:    []string{"MY_GID"},
+			},
+		}, //nolint:exhaustruct // Apt / Version not exercised by this test
+	}
+	enabled := []string{"user-only-with-arg"}
+	pluginsDir := t.TempDir()
+	dir := filepath.Join(pluginsDir, "user-only-with-arg")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "plugin.toml"), []byte("# stub\n"), 0o600); err != nil {
+		t.Fatalf("write plugin.toml: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "install_user.sh"),
+		[]byte("#!/usr/bin/env bash\necho \"gid=${MY_GID}\"\n"), 0o600); err != nil {
+		t.Fatalf("write install_user.sh: %v", err)
+	}
+
+	out, err := generatePluginInstalls(
+		plugins, enabled, os.DirFS(pluginsDir), nil,
+		map[string]config.PluginVersionOverride{},
+		&bytes.Buffer{},
+		shellEnv{rcFileAbs: "/home/${USERNAME}/.bashrc", rcSyntax: "posix", loginShell: "bash"},
+	)
+	if err != nil {
+		t.Fatalf("generatePluginInstalls: %v", err)
+	}
+
+	for _, want := range []string{
+		"# Configure User Only With Arg (user)",
+		"\nARG MY_GID\n",
+		`MY_GID="${MY_GID}" bash <<'COCOON_PLUGIN_EOF'`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output missing %q\n--- got ---\n%s", want, out)
+		}
+	}
+}
+
+// TestGeneratePluginInstalls_BuildArgsDeclaredOnce pins down that
+// when a plugin has BOTH install.sh and install_user.sh and declares
+// build_args, the matching `ARG <name>` line is emitted exactly
+// once — next to install.sh — and is NOT redeclared before the
+// install_user.sh RUN. ARGs are stage-scoped, so a second
+// declaration would be a redundant duplicate.
+func TestGeneratePluginInstalls_BuildArgsDeclaredOnce(t *testing.T) {
+	t.Parallel()
+
+	plugins := map[string]*plugin.Plugin{
+		"both-hooks-with-arg": {
+			Metadata: plugin.Metadata{Name: "Both Hooks"}, //nolint:exhaustruct // unused metadata fields
+			Install: plugin.Install{ //nolint:exhaustruct // Volumes / Env unused
+				RequiresRoot: true,
+				BuildArgs:    []string{"SOME_GID"},
+			},
+		}, //nolint:exhaustruct // Apt / Version not exercised by this test
+	}
+	enabled := []string{"both-hooks-with-arg"}
+	pluginsDir := t.TempDir()
+	dir := filepath.Join(pluginsDir, "both-hooks-with-arg")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	for _, fixture := range []struct{ name, body string }{
+		{"plugin.toml", "# stub\n"},
+		{"install.sh", "#!/usr/bin/env bash\necho root=${SOME_GID}\n"},
+		{"install_user.sh", "#!/usr/bin/env bash\necho user=${SOME_GID}\n"},
+	} {
+		if err := os.WriteFile(filepath.Join(dir, fixture.name), []byte(fixture.body), 0o600); err != nil {
+			t.Fatalf("write %s: %v", fixture.name, err)
+		}
+	}
+
+	out, err := generatePluginInstalls(
+		plugins, enabled, os.DirFS(pluginsDir), nil,
+		map[string]config.PluginVersionOverride{},
+		&bytes.Buffer{},
+		shellEnv{rcFileAbs: "/home/${USERNAME}/.bashrc", rcSyntax: "posix", loginShell: "bash"},
+	)
+	if err != nil {
+		t.Fatalf("generatePluginInstalls: %v", err)
+	}
+
+	// ARG line should appear exactly once (next to install.sh) — not
+	// redeclared near install_user.sh's RUN.
+	if got := strings.Count(out, "\nARG SOME_GID\n"); got != 1 {
+		t.Errorf("ARG SOME_GID count: got %d, want 1\n--- got ---\n%s", got, out)
+	}
+	// The single ARG line must precede the user-configure block so it
+	// is in scope for both RUNs (ARG is stage-scoped).
+	argIdx := strings.Index(out, "\nARG SOME_GID\n")
+	userBlockIdx := strings.Index(out, "# Configure Both Hooks (user)")
+	if argIdx < 0 || userBlockIdx < 0 || argIdx >= userBlockIdx {
+		t.Errorf("ARG SOME_GID must appear before # Configure Both Hooks (user)\n--- got ---\n%s", out)
+	}
+	// Both RUN lines must still carry the per-RUN env prefix so bash
+	// sees SOME_GID as an env var.
+	wantPrefix := `SOME_GID="${SOME_GID}" bash <<'COCOON_PLUGIN_EOF'`
+	if got := strings.Count(out, wantPrefix); got != 2 {
+		t.Errorf("per-RUN SOME_GID prefix count: got %d, want 2 (one per hook)\n--- got ---\n%s", got, out)
 	}
 }
 

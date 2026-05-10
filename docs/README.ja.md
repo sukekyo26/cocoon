@@ -52,6 +52,7 @@ docker compose -f .devcontainer/docker-compose.yml up -d # または VS Code で
 | アーキテクチャ | [architecture.md](architecture.md) | [architecture.ja.md](architecture.ja.md) |
 | 設定 (`workspace.toml`) | [configuration.md](configuration.md) | [configuration.ja.md](configuration.ja.md) |
 | コマンド | [commands.md](commands.md) | [commands.ja.md](commands.ja.md) |
+| プラグイン作成 (`plugin.toml`, `install.sh`, `install_user.sh`) | [plugins.md](plugins.md) | [plugins.ja.md](plugins.ja.md) |
 | 変更履歴 | [CHANGELOG.md](../CHANGELOG.md) | [CHANGELOG.ja.md](CHANGELOG.ja.md) |
 
 ## ライセンス

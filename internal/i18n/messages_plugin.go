@@ -7,14 +7,29 @@ func init() {
 
 //nolint:gochecknoglobals,revive // catalog tables are file-scoped by design.
 var messagesEN_plugin = map[string]string{
-	"plugin_scaffold_intro":             "Scaffold a new plugin under %s/%s.",
-	"plugin_scaffold_prompt_name":       "Display name (e.g. \"GitHub CLI\")",
-	"plugin_scaffold_prompt_desc":       "Description (include upstream URL in parentheses)",
-	"plugin_scaffold_prompt_default":    "Mark plugin enabled by default?",
-	"plugin_scaffold_prompt_root":       "Run install.sh as root?",
-	"plugin_scaffold_prompt_versioned":  "Generate $PIN / $CHECKSUM_* boilerplate?",
-	"plugin_scaffold_prompt_template":   "install.sh template",
-	"plugin_scaffold_prompt_user_hook":  "Also generate install_user.sh?",
+	"plugin_scaffold_intro":            "Scaffold a new plugin under %s/%s.",
+	"plugin_scaffold_prompt_name":      "Display name (e.g. \"GitHub CLI\")",
+	"plugin_scaffold_prompt_desc":      "Description (include upstream URL in parentheses)",
+	"plugin_scaffold_prompt_default":   "Mark plugin enabled by default?",
+	"plugin_scaffold_prompt_root":      "Run install.sh as root?",
+	"plugin_scaffold_prompt_versioned": "Generate $PIN / $CHECKSUM_* boilerplate?",
+	"plugin_scaffold_prompt_template":  "install.sh template",
+	"plugin_scaffold_prompt_user_hook": "Also generate install_user.sh?",
+	"plugin_scaffold_prompt_user_hook_desc": "install_user.sh runs as the unprivileged container user (USERNAME),\n" +
+		"regardless of [install].requires_root.\n" +
+		"\n" +
+		"Use it when install.sh runs as root (requires_root=true) AND the\n" +
+		"plugin needs to write to user-owned files (~/.bashrc,\n" +
+		"~/.config/<tool>, ~/.local/share, ...) OR run a setup command as\n" +
+		"the unprivileged user (`<tool> init`, `git clone ~/.<tool>`,\n" +
+		"`conda init bash`, ...).\n" +
+		"\n" +
+		"Skip it when install.sh already runs as user (requires_root=false),\n" +
+		"the plugin only needs ENV vars (use [install].env), or a single\n" +
+		"rc-file line that fits in install.sh itself.\n" +
+		"\n" +
+		"Examples: yes -> starship (root binary + user rc edit).\n" +
+		"          no  -> go, docker-cli, bun, uv, ... (most catalog plugins).",
 	"plugin_scaffold_invalid_id":        "Invalid plugin id %q (must match ^[a-z][a-z0-9-]*$)",
 	"plugin_scaffold_missing_id":        "plugin id is required",
 	"plugin_scaffold_missing_flag":      "--non-interactive requires --%s",
@@ -34,14 +49,29 @@ var messagesEN_plugin = map[string]string{
 
 //nolint:gochecknoglobals,revive // catalog tables are file-scoped by design.
 var messagesJA_plugin = map[string]string{
-	"plugin_scaffold_intro":             "%s/%s に新規プラグインを生成します。",
-	"plugin_scaffold_prompt_name":       "表示名 (例: \"GitHub CLI\")",
-	"plugin_scaffold_prompt_desc":       "説明 (上流 URL を括弧内に含めること)",
-	"plugin_scaffold_prompt_default":    "デフォルトで有効化する?",
-	"plugin_scaffold_prompt_root":       "install.sh を root で実行?",
-	"plugin_scaffold_prompt_versioned":  "$PIN / $CHECKSUM_* の雛形を生成する?",
-	"plugin_scaffold_prompt_template":   "install.sh のテンプレート",
-	"plugin_scaffold_prompt_user_hook":  "install_user.sh も生成する?",
+	"plugin_scaffold_intro":            "%s/%s に新規プラグインを生成します。",
+	"plugin_scaffold_prompt_name":      "表示名 (例: \"GitHub CLI\")",
+	"plugin_scaffold_prompt_desc":      "説明 (上流 URL を括弧内に含めること)",
+	"plugin_scaffold_prompt_default":   "デフォルトで有効化する?",
+	"plugin_scaffold_prompt_root":      "install.sh を root で実行?",
+	"plugin_scaffold_prompt_versioned": "$PIN / $CHECKSUM_* の雛形を生成する?",
+	"plugin_scaffold_prompt_template":  "install.sh のテンプレート",
+	"plugin_scaffold_prompt_user_hook": "install_user.sh も生成する?",
+	"plugin_scaffold_prompt_user_hook_desc": "install_user.sh は [install].requires_root の値に関わらず、常に\n" +
+		"非特権ユーザー (USERNAME) で実行される。\n" +
+		"\n" +
+		"必要なケース: install.sh が root で動く (requires_root=true) かつ、\n" +
+		"プラグインが ~/.bashrc / ~/.config/<tool> / ~/.local/share/...\n" +
+		"などユーザー所有ファイルに書き込む、もしくは `<tool> init` や\n" +
+		"`git clone ~/.<tool>` / `conda init bash` のような初期化コマンドを\n" +
+		"非特権ユーザーとして実行したい場合。\n" +
+		"\n" +
+		"不要なケース: install.sh が既に user 権限で動く (requires_root=false) /\n" +
+		"ENV のみで完結する ([install].env で書ける) / 単一行の rc 追記なら\n" +
+		"install.sh 内で済む。\n" +
+		"\n" +
+		"例: yes -> starship (root でバイナリ配置 → user で rc 追記)。\n" +
+		"    no  -> go / docker-cli / bun / uv など (ほとんどのプラグイン)。",
 	"plugin_scaffold_invalid_id":        "プラグイン ID %q が不正です (^[a-z][a-z0-9-]*$ に一致が必要)",
 	"plugin_scaffold_missing_id":        "プラグイン ID は必須です",
 	"plugin_scaffold_missing_flag":      "--non-interactive 時は --%s が必須です",

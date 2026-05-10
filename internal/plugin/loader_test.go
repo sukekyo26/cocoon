@@ -32,6 +32,35 @@ func TestLoad_MissingFile(t *testing.T) {
 	require.Error(t, err)
 }
 
+// TestLoad_RejectsRetiredUserDirsField pins the contract that the
+// removed [install].user_dirs field surfaces as a strict-unmarshal error
+// rather than being silently ignored, so authors discover the migration
+// to [install].volumes immediately.
+func TestLoad_RejectsRetiredUserDirsField(t *testing.T) {
+	t.Parallel()
+
+	body := []byte(`[metadata]
+name = "Retired"
+description = "uses removed user_dirs (https://example.com)"
+
+[install]
+requires_root = true
+user_dirs = ["/home/${USERNAME}/.cache/x"]
+
+[version]
+version_capable = false
+`)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "plugin.toml")
+	require.NoError(t, os.WriteFile(path, body, 0o600))
+
+	_, err := plugin.Load(path)
+	require.Error(t, err)
+	if !strings.Contains(err.Error(), "user_dirs") {
+		t.Errorf("expected error to mention user_dirs, got %v", err)
+	}
+}
+
 func TestLoadEnabled_WarnsOnMissingPlugin(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()

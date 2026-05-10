@@ -9,21 +9,27 @@ import (
 	"github.com/sukekyo26/cocoon/internal/i18n"
 )
 
-const pluginLong = `cocoon plugin — manage cocoon plugins
+const pluginLong = `cocoon plugin — inspect and author cocoon plugins
 
 Subcommands:
   list       list every plugin available in the layered view (project > user > embedded)
   show       print the resolved manifest for one plugin id
-  add        copy an embedded plugin into ~/.cocoon/plugins (or .cocoon/plugins) for editing
-  remove     delete a user / project overlay copy
   pin        print a workspace.toml [plugins.versions.<id>] block
-  scaffold   create a new <id>/ directory from a template`
+  scaffold   create a new <id>/ directory from a template
+
+To use a plugin, add its id to [plugins].enable in workspace.toml — the
+embedded catalog is picked up automatically. To customise an embedded
+plugin, the supported workflow is "cocoon plugin scaffold <new-id>" and
+adapting the logic. If you have a clone of the cocoon source repo (or an
+unpacked source tarball), copying the embedded source from
+internal/plugin/catalog/<id>/ into ~/.cocoon/plugins/<id>/ is a shortcut;
+single-binary installs do not include the embedded source on disk.`
 
 // NewCommand returns the cobra subtree for ` + "`cocoon plugin`" + `.
 func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "plugin",
-		Short:         "Manage cocoon plugins (list / show / add / remove / pin / scaffold)",
+		Short:         "Inspect and author cocoon plugins (list / show / pin / scaffold)",
 		Long:          pluginLong,
 		Args:          rejectUnknownSubcommand,
 		SilenceUsage:  true,
@@ -40,8 +46,6 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 	cmd.AddCommand(
 		newListCmd(stdout, stderr),
 		newShowCmd(stdout, stderr),
-		newAddCmd(stdout, stderr),
-		newRemoveCmd(stdout, stderr),
 		newPinCmd(stdout, stderr),
 		newScaffoldCmd(stdout, stderr),
 	)

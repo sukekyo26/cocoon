@@ -169,7 +169,19 @@ func buildPluginSnippets(
 		return pluginSnippets{}, false, err
 	}
 	if hasUserInstall {
-		out.userInstall, err = renderUserInstallSnippet(rs, userPath)
+		// Plugin-level ARG declarations need to be in scope for the
+		// install_user.sh RUN as well so its per-RUN env prefix
+		// (`<name>="${<name>}"`) resolves to a real value rather than
+		// an empty string. ARG scope is stage-wide, so when install.sh
+		// already emitted the ARG lines we skip them here to avoid a
+		// redundant duplicate declaration. When install.sh is absent,
+		// emit them from the install_user.sh snippet so build_args
+		// works symmetrically across both hooks.
+		var userArgLines []string
+		if !hasInstall {
+			userArgLines = rs.argLines
+		}
+		out.userInstall, err = renderUserInstallSnippet(rs, userPath, userArgLines)
 		if err != nil {
 			return pluginSnippets{}, false, err
 		}
@@ -238,7 +250,10 @@ func renderInstallSnippet(rs runSpec, hasInstall bool, installPath string) (stri
 
 // renderUserInstallSnippet renders the install_user.sh heredoc with
 // the "# Configure … (user)" comment used in the non-root bucket.
-func renderUserInstallSnippet(rs runSpec, userPath string) (string, error) {
+// argLines carries plugin-level ARG declarations to emit before the
+// RUN; pass nil when install.sh already emitted them (their scope is
+// the whole stage, so a second declaration is redundant).
+func renderUserInstallSnippet(rs runSpec, userPath string, argLines []string) (string, error) {
 	body, err := readFileFromFS(rs.pluginsFS, userPath)
 	if err != nil {
 		return "", err
@@ -246,7 +261,7 @@ func renderUserInstallSnippet(rs runSpec, userPath string) (string, error) {
 	if err := checkHeredocCollision(rs.id, body); err != nil {
 		return "", err
 	}
-	return renderInstallRun(rs.id, "# Configure "+rs.comment+" (user)", nil, body,
+	return renderInstallRun(rs.id, "# Configure "+rs.comment+" (user)", argLines, body,
 		rs.versionCapable, rs.hasOverride, rs.override, rs.buildArgs, rs.sh), nil
 }
 
@@ -268,9 +283,13 @@ func renderEnvBlock(env map[string]string, pluginsFS fs.FS, id string) (string, 
 	return strings.Join(envLines, "\n"), nil
 }
 
-// generatePluginInstalls renders the {{PLUGIN_INSTALLS}} block. enabled
-// preserves user-declared order (matches Python dict insertion order). Missing
-// plugin entries are silently skipped (callers warn elsewhere).
+// collectAllUserDirs collects every container-side directory the user-dirs
+// mkdir block must own. Plugin entries contribute their [install].volumes
+// (validated to live under /home/${USERNAME}/...), and the caller-supplied
+// `extra` slice carries `[volumes]` targets from workspace.toml — those can
+// point anywhere inside the container, including paths outside the user
+// home (e.g. /var/cache/...). enabled preserves user-declared order.
+// Missing plugin entries are silently skipped (callers warn elsewhere).
 func collectAllUserDirs(plugins map[string]*plugin.Plugin, enabled, extra []string) []string {
 	out := make([]string, 0)
 	for _, id := range enabled {
@@ -278,7 +297,6 @@ func collectAllUserDirs(plugins map[string]*plugin.Plugin, enabled, extra []stri
 		if !ok {
 			continue
 		}
-		out = append(out, p.Install.UserDirs...)
 		out = append(out, p.Install.Volumes...)
 	}
 	out = append(out, extra...)

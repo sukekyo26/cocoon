@@ -186,6 +186,7 @@ func promptMissing(opts *scaffoldOpts, cat *i18n.Catalog, p prompter) error {
 		groups = append(groups, huh.NewGroup(
 			huh.NewConfirm().
 				Title(cat.Msg("plugin_scaffold_prompt_user_hook")).
+				Description(cat.Msg("plugin_scaffold_prompt_user_hook_desc")).
 				Value(&opts.withInstallUser),
 		))
 	}
