@@ -35,8 +35,18 @@ require() {
 
 require curl
 require uname
-require sha256sum
 require mktemp
+
+# sha256: portable wrapper. Linux ships coreutils `sha256sum`; macOS ships
+# `shasum` (Perl) which prints the same `<hash>  <filename>` format under
+# `-a 256`. Both need to work because install.sh declares darwin support.
+if command -v sha256sum >/dev/null 2>&1; then
+  sha256() { sha256sum "$@"; }
+elif command -v shasum >/dev/null 2>&1; then
+  sha256() { shasum -a 256 "$@"; }
+else
+  die "missing required tool: sha256sum or shasum"
+fi
 
 os=$(uname -s | tr '[:upper:]' '[:lower:]')
 case "$os" in
@@ -84,7 +94,7 @@ curl -fsSL "$base/SHA256SUMS" -o "$tmp/SHA256SUMS" || die "download failed: $bas
 
 expected=$(grep "  $asset\$" "$tmp/SHA256SUMS" | awk '{print $1}')
 [ -n "$expected" ] || die "$asset not listed in SHA256SUMS"
-actual=$(sha256sum "$tmp/$asset" | awk '{print $1}')
+actual=$(sha256 "$tmp/$asset" | awk '{print $1}')
 [ "$expected" = "$actual" ] || die "checksum mismatch ($actual != $expected)"
 
 mkdir -p "$INSTALL_DIR"
