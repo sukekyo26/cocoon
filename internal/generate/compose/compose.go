@@ -225,15 +225,24 @@ type volPair struct {
 
 // workspaceBindMount returns the host:container bind mount line for the
 // workspace, choosing between cwd-only and parent-dir mounts based on
-// [workspace] mount_root. The :cached flag is a no-op on Linux but is
-// the macOS performance hint v1 used to set in the override compose
-// file; keeping it in the generated output preserves that behaviour.
+// [workspace] mount_root.
+//
+// docker-compose resolves bind mount relative paths against the
+// directory that holds the compose file, not the current working
+// directory. The generated compose file lives at
+// .devcontainer/docker-compose.yml, so reaching the project root takes
+// `..` and reaching the project's parent (the sibling-repos workspace
+// requested by mount_root = "..") takes `../..`.
+//
+// The :cached flag is a no-op on Linux but is the macOS performance
+// hint v1 used to set in the override compose file; keeping it in the
+// generated output preserves that behaviour.
 func workspaceBindMount(ctx *generate.WorkspaceContext) string {
 	switch ctx.WS.Workspace.MountRootOrDefault() {
 	case "..":
-		return "..:/home/${USERNAME}/workspace:cached"
+		return "../..:/home/${USERNAME}/workspace:cached"
 	default:
-		return ".:/home/${USERNAME}/workspace/" + ctx.ServiceName() + ":cached"
+		return "..:/home/${USERNAME}/workspace/" + ctx.ServiceName() + ":cached"
 	}
 }
 

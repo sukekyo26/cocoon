@@ -16,35 +16,64 @@ func TestGenerate_Snapshot(t *testing.T) {
 	t.Parallel()
 
 	repoRoot := repoRoot(t)
-	wsPath := filepath.Join(repoRoot, "tests", "fixtures", "snapshot.workspace.toml")
 	pluginsDir := filepath.Join(repoRoot, "internal", "plugin", "catalog")
 
-	ws, err := config.LoadWorkspace(wsPath)
-	if err != nil {
-		t.Fatalf("load workspace: %v", err)
+	// Two fixtures lock both mount_root branches: ".." emits the
+	// sibling-repo bind mount (`../..:/home/.../workspace`) and "."
+	// emits the project-only mount plus the working_dir override.
+	cases := []struct {
+		name        string
+		fixture     string
+		expectation string
+	}{
+		{
+			name:        "parent_mount",
+			fixture:     "snapshot.workspace.toml",
+			expectation: "snapshot.expected",
+		},
+		{
+			name:        "cwd_mount",
+			fixture:     "snapshot-cwd.workspace.toml",
+			expectation: "snapshot-cwd.expected",
+		},
 	}
 
-	var warns bytes.Buffer
-	plugins, err := plugin.LoadEnabled(pluginsDir, ws.Plugins.Enable, &warns)
-	if err != nil {
-		t.Fatalf("load plugins: %v", err)
-	}
-	if cerr := plugin.CheckConflicts(plugins); cerr != nil {
-		t.Fatalf("plugin conflicts: %v", cerr)
-	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 
-	ctx := &generate.WorkspaceContext{WS: ws, PluginsDir: pluginsDir, Plugins: plugins, Warnings: &warns}
-	got, err := compose.Generate(ctx, compose.Options{Plugins: plugins, Warnings: &warns})
-	if err != nil {
-		t.Fatalf("generate: %v", err)
-	}
+			wsPath := filepath.Join(repoRoot, "tests", "fixtures", tc.fixture)
+			ws, err := config.LoadWorkspace(wsPath)
+			if err != nil {
+				t.Fatalf("load workspace: %v", err)
+			}
 
-	wantBytes, err := os.ReadFile(filepath.Join("testdata", "snapshot.expected"))
-	if err != nil {
-		t.Fatalf("read expected: %v", err)
-	}
-	if got != string(wantBytes) {
-		t.Errorf("output mismatch\n--- got ---\n%s\n--- want ---\n%s", got, string(wantBytes))
+			var warns bytes.Buffer
+			plugins, err := plugin.LoadEnabled(pluginsDir, ws.Plugins.Enable, &warns)
+			if err != nil {
+				t.Fatalf("load plugins: %v", err)
+			}
+			if cerr := plugin.CheckConflicts(plugins); cerr != nil {
+				t.Fatalf("plugin conflicts: %v", cerr)
+			}
+
+			ctx := &generate.WorkspaceContext{
+				WS: ws, PluginsDir: pluginsDir, Plugins: plugins, Warnings: &warns,
+			}
+			got, err := compose.Generate(ctx, compose.Options{Plugins: plugins, Warnings: &warns})
+			if err != nil {
+				t.Fatalf("generate: %v", err)
+			}
+
+			wantBytes, err := os.ReadFile(filepath.Join("testdata", tc.expectation))
+			if err != nil {
+				t.Fatalf("read expected: %v", err)
+			}
+			if got != string(wantBytes) {
+				t.Errorf("output mismatch\n--- got ---\n%s\n--- want ---\n%s", got, string(wantBytes))
+			}
+		})
 	}
 }
 

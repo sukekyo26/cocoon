@@ -18,7 +18,7 @@ services:
     environment:
       - "CONTAINER_SERVICE_NAME=${CONTAINER_SERVICE_NAME}"
     volumes:
-      - "../..:/home/${USERNAME}/workspace:cached"
+      - "..:/home/${USERNAME}/workspace/snapshot-test:cached"
       - "local:/home/${USERNAME}/.local"
       - "cocoon:/home/${USERNAME}/.cocoon"
       - "proto:/home/${USERNAME}/.proto"
@@ -51,6 +51,7 @@ services:
     security_opt:
       - seccomp=unconfined
       - "no-new-privileges:true"
+    working_dir: "/home/${USERNAME}/workspace/snapshot-test"
     tty: true
     init: true
     command: sleep infinity
