@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-11
+
 ### Added
 
 - `install.sh` accepts `COCOON_API_BASE` (default `https://api.github.com`) and `COCOON_RELEASE_BASE` (default `https://github.com`) overrides so the public installer can target GitHub Enterprise Server or local mirrors.
@@ -70,5 +72,6 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Add `COMPOSE_PROJECT_NAME` derivation from the project directory basename so docker compose namespacing matches the host directory.
 - Add i18n catalog (English / Japanese) covering every CLI prompt, error message, and inline `workspace.toml` comment, switched via `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG`.
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/sukekyo26/cocoon/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/sukekyo26/cocoon/releases/tag/v0.1.0

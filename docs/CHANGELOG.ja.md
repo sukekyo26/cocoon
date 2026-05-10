@@ -6,6 +6,8 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-11
+
 ### 追加
 
 - `install.sh` に `COCOON_API_BASE` (デフォルト `https://api.github.com`) と `COCOON_RELEASE_BASE` (デフォルト `https://github.com`) の上書き入力を追加。GitHub Enterprise Server やローカルミラー経由でも公開インストーラを利用可能。
@@ -70,5 +72,6 @@ cocoon の主要な変更を記録します。フォーマットは
 - `COMPOSE_PROJECT_NAME` をプロジェクトディレクトリの basename から導出するように変更。docker compose の namespace がホストディレクトリと一致する。
 - 国際化 (英語 / 日本語) カタログを追加。CLI プロンプト・エラーメッセージ・`workspace.toml` インラインコメントすべてを `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` で切替可能。
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/sukekyo26/cocoon/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/sukekyo26/cocoon/releases/tag/v0.1.0
