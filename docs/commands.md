@@ -58,8 +58,9 @@ When run without `--yes`, prompts are shown one screen at a time:
 6. alias bundles (multi-select)
 7. mount range
 8. devcontainer y/n
-9. apt categories (multi-select)
-10. plugins (multi-select)
+9. certificates y/n (opt in to host TLS auto-bake from `~/.cocoon/certs/`; default no)
+10. apt categories (multi-select)
+11. plugins (multi-select)
 
 ### Examples
 

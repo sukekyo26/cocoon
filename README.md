@@ -74,11 +74,14 @@ docker compose -f .devcontainer/docker-compose.yml up -d # or VS Code → "Reope
 1. **Service name** and **username** for the container
 2. **Base OS** — `ubuntu` (26.04 / 24.04 / 22.04) or `debian` (13 / 12)
 3. **Login shell** — `bash`, `zsh`, or `fish`
-4. **apt categories** — text-editors, vcs, utilities, build, network, … (multi-select)
-5. **Plugins** to enable from the embedded catalog (multi-select, 20 to choose from)
-6. **Alias bundles** — `git`, `ls`, `docker` shortcut sets
+4. **Alias bundles** — `git`, `ls`, `docker` shortcut sets (multi-select)
+5. **Mount range** — cwd only, or its parent (for fat workspaces where sibling repos must be visible)
+6. **VS Code Dev Containers** support — emit `devcontainer.json` or skip
+7. **Corporate CA auto-bake** — opt in to picking up `.crt` files from `~/.cocoon/certs/` at build time (off by default; see below)
+8. **apt categories** — text-editors, vcs, utilities, build, network, … (multi-select)
+9. **Plugins** to enable from the embedded catalog (multi-select, 20 to choose from)
 
-Each answer becomes a self-documenting line in `workspace.toml`. Pass `--yes` together with the value flags (`--service-name`, `--username`, `--os`, `--plugins`, …) to drive it from CI without a TTY.
+Each answer becomes a self-documenting line in `workspace.toml`. Pass `--yes` together with the value flags (`--service-name`, `--username`, `--os`, `--plugins`, `--certificates`, …) to drive it from CI without a TTY.
 
 ## Plugins
 

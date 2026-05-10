@@ -58,8 +58,9 @@
 6. alias bundles (multi-select)
 7. mount range
 8. devcontainer y/n
-9. apt categories (multi-select)
-10. plugins (multi-select)
+9. certificates y/n (`~/.cocoon/certs/` からの TLS 自動取り込みを opt-in。デフォルト no)
+10. apt categories (multi-select)
+11. plugins (multi-select)
 
 ### 例
 

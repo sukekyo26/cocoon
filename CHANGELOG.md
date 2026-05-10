@@ -40,6 +40,7 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Drop the numbered `## 1. … ## 9. …` H2 prefixes from `docs/plugins.md` / `docs/plugins.ja.md` and rewrite the in-body `§N` cross-references to use the section titles, so anchors are stable across future edits.
 - Dedupe the persistent-shellrc explanation in `docs/configuration.{md,ja.md}` (`[container.shell]` section): collapse the repeated implementation walkthrough to one sentence and link to `architecture.md#shell-injection` as the single source of truth.
 - Append a "Removed commands" section to `docs/commands.{md,ja.md}` listing the retired `cocoon config` noun group plus `cocoon plugin add` / `cocoon plugin remove`, with one-line migration pointers, so readers searching for an old command find the replacement immediately.
+- Add the corporate-CA prompt (step 9) to the `cocoon init` interactive-flow lists in `README.md`, `docs/README.ja.md`, `docs/commands.md`, and `docs/commands.ja.md` so the docs match the actual prompt order. Previously the list stopped at 10 steps and skipped the certificates opt-in.
 
 ### Removed
 

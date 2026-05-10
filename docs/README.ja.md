@@ -74,11 +74,14 @@ docker compose -f .devcontainer/docker-compose.yml up -d # または VS Code で
 1. コンテナの **サービス名** と **ユーザー名**
 2. **ベース OS** — `ubuntu` (26.04 / 24.04 / 22.04) または `debian` (13 / 12)
 3. **ログインシェル** — `bash` / `zsh` / `fish`
-4. **apt カテゴリ** — text-editors / vcs / utilities / build / network / … (複数選択)
-5. **プラグイン** — 同梱カタログ 20 種から選択 (複数選択)
-6. **エイリアスバンドル** — `git` / `ls` / `docker` のショートカット集
+4. **エイリアスバンドル** — `git` / `ls` / `docker` のショートカット集 (複数選択)
+5. **マウント範囲** — cwd のみ、または親ディレクトリ (兄弟リポジトリも見える fat ワークスペース向け)
+6. **VS Code Dev Containers** 対応 — `devcontainer.json` を出力するかどうか
+7. **社内 CA 自動取り込み** — `~/.cocoon/certs/` 配下の `.crt` をビルド時に取り込むか opt-in (デフォルト off。下記参照)
+8. **apt カテゴリ** — text-editors / vcs / utilities / build / network / … (複数選択)
+9. **プラグイン** — 同梱カタログ 20 種から選択 (複数選択)
 
-各回答は自己説明的な 1 行として `workspace.toml` に書き込まれます。`--yes` と各値フラグ (`--service-name` / `--username` / `--os` / `--plugins` …) を組み合わせれば TTY なしで CI から呼び出せます。
+各回答は自己説明的な 1 行として `workspace.toml` に書き込まれます。`--yes` と各値フラグ (`--service-name` / `--username` / `--os` / `--plugins` / `--certificates` …) を組み合わせれば TTY なしで CI から呼び出せます。
 
 ## プラグイン
 
