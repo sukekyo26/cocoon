@@ -104,40 +104,16 @@ func TestPluginAdd_RejectsUnknownID(t *testing.T) {
 }
 
 //nolint:paralleltest // t.Setenv on HOME forbids t.Parallel.
-func TestPluginRemove_DeletesUserOverlay(t *testing.T) {
-	home := withIsolatedHome(t)
-	dst := filepath.Join(home, ".cocoon", "plugins", "uv")
-	if err := os.MkdirAll(dst, 0o755); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(dst, "plugin.toml"), []byte("# user uv\n"), 0o600); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
-
+func TestPluginRemove_RejectsUnknownSubcommand(t *testing.T) {
+	withIsolatedHome(t)
 	var stdout, stderr bytes.Buffer
 	cmd := plugincli.NewCommand(&stdout, &stderr)
 	cmd.SetArgs([]string{"remove", "uv", "--scope", "user"})
 	cmd.SetOut(&stdout)
 	cmd.SetErr(&stderr)
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("remove: err=%v stderr=%s", err, stderr.String())
-	}
-	if _, err := os.Stat(dst); !os.IsNotExist(err) {
-		t.Errorf("expected %s removed, got err=%v", dst, err)
-	}
-}
-
-//nolint:paralleltest // t.Setenv on HOME forbids t.Parallel.
-func TestPluginRemove_RequiresScope(t *testing.T) {
-	withIsolatedHome(t)
-	var stdout, stderr bytes.Buffer
-	cmd := plugincli.NewCommand(&stdout, &stderr)
-	cmd.SetArgs([]string{"remove", "uv"})
-	cmd.SetOut(&stdout)
-	cmd.SetErr(&stderr)
 	err := cmd.Execute()
 	if err == nil {
-		t.Fatalf("remove without --scope should fail")
+		t.Fatalf("plugin remove should be unknown after removal; stdout=%s", stdout.String())
 	}
 	if !errors.Is(err, plugincli.ErrUsage) {
 		t.Errorf("expected ErrUsage, got %v", err)
