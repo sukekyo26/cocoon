@@ -428,11 +428,8 @@ func (c *WorkspaceContext) AptSources() []config.AptSource {
 	return c.WS.Apt.Sources
 }
 
-// CertificatesEnabled reports whether the workspace opts into TLS
-// certificate auto-bake from ${HOME}/.cocoon/certs. Returns false when
-// the [certificates] section is absent or `enable = false`. Generators
-// branch on this to decide whether to emit cert-related wiring at all,
-// so cert-free workspaces produce cert-free artifacts.
+// CertificatesEnabled returns true iff `[certificates] enable = true`.
+// Generators branch on this to gate all cert-related output.
 func (c *WorkspaceContext) CertificatesEnabled() bool {
 	if c == nil || c.WS == nil {
 		return false

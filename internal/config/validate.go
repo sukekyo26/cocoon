@@ -515,12 +515,8 @@ func (g *GitIdentitySpec) validate(a *errAccumulator) {
 	}
 }
 
-// validate is a no-op today: the only field is `enable` (a bool, with
-// `nil ⇒ false` default applied by EnableOrDefault), and nothing about
-// it can fail validation. The method exists so the [certificates]
-// section is wired through Workspace.runValidate and ready to grow new
-// fields (e.g. `path`) without callers having to remember to add the
-// hook.
+// validate is a no-op hook (only field is enable: bool); kept so future
+// fields slot in without re-wiring runValidate.
 func (*CertificatesSpec) validate(_ *errAccumulator) {}
 
 func (m *Mount) validate(a *errAccumulator) {

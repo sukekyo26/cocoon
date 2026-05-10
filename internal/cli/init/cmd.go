@@ -409,9 +409,6 @@ func applyDefaults(ans initAnswers, plugins map[string]*plugin.Plugin) (initAnsw
 		ans.Devcontainer, ans.DevcontainerSet = true, true
 	}
 	if !ans.CertificatesSet {
-		// Default off — most projects don't need a corp CA inside the
-		// container. Users opt in with --certificates or by editing
-		// workspace.toml after the fact.
 		ans.Certificates, ans.CertificatesSet = false, true
 	}
 	if !ans.AptSet {
@@ -509,8 +506,6 @@ func promptForMissing(ans initAnswers, cat *i18n.Catalog, plugins map[string]*pl
 		ans.DevcontainerSet = true
 	}
 	if !ans.CertificatesSet {
-		// Default off so the prompt's initial cursor sits on "No"; users
-		// who actually need a corp CA bake-in flip it to Yes.
 		ans.Certificates = false
 		if err := runSingleFieldForm(certificatesConfirm(cat, &ans.Certificates)); err != nil {
 			return ans, err
@@ -1109,9 +1104,6 @@ func renderWorkspaceToml(s containerSpec, cat *i18n.Catalog) string {
 		emitTemplate(&sb, cat, key)
 	}
 
-	// [certificates] is opt-in (default off). Emit the live section only
-	// when the user enables it; otherwise rely on the commented template
-	// below for discoverability.
 	if s.Certificates {
 		sb.WriteString(cat.Msg("init_toml_section_certificates"))
 		sb.WriteByte('\n')

@@ -296,17 +296,6 @@ func buildService(ctx *generate.WorkspaceContext, mounts []*yaml.Node) *yaml.Nod
 		{Key: "dockerfile", Value: yamlx.QuotedIfSpecial(".devcontainer/Dockerfile")},
 	}
 	if ctx.CertificatesEnabled() {
-		// additional_contexts wires ${HOME}/.cocoon/certs into the build
-		// as a named context so the Dockerfile can mount it via
-		// `RUN --mount=type=bind,from=cocoon_user_certs,...` without a
-		// staging copy in the project tree. Only emitted when the
-		// workspace opts into [certificates] enable=true; cert-free
-		// teams get an additional_contexts-free compose file.
-		//
-		// The path uses Compose's required-variable form (${HOME:?...})
-		// so an unset HOME on the host fails fast with a clear message
-		// instead of silently collapsing the path to "/.cocoon/certs"
-		// and producing a confusing build error.
 		buildPairs = append(buildPairs, yamlx.Pair{
 			Key: "additional_contexts",
 			Value: yamlx.Map(yamlx.Pair{

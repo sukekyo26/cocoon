@@ -18,17 +18,9 @@ RUN sed -i \
 # Configure apt HTTP(S) proxy from [apt.proxy]
 RUN { echo 'Acquire::http::Proxy "http://proxy.corp:8080";'; echo 'Acquire::https::Proxy "http://proxy.corp:8080";'; } > /etc/apt/apt.conf.d/95proxy
 
-# Install custom CA certificates from ~/.cocoon/certs/ (root stage; runs
-# before the main apt-get update so HTTPS apt mirrors / sources signed by
-# a corporate CA can complete TLS handshake). The RUN body itself runs
-# its own apt-get update inside the conditional to install ca-certificates
-# only when the user has dropped *.crt files into the host directory — the
-# block is a no-op otherwise. Certificates flow in via the
-# cocoon_user_certs named build context declared by docker-compose.yml's
-# additional_contexts (sourced from ${HOME}/.cocoon/certs). The apt cache
-# / lists mounts mirror buildAptCABootstrap and the main apt install RUN
-# so repeated builds reuse cached package indexes and the layer stays
-# clean (no /var/lib/apt/lists/* in the image).
+# Install custom CA certificates from ~/.cocoon/certs/ (no-op when the
+# host directory is empty). Runs before the main apt install so HTTPS
+# mirrors signed by a corporate CA can complete TLS handshake.
 RUN --mount=type=bind,from=cocoon_user_certs,target=/tmp/cocoon-user-certs \
     --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
@@ -126,9 +118,7 @@ RUN mkdir -p "$HOME/.cocoon" && \
     printf '# cocoon: persisted shell rc (fish). Edit freely; survives container rebuild.\n' \
         > "$HOME/.cocoon/.shellrc.fish"
 
-# CA bundle env vars for various tools. These point at the merged system
-# bundle which always exists regardless of whether ~/.cocoon/certs/ was
-# populated, so emitting them unconditionally is safe.
+# CA bundle env vars for tools that read them directly.
 ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 ENV CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
 ENV REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
