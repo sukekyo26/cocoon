@@ -13,7 +13,7 @@
 
  - **コミット前に必ずローカルでテストとリントを通す** — push 後に CI
 で初めて失敗を検知するのは避ける。Go / シェルコードを変更したら `just ci`（= `fmt-check` + `vet`
-+ `lint` + `test` + `vuln` + `mod-verify` + `shellcheck`）を実行し、グリーンを確認してからコミットする。
++ `lint` + `test` + `vuln` + `mod-verify` + `shellcheck` + `shfmt-check`）を実行し、グリーンを確認してからコミットする。
  - **修正したら再実行する** — 失敗を直したら無関係な箇所を壊していないか `just ci`
 を再実行して検証する。「あとで CI が拾うから」と未確認のままコミットしない。
  - **CI ワークフロー（`.github/workflows/`）を変更した場合** —

@@ -104,5 +104,15 @@ shellcheck:
     @command -v shellcheck >/dev/null 2>&1 || { echo >&2 "shellcheck not installed; install via 'apt-get install shellcheck' / 'brew install shellcheck'"; exit 1; }
     shellcheck --severity=style $(find . -type f -name '*.sh' -not -path './.git/*' -not -path './bin/*')
 
+# Format all *.sh files in-place with shfmt (gofmt-style)
+shfmt:
+    @command -v shfmt >/dev/null 2>&1 || { echo >&2 "shfmt not installed; see https://github.com/mvdan/sh/releases or 'brew install shfmt'"; exit 1; }
+    shfmt -i 2 -ci -w $(find . -type f -name '*.sh' -not -path './.git/*' -not -path './bin/*')
+
+# Verify all *.sh files are shfmt-clean (CI gate)
+shfmt-check:
+    @command -v shfmt >/dev/null 2>&1 || { echo >&2 "shfmt not installed; see https://github.com/mvdan/sh/releases or 'brew install shfmt'"; exit 1; }
+    shfmt -i 2 -ci -d $(find . -type f -name '*.sh' -not -path './.git/*' -not -path './bin/*')
+
 # Composite pre-push gate mirroring the GitHub Actions pipeline.
-ci: fmt-check vet lint test vuln mod-verify shellcheck
+ci: fmt-check vet lint test vuln mod-verify shellcheck shfmt-check

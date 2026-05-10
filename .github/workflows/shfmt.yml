@@ -1,0 +1,36 @@
+name: shfmt
+
+on:
+  push:
+    branches: ["feature/*", "fix/*", "refactor/*"]
+  pull_request:
+    branches: [develop, main]
+  workflow_dispatch:
+  workflow_call:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  SHFMT_VERSION: v3.10.0
+
+jobs:
+  shfmt:
+    name: shfmt (-i 2 -ci -d)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install shfmt
+        run: |
+          curl -fsSL --proto '=https' --tlsv1.2 \
+            "https://github.com/mvdan/sh/releases/download/${SHFMT_VERSION}/shfmt_${SHFMT_VERSION}_linux_amd64" \
+            -o /usr/local/bin/shfmt
+          chmod +x /usr/local/bin/shfmt
+          shfmt --version
+      - name: shfmt -d
+        run: |
+          shfmt -i 2 -ci -d $(find . -type f -name '*.sh' -not -path './.git/*' -not -path './bin/*')
