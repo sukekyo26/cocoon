@@ -27,3 +27,6 @@ __pycache__/
 .cocoon/
 .devcontainer/
 workspace.toml
+
+# claude
+.claude/scheduled_tasks.lock
