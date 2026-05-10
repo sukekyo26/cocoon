@@ -717,21 +717,25 @@ func collectPluginAptPackages(
 	return formatAptContinuations(packages)
 }
 
-// generateCertificateInstall returns the always-emitted Dockerfile blocks
-// that wire up custom CA certificate installation from ~/.cocoon/certs/ via
+// generateCertificateInstall returns the static Dockerfile blocks that
+// wire up custom CA certificate installation from ~/.cocoon/certs/ via
 // BuildKit's named build context "cocoon_user_certs" (declared in the
 // generated docker-compose.yml's additional_contexts).
 //
-// rootBlock is a RUN that bind-mounts ${HOME}/.cocoon/certs at build time
-// and installs any *.crt files into the trust store. A shell-side
+// Generate() calls this only when ctx.CertificatesEnabled() is true (the
+// workspace opted into [certificates] enable = true); cert-free
+// workspaces never see these blocks in their generated Dockerfile.
+//
+// rootBlock is a RUN that bind-mounts ${HOME}/.cocoon/certs at build
+// time and installs any *.crt files into the trust store. A shell-side
 // conditional inside the RUN body skips the work when the directory is
-// empty, so the same Dockerfile builds successfully whether the developer
-// has user certs configured or not.
+// empty, so an opted-in Dockerfile builds successfully whether the
+// developer has actually populated ~/.cocoon/certs/ or not.
 //
 // envBlock is the post-USER ENV declaration block. SSL_CERT_FILE et al.
-// point at the standard system bundle which exists regardless of user-cert
-// presence, so emitting them unconditionally is safe and keeps generated
-// artifacts byte-identical across team members.
+// land here only on the enabled path; the cert-free Dockerfile contains
+// no SSL_CERT_FILE / CURL_CA_BUNDLE / REQUESTS_CA_BUNDLE /
+// NODE_EXTRA_CA_CERTS exports.
 func generateCertificateInstall() (rootBlock, envBlock string) {
 	return certInstallRootBlock, certInstallEnvBlock
 }
@@ -751,7 +755,7 @@ var certInstallRootBlock = `# Install custom CA certificates from ~/.cocoon/cert
 RUN --mount=type=bind,from=` + generate.CertsBuildContextName + `,target=/tmp/cocoon-user-certs \
     --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    if [ -n "$(find /tmp/cocoon-user-certs -maxdepth 1 -name '*.crt' 2>/dev/null | head -n 1)" ]; then \
+    if [ -n "$(find /tmp/cocoon-user-certs -maxdepth 1 -name '*.crt' -print -quit)" ]; then \
         apt-get update && \
         DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates && \
         mkdir -p /usr/local/share/ca-certificates/cocoon-user && \

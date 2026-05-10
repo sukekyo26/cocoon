@@ -32,7 +32,7 @@ RUN { echo 'Acquire::http::Proxy "http://proxy.corp:8080";'; echo 'Acquire::http
 RUN --mount=type=bind,from=cocoon_user_certs,target=/tmp/cocoon-user-certs \
     --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    if [ -n "$(find /tmp/cocoon-user-certs -maxdepth 1 -name '*.crt' 2>/dev/null | head -n 1)" ]; then \
+    if [ -n "$(find /tmp/cocoon-user-certs -maxdepth 1 -name '*.crt' -print -quit)" ]; then \
         apt-get update && \
         DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates && \
         mkdir -p /usr/local/share/ca-certificates/cocoon-user && \
