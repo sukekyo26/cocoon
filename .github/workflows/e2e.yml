@@ -133,6 +133,18 @@ jobs:
             --apt-categories=text-editors,vcs,utilities,compression,build \
             "${extra[@]}"
           "$COCOON" gen
+          # Surface the generated artifacts to the CI log so PR reviewers
+          # can read exactly what cocoon emitted for this preset (matters
+          # most after generator changes — e.g. plugin install scripts now
+          # land inline in the Dockerfile via bash heredocs). The
+          # GitHub Actions group markers keep the dumps collapsed by
+          # default so they don't drown the rest of the step.
+          echo "::group::.devcontainer/Dockerfile"
+          cat .devcontainer/Dockerfile
+          echo "::endgroup::"
+          echo "::group::.devcontainer/docker-compose.yml"
+          cat .devcontainer/docker-compose.yml
+          echo "::endgroup::"
           # The generated tree must land under .devcontainer/ exclusively;
           # any leakage back into config/ or to the project root is a regression.
           # The .env file is critical for compose interpolation (UID/GID/
@@ -165,12 +177,6 @@ jobs:
           #      both paths absolutely via `--set "*.context=$PWD"` and
           #      `--set "*.dockerfile=$PWD/.devcontainer/Dockerfile"`.
           #
-          # `--allow fs=<path>` is narrowed to the single directory bake needs
-          # to read: `${HOME}/.cocoon/cache/build-context`, the materialized
-          # plugin context referenced by additional_contexts.plugins. It sits
-          # outside the compose file's directory so bake's default entitlements
-          # would otherwise reject it; `--allow fs=*` would also work but
-          # grants BuildKit unrestricted host filesystem access for no benefit.
           # `scope=e2e-${PRESET}` separates minimal / amd64-full / arm64-full
           # cache buckets; GHA cache backend further isolates by branch.
           # mode=max captures all layers (within the 10GB/repo limit).
@@ -194,7 +200,6 @@ jobs:
           env "${env_args[@]}" docker buildx bake \
             -f .devcontainer/docker-compose.yml \
             --load \
-            --allow "fs=${HOME}/.cocoon/cache/build-context" \
             --set "*.context=$PWD" \
             --set "*.dockerfile=$PWD/.devcontainer/Dockerfile" \
             --set "*.cache-from=type=gha,scope=e2e-${PRESET}" \
