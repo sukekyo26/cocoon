@@ -65,7 +65,7 @@ plugins/<id>/
 | `[metadata]` | `conflicts`       | list of strings    | `[]`  |   | 同時に enable できない id 群 |
 | `[apt]`      | `packages`        | list of strings    | `[]`  |   | `install.sh` の前に apt-get install されるパッケージ |
 | `[install]`  | `requires_root`   | bool               | —     | ✓ | true なら `install.sh` を root で実行、false なら非特権ユーザー |
-| `[install]`  | `build_args`      | list of strings    | `[]`  |   | Dockerfile が `ARG` で宣言し `install.sh` に渡す変数名群。`^[A-Z_][A-Z0-9_]*$` に一致すること |
+| `[install]`  | `build_args`      | list of strings    | `[]`  |   | ビルド時に受け取りたい変数名群 (例: `DOCKER_GID`)。ジェネレータが対応する `ARG <name>` 行を自動で出力し、per-RUN env prefix に `<name>="${<name>}"` を載せるので、`install.sh` は `$<name>` を通常の環境変数として読める。`^[A-Z_][A-Z0-9_]*$` に一致すること |
 | `[install]`  | `env`             | map<string,string> | `{}`  |   | install 後に出力される `ENV` 行。値内で先行 `ENV`/`ARG` を参照可 |
 | `[install]`  | `volumes`         | list of strings    | `[]`  |   | `/home/${USERNAME}/<dir>` 形式のユーザー所有パス。各エントリは `mkdir -p` + `chown` され、永続化のため docker named volume として宣言される |
 | `[version]`  | `version_capable` | bool               | —     | ✓ | true なら `install.sh` が `$PIN` および任意で `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` を受け取る（§7） |
@@ -134,9 +134,18 @@ rc 編集も user 所有 config の書き込みも要らないなら `install_us
 | `CHECKSUM_ARM64` | 同上 | arm64 アーティファクトの `sha256` |
 | `<BUILD_ARG>`    | per-RUN env、`[install].build_args` に列挙されたときのみ | Dockerfile が同名 `ARG` を宣言し、per-RUN prefix で値を渡すためスクリプトからは実 env として見える（例: `docker-cli` の `DOCKER_GID`） |
 
-`install.sh` 本体は `bash` が解釈するが、heredoc の `COCOON_PLUGIN_EOF`
-はシングルクォート付きで開いているため **ホスト側での変数展開は行われない** —
-スクリプト内の `$VAR` はビルド中のコンテナ内で評価される。
+`install.sh` と `install_user.sh` 内の `$VAR` 参照は 2 段階で解決される:
+
+1. **BuildKit** が Dockerfile レベルの `ARG` 参照 (`${USERNAME}` /
+   `${UID}` など) を heredoc 本体に対して bash 起動前に置換する。
+   per-RUN prefix に載っていない `${USERNAME}` がプラグインから参照できるのはこの仕組みのおかげ。
+2. 続いて **bash** が per-RUN env で渡された変数 (`$RC_FILE` /
+   `$DOCKER_GID` など) をスクリプト実行時に展開する。
+
+heredoc terminator がシングルクォート (`<<'COCOON_PLUGIN_EOF'`) なのは、
+外側シェルの heredoc 読込フェーズで本体テキストを透過させて 2 段階の置換が
+正しく機能するようにするため。**ホスト側での評価は一切行われない** — どちらの
+段階もビルド環境内で実行される。
 
 リテラル文字列 `COCOON_PLUGIN_EOF` を `install.sh` / `install_user.sh`
 内で **行頭から行末まで一致する形で書いてはならない**。書くと

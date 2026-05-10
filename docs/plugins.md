@@ -71,7 +71,7 @@ plugins/<id>/
 | `[metadata]` | `conflicts`       | list of strings    | `[]`  |   | Plugin ids that must not be enabled at the same time. |
 | `[apt]`      | `packages`        | list of strings    | `[]`  |   | Apt packages installed before `install.sh` runs. |
 | `[install]`  | `requires_root`   | bool               | —     | ✓ | If true, `install.sh` runs as root; otherwise as the unprivileged user. |
-| `[install]`  | `build_args`      | list of strings    | `[]`  |   | Names of `ARG`s the Dockerfile must declare so the build can pass values into `install.sh`. Names match `^[A-Z_][A-Z0-9_]*$`. |
+| `[install]`  | `build_args`      | list of strings    | `[]`  |   | Names of build-time variables (e.g. `DOCKER_GID`) the build must accept. The generator emits matching `ARG <name>` lines and threads `<name>="${<name>}"` into the per-RUN env prefix, so `install.sh` can read `$<name>` as a normal env var. Names match `^[A-Z_][A-Z0-9_]*$`. |
 | `[install]`  | `env`             | map<string,string> | `{}`  |   | `ENV` lines emitted after the install runs. Values can reference earlier `ENV`/`ARG` vars. |
 | `[install]`  | `volumes`         | list of strings    | `[]`  |   | Per-user paths under `/home/${USERNAME}/<dir>`; each one is `mkdir -p`'d, `chown`'d, and declared as a docker named volume so its contents persist across rebuilds. |
 | `[version]`  | `version_capable` | bool               | —     | ✓ | If true, `install.sh` accepts `$PIN` and optionally `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` (see §7). |
@@ -144,10 +144,20 @@ mechanisms:
 | `CHECKSUM_ARM64` | same as above | `sha256` of the arm64 artifact. |
 | `<BUILD_ARG>`    | per-RUN env, only when listed in `[install].build_args` | The Dockerfile declares an `ARG` and the per-RUN prefix passes the value through, so the script sees a real env var. Example: `docker-cli` reads `DOCKER_GID`. |
 
-Inside `install.sh` the body is interpreted by `bash`, but
-`COCOON_PLUGIN_EOF` is single-quoted on the heredoc line, which means
-**no host-side variable expansion happens**: shell `$VAR` references
-in the script run inside the container at build time, not on the host.
+Inside `install.sh` and `install_user.sh`, `$VAR` references resolve in
+two stages:
+
+1. **BuildKit** substitutes Dockerfile-level `ARG` references
+   (`${USERNAME}`, `${UID}`, …) in the heredoc body before bash starts.
+   This is how plugins reach `${USERNAME}` without any per-RUN prefix.
+2. **bash** then expands per-RUN env vars (`$RC_FILE`, `$DOCKER_GID`, …)
+   while it executes the script.
+
+The single-quoted heredoc terminator (`<<'COCOON_PLUGIN_EOF'`) prevents
+the outer shell from interfering during the heredoc-read phase, so the
+text passes through unchanged and both stages work as expected. Nothing
+on the developer's host machine evaluates the script — both stages run
+inside the build environment.
 
 The literal string `COCOON_PLUGIN_EOF` must not appear on a line by
 itself anywhere in `install.sh` / `install_user.sh` — that would
