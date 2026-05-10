@@ -1,0 +1,19 @@
+# https://pre-commit.com — install with `pip install pre-commit && pre-commit install`.
+# Hooks shell out to the same shellcheck/shfmt that `just ci` invokes, so all
+# three layers (just / CI / pre-commit) agree.
+repos:
+  - repo: local
+    hooks:
+      - id: shellcheck
+        name: shellcheck (severity=style)
+        entry: shellcheck --severity=style
+        language: system
+        types: [shell]
+        require_serial: false
+
+      - id: shfmt
+        name: shfmt (-i 2 -ci -d)
+        entry: shfmt -i 2 -ci -d
+        language: system
+        types: [shell]
+        require_serial: false
