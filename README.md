@@ -43,7 +43,7 @@ cocoon gen                                               # generate .devcontaine
 docker compose -f .devcontainer/docker-compose.yml up -d # or open in VS Code → "Reopen in Container"
 ```
 
-> **Need a corporate CA inside the container** (Zscaler, dev self-signed, etc.)? Run `cocoon init --certificates` (or set `[certificates] enable = true` in `workspace.toml`), then drop the `.crt` files into `~/.cocoon/certs/` on the host. They are picked up automatically at container build time. Cert-free workspaces stay cert-free — no wiring lands in the generated artifacts unless you opt in. See [TLS certificates](docs/configuration.md#tls-certificates-certificates--cocooncerts) for the team workflow.
+> **Need a corporate CA inside the container** (Zscaler, dev self-signed, etc.)? Run `cocoon init --certificates` (or set `[certificates] enable = true` in `workspace.toml`), then drop the `.crt` files into `~/.cocoon/certs/` on the host. They are picked up automatically at container build time. Cert-free workspaces stay cert-free — no wiring lands in the generated artifacts unless you opt in. See [`[certificates]`](docs/configuration.md#certificates) for the team workflow.
 
 ## Documentation
 

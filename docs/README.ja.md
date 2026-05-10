@@ -43,7 +43,7 @@ cocoon gen                                               # .devcontainer/ を生
 docker compose -f .devcontainer/docker-compose.yml up -d # または VS Code で「Reopen in Container」
 ```
 
-> **社内 CA をコンテナで信頼させたい** (Zscaler、開発用自己署名 等) 場合は `cocoon init --certificates` (または `workspace.toml` に `[certificates] enable = true`) で opt-in したうえでホスト側の `~/.cocoon/certs/` に `.crt` を置く。opt-in しないワークスペースの成果物には cert 関連の配線は一切乗らない。詳細は [TLS 証明書](configuration.ja.md#tls-証明書-certificates--cocooncerts) 参照。
+> **社内 CA をコンテナで信頼させたい** (Zscaler、開発用自己署名 等) 場合は `cocoon init --certificates` (または `workspace.toml` に `[certificates] enable = true`) で opt-in したうえでホスト側の `~/.cocoon/certs/` に `.crt` を置く。opt-in しないワークスペースの成果物には cert 関連の配線は一切乗らない。詳細は [`[certificates]`](configuration.ja.md#certificates) 参照。
 
 ## ドキュメント
 

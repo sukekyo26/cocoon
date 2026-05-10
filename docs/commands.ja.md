@@ -101,7 +101,7 @@ cocoon gen --workspace ./infra/workspace.toml --output ./infra
 
 ### TLS 証明書
 
-生成される `Dockerfile` / `docker-compose.yml` / `devcontainer.json` に cert 自動取り込み配線が乗るのは、ワークスペースが `[certificates] enable = true` (または `cocoon init --certificates`) で opt-in したときのみ。cert を扱わないワークスペースは cert-free 成果物 (`additional_contexts` なし、`RUN --mount=type=bind` なし、`initializeCommand` なし) を commit する。opt-in 時は `~/.cocoon/certs/*.crt` が build 時にトラストストアへマージされる。詳細は [`configuration.ja.md` の TLS 証明書セクション](configuration.ja.md#tls-証明書-certificates--cocooncerts) を参照。
+生成される `Dockerfile` / `docker-compose.yml` / `devcontainer.json` に cert 自動取り込み配線が乗るのは、ワークスペースが `[certificates] enable = true` (または `cocoon init --certificates`) で opt-in したときのみ。cert を扱わないワークスペースは cert-free 成果物 (`additional_contexts` なし、`RUN --mount=type=bind` なし、`initializeCommand` なし) を commit する。opt-in 時は `~/.cocoon/certs/*.crt` が build 時にトラストストアへマージされる。詳細は [`configuration.ja.md` の `[certificates]`](configuration.ja.md#certificates) を参照。
 
 ---
 

@@ -311,16 +311,20 @@ readonly = true
 
 ---
 
-## TLS 証明書 (`[certificates]` + `~/.cocoon/certs/`)
+## `[certificates]`
 
-TLS 証明書の自動取り込みは **opt-in** です。ワークスペース単位で以下のセクションを追加 (または `cocoon init --certificates`) して有効化します:
+`~/.cocoon/certs/` からの TLS 証明書自動取り込みを opt-in で有効化する。
+
+| フィールド | 型 | デフォルト | 備考 |
+|---|---|---|---|
+| `enable` | bool | `false` | `true` のときジェネレータがホスト TLS 証明書を build に配線する。 |
 
 ```toml
 [certificates]
 enable = true
 ```
 
-セクション不在 / `enable = false` のときは、生成される `Dockerfile` / `docker-compose.yml` / `devcontainer.json` に **cert 関連の配線は一切乗りません** (`additional_contexts` / `RUN --mount=type=bind` / `initializeCommand` / `SSL_CERT_FILE` ENV のいずれも出力されない)。社内 CA を扱わないチームは、corp-CA 機構ゼロの成果物を commit できます。
+セクション不在 / `enable = false` のときは、生成される `Dockerfile` / `docker-compose.yml` / `devcontainer.json` に **cert 関連の配線は一切乗りません** (`additional_contexts` / `RUN --mount=type=bind` / `initializeCommand` / `SSL_CERT_FILE` / `CURL_CA_BUNDLE` / `REQUESTS_CA_BUNDLE` / `NODE_EXTRA_CA_CERTS` ENV のいずれも出力されない)。社内 CA を扱わないチームは、corp-CA 機構ゼロの成果物を commit できます。
 
 有効化時、社内 CA (Zscaler、企業プロキシ、開発用自己署名 CA 等) をコンテナで信頼させたい場合、PEM 形式の `.crt` ファイルを **`~/.cocoon/certs/`** に置きます。コンテナビルド時に自動的にトラストストアへ取り込まれます。
 
@@ -346,13 +350,11 @@ cocoon の生成物 `.devcontainer/*` は、ワークスペースが `[certifica
 
 > **Note**: VS Code Dev Containers を使わずに `docker compose build` を直接実行する場合は、初回のみホスト側で `mkdir -p ~/.cocoon/certs` を実行してください。VS Code 経由のメンバーは `initializeCommand` により自動作成されます。CI 環境ではセットアップステップに `mkdir -p ~/.cocoon/certs` を 1 行追加してください。
 
-### 仕組み
+### 仕組み (有効化時)
 
-- `.devcontainer/docker-compose.yml`: `additional_contexts: cocoon_user_certs: ${HOME}/.cocoon/certs` により `~/.cocoon/certs/` をビルドコンテキストとして直接参照 (コピー無し)。
-- `.devcontainer/Dockerfile`: `RUN --mount=type=bind,from=cocoon_user_certs ... if find ... ; then ... update-ca-certificates ; fi` により build 時に `*.crt` を取り込む。apt install より前に実行されるため、Zscaler 等の TLS インターセプト下でも build が通る。
-- `.devcontainer/devcontainer.json`: `initializeCommand: "mkdir -p ${HOME}/.cocoon/certs"` により VS Code Dev Containers がコンテナ作成前にホスト側ディレクトリを自動作成する。
-
-環境変数 `SSL_CERT_FILE` / `CURL_CA_BUNDLE` / `REQUESTS_CA_BUNDLE` / `NODE_EXTRA_CA_CERTS` は、マージ済み trust store (`/etc/ssl/certs/ca-certificates.crt`) を指すように常時設定されます (証明書の有無に依らず安全)。
+- `.devcontainer/docker-compose.yml`: `additional_contexts: cocoon_user_certs: ${HOME:?…}/.cocoon/certs` により `~/.cocoon/certs/` をビルドコンテキストとして直接参照 (コピー無し)。`${HOME:?…}` 形式で HOME 未設定環境では fail-fast。
+- `.devcontainer/Dockerfile`: `RUN --mount=type=bind,from=cocoon_user_certs … if find … ; then … update-ca-certificates ; fi` により build 時に `*.crt` を取り込む。main apt install より前に実行されるため、Zscaler 等の TLS インターセプト下でも build が通る。同 RUN の後に `SSL_CERT_FILE` / `CURL_CA_BUNDLE` / `REQUESTS_CA_BUNDLE` / `NODE_EXTRA_CA_CERTS` をマージ済み trust store (`/etc/ssl/certs/ca-certificates.crt`) に設定するため、これら環境変数を読む言語ランタイム (curl / Python requests / Node.js 等) も新しい CA を参照できる。
+- `.devcontainer/devcontainer.json`: `initializeCommand: "mkdir -p ${HOME:?…}/.cocoon/certs"` により VS Code Dev Containers がコンテナ作成前にホスト側ディレクトリを自動作成する。
 
 ### 注意点
 
