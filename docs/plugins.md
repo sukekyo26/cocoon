@@ -57,14 +57,29 @@ archive).
 ```
 plugins/<id>/
 ├── plugin.toml         # required
-├── install.sh          # optional (skip if the plugin only needs [install.env],
-│                       #   [install.build_args], or an install_user.sh hook)
+├── install.sh          # optional — see below
 └── install_user.sh     # optional (only when §5 applies)
 ```
 
-The generator emits nothing for a plugin that has none of `install.sh`,
-`install_user.sh`, `[install.build_args]`, and `[install.env]` — at least
-one must be present.
+A plugin's **install snippet** (the `# Install …` comment + RUN block in
+the generated Dockerfile) is emitted only when at least one of these is
+present:
+
+- `install.sh`
+- `install_user.sh`
+- `[install.env]`
+
+`[install.build_args]` on its own does **not** trigger output: the `ARG`
+declaration is only emitted alongside a hook, so a plugin built around
+`build_args` alone would carry an `ARG` name that nothing references.
+`build_args` is meaningful only when consumed by `install.sh` or
+`install_user.sh`.
+
+Plugins that declare only `[install].volumes` (no install hook, no env)
+still affect the generated artifacts — `volumes` flows through a
+separate path that produces the `mkdir -p` / `chown` block at the top
+of the install phase and the named-volume declaration in
+`docker-compose.yml`. Just no per-plugin install snippet.
 
 ## 4. `plugin.toml` schema
 

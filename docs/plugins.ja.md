@@ -51,13 +51,28 @@ embedded プラグインを改変したい場合のサポート手順は
 ```
 plugins/<id>/
 ├── plugin.toml         # 必須
-├── install.sh          # 任意（[install.env] / [install.build_args] /
-│                       #   install_user.sh のいずれかで足りるなら省略可）
+├── install.sh          # 任意 — 下記参照
 └── install_user.sh     # 任意（§5 のケースのみ）
 ```
 
-`install.sh` / `install_user.sh` / `[install.build_args]` / `[install.env]`
-の **どれか 1 つ** は必要 — 全部空ならジェネレータは何も出力しない。
+プラグインの **install snippet**（生成 Dockerfile 上の
+`# Install …` コメント + RUN ブロック）が出力されるのは、次のいずれかが
+存在するときだけ:
+
+- `install.sh`
+- `install_user.sh`
+- `[install.env]`
+
+`[install.build_args]` 単独では何も出力されない: `ARG` 宣言は hook の
+直前にしか emit されないため、`build_args` だけのプラグインは
+誰も参照しない `ARG` 名を持つだけになる。`build_args` は
+`install.sh` または `install_user.sh` から参照されて初めて意味を持つ。
+
+`[install].volumes` のみを宣言したプラグイン（install hook も env も
+無し）でも、生成成果物には影響する — `volumes` は別経路を通り、
+install フェーズ冒頭の `mkdir -p` / `chown` ブロックと
+`docker-compose.yml` の named volume 宣言を生む。プラグイン固有の
+install snippet が出ないだけ。
 
 ## 4. `plugin.toml` スキーマ
 
