@@ -179,7 +179,7 @@ func runInstallSh(t *testing.T, env map[string]string) (stderr string, exit int)
 		t.Skip("sh not on PATH")
 	}
 	cmd := exec.CommandContext(t.Context(), "sh", installShPath(t)) //nolint:gosec // installShPath is repo-internal, not user input
-	cmd.Env = append(os.Environ(), envSlice(env)...)
+	cmd.Env = mergedEnv(env)
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
 	err := cmd.Run()
@@ -194,9 +194,23 @@ func runInstallSh(t *testing.T, env map[string]string) (stderr string, exit int)
 	return "", -1
 }
 
-func envSlice(m map[string]string) []string {
-	out := make([]string, 0, len(m))
-	for k, v := range m {
+// mergedEnv returns a child-process env where keys in `overrides` deterministically
+// win over any matching entry inherited from the parent. Just appending after
+// os.Environ() leaves duplicates; libc getenv() typically returns the FIRST
+// match, so the parent's value would silently shadow the test's override
+// whenever the CI runner / dev shell happens to have COCOON_* already set.
+func mergedEnv(overrides map[string]string) []string {
+	merged := make(map[string]string, len(os.Environ())+len(overrides))
+	for _, kv := range os.Environ() {
+		if k, v, ok := strings.Cut(kv, "="); ok {
+			merged[k] = v
+		}
+	}
+	for k, v := range overrides {
+		merged[k] = v
+	}
+	out := make([]string, 0, len(merged))
+	for k, v := range merged {
 		out = append(out, k+"="+v)
 	}
 	return out
