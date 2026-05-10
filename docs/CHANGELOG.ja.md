@@ -8,6 +8,8 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ### 追加
 
+- `install.sh` に `COCOON_API_BASE` (デフォルト `https://api.github.com`) と `COCOON_RELEASE_BASE` (デフォルト `https://github.com`) の上書き入力を追加。GitHub Enterprise Server やローカルミラー経由でも公開インストーラを利用可能。
+- `install.sh` に `COCOON_API_TOKEN` を追加。GitHub API 呼び出し時に Bearer トークンとして送られ、anonymous 60 req/hour のレート制限 (CI のように同一 runner IP プールを共有する環境でぶつかりやすい) を回避できる。`curl ... | sh` を 1 回だけ手で叩く一般ユーザは設定不要。
 - コンテナ内 `/home/<user>/.cocoon` に named volume `cocoon` をマウント。ユーザー個人のシェル設定をコンテナリビルドを跨いで永続化する。コンテナの rc (bash / zsh / fish) が起動時に `~/.cocoon/.shellrc` (fish は `~/.cocoon/.shellrc.fish`) を自動 source するので、コンテナ内で編集した内容は `docker compose down && up --build` を跨いでも残る (リセットは `down -v` のみ)。
 - `cocoon init --plugin-versions=<id>=<ref>,...` を追加。1 コマンドで `[plugins] enable` と `[plugins.versions]` の両方を出力できる。各 `<id>` は `--plugins` に含まれ、かつ `version_capable` である必要があり、重複は不可。これまで `cocoon plugin pin` の出力を手で貼り付けていた運用を置き換える。
 - `cocoon plugin pin --write` を追加。`workspace.toml` の `[plugins.versions.<id>]` ブロックを直接挿入・置換する。行ベースのミューテータが対象ブロック外のコメント・空行を保持するため、既存ファイルを安全に編集できる。`--write` 無しの stdout-only 動作はデフォルトのまま。`[plugins.versions]` 直下に任意の key 代入 (例: `<id> = "..."` や `<id> = { ... }`) がある場合は重複ブロック追加を避けるため usage error で停止する。
@@ -26,6 +28,7 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ### 修正
 
+- `install.sh` が macOS 上で動作するように修正。これまで darwin サポートを宣言していたにもかかわらず Linux coreutils の `sha256sum` を直接呼び出していたため、macOS では `curl ... | sh` が `missing required tool: sha256sum` で停止していた。`sha256sum` が無い環境では `shasum -a 256` にフォールバックする。
 - `[install].build_args` を `install.sh` と `install_user.sh` で対称に扱うよう修正。これまでジェネレータは `ARG <name>` 行を `install.sh` の RUN の直前にしか出力していなかったため、`install_user.sh` のみのプラグイン（`install.sh` なし）+ `build_args` の組み合わせでは `${<name>}` がビルド時に空文字に展開されていた。修正後はプラグインごとに 1 回 `ARG <name>` を「先に走る hook」の直前に出力し、両 hook の per-RUN env prefix から build-arg 値を参照できるようにした。ARG のスコープは stage 全体なので 1 回の宣言で両 RUN をカバーでき、両 hook を持つプラグインで重複宣言は発生しない。
 - 生成される `docker-compose.yml` の `[workspace] mount_root` 解決を修正。docker-compose は bind mount の相対パスを compose ファイルがあるディレクトリ (`.devcontainer/`) 基準で解決するため、従来の出力は 1 段浅かった。`mount_root = ".."` ではプロジェクトルートしかマウントされず兄弟リポジトリが見えていなかったし、`mount_root = "."` では `.devcontainer/` 自身がマウントされていた。両ケースとも `..` を 1 段足した形で出力されるようになり、本来の対象ディレクトリにマウントされるようになった。
 - `install.sh` を持たず `[install.env]` のみを定義したプラグイン (env-only プラグイン) で `ENV` ディレクティブが生成 Dockerfile から silently drop されていた問題を修正。env ブロックを独立したスニペットとして出力し、env 変数が確実にイメージに反映されるようにした。
