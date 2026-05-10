@@ -78,7 +78,7 @@ cocoon init --yes \
 
 ## `cocoon gen`
 
-Read `workspace.toml`, materialize plugins, and write `.devcontainer/`.
+Read `workspace.toml`, resolve the layered plugin catalog (project ∪ user ∪ embedded), and write `.devcontainer/`. Plugin install scripts are inlined directly into the generated Dockerfile, so the build needs no external context beyond the project tree.
 
 ### Flags
 

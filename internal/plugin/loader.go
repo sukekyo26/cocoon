@@ -1,9 +1,12 @@
 package plugin
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 
 	"github.com/sukekyo26/cocoon/internal/config"
@@ -15,11 +18,26 @@ func Load(path string) (*Plugin, error) {
 	if err != nil {
 		return nil, config.WrapIO(path, err) //nolint:wrapcheck // wrapper preserves the renderer-friendly format.
 	}
+	return parsePluginTOML(path, data)
+}
+
+// loadFromFS reads <id>/plugin.toml out of src and validates it. The
+// label argument is used purely for error wrapping so messages mirror
+// the on-disk Load behaviour.
+func loadFromFS(src fs.FS, id, label string) (*Plugin, error) {
+	data, err := fs.ReadFile(src, path.Join(id, "plugin.toml"))
+	if err != nil {
+		return nil, config.WrapIO(label, err) //nolint:wrapcheck // wrapper preserves the renderer-friendly format.
+	}
+	return parsePluginTOML(label, data)
+}
+
+func parsePluginTOML(label string, data []byte) (*Plugin, error) {
 	var p Plugin
-	if err := config.StrictUnmarshal(path, data, &p); err != nil {
+	if err := config.StrictUnmarshal(label, data, &p); err != nil {
 		return nil, err //nolint:wrapcheck // already a *config.ValidationError.
 	}
-	if err := p.Validate(path); err != nil {
+	if err := p.Validate(label); err != nil {
 		return nil, err //nolint:wrapcheck // already a *config.ValidationError.
 	}
 	return &p, nil
@@ -29,19 +47,35 @@ func Load(path string) (*Plugin, error) {
 // Missing plugins emit a stderr-style warning to `warnings` (mirroring the
 // Python `_load_plugin_data` warning) and are skipped.
 func LoadEnabled(pluginsDir string, enabled []string, warnings io.Writer) (map[string]*Plugin, error) {
+	return LoadEnabledFromFS(os.DirFS(pluginsDir), enabled, warnings, pluginsDir)
+}
+
+// LoadEnabledFromFS is the fs.FS-backed counterpart of LoadEnabled. The
+// optional pathPrefix is only used to decorate the warning message for
+// missing plugins so on-disk callers can keep their absolute-path
+// diagnostic; pass "" for embedded sources.
+func LoadEnabledFromFS(src fs.FS, enabled []string, warnings io.Writer, pathPrefix string) (map[string]*Plugin, error) {
 	out := make(map[string]*Plugin, len(enabled))
 	for _, id := range enabled {
-		path := filepath.Join(pluginsDir, id, "plugin.toml")
-		if _, err := os.Stat(path); err != nil {
-			if os.IsNotExist(err) {
+		rel := path.Join(id, "plugin.toml")
+		if _, err := fs.Stat(src, rel); err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
 				if warnings != nil {
-					fmt.Fprintf(warnings, "WARNING: Plugin '%s' not found at %s\n", id, path)
+					where := rel
+					if pathPrefix != "" {
+						where = filepath.Join(pathPrefix, id, "plugin.toml")
+					}
+					fmt.Fprintf(warnings, "WARNING: Plugin '%s' not found at %s\n", id, where)
 				}
 				continue
 			}
 			return nil, fmt.Errorf("stat plugin %q: %w", id, err)
 		}
-		p, err := Load(path)
+		label := rel
+		if pathPrefix != "" {
+			label = filepath.Join(pathPrefix, id, "plugin.toml")
+		}
+		p, err := loadFromFS(src, id, label)
 		if err != nil {
 			return nil, fmt.Errorf("load plugin %q: %w", id, err)
 		}

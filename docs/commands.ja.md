@@ -78,7 +78,7 @@ cocoon init --yes \
 
 ## `cocoon gen`
 
-`workspace.toml` を読み、プラグインを materialize し、`.devcontainer/` を出力。
+`workspace.toml` を読み、レイヤード FS (project ∪ user ∪ embedded) でプラグインカタログを解決し、`.devcontainer/` を出力。プラグインの install スクリプトは生成 Dockerfile 内に直接埋め込まれるため、ビルドはプロジェクトツリー以外を必要としない。
 
 ### フラグ
 

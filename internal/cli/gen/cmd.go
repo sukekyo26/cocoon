@@ -1,11 +1,13 @@
 // Package gencli implements `cocoon gen`, the central generator command.
 //
-// `cocoon gen` discovers workspace.toml from the current directory (or an
-// explicit --workspace path), materializes the embedded plugin catalog
-// into ~/.cocoon/cache/build-context, then writes Dockerfile,
+// `cocoon gen` discovers workspace.toml from the current directory (or
+// an explicit --workspace path), assembles the layered plugin catalog
+// (embedded < user < project), and writes Dockerfile,
 // docker-compose.yml, and (when [workspace].devcontainer is true)
-// devcontainer.json into .devcontainer/. Container start-up itself is
-// left to the user — `docker compose -f .devcontainer/docker-compose.yml
+// devcontainer.json into .devcontainer/. Plugin install scripts are
+// inlined directly into the generated Dockerfile so the build needs no
+// external context beyond the project tree. Container start-up itself
+// is left to the user — `docker compose -f .devcontainer/docker-compose.yml
 // up -d` or VS Code's "Reopen in Container" both consume the output.
 package gencli
 
@@ -35,9 +37,11 @@ var ErrFailure = errors.New("gen failed")
 const genLong = `cocoon gen — generate .devcontainer/{Dockerfile, docker-compose.yml, devcontainer.json}
 
 Discovers workspace.toml from the current directory (walking parent
-directories until a .git boundary or $HOME), materializes the embedded
-plugin catalog into ~/.cocoon/cache/build-context, and writes the
-generated artifacts under .devcontainer/.
+directories until a .git boundary or $HOME), assembles the layered
+plugin catalog (embedded < user < project), and writes the generated
+artifacts under .devcontainer/. Plugin install scripts are inlined into
+the generated Dockerfile, so the build needs no external context
+beyond the project tree.
 
 After generation, start the container yourself:
 
@@ -89,16 +93,6 @@ func runGen(stdout, stderr io.Writer, workspaceFlag, outputFlag string) error {
 		outDir = filepath.Dir(wsPath)
 	}
 
-	cacheDir, err := defaultBuildContextDir()
-	if err != nil {
-		return fmt.Errorf("%w: %w", ErrFailure, err)
-	}
-
-	ws, err := config.LoadWorkspace(wsPath)
-	if err != nil {
-		return fmt.Errorf("%w: load workspace.toml: %w", ErrFailure, err)
-	}
-
 	catalog, err := plugin.CatalogFS()
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrFailure, err)
@@ -110,15 +104,12 @@ func runGen(stdout, stderr io.Writer, workspaceFlag, outputFlag string) error {
 	projectPluginDir := filepath.Join(filepath.Dir(wsPath), ".cocoon", "plugins")
 	layered := plugin.NewLayeredFS(catalog, userPluginDir, projectPluginDir)
 	layered.LogOverrides(stderr)
-	if matErr := plugin.Materialize(layered, ws.Plugins.Enable, cacheDir); matErr != nil {
-		return fmt.Errorf("%w: materialize plugins: %w", ErrFailure, matErr)
-	}
 
-	ctx, err := generatecli.LoadContext(wsPath, cacheDir, stderr)
+	ctx, err := generatecli.LoadContext(wsPath, layered, "", stderr)
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrFailure, err)
 	}
-	arts, err := generatecli.BuildArtifacts(ctx, cacheDir, stderr)
+	arts, err := generatecli.BuildArtifacts(ctx, stderr)
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrFailure, err)
 	}
@@ -130,7 +121,7 @@ func runGen(stdout, stderr io.Writer, workspaceFlag, outputFlag string) error {
 	for _, a := range arts {
 		fmt.Fprintln(stdout, cat.Msg("gen_wrote", displayPath(cwd, filepath.Join(outDir, a.Rel))))
 	}
-	printNextSteps(stdout, cat, ws.Workspace.DevContainerOrDefault())
+	printNextSteps(stdout, cat, ctx.WS.Workspace.DevContainerOrDefault())
 	return nil
 }
 
@@ -174,14 +165,6 @@ func resolveWorkspace(flag string) (string, error) {
 		)
 	}
 	return found, nil
-}
-
-func defaultBuildContextDir() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("resolve home dir: %w", err)
-	}
-	return filepath.Join(home, ".cocoon", "cache", "build-context"), nil
 }
 
 // userPluginsDir returns ~/.cocoon/plugins, the LayeredFS user layer root.

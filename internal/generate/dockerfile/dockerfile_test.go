@@ -64,7 +64,7 @@ func TestGenerate_Snapshot(t *testing.T) {
 				t.Fatalf("load plugins: %v", err)
 			}
 
-			ctx := &generate.WorkspaceContext{WS: ws, PluginsDir: pluginsDir, Plugins: plugins, Warnings: &warns}
+			ctx := &generate.WorkspaceContext{WS: ws, PluginsFS: os.DirFS(pluginsDir), Plugins: plugins, Warnings: &warns}
 			got, err := dockerfile.Generate(ctx, dockerfile.Options{
 				WorkspaceRoot: root,
 				// Pin the embedded repo dir so the snapshot does not drift
@@ -196,7 +196,7 @@ func generateDebianWithMirrorURL(t *testing.T, mirrorURL string) string {
 		t.Fatalf("load plugins: %v", err)
 	}
 
-	ctx := &generate.WorkspaceContext{WS: ws, PluginsDir: pluginsDir, Plugins: plugins, Warnings: &warns}
+	ctx := &generate.WorkspaceContext{WS: ws, PluginsFS: os.DirFS(pluginsDir), Plugins: plugins, Warnings: &warns}
 	got, err := dockerfile.Generate(ctx, dockerfile.Options{
 		WorkspaceRoot: root,
 		RepoDir:       "cocoon",
@@ -343,7 +343,7 @@ func generateWithMirrorURLAndSources(t *testing.T, mirrorURL string, sources []c
 		t.Fatalf("load plugins: %v", err)
 	}
 
-	ctx := &generate.WorkspaceContext{WS: ws, PluginsDir: pluginsDir, Plugins: plugins, Warnings: &warns}
+	ctx := &generate.WorkspaceContext{WS: ws, PluginsFS: os.DirFS(pluginsDir), Plugins: plugins, Warnings: &warns}
 	got, err := dockerfile.Generate(ctx, dockerfile.Options{
 		WorkspaceRoot: root,
 		RepoDir:       "cocoon",
@@ -485,7 +485,7 @@ func generateInStagingRootWithProxy(t *testing.T, root, mirrorURL, httpProxy str
 		t.Fatalf("load plugins: %v", err)
 	}
 
-	ctx := &generate.WorkspaceContext{WS: ws, PluginsDir: pluginsDir, Plugins: plugins, Warnings: &warns}
+	ctx := &generate.WorkspaceContext{WS: ws, PluginsFS: os.DirFS(pluginsDir), Plugins: plugins, Warnings: &warns}
 	got, err := dockerfile.Generate(ctx, dockerfile.Options{
 		WorkspaceRoot: root,
 		RepoDir:       "cocoon",

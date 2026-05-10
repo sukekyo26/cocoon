@@ -14,6 +14,7 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- `cocoon gen` no longer materializes the plugin catalog into `~/.cocoon/cache/build-context/`. Each enabled plugin's `install.sh` (and `install_user.sh` when present) is now inlined directly into the generated `.devcontainer/Dockerfile` via a single-quoted bash heredoc, and the `additional_contexts: plugins:` entry is dropped from `docker-compose.yml`. The build needs no external Docker context beyond the project tree, which means `cocoon gen` works the same way from inside the dev container as from the host (the previous flow assumed the build always ran on the host because the cache lived under the host `$HOME`). Existing `~/.cocoon/cache/build-context/` directories are no longer recreated and can be removed manually with `rm -rf ~/.cocoon/cache/build-context`.
 - **BREAKING**: `cocoon plugin scaffold` now defaults `--plugins-dir` to `<workspace>/.cocoon/plugins` (auto-discovered from `workspace.toml`) instead of `./plugins`. Without `--plugins-dir` and outside a cocoon project, scaffold refuses with an actionable error rather than writing to `./plugins/<id>/`. Pass `--plugins-dir <path>` explicitly to override.
 
 ### Fixed

@@ -39,7 +39,6 @@ func TestGenerate_Snapshot(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -59,7 +58,7 @@ func TestGenerate_Snapshot(t *testing.T) {
 			}
 
 			ctx := &generate.WorkspaceContext{
-				WS: ws, PluginsDir: pluginsDir, Plugins: plugins, Warnings: &warns,
+				WS: ws, PluginsFS: os.DirFS(pluginsDir), Plugins: plugins, Warnings: &warns,
 			}
 			got, err := compose.Generate(ctx, compose.Options{Plugins: plugins, Warnings: &warns})
 			if err != nil {

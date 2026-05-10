@@ -1,10 +1,11 @@
 package dockerfile
 
 import (
+	"errors"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
+	"io/fs"
+	"path"
 	"sort"
 	"strings"
 
@@ -13,22 +14,42 @@ import (
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
 
-func fileExists(p string) bool {
-	st, err := os.Stat(p)
-	return err == nil && !st.IsDir()
+// errPluginsFSNil is returned when a Dockerfile renderer is asked to
+// read a plugin asset but the WorkspaceContext was constructed without
+// a PluginsFS. Wrapped (rather than emitted as a dynamic errors.New)
+// so callers can identify the cause via errors.Is.
+var errPluginsFSNil = errors.New("plugins fs is nil")
+
+// fileExistsInFS reports whether name is a regular file inside fsys.
+// Returns false on missing file, missing fs, or any other stat error
+// (callers treat plugins without an install.sh as a no-op).
+func fileExistsInFS(fsys fs.FS, name string) bool {
+	if fsys == nil {
+		return false
+	}
+	st, err := fs.Stat(fsys, name)
+	if err != nil {
+		return false
+	}
+	return !st.IsDir()
 }
 
-func joinPath(parts ...string) string { return filepath.Join(parts...) }
-
-// readEnvKeyOrder parses plugin.toml and returns the key declaration order of
-// the [install.env] table. Order matters because Dockerfile output mirrors
-// Python's dict insertion order, but go-toml/v2 decodes into Go maps which
-// are unordered.
-func readEnvKeyOrder(pluginTomlPath string) ([]string, error) {
-	data, err := os.ReadFile(pluginTomlPath)
-	if err != nil {
-		return nil, fmt.Errorf("read plugin.toml: %w", err)
+func readFileFromFS(fsys fs.FS, name string) ([]byte, error) {
+	if fsys == nil {
+		return nil, errPluginsFSNil
 	}
+	data, err := fs.ReadFile(fsys, name)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", name, err)
+	}
+	return data, nil
+}
+
+// readEnvKeyOrderBytes parses plugin.toml bytes and returns the key
+// declaration order of the [install.env] table. Order matters because
+// Dockerfile output mirrors Python's dict insertion order, but
+// go-toml/v2 decodes into Go maps which are unordered.
+func readEnvKeyOrderBytes(data []byte) []string {
 	var keys []string
 	inEnv := false
 	for _, raw := range strings.Split(string(data), "\n") {
@@ -50,7 +71,7 @@ func readEnvKeyOrder(pluginTomlPath string) ([]string, error) {
 			keys = append(keys, key)
 		}
 	}
-	return keys, nil
+	return keys
 }
 
 // pluginSnippets describes the install/install_user snippets generated for one
@@ -74,7 +95,7 @@ type shellEnv struct {
 func buildPluginSnippets(
 	id string,
 	p *plugin.Plugin,
-	pluginsDir string,
+	pluginsFS fs.FS,
 	overrides map[string]config.PluginVersionOverride,
 	sh shellEnv,
 ) (pluginSnippets, bool, error) {
@@ -89,8 +110,10 @@ func buildPluginSnippets(
 		}
 	}
 
-	hasInstall := fileExists(joinPath(pluginsDir, id, "install.sh"))
-	hasUserInstall := fileExists(joinPath(pluginsDir, id, "install_user.sh"))
+	installPath := path.Join(id, "install.sh")
+	userPath := path.Join(id, "install_user.sh")
+	hasInstall := fileExistsInFS(pluginsFS, installPath)
+	hasUserInstall := fileExistsInFS(pluginsFS, userPath)
 	if !hasInstall && !hasUserInstall && len(install.BuildArgs) == 0 && len(install.Env) == 0 {
 		return pluginSnippets{install: "", userInstall: "", requiresRoot: false}, false, nil
 	}
@@ -106,9 +129,13 @@ func buildPluginSnippets(
 
 	out := pluginSnippets{install: "", userInstall: "", requiresRoot: install.RequiresRoot}
 	if hasInstall {
-		snippet := renderInstallRun(id, "# Install "+comment, argLines, "install.sh",
+		body, err := readFileFromFS(pluginsFS, installPath)
+		if err != nil {
+			return pluginSnippets{}, false, err
+		}
+		snippet := renderInstallRun(id, "# Install "+comment, argLines, body,
 			versionCapable, hasOverride, override, install.BuildArgs, sh)
-		envBlock, err := renderEnvBlock(install.Env, joinPath(pluginsDir, id, "plugin.toml"))
+		envBlock, err := renderEnvBlock(install.Env, pluginsFS, id)
 		if err != nil {
 			return pluginSnippets{}, false, err
 		}
@@ -118,20 +145,25 @@ func buildPluginSnippets(
 		out.install = snippet
 	}
 	if hasUserInstall {
-		out.userInstall = renderInstallRun(id, "# Configure "+comment+" (user)", nil, "install_user.sh",
+		body, err := readFileFromFS(pluginsFS, userPath)
+		if err != nil {
+			return pluginSnippets{}, false, err
+		}
+		out.userInstall = renderInstallRun(id, "# Configure "+comment+" (user)", nil, body,
 			versionCapable, hasOverride, override, install.BuildArgs, sh)
 	}
 	return out, true, nil
 }
 
-func renderEnvBlock(env map[string]string, pluginTomlPath string) (string, error) {
+func renderEnvBlock(env map[string]string, pluginsFS fs.FS, id string) (string, error) {
 	if len(env) == 0 {
 		return "", nil
 	}
-	keys, err := readEnvKeyOrder(pluginTomlPath)
+	tomlBytes, err := readFileFromFS(pluginsFS, path.Join(id, "plugin.toml"))
 	if err != nil {
 		return "", err
 	}
+	keys := readEnvKeyOrderBytes(tomlBytes)
 	envLines := make([]string, 0, len(keys))
 	for _, k := range keys {
 		if v, ok := env[k]; ok {
@@ -165,7 +197,7 @@ type snippetGroups struct {
 func collectPluginSnippets(
 	plugins map[string]*plugin.Plugin,
 	enabled []string,
-	pluginsDir string,
+	pluginsFS fs.FS,
 	overrides map[string]config.PluginVersionOverride,
 	sh shellEnv,
 ) (snippetGroups, error) {
@@ -175,7 +207,7 @@ func collectPluginSnippets(
 		if !ok {
 			continue
 		}
-		snips, emit, err := buildPluginSnippets(id, p, pluginsDir, overrides, sh)
+		snips, emit, err := buildPluginSnippets(id, p, pluginsFS, overrides, sh)
 		if err != nil {
 			return snippetGroups{root: nil, nonRoot: nil, userPost: nil}, err
 		}
@@ -199,7 +231,7 @@ func collectPluginSnippets(
 func generatePluginInstalls(
 	plugins map[string]*plugin.Plugin,
 	enabled []string,
-	pluginsDir string,
+	pluginsFS fs.FS,
 	extraUserDirs []string,
 	overrides map[string]config.PluginVersionOverride,
 	warnings io.Writer,
@@ -212,7 +244,7 @@ func generatePluginInstalls(
 	}
 
 	dirBlock := generateUserDirsBlock(collectAllUserDirs(plugins, enabled, extraUserDirs))
-	g, err := collectPluginSnippets(plugins, enabled, pluginsDir, overrides, sh)
+	g, err := collectPluginSnippets(plugins, enabled, pluginsFS, overrides, sh)
 	if err != nil {
 		return "", err
 	}
@@ -245,39 +277,49 @@ func generatePluginInstalls(
 }
 
 type installRunData struct {
-	Comment  string
-	ArgLines []string
-	PluginID string
-	Script   string
-	EnvPairs []string
+	Comment    string
+	ArgLines   []string
+	EnvPairs   []string
+	ScriptBody string
 }
 
+// installRunTmpl emits the plugin install script as a single RUN with
+// the shell body inlined via a quoted heredoc. Single-quoted
+// 'COCOON_PLUGIN_EOF' suppresses parameter and command substitution so
+// the catalog install.sh contents land verbatim, and per-RUN env vars
+// (PIN / RC_FILE / etc.) stay scoped to that step rather than leaking
+// into subsequent layers.
 var installRunTmpl = tmplx.MustParse("dockerfile-plugin-install", `{{ .Comment }}
 {{- range .ArgLines }}
 {{ . }}
 {{- end }}
-RUN --mount=type=bind,from=plugins,source={{ .PluginID }},target=/tmp/plugin \
-{{- range .EnvPairs }}
-    {{ . }} \
-{{- end }}
-    bash /tmp/plugin/{{ .Script }}`, nil)
+RUN {{ range .EnvPairs }}{{ . }} {{ end }}bash <<'COCOON_PLUGIN_EOF'
+{{ .ScriptBody }}COCOON_PLUGIN_EOF`, nil)
 
+// renderInstallRun returns the rendered RUN block. scriptBody is the
+// raw install.sh contents and should end with a newline so the closing
+// COCOON_PLUGIN_EOF starts on its own line; renderInstallRun normalises
+// the trailing newline so callers can pass either flavour.
 func renderInstallRun(
 	pluginID, comment string,
 	argLines []string,
-	script string,
+	scriptBody []byte,
 	versionCapable, hasOverride bool,
 	override config.PluginVersionOverride,
 	buildArgs []string,
 	sh shellEnv,
 ) string {
+	_ = pluginID // reserved for future log/comment hooks; kept to preserve callers.
 	envPairs := buildInstallEnvPairs(versionCapable, hasOverride, override, buildArgs, sh)
+	body := string(scriptBody)
+	if !strings.HasSuffix(body, "\n") {
+		body += "\n"
+	}
 	out, err := tmplx.Render(installRunTmpl, installRunData{
-		Comment:  comment,
-		ArgLines: argLines,
-		PluginID: pluginID,
-		Script:   script,
-		EnvPairs: envPairs,
+		Comment:    comment,
+		ArgLines:   argLines,
+		EnvPairs:   envPairs,
+		ScriptBody: body,
 	})
 	if err != nil {
 		// Static template, well-formed input — unreachable in practice.

@@ -3,6 +3,7 @@ package generate
 import (
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,12 +14,16 @@ import (
 
 // WorkspaceContext is a normalized read-only view over a workspace.toml that
 // generator subpackages consume. It wraps a typed *config.Workspace (already
-// validated upstream) and the per-workspace plugin cache loaded from
-// PluginsDir, exposing accessor methods that apply defaults and deterministic
-// ordering so generators can stay free of TOML-shape concerns.
+// validated upstream) and the per-workspace plugin file source so
+// generators can read install scripts and plugin assets directly without
+// staging them on the host filesystem first.
 type WorkspaceContext struct {
-	WS         *config.Workspace
-	PluginsDir string
+	WS *config.Workspace
+	// PluginsFS is the layered file source rooted at the plugin catalog
+	// (each id is a top-level entry). dockerfile/plugins.go reads
+	// install.sh / install_user.sh through this so the catalog can be
+	// embedded, on-disk, or LayeredFS-merged transparently.
+	PluginsFS fs.FS
 	// ProjectDir is the directory holding workspace.toml. envfile uses its
 	// basename as COMPOSE_PROJECT_NAME so the docker-compose namespace
 	// matches the project root the user invoked `cocoon gen` against,

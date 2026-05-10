@@ -32,7 +32,7 @@ func TestGeneratePluginInstalls_NoRedundantUserToggle(t *testing.T) {
 	seedPluginInstall(t, pluginsDir, "needs-root")
 
 	out, err := generatePluginInstalls(
-		plugins, enabled, pluginsDir, nil,
+		plugins, enabled, os.DirFS(pluginsDir), nil,
 		map[string]config.PluginVersionOverride{},
 		&bytes.Buffer{},
 		shellEnv{rcFileAbs: "/home/${USERNAME}/.bashrc", rcSyntax: "posix", loginShell: "bash"},
@@ -52,6 +52,73 @@ func TestGeneratePluginInstalls_NoRedundantUserToggle(t *testing.T) {
 	}
 	if !strings.Contains(out, "# Install Needs Root") {
 		t.Errorf("output missing root-bucket install snippet:\n%s", out)
+	}
+}
+
+// TestRenderInstallRun_InlineHeredoc locks the contract documented on
+// installRunTmpl: install.sh contents land verbatim under a quoted
+// `<<'COCOON_PLUGIN_EOF' … COCOON_PLUGIN_EOF` heredoc, the body has a
+// trailing newline normalised, and the bind-mount form is gone.
+func TestRenderInstallRun_InlineHeredoc(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name           string
+		script         []byte
+		wantContains   []string
+		wantNotContain []string
+	}{
+		{
+			name:   "verbatim_body_with_trailing_newline",
+			script: []byte("set -e\necho hi\n"),
+			wantContains: []string{
+				"bash <<'COCOON_PLUGIN_EOF'\nset -e\necho hi\nCOCOON_PLUGIN_EOF",
+			},
+		},
+		{
+			name:   "missing_trailing_newline_is_normalised",
+			script: []byte("echo hi"),
+			wantContains: []string{
+				"bash <<'COCOON_PLUGIN_EOF'\necho hi\nCOCOON_PLUGIN_EOF",
+			},
+		},
+		{
+			name:   "dollar_sequences_are_preserved_verbatim",
+			script: []byte("echo $HOME ${PIN}\n"),
+			wantContains: []string{
+				"bash <<'COCOON_PLUGIN_EOF'\necho $HOME ${PIN}\nCOCOON_PLUGIN_EOF",
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := renderInstallRun(
+				"my-plugin", "# Install Stuff", nil, tc.script,
+				false, false, config.PluginVersionOverride{},
+				nil,
+				shellEnv{
+					rcFileAbs:  "/home/${USERNAME}/.bashrc",
+					rcSyntax:   "posix",
+					loginShell: "bash",
+				},
+			)
+			if strings.Contains(got, "--mount=type=bind,from=plugins") {
+				t.Errorf("output still references the old bind-mount build context:\n%s", got)
+			}
+			for _, want := range tc.wantContains {
+				if !strings.Contains(got, want) {
+					t.Errorf("missing %q\n--- got ---\n%s", want, got)
+				}
+			}
+			for _, bad := range tc.wantNotContain {
+				if strings.Contains(got, bad) {
+					t.Errorf("must not contain %q\n--- got ---\n%s", bad, got)
+				}
+			}
+		})
 	}
 }
 
