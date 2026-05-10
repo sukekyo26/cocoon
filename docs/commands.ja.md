@@ -1,5 +1,8 @@
 # コマンドリファレンス
 
+> [!WARNING]
+> cocoon は v0.x（alpha）開発段階です。お使いになる場合は、1.0 までに CLI フラグ・サブコマンドが変更され得ること、各リリースに breaking change が含まれうることをご了承のうえご利用ください。詳細は [CHANGELOG](CHANGELOG.ja.md) と README の「プロジェクトステータス」を参照してください。
+
 `cocoon` バイナリが提供する全コマンドのリファレンス。
 
 ## クイックリファレンス
@@ -40,6 +43,7 @@
 | `--no-certificates` | bool | `[certificates]` セクション省略を強制（デフォルト）。 |
 | `--apt-categories <ids>` | string | カンマ区切り apt カテゴリ ID (プロンプトをスキップ)。 |
 | `--plugins <ids>` | string | カンマ区切りで有効化するプラグイン ID。 |
+| `--plugin-versions <id>=<ref>,...` | string | カンマ区切りの `<id>=<ref>` でプラグインを pin する。各 `<id>` は `--plugins` にも含まれ、かつ `version_capable = true` である必要があり、重複は不可。`[plugins.versions]` ブロックを生成 `workspace.toml` に直接書き込む。 |
 | `--alias-bundles <ids>` | string | カンマ区切りエイリアスバンドル ID (例: `git,ls`)。 |
 | `--force` | bool | 既存 `workspace.toml` を上書き。 |
 
@@ -55,8 +59,9 @@
 6. alias bundles (multi-select)
 7. mount range
 8. devcontainer y/n
-9. apt categories (multi-select)
-10. plugins (multi-select)
+9. certificates y/n (`~/.cocoon/certs/` からの TLS 自動取り込みを opt-in。デフォルト no)
+10. apt categories (multi-select)
+11. plugins (multi-select)
 
 ### 例
 
@@ -313,3 +318,13 @@ cocoon completion powershell | Out-String | Invoke-Expression
 | `1` | 失敗 (`ErrFailure` ラップ) |
 | `2` | usage エラー (`ErrUsage` ラップ) |
 | `100` | `cocoon self-update --check-only`: 更新あり |
+
+---
+
+## 削除済みコマンド
+
+以下のノウングループ・サブコマンドは過去のリリースに存在しましたが **削除済み** です。古いコマンドを探して辿り着いた読者向けに、移行先を記載します。完全な移行手順は [CHANGELOG](CHANGELOG.ja.md) を参照してください。
+
+- **`cocoon config` (ノウングループ全体)** — `get` / `list` / `volumes` / `plugin-get` / `plugin-list` / `plugin-volumes` / `plugins-table` / `validate-workspace` / `validate-plugins` / `has-section` / `list-sidecars` / `dump-devcontainer` / `dump-repositories` / `repositories` / `format-repositories`。これらは引退済みの bash entry-point スクリプト用の低レベル TOML アクセサでした。`cocoon config` でスクレイプしていた外部スクリプトは専用の TOML パーサ (`tomlq` / `taplo` / 小さな Go / Python ヘルパ) に切り替えてください。
+- **`cocoon plugin add`** — 代わりに `[plugins].enable` に id を列挙してください（埋め込みカタログは LayeredFS でコピーなしに公開されます）。埋め込みプラグインを改変したい場合は `cocoon plugin scaffold <new-id>` で新しい id を作りロジックを移植する手順がサポート対象です。
+- **`cocoon plugin remove`** — `rm -rf ~/.cocoon/plugins/<id>` (ユーザースコープ) もしくは `rm -rf <workspace>/.cocoon/plugins/<id>` (プロジェクトスコープ) で代替できます。

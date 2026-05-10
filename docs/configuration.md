@@ -1,5 +1,8 @@
 # Configuration (`workspace.toml`)
 
+> [!WARNING]
+> cocoon is in v0.x (alpha). By using it, please understand and accept that the `workspace.toml` schema, the CLI flags, and the plugin contracts may change before 1.0, and that breaking changes can land in any release. See the [CHANGELOG](../CHANGELOG.md) and the README's "Project status" section.
+
 `workspace.toml` is the single source of truth that drives `cocoon gen`. This page documents every section and field accepted by the schema.
 
 `cocoon init` writes a fresh file with sensible defaults plus commented-out templates for opt-in features. For most projects, editing the generated file is enough; this reference covers every accepted field for when you need it.
@@ -124,15 +127,7 @@ env     = { EDITOR = "vim", PAGER = "less -R" }
 
 > `EDITOR=vim` / `nano` requires the `text-editors` apt category. `EDITOR=code` works when the container is launched from VS Code Dev Containers (which injects the `code` shim). `PAGER=less` requires the `utilities` apt category.
 
-`[container.shell]` is for project-level settings checked into the repo. For **per-user, container-rebuild-persistent** edits, the rc file additionally sources `~/.cocoon/.shellrc` (or `~/.cocoon/.shellrc.fish` for fish) on every shell start. That path is backed by a Docker named volume (`cocoon`), so user edits survive `docker compose down && up --build`. Edit it from inside the container:
-
-```bash
-docker compose -f .devcontainer/docker-compose.yml exec dev bash -lc 'vim ~/.cocoon/.shellrc'
-```
-
-(Pick whichever editor your image has installed; `bash -lc` ensures the in-container `EDITOR` / `PATH` resolve, which would not happen if the editor were named via `"$EDITOR"` at the host shell.)
-
-The volume is reset only by `docker compose down -v`. The path lives **inside the container only** — host `~/.cocoon/` is unrelated (it is cocoon CLI's local working area for plugin overlays and certificates).
+`[container.shell]` is for project-level settings checked into the repo. For **per-user, container-rebuild-persistent** edits, the rc file also sources `~/.cocoon/.shellrc` (or `~/.cocoon/.shellrc.fish` for fish) on every shell start; that path is backed by a Docker named volume so edits survive `docker compose down && up --build` and are reset only by `docker compose down -v`. See ["Shell injection" in `architecture.md`](architecture.md#shell-injection) for how the rc file is composed at build time and how the in-container `~/.cocoon/` differs from the host's cocoon CLI working area.
 
 ### `[container.hosts]`
 

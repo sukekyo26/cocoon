@@ -1,5 +1,8 @@
 # アーキテクチャ
 
+> [!WARNING]
+> cocoon は v0.x（alpha）開発段階です。お使いになる場合は、1.0 までに CLI フラグ・`workspace.toml` スキーマ・プラグイン契約が変更され得ること、各リリースに breaking change が含まれうることをご了承のうえご利用ください。詳細は [CHANGELOG](CHANGELOG.ja.md) と README の「プロジェクトステータス」を参照してください。
+
 ## 設計思想
 
 cocoon はプロジェクト直下の `workspace.toml` を読み、レイヤード FS でプラグイン資産を解決し、`.devcontainer/` 一式を書き出すジェネレータです。コンテナのライフサイクル (build / up / down / exec) は `docker compose` か VS Code Dev Containers が担当します。

@@ -1,5 +1,8 @@
 # Plugins
 
+> [!WARNING]
+> cocoon is in v0.x (alpha). By using it, please understand and accept that the plugin contracts (`plugin.toml` schema, install-script env vars, version-pin layout) may change before 1.0, and that breaking changes can land in any release. See the [CHANGELOG](../CHANGELOG.md) and the README's "Project status" section.
+
 This page is the single source of truth for **plugin authoring**:
 the `plugin.toml` schema, the rules for `install.sh` and
 `install_user.sh`, the environment variables those scripts receive,
@@ -10,7 +13,7 @@ only need one thing: list the plugin's id in `[plugins].enable` in
 `workspace.toml`. The rest of this page is for people writing or
 modifying a plugin.
 
-## 1. What a plugin is
+## What a plugin is
 
 A plugin is a self-contained installer that the dockerfile generator
 folds into the build. It has one required file — `plugin.toml`,
@@ -22,12 +25,12 @@ which describes the plugin — and up to two optional shell scripts:
 - `install_user.sh` runs **always** as the unprivileged user
   after `install.sh`. It exists to handle the small set of cases
   where root-owned install needs to be paired with user-owned
-  configuration (see §5).
+  configuration (see "`install.sh` vs `install_user.sh`" below).
 
 The whole point of plugins is to keep cocoon's generator small while
 still letting users add anything that is not in `[apt].packages`.
 
-## 2. The three layers
+## The three layers
 
 Plugins are read from a layered filesystem that resolves
 **project > user > embedded** priority:
@@ -52,13 +55,13 @@ disk, so this shortcut requires either a `git clone` of cocoon
 or unpacking a source tarball (e.g. the GitHub Release source
 archive).
 
-## 3. Directory layout
+## Directory layout
 
 ```
 plugins/<id>/
 ├── plugin.toml         # required
 ├── install.sh          # optional — see below
-└── install_user.sh     # optional (only when §5 applies)
+└── install_user.sh     # optional (only when "install.sh vs install_user.sh" applies)
 ```
 
 A plugin's **install snippet** (the `# Install …` comment + RUN block in
@@ -81,7 +84,7 @@ separate path that produces the `mkdir -p` / `chown` block at the top
 of the install phase and the named-volume declaration in
 `docker-compose.yml`. Just no per-plugin install snippet.
 
-## 4. `plugin.toml` schema
+## `plugin.toml` schema
 
 | Section | Field | Type | Default | Required | Meaning |
 |---|---|---|---|---|---|
@@ -94,14 +97,14 @@ of the install phase and the named-volume declaration in
 | `[install]`  | `build_args`      | list of strings    | `[]`  |   | Names of build-time variables (e.g. `DOCKER_GID`) the plugin consumes. The generator emits matching `ARG <name>` lines once per plugin (next to whichever of `install.sh` / `install_user.sh` runs first) and threads `<name>="${<name>}"` into the per-RUN env prefix of every hook, so both `install.sh` and `install_user.sh` can read `$<name>` as a normal env var. ARG scope is stage-wide, so a single declaration covers both RUNs. Names match `^[A-Z_][A-Z0-9_]*$`. |
 | `[install]`  | `env`             | map<string,string> | `{}`  |   | `ENV` lines emitted after the install runs. Values can reference earlier `ENV`/`ARG` vars. |
 | `[install]`  | `volumes`         | list of strings    | `[]`  |   | Per-user paths under `/home/${USERNAME}/<dir>`; each one is `mkdir -p`'d, `chown`'d, and declared as a docker named volume so its contents persist across rebuilds. |
-| `[version]`  | `version_capable` | bool               | —     | ✓ | If true, `install.sh` accepts `$PIN` and optionally `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` (see §7). |
+| `[version]`  | `version_capable` | bool               | —     | ✓ | If true, `install.sh` accepts `$PIN` and optionally `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` (see "Versioned plugins" below). |
 
 Strict unmarshal: unknown top-level fields and unknown keys inside
 known sections are rejected loud. If you see `unknown field "foo"`
 when loading a plugin, something in `plugin.toml` was renamed or
 removed — check this page for the current schema.
 
-## 5. `install.sh` vs `install_user.sh`
+## `install.sh` vs `install_user.sh`
 
 Most plugins only need `install.sh`. Reach for `install_user.sh`
 when **all** of these are true:
@@ -139,7 +142,7 @@ If there is no rc edit and no user-owned config to write, you don't
 need `install_user.sh`. The current catalog reflects this: starship
 is the only plugin that uses it.
 
-## 6. Environment variables passed to install scripts
+## Environment variables passed to install scripts
 
 Both scripts run inside `bash <<'COCOON_PLUGIN_EOF' … COCOON_PLUGIN_EOF`.
 The single-quoted heredoc terminator means the body passes through
@@ -181,7 +184,7 @@ itself anywhere in `install.sh` / `install_user.sh` — that would
 close the heredoc early. The generator detects this and fails loud
 (`ErrHeredocCollision`).
 
-## 7. Versioned plugins (`version_capable = true`)
+## Versioned plugins (`version_capable = true`)
 
 A versioned plugin agrees to:
 
@@ -209,7 +212,7 @@ full flag list.
 Plugins where `version_capable = false` ignore `$PIN` entirely;
 the pin block has no effect at `gen` time for those.
 
-## 8. Catalog tour
+## Catalog tour
 
 Use these embedded plugins as templates when writing your own:
 
@@ -227,12 +230,13 @@ Use these embedded plugins as templates when writing your own:
 - **`lazygit`** — `tarball` template, no `[install.env]`. Smallest
   versioned plugin in the catalog.
 
-## 9. Troubleshooting
+## Troubleshooting
 
 - **`unknown field "<x>"` from `cocoon plugin show` / `gen`** — your
   `plugin.toml` carries a field that was renamed or removed. Cross
-  reference §4 for the current schema. Common offenders are old
-  fields that were dropped during refactors.
+  reference the "`plugin.toml` schema" section above for the current
+  schema. Common offenders are old fields that were dropped during
+  refactors.
 - **`ErrHeredocCollision: plugin "x" contains the literal
   COCOON_PLUGIN_EOF`** — your `install.sh` has a line that exactly
   matches the heredoc terminator. Rename the marker inside the

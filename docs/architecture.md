@@ -1,5 +1,8 @@
 # Architecture
 
+> [!WARNING]
+> cocoon is in v0.x (alpha). By using it, please understand and accept that the CLI flags, `workspace.toml` schema, and plugin contracts may change before 1.0, and that breaking changes can land in any release. See the [CHANGELOG](../CHANGELOG.md) and the README's "Project status" section.
+
 ## Design philosophy
 
 cocoon reads a project-local `workspace.toml`, assembles the relevant plugin assets via a layered file source, and writes a `.devcontainer/` stack. Container lifecycle (build / up / down / exec) is handled by `docker compose` or VS Code Dev Containers.

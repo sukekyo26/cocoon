@@ -1,5 +1,8 @@
 # Commands
 
+> [!WARNING]
+> cocoon is in v0.x (alpha). By using it, please understand and accept that the CLI flags and subcommands may change before 1.0, and that breaking changes can land in any release. See the [CHANGELOG](../CHANGELOG.md) and the README's "Project status" section.
+
 Reference for every command exposed by the `cocoon` binary.
 
 ## Quick reference
@@ -40,6 +43,7 @@ Generate `workspace.toml` in the current directory.
 | `--no-certificates` | bool | Force-disable; omit the `[certificates]` section (default). |
 | `--apt-categories <ids>` | string | Comma-separated apt category IDs (skips the prompt). |
 | `--plugins <ids>` | string | Comma-separated plugin IDs to enable. |
+| `--plugin-versions <id>=<ref>,...` | string | Comma-separated `<id>=<ref>` pins for `version_capable` plugins. Each `<id>` must also appear in `--plugins`, must be `version_capable`, and may not repeat. Emits a `[plugins.versions]` block directly in the generated `workspace.toml`. |
 | `--alias-bundles <ids>` | string | Comma-separated shell-alias bundle IDs (e.g. `git,ls`). |
 | `--force` | bool | Overwrite an existing `workspace.toml`. |
 
@@ -55,8 +59,9 @@ When run without `--yes`, prompts are shown one screen at a time:
 6. alias bundles (multi-select)
 7. mount range
 8. devcontainer y/n
-9. apt categories (multi-select)
-10. plugins (multi-select)
+9. certificates y/n (opt in to host TLS auto-bake from `~/.cocoon/certs/`; default no)
+10. apt categories (multi-select)
+11. plugins (multi-select)
 
 ### Examples
 
@@ -313,3 +318,13 @@ cocoon completion powershell | Out-String | Invoke-Expression
 | `1` | Failure (`ErrFailure`-wrapped) |
 | `2` | Usage error (`ErrUsage`-wrapped) |
 | `100` | `cocoon self-update --check-only`: an update is available |
+
+---
+
+## Removed commands
+
+The following noun groups and subcommands existed in earlier releases and have been **removed**. They are documented here so readers searching for an old command know where they went; full migration notes live in the [CHANGELOG](../CHANGELOG.md).
+
+- **`cocoon config` (entire noun group)** — `get`, `list`, `volumes`, `plugin-get`, `plugin-list`, `plugin-volumes`, `plugins-table`, `validate-workspace`, `validate-plugins`, `has-section`, `list-sidecars`, `dump-devcontainer`, `dump-repositories`, `repositories`, `format-repositories`. These were low-level TOML accessors used by retired bash entry-point scripts. External scripts that scraped `workspace.toml` via `cocoon config` should switch to a dedicated TOML parser (`tomlq`, `taplo`, or a small Go / Python helper).
+- **`cocoon plugin add`** — replaced by listing the id under `[plugins].enable` (the embedded catalog is exposed through LayeredFS without a copy step). To customise an embedded plugin, run `cocoon plugin scaffold <new-id>` and adapt logic from there.
+- **`cocoon plugin remove`** — replaced by `rm -rf ~/.cocoon/plugins/<id>` (user scope) or `rm -rf <workspace>/.cocoon/plugins/<id>` (project scope).

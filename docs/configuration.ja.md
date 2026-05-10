@@ -1,5 +1,8 @@
 # 設定 (`workspace.toml`)
 
+> [!WARNING]
+> cocoon は v0.x（alpha）開発段階です。お使いになる場合は、1.0 までに `workspace.toml` スキーマ・CLI フラグ・プラグイン契約が変更され得ること、各リリースに breaking change が含まれうることをご了承のうえご利用ください。詳細は [CHANGELOG](CHANGELOG.ja.md) と README の「プロジェクトステータス」を参照してください。
+
 `workspace.toml` は `cocoon gen` の唯一の入力です。本ページではスキーマが受理する全セクション・全フィールドを説明します。
 
 `cocoon init` は妥当なデフォルトとコメントアウト済の雛形を含むファイルを書き出すので、多くの場合は生成物を編集するだけで済みます。本リファレンスは必要に応じて参照してください。
@@ -124,15 +127,7 @@ env     = { EDITOR = "vim", PAGER = "less -R" }
 
 > `EDITOR=vim` / `nano` は apt カテゴリ `text-editors` の有効化が前提。`EDITOR=code` は VS Code Dev Containers から起動したとき (VS Code が `code` シムを注入) に使えます。`PAGER=less` は apt カテゴリ `utilities` が前提。
 
-`[container.shell]` はリポジトリにチェックインするプロジェクト共通設定向けです。**個人ごと、コンテナリビルドを跨いで永続化したい**設定は、起動時に rc ファイルから自動 source される `~/.cocoon/.shellrc` (fish の場合 `~/.cocoon/.shellrc.fish`) に書きます。このパスは Docker named volume (`cocoon`) でバックされており、`docker compose down && up --build` を跨いでも編集が残ります。コンテナ内から編集してください:
-
-```bash
-docker compose -f .devcontainer/docker-compose.yml exec dev bash -lc 'vim ~/.cocoon/.shellrc'
-```
-
-(エディタはイメージにインストールされているものを選んでください。`bash -lc` を経由することでコンテナ内の `EDITOR` / `PATH` が解決されます。`"$EDITOR"` を直接渡すとホスト側で展開されてしまいます。)
-
-`docker compose down -v` でのみリセットされます。このパスは**コンテナ内専用**で、ホスト `~/.cocoon/` とは無関係です (ホスト側は cocoon CLI のプラグインオーバーレイ・ビルドコンテキスト・証明書置き場として独立)。
+`[container.shell]` はリポジトリにチェックインするプロジェクト共通設定向けです。**個人ごと、コンテナリビルドを跨いで永続化したい**設定は、起動時に rc ファイルから自動 source される `~/.cocoon/.shellrc` (fish の場合 `~/.cocoon/.shellrc.fish`) に書いてください。このパスは Docker named volume でバックされているため、`docker compose down && up --build` を跨いでも編集が残り、`docker compose down -v` でのみリセットされます。rc ファイルがビルド時にどう組み立てられるか、コンテナ内 `~/.cocoon/` とホスト側の cocoon CLI 作業領域がどう違うかは [`architecture.ja.md` の「シェル注入」](architecture.ja.md#シェル注入) を参照してください。
 
 ### `[container.hosts]`
 
