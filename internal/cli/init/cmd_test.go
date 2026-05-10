@@ -713,6 +713,100 @@ func TestRunInit_DevcontainerConflict(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // t.Chdir
+func TestRunInit_CertificatesConflict(t *testing.T) {
+	pinEnglish(t)
+	work := t.TempDir()
+	t.Chdir(work)
+	cmd := NewCommand(io.Discard, io.Discard)
+	cmd.SetArgs([]string{
+		"--yes", "--service-name", "x", "--username", "y",
+		"--certificates", "--no-certificates",
+	})
+	if err := cmd.Execute(); !errors.Is(err, ErrUsage) {
+		t.Errorf("conflicting --certificates flags should be ErrUsage, got %v", err)
+	}
+}
+
+// TestRunInit_CertificatesFlag verifies that --certificates emits the
+// live [certificates] section and the absence of the flag emits the
+// commented template. Both branches sit through the same renderer so
+// this protects against regressions where the toggle desyncs from the
+// emit path.
+//
+//nolint:paralleltest // t.Chdir
+func TestRunInit_CertificatesFlag(t *testing.T) {
+	pinEnglish(t)
+
+	cases := []struct {
+		name           string
+		extraArgs      []string
+		mustContain    []string
+		mustNotContain []string
+	}{
+		{
+			name:      "enabled",
+			extraArgs: []string{"--certificates"},
+			mustContain: []string{
+				"\n[certificates]\nenable = true\n",
+			},
+			mustNotContain: []string{
+				// Commented template (init_toml_template_certificates)
+				// uses "opt in to" wording; the live section header
+				// (init_toml_section_certificates) does not.
+				"opt in to TLS certificate auto-bake",
+				"# enable = true",
+			},
+		},
+		{
+			name:           "default-off",
+			extraArgs:      nil,
+			mustContain:    []string{"opt in to TLS certificate auto-bake", "# enable = true"},
+			mustNotContain: []string{"\n[certificates]\nenable = true\n"},
+		},
+		{
+			name:      "explicit-off",
+			extraArgs: []string{"--no-certificates"},
+			mustContain: []string{
+				"opt in to TLS certificate auto-bake",
+				"# enable = true",
+			},
+			mustNotContain: []string{"\n[certificates]\nenable = true\n"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			work := t.TempDir()
+			t.Chdir(work)
+			args := append([]string{
+				"--yes", "--service-name", "dev", "--username", "dev",
+				"--os", "ubuntu", "--os-version", "22.04",
+				"--mount-root", ".", "--no-devcontainer",
+			}, tc.extraArgs...)
+			cmd := NewCommand(io.Discard, io.Discard)
+			cmd.SetArgs(args)
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("init: %v", err)
+			}
+			body, err := os.ReadFile(filepath.Join(work, "workspace.toml"))
+			if err != nil {
+				t.Fatalf("read workspace.toml: %v", err)
+			}
+			out := string(body)
+			for _, want := range tc.mustContain {
+				if !strings.Contains(out, want) {
+					t.Errorf("workspace.toml missing %q\n--- got ---\n%s", want, out)
+				}
+			}
+			for _, mustNot := range tc.mustNotContain {
+				if strings.Contains(out, mustNot) {
+					t.Errorf("workspace.toml must not contain %q\n--- got ---\n%s", mustNot, out)
+				}
+			}
+		})
+	}
+}
+
 // ---------------------------------------------------------------------
 // Plugin selection: --plugins flag, conflicts validation, defaults.
 // ---------------------------------------------------------------------

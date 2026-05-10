@@ -73,6 +73,10 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 	cmd.Flags().StringVar(&flags.MountRoot, "mount-root", "", `mount range: "." (cwd, default) or ".." (parent)`)
 	cmd.Flags().BoolVar(&flags.Devcontainer, "devcontainer", false, "force-enable .devcontainer/devcontainer.json output")
 	cmd.Flags().BoolVar(&flags.NoDevcontainer, "no-devcontainer", false, "skip .devcontainer/devcontainer.json output")
+	cmd.Flags().BoolVar(&flags.Certificates, "certificates", false,
+		"force-enable [certificates] auto-bake from ~/.cocoon/certs/")
+	cmd.Flags().BoolVar(&flags.NoCertificates, "no-certificates", false,
+		"skip the [certificates] section (default off)")
 	cmd.Flags().StringVar(
 		&flags.AptCategories,
 		"apt-categories",
@@ -111,6 +115,8 @@ type initFlags struct {
 	MountRoot      string
 	Devcontainer   bool
 	NoDevcontainer bool
+	Certificates   bool
+	NoCertificates bool
 	AptCategories  string
 	Plugins        string
 	PluginVersions string
@@ -129,6 +135,8 @@ func zeroFlags() initFlags {
 		MountRoot:      "",
 		Devcontainer:   false,
 		NoDevcontainer: false,
+		Certificates:   false,
+		NoCertificates: false,
 		AptCategories:  "",
 		Plugins:        "",
 		PluginVersions: "",
@@ -155,6 +163,8 @@ type initAnswers struct {
 	MountRootSet      bool
 	Devcontainer      bool
 	DevcontainerSet   bool
+	Certificates      bool
+	CertificatesSet   bool
 	AptCategories     []string
 	AptSet            bool
 	Plugins           []string
@@ -179,6 +189,8 @@ func zeroAnswers() initAnswers {
 		MountRootSet:      false,
 		Devcontainer:      false,
 		DevcontainerSet:   false,
+		Certificates:      false,
+		CertificatesSet:   false,
 		AptCategories:     nil,
 		AptSet:            false,
 		Plugins:           nil,
@@ -193,6 +205,9 @@ func zeroAnswers() initAnswers {
 func runInit(cmd *cobra.Command, stdout, _ io.Writer, flags *initFlags) error {
 	if flags.Devcontainer && flags.NoDevcontainer {
 		return fmt.Errorf("%w: --devcontainer and --no-devcontainer are mutually exclusive", ErrUsage)
+	}
+	if flags.Certificates && flags.NoCertificates {
+		return fmt.Errorf("%w: --certificates and --no-certificates are mutually exclusive", ErrUsage)
 	}
 	cat := i18n.New(i18n.Detect())
 
@@ -226,6 +241,7 @@ func runInit(cmd *cobra.Command, stdout, _ io.Writer, flags *initFlags) error {
 		Aliases:        aliases,
 		MountRoot:      ans.MountRoot,
 		Devcontainer:   ans.Devcontainer,
+		Certificates:   ans.Certificates,
 		Packages:       pkgs,
 		Plugins:        ans.Plugins,
 		PluginVersions: ans.PluginVersions,
@@ -268,7 +284,7 @@ func collectAnswers(flags *initFlags, cat *i18n.Catalog, plugins map[string]*plu
 // the corresponding *Set flags. Empty flags leave the field zero so the
 // prompt or default layer knows to fill it in.
 //
-//nolint:gocognit,gocyclo // sequence of independent flag checks; splitting hides intent.
+//nolint:gocognit,gocyclo,funlen // sequence of independent flag checks; splitting hides intent.
 func applyFlags(flags *initFlags, plugins map[string]*plugin.Plugin) (initAnswers, error) {
 	ans := zeroAnswers()
 	if flags.ServiceName != "" {
@@ -325,6 +341,12 @@ func applyFlags(flags *initFlags, plugins map[string]*plugin.Plugin) (initAnswer
 		ans.Devcontainer, ans.DevcontainerSet = true, true
 	case flags.NoDevcontainer:
 		ans.Devcontainer, ans.DevcontainerSet = false, true
+	}
+	switch {
+	case flags.Certificates:
+		ans.Certificates, ans.CertificatesSet = true, true
+	case flags.NoCertificates:
+		ans.Certificates, ans.CertificatesSet = false, true
 	}
 	if flags.AptCategories != "" {
 		ids, err := parseAptCategories(flags.AptCategories)
@@ -385,6 +407,12 @@ func applyDefaults(ans initAnswers, plugins map[string]*plugin.Plugin) (initAnsw
 	}
 	if !ans.DevcontainerSet {
 		ans.Devcontainer, ans.DevcontainerSet = true, true
+	}
+	if !ans.CertificatesSet {
+		// Default off — most projects don't need a corp CA inside the
+		// container. Users opt in with --certificates or by editing
+		// workspace.toml after the fact.
+		ans.Certificates, ans.CertificatesSet = false, true
 	}
 	if !ans.AptSet {
 		ans.AptCategories, ans.AptSet = aptcategories.DefaultAptCategoryIDs(), true
@@ -479,6 +507,15 @@ func promptForMissing(ans initAnswers, cat *i18n.Catalog, plugins map[string]*pl
 			return ans, err
 		}
 		ans.DevcontainerSet = true
+	}
+	if !ans.CertificatesSet {
+		// Default off so the prompt's initial cursor sits on "No"; users
+		// who actually need a corp CA bake-in flip it to Yes.
+		ans.Certificates = false
+		if err := runSingleFieldForm(certificatesConfirm(cat, &ans.Certificates)); err != nil {
+			return ans, err
+		}
+		ans.CertificatesSet = true
 	}
 	if !ans.AptSet {
 		ans.AptCategories = aptcategories.DefaultAptCategoryIDs()
@@ -643,6 +680,15 @@ func devcontainerConfirm(cat *i18n.Catalog, target *bool) *huh.Confirm {
 	return huh.NewConfirm().
 		Title(cat.Msg("init_prompt_devcontainer")).
 		Description(cat.Msg("init_desc_devcontainer")).
+		Affirmative(cat.Msg("init_confirm_yes")).
+		Negative(cat.Msg("init_confirm_no")).
+		Value(target)
+}
+
+func certificatesConfirm(cat *i18n.Catalog, target *bool) *huh.Confirm {
+	return huh.NewConfirm().
+		Title(cat.Msg("init_prompt_certificates")).
+		Description(cat.Msg("init_desc_certificates")).
 		Affirmative(cat.Msg("init_confirm_yes")).
 		Negative(cat.Msg("init_confirm_no")).
 		Value(target)
@@ -969,6 +1015,7 @@ type containerSpec struct {
 	Aliases        map[string]string
 	MountRoot      string
 	Devcontainer   bool
+	Certificates   bool
 	Packages       []string
 	Plugins        []string
 	PluginVersions map[string]string
@@ -979,6 +1026,8 @@ type containerSpec struct {
 // because the file is committed and shared, the locale snapshot is whatever
 // the original `cocoon init` runner had — re-run with --force under a
 // different LANG to switch.
+//
+//nolint:funlen // sequence of independent section emits; splitting hides the resulting TOML's top-to-bottom structure.
 func renderWorkspaceToml(s containerSpec, cat *i18n.Catalog) string {
 	var sb strings.Builder
 	sb.WriteString(cat.Msg("init_toml_header"))
@@ -1060,10 +1109,21 @@ func renderWorkspaceToml(s containerSpec, cat *i18n.Catalog) string {
 		emitTemplate(&sb, cat, key)
 	}
 
+	// [certificates] is opt-in (default off). Emit the live section only
+	// when the user enables it; otherwise rely on the commented template
+	// below for discoverability.
+	if s.Certificates {
+		sb.WriteString(cat.Msg("init_toml_section_certificates"))
+		sb.WriteByte('\n')
+		sb.WriteString("[certificates]\n")
+		sb.WriteString("enable = true\n\n")
+	}
+
 	// Top-level opt-in extras at the end of the file. Order roughly
 	// follows "compose runtime knobs first, then host-side persistence,
-	// then locale + Dockerfile hooks, then sidecars + IDE config".
-	for _, key := range []string{
+	// then locale + Dockerfile hooks, then certificates, then sidecars +
+	// IDE config".
+	templateKeys := []string{
 		"init_toml_template_ports",
 		"init_toml_template_volumes",
 		"init_toml_template_env",
@@ -1071,9 +1131,15 @@ func renderWorkspaceToml(s containerSpec, cat *i18n.Catalog) string {
 		"init_toml_template_home_files",
 		"init_toml_template_locale",
 		"init_toml_template_dockerfile",
+	}
+	if !s.Certificates {
+		templateKeys = append(templateKeys, "init_toml_template_certificates")
+	}
+	templateKeys = append(templateKeys,
 		"init_toml_template_services",
 		"init_toml_template_devcontainer",
-	} {
+	)
+	for _, key := range templateKeys {
 		emitTemplate(&sb, cat, key)
 	}
 

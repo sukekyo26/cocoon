@@ -78,46 +78,13 @@ default = "bash"
 [plugins]
 enable = [
     "docker-cli",
-    "github-cli",
-    "claude-code",
-    "copilot-cli",
-    "proto",
-    "mise",
-    "uv",
-    "bun",
-    "rust",
-    "go",
-    "custom-ps1",
-    "nerd-fonts",
-    "terraform",
-    "opentofu",
 ]
 
-# [plugins.versions] — pinned versions for the enabled plugins above.
-#   Add checksum_amd64 / checksum_arm64 (64 lowercase hex chars) per block to verify install tarballs.
-[plugins.versions.bun]
-pin = "1.3.3"
-
-[plugins.versions.copilot-cli]
-pin = "0.0.369"
-
-[plugins.versions.go]
-pin = "1.23.4"
-
-[plugins.versions.mise]
-pin = "2025.12.0"
-
-[plugins.versions.opentofu]
-pin = "1.9.0"
-
-[plugins.versions.proto]
-pin = "0.46.1"
-
-[plugins.versions.terraform]
-pin = "1.10.5"
-
-[plugins.versions.uv]
-pin = "0.5.7"
+# [plugins.versions] — pin specific versions for version_capable plugins.
+#   Optional checksum_amd64 / checksum_arm64 (64 lowercase hex chars) verify install tarballs.
+# [plugins.versions]
+# go = { pin = "1.22.5" }
+# uv = { pin = "0.5.7", checksum_amd64 = "<sha256>" }
 
 # [apt] — extra apt packages installed on top of cocoon's minimal base + selected categories.
 #   Re-run `cocoon init --force` to change category checkboxes, or edit this list directly.
@@ -168,6 +135,13 @@ packages = [
 # url        = "https://download.opensuse.org/repositories/shells:fish:release:3/xUbuntu_24.04/"
 # key_url    = "https://download.opensuse.org/repositories/shells:fish:release:3/xUbuntu_24.04/Release.key"
 
+# [certificates] — TLS certificate auto-bake from ~/.cocoon/certs/ on the host.
+#   When enable = true the generators wire the host directory through to the build via
+#   docker-compose's additional_contexts and the Dockerfile's RUN --mount=type=bind, so any
+#   *.crt files placed there land in the container's trust store at build time. Default off.
+[certificates]
+enable = true
+
 # [ports] — host ports to forward into the container.
 #   Short form ("3000:3000") or long-form table; ranges and protocol/mode supported.
 # [ports]
@@ -207,15 +181,6 @@ packages = [
 # [dockerfile]
 # pre_user_setup = """RUN apt-get install -y my-extra-pkg"""
 # post_plugins   = """RUN echo done"""
-
-# [certificates] — opt in to TLS certificate auto-bake from ~/.cocoon/certs/.
-#   When enable = true, `cocoon gen` wires the host directory into the build via
-#   docker-compose's additional_contexts and the Dockerfile's RUN --mount=type=bind,
-#   so any *.crt files placed there land in the container's trust store at build time.
-#   Useful for Zscaler / corporate proxies / private CAs. Default off → no cert wiring
-#   in any generated artifact.
-# [certificates]
-# enable = true
 
 # [services.<name>] — sidecar services on the same Compose network (e.g. postgres, redis).
 #   Reachable from the dev container by service name. Multiple sidecars allowed.

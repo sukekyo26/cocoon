@@ -34,6 +34,8 @@ var messagesEN_init = map[string]string{
 	"init_option_mount_parent":          "Parent directory — sibling repos visible (..)",
 	"init_prompt_devcontainer":          "Generate .devcontainer/devcontainer.json for VS Code Dev Containers?",
 	"init_desc_devcontainer":            "Says yes if you ever open this repo in VS Code Dev Containers; harmless otherwise.",
+	"init_prompt_certificates":          "Bake user TLS certificates from ~/.cocoon/certs/ into the container image?",
+	"init_desc_certificates":            "Enable when your build needs a corp CA inside the container (Zscaler, internal proxies, etc.). When off, no cert wiring lands in the generated artifacts.",
 	"init_confirm_yes":                  "Yes",
 	"init_confirm_no":                   "No",
 	"init_prompt_apt":                   "Select common apt packages to install",
@@ -72,6 +74,10 @@ var messagesEN_init = map[string]string{
 		"#   Add checksum_amd64 / checksum_arm64 (64 lowercase hex chars) per block to verify install tarballs.",
 	"init_toml_section_apt": "# [apt] — extra apt packages installed on top of cocoon's minimal base + selected categories.\n" +
 		"#   Re-run `cocoon init --force` to change category checkboxes, or edit this list directly.",
+	"init_toml_section_certificates": "# [certificates] — TLS certificate auto-bake from ~/.cocoon/certs/ on the host.\n" +
+		"#   When enable = true the generators wire the host directory through to the build via\n" +
+		"#   docker-compose's additional_contexts and the Dockerfile's RUN --mount=type=bind, so any\n" +
+		"#   *.crt files placed there land in the container's trust store at build time. Default off.",
 	// init result + next steps
 	"init_wrote":             "wrote %s",
 	"init_next_header":       "Next steps:",
@@ -117,6 +123,8 @@ var messagesJA_init = map[string]string{
 	"init_option_mount_parent":          "親ディレクトリ — 兄弟リポジトリも見える (..)",
 	"init_prompt_devcontainer":          ".devcontainer/devcontainer.json を VS Code Dev Containers 用に生成しますか？",
 	"init_desc_devcontainer":            "VS Code Dev Containers で開く可能性があれば Yes。そうでなくても害はありません。",
+	"init_prompt_certificates":          "~/.cocoon/certs/ の TLS 証明書をコンテナイメージに取り込みますか？",
+	"init_desc_certificates":            "Zscaler や社内プロキシなど、build 中に corp CA を信頼させる必要がある場合に Yes。off の場合は生成物に cert 関連の配線は一切乗りません。",
 	"init_confirm_yes":                  "はい",
 	"init_confirm_no":                   "いいえ",
 	"init_prompt_apt":                   "インストールする apt パッケージのカテゴリを選択",
@@ -153,6 +161,10 @@ var messagesJA_init = map[string]string{
 		"#   再現性が必要なら [plugins.versions] でバージョン固定。",
 	"init_toml_section_plugins_versions": "# [plugins.versions] — 上で有効化したプラグインに対するバージョン固定。\n" +
 		"#   各ブロックに checksum_amd64 / checksum_arm64（64 文字小文字 hex）を足すと install 時のハッシュ検証が有効になる。",
+	"init_toml_section_certificates": "# [certificates] — ホスト側 ~/.cocoon/certs/ の TLS 証明書をコンテナイメージに自動取り込み (opt-in)。\n" +
+		"#   enable = true のときジェネレータが docker-compose の additional_contexts と Dockerfile の\n" +
+		"#   RUN --mount=type=bind を配線し、ホスト側 *.crt が build 時にトラストストアへマージされる。\n" +
+		"#   デフォルト off。",
 	"init_toml_section_apt": "# [apt] — cocoon の最小ベース + 選択カテゴリに追加する apt パッケージ。\n" +
 		"#   カテゴリのチェックを変えるなら `cocoon init --force` を再実行、または直接このリストを編集。",
 	// init result + next steps
