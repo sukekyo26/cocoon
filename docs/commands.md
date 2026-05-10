@@ -10,8 +10,6 @@ Reference for every command exposed by the `cocoon` binary.
 | `cocoon gen` | Generate `.devcontainer/` artifacts |
 | `cocoon plugin list` | List every available plugin (embedded + overlays) |
 | `cocoon plugin show <id>` | Print the resolved manifest for one plugin |
-| `cocoon plugin add <id>` | Copy a plugin into a user / project overlay |
-| `cocoon plugin remove <id>` | Delete a user / project overlay copy |
 | `cocoon plugin pin <id> <ref>` | Emit a `[plugins.versions.<id>]` block (stdout, or in-place with `--write`) |
 | `cocoon plugin scaffold <id>` | Create a new `<id>/` directory from a template |
 | `cocoon self-update` | Replace this binary with the latest GitHub release |
@@ -107,22 +105,19 @@ The generated `Dockerfile` / `docker-compose.yml` / `devcontainer.json` carry ce
 
 ## `cocoon plugin`
 
-Manage cocoon plugins. Plugins live in three layers, resolved with priority **project > user > embedded**:
+Inspect and author cocoon plugins. Plugins live in three layers, resolved with priority **project > user > embedded**:
 
 | Layer | Path | Source |
 |---|---|---|
-| project | `<workspace>/.cocoon/plugins/<id>/` | overlay copied via `add --scope project` or scaffolded in place |
-| user | `~/.cocoon/plugins/<id>/` | overlay copied via `add --scope user` (default) |
+| project | `<workspace>/.cocoon/plugins/<id>/` | overlay scaffolded in place or copied with `cp -r` |
+| user | `~/.cocoon/plugins/<id>/` | overlay copied with `cp -r` from another id |
 | embedded | `internal/plugin/catalog/<id>/` (compiled into the binary) | shipped with cocoon |
 
-The typical workflow is:
-
-1. `cocoon plugin add <id>` → copy an embedded plugin into a writable overlay
-2. edit `plugin.toml` / `install.sh` in that overlay
-3. add `<id>` to `[plugins].enable` in `workspace.toml`
-4. `cocoon gen && docker compose up -d --build`
+To enable an embedded plugin, just add its id to `[plugins].enable` in `workspace.toml`. To customise an embedded plugin, copy the embedded source into your overlay (`cp -r internal/plugin/catalog/<id> ~/.cocoon/plugins/`) or scaffold a new id with `cocoon plugin scaffold <new-id>`.
 
 Overlays are read at `gen` time only; placing files in `~/.cocoon/plugins/<id>/` does not enable a plugin on its own — `[plugins].enable` is the activation list.
+
+> Authoring a plugin? See [`docs/plugins.md`](plugins.md) for the full `plugin.toml` schema, the `install.sh` / `install_user.sh` rules, and the version-pin contract.
 
 ### `cocoon plugin list`
 
@@ -144,7 +139,7 @@ my-internal   user      true     internal CLI ...
 |---|---|
 | `--source <embedded\|user\|project>` | Filter to plugins resolved from a single layer (single value only). |
 
-**Gotchas:** when the same id exists in multiple layers, only the highest-priority layer is shown. Use `cocoon plugin remove --scope <layer>` to peel back overlays and reveal the next layer.
+**Gotchas:** when the same id exists in multiple layers, only the highest-priority layer is shown. Delete the overlay directory directly (e.g. `rm -rf ~/.cocoon/plugins/<id>`) to reveal the next layer.
 
 ### `cocoon plugin show <id>`
 
@@ -169,53 +164,6 @@ volumes: [/home/${USERNAME}/go]
 ```
 
 **Gotchas:** errors with `plugin "<id>" not found in any layer` if the id is unknown. `apt_packages` and `env` are sorted alphabetically for stable diffs — the order does not match `plugin.toml` source order.
-
-### `cocoon plugin add <id>`
-
-**Purpose:** copy an embedded plugin into a writable overlay so its `plugin.toml` / `install.sh` can be edited locally.
-
-**Example:**
-
-```console
-$ cocoon plugin add starship --scope user
-Plugin "starship" copied to /home/alice/.cocoon/plugins/starship (user overlay)
-$ $EDITOR ~/.cocoon/plugins/starship/install.sh
-```
-
-**Flags:**
-
-| Flag | Description |
-|---|---|
-| `--scope <user\|project>` | Where to copy. Default `user` (`~/.cocoon/plugins/<id>/`); `project` uses `<workspace>/.cocoon/plugins/<id>/`. |
-| `--force` | Overwrite an existing overlay copy (without `--force` an existing target is an error). |
-
-**Gotchas:**
-
-- An overlay copy is **not auto-enabled** — add `<id>` to `[plugins].enable` in `workspace.toml` and re-run `cocoon gen` for the change to take effect.
-- `--scope project` requires a discoverable `workspace.toml` from cwd; otherwise the command refuses with a usage error.
-- `*.sh` files are restored to mode `0755` even if the source umask was stricter.
-
-### `cocoon plugin remove <id>`
-
-**Purpose:** delete a user- or project-scope overlay copy. The embedded catalog is never touched.
-
-**Example:**
-
-```console
-$ cocoon plugin remove starship --scope user
-Plugin "starship" removed from /home/alice/.cocoon/plugins/starship
-```
-
-**Flags:**
-
-| Flag | Description |
-|---|---|
-| `--scope <user\|project>` | Which overlay to delete (**required**, no default). |
-
-**Gotchas:**
-
-- `--scope` is mandatory so you always confirm whether the user or project overlay is being deleted.
-- After removal, `cocoon plugin list` will surface the next-priority layer (or the embedded version) for the same id.
 
 ### `cocoon plugin pin <id> <ref>`
 

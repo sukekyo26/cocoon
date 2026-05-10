@@ -10,8 +10,6 @@
 | `cocoon gen` | `.devcontainer/` 配下の成果物を生成 |
 | `cocoon plugin list` | 利用可能な全プラグインを表示 (埋め込み + 上書き) |
 | `cocoon plugin show <id>` | 解決後の plugin マニフェストを表示 |
-| `cocoon plugin add <id>` | プラグインを user / project 上書き層にコピー |
-| `cocoon plugin remove <id>` | 上書き層のコピーを削除 |
 | `cocoon plugin pin <id> <ref>` | `[plugins.versions.<id>]` ブロックを生成 (stdout / `--write` で in-place) |
 | `cocoon plugin scaffold <id>` | テンプレートから新規 `<id>/` ディレクトリを作成 |
 | `cocoon self-update` | 最新 GitHub リリースで自分自身を置換 |
@@ -107,22 +105,19 @@ cocoon gen --workspace ./infra/workspace.toml --output ./infra
 
 ## `cocoon plugin`
 
-cocoon プラグインの管理。プラグインは 3 層に分かれ、優先度 **project > user > embedded** で解決される。
+cocoon プラグインの参照と作成支援。プラグインは 3 層に分かれ、優先度 **project > user > embedded** で解決される。
 
 | 層 | パス | 出所 |
 |---|---|---|
-| project | `<workspace>/.cocoon/plugins/<id>/` | `add --scope project` または同所への scaffold |
-| user | `~/.cocoon/plugins/<id>/` | `add --scope user` (デフォルト) |
+| project | `<workspace>/.cocoon/plugins/<id>/` | overlay (同所での scaffold か `cp -r`) |
+| user | `~/.cocoon/plugins/<id>/` | overlay (`cp -r` で他 id をコピー) |
 | embedded | `internal/plugin/catalog/<id>/` (バイナリに同梱) | cocoon 同梱カタログ |
 
-典型的な利用フロー:
-
-1. `cocoon plugin add <id>` で埋め込みプラグインを overlay にコピー
-2. その overlay 内の `plugin.toml` / `install.sh` を編集
-3. `workspace.toml` の `[plugins].enable` に `<id>` を追加
-4. `cocoon gen && docker compose up -d --build`
+埋め込みプラグインを使うだけなら `workspace.toml` の `[plugins].enable` に id を並べるだけでよい。embedded を改変したい場合は overlay にコピー (`cp -r internal/plugin/catalog/<id> ~/.cocoon/plugins/`) するか、`cocoon plugin scaffold <new-id>` で新規 id の雛形を生成する。
 
 overlay は `gen` 時にのみ参照される。`~/.cocoon/plugins/<id>/` にファイルを置いただけでは有効化されず、`[plugins].enable` への追加が必須。
+
+> プラグインを書く・改修するなら [`docs/plugins.ja.md`](plugins.ja.md) を参照 — `plugin.toml` の全フィールド、`install.sh` / `install_user.sh` の使い分け、バージョン pin の契約がまとまっている。
 
 ### `cocoon plugin list`
 
@@ -144,7 +139,7 @@ my-internal   user      true     internal CLI ...
 |---|---|
 | `--source <embedded\|user\|project>` | 単一層に絞って表示 (複数値不可)。 |
 
-**落とし穴:** 同 id が複数層にある場合、最高優先度の層のみ表示される。下位層を見たい場合は `cocoon plugin remove --scope <層>` で上位層を剥がす。
+**落とし穴:** 同 id が複数層にある場合、最高優先度の層のみ表示される。下位層を見たい場合は overlay ディレクトリを直接削除する（例: `rm -rf ~/.cocoon/plugins/<id>`）。
 
 ### `cocoon plugin show <id>`
 
@@ -169,53 +164,6 @@ volumes: [/home/${USERNAME}/go]
 ```
 
 **落とし穴:** id が見つからなければ `plugin "<id>" not found in any layer` エラー。`apt_packages` / `env` は安定化のためアルファベット順ソート — `plugin.toml` 上の記述順とは一致しない。
-
-### `cocoon plugin add <id>`
-
-**目的:** 埋め込みプラグインを書き込み可能な overlay にコピーし、`plugin.toml` / `install.sh` をローカルで編集可能にする。
-
-**例:**
-
-```console
-$ cocoon plugin add starship --scope user
-Plugin "starship" copied to /home/alice/.cocoon/plugins/starship (user overlay)
-$ $EDITOR ~/.cocoon/plugins/starship/install.sh
-```
-
-**フラグ:**
-
-| フラグ | 説明 |
-|---|---|
-| `--scope <user\|project>` | コピー先。デフォルト `user` (`~/.cocoon/plugins/<id>/`)。`project` は `<workspace>/.cocoon/plugins/<id>/`。 |
-| `--force` | 既存 overlay コピーを上書き (`--force` 無しで既存があるとエラー)。 |
-
-**落とし穴:**
-
-- overlay にコピーされても**自動有効化されない** — `workspace.toml` の `[plugins].enable` に `<id>` を追加し、`cocoon gen` を再実行する必要がある。
-- `--scope project` は cwd から `workspace.toml` を発見できる必要がある。発見できなければ usage error。
-- `*.sh` ファイルはコピー後に mode `0755` に再設定される (umask が厳しくても）。
-
-### `cocoon plugin remove <id>`
-
-**目的:** user / project スコープの overlay コピーを削除する。embedded カタログには影響しない。
-
-**例:**
-
-```console
-$ cocoon plugin remove starship --scope user
-Plugin "starship" removed from /home/alice/.cocoon/plugins/starship
-```
-
-**フラグ:**
-
-| フラグ | 説明 |
-|---|---|
-| `--scope <user\|project>` | 削除対象の overlay (**必須**、デフォルト無し)。 |
-
-**落とし穴:**
-
-- どちらの overlay を削除するかを必ず明示させるため `--scope` は必須。
-- 削除後の `cocoon plugin list` では、同 id について次の優先度層 (or embedded) が表示される。
 
 ### `cocoon plugin pin <id> <ref>`
 

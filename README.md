@@ -52,6 +52,7 @@ docker compose -f .devcontainer/docker-compose.yml up -d # or open in VS Code â†
 | Architecture | [architecture.md](docs/architecture.md) | [architecture.ja.md](docs/architecture.ja.md) |
 | Configuration (`workspace.toml`) | [configuration.md](docs/configuration.md) | [configuration.ja.md](docs/configuration.ja.md) |
 | Commands | [commands.md](docs/commands.md) | [commands.ja.md](docs/commands.ja.md) |
+| Plugin authoring (`plugin.toml`, `install.sh`, `install_user.sh`) | [plugins.md](docs/plugins.md) | [plugins.ja.md](docs/plugins.ja.md) |
 | Changelog | [CHANGELOG.md](CHANGELOG.md) | [CHANGELOG.ja.md](docs/CHANGELOG.ja.md) |
 
 ## License
