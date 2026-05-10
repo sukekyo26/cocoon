@@ -29,17 +29,22 @@
 
 | 層 | パス | 備考 |
 |---|---|---|
-| project  | `<workspace>/.cocoon/plugins/<id>/` | 全層に勝つ |
-| user     | `~/.cocoon/plugins/<id>/`           | embedded に勝つ |
-| embedded | `internal/plugin/catalog/<id>/`     | バイナリに同梱 |
+| project  | `<workspace>/.cocoon/plugins/<id>/`              | 全層に勝つ。ディスク上に存在 |
+| user     | `~/.cocoon/plugins/<id>/`                        | embedded に勝つ。ディスク上に存在 |
+| embedded | `internal/plugin/catalog/<id>/` (cocoon ソースリポジトリ内、`go:embed` でバイナリにコンパイル) | バイナリに同梱。**単体バイナリでインストールしたユーザーのディスクには存在しない** |
 
 同 id のディレクトリは **マージされない** — 最高優先度の層がそのまま勝つ。
 どの層が勝っているかは `cocoon plugin list` の `SOURCE` 列、
 あるいは `cocoon plugin show <id>` で確認できる。
 
-embedded プラグインを改変したい場合は overlay にコピーする
-（`cp -r internal/plugin/catalog/<id> ~/.cocoon/plugins/`）か、
-新しい id で `cocoon plugin scaffold <new-id>` から雛形を生成する。
+embedded プラグインを改変したい場合のサポート手順は
+**`cocoon plugin scaffold <new-id>` で新しい id の雛形を生成し、
+そこにロジックを移植する** こと。cocoon リポジトリのクローンを
+持っているなら `cp -r internal/plugin/catalog/<id> ~/.cocoon/plugins/<id>/`
+で embedded ソースを overlay に直接コピーする近道もある。
+単体バイナリでインストールした場合は embedded ソースがディスク上に
+存在しないため、この近道を使うには cocoon を `git clone` するか、
+ソース tarball（GitHub Release のソースアーカイブ等）を展開する必要がある。
 
 ## 3. ディレクトリ構成
 
@@ -109,18 +114,25 @@ rc 編集も user 所有 config の書き込みも要らないなら `install_us
 ## 6. install スクリプトに渡される環境変数
 
 `install.sh` も `install_user.sh` も `bash <<'COCOON_PLUGIN_EOF' … EOF`
-の中で実行され、次の変数が `RUN` 行で export される:
+の中で実行される。スクリプト本体から参照できる名前は次の 2 経路で
+解決される:
 
-| 変数 | 設定タイミング | 意味 |
+- **per-RUN env prefix（実 bash 環境変数）**: 生成 Dockerfile の `bash`
+  起動行に `NAME="value"` の形で前置される。bash から `$NAME` で見える。
+- **Dockerfile `ARG`（build-time 置換）**: BuildKit が RUN 本文（heredoc 内も含む）の
+  `${NAME}` を build 時にリテラル値へ置換する。bash がスクリプトを実行する時点で値はすでに
+  焼き込まれており、ランタイム環境変数ではないため `unset NAME` しても効果はない。
+
+| 変数 | 渡され方 | 意味 |
 |---|---|---|
-| `RC_FILE`        | 常に | ユーザー login-shell の rc ファイルの絶対パス（`/home/<user>/.bashrc`、`/home/<user>/.zshrc`、`~/.config/fish/config.fish`） |
-| `RC_SYNTAX`      | 常に | `posix`（bash/zsh）または `fish`。rc 行を出すときの分岐に使う |
-| `LOGIN_SHELL`    | 常に | `bash` / `zsh` / `fish` |
-| `USERNAME`       | 常に | コンテナ内の非特権ユーザー名 |
-| `PIN`            | `[version].version_capable = true` のときのみ | `workspace.toml` の `[plugins.versions.<id>].pin` の値。空なら upstream 最新を使う |
-| `CHECKSUM_AMD64` | `[version].version_capable = true` のときのみ | amd64 アーティファクトの `sha256`。空ならスクリプトは検証スキップ＋警告 |
+| `RC_FILE`        | per-RUN env、常に | ユーザー login-shell の rc ファイル絶対パス（`/home/<user>/.bashrc`、`/home/<user>/.zshrc`、`~/.config/fish/config.fish`） |
+| `RC_SYNTAX`      | per-RUN env、常に | `posix`（bash/zsh）または `fish`。rc 行を出すときの分岐に使う |
+| `LOGIN_SHELL`    | per-RUN env、常に | `bash` / `zsh` / `fish` |
+| `USERNAME`       | Dockerfile `ARG`（生成 Dockerfile 冒頭で宣言）、常に | コンテナ内の非特権ユーザー名。`install.sh` 内で `${USERNAME}` と書けば、bash 実行前に BuildKit がリテラル値へ置換する |
+| `PIN`            | per-RUN env、`[version].version_capable = true` のときのみ | `workspace.toml` の `[plugins.versions.<id>].pin` の値。空なら upstream 最新を使う |
+| `CHECKSUM_AMD64` | per-RUN env、`[version].version_capable = true` のときのみ | amd64 アーティファクトの `sha256`。空ならスクリプトは検証スキップ＋警告 |
 | `CHECKSUM_ARM64` | 同上 | arm64 アーティファクトの `sha256` |
-| `<BUILD_ARG>`    | `[install].build_args` に列挙されたときのみ | Dockerfile が同名 `ARG` を宣言し値を渡す（例: `docker-cli` の `DOCKER_GID`） |
+| `<BUILD_ARG>`    | per-RUN env、`[install].build_args` に列挙されたときのみ | Dockerfile が同名 `ARG` を宣言し、per-RUN prefix で値を渡すためスクリプトからは実 env として見える（例: `docker-cli` の `DOCKER_GID`） |
 
 `install.sh` 本体は `bash` が解釈するが、heredoc の `COCOON_PLUGIN_EOF`
 はシングルクォート付きで開いているため **ホスト側での変数展開は行われない** —

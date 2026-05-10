@@ -34,18 +34,23 @@ Plugins are read from a layered filesystem that resolves
 
 | Layer | Path | Notes |
 |---|---|---|
-| project  | `<workspace>/.cocoon/plugins/<id>/` | overrides everything else |
-| user     | `~/.cocoon/plugins/<id>/`           | overrides embedded |
-| embedded | `internal/plugin/catalog/<id>/`     | shipped inside the binary |
+| project  | `<workspace>/.cocoon/plugins/<id>/`              | overrides everything else; on disk |
+| user     | `~/.cocoon/plugins/<id>/`                        | overrides embedded; on disk |
+| embedded | `internal/plugin/catalog/<id>/` (in the cocoon source repo, compiled into the binary via `go:embed`) | shipped inside the binary; **not present on a single-binary install** |
 
 Same-id directories are **not merged**: the highest-priority layer
 wins completely. Inspect what wins with `cocoon plugin list` (the
 `SOURCE` column shows the layer) and `cocoon plugin show <id>`.
 
-To customise an embedded plugin, copy the embedded source into your
-overlay (`cp -r internal/plugin/catalog/<id> ~/.cocoon/plugins/`),
-or scaffold a new id with `cocoon plugin scaffold <new-id>` and
-borrow logic.
+To customise an embedded plugin, the supported workflow is to
+**scaffold a new id with `cocoon plugin scaffold <new-id>`** and
+adapt logic from there. If you have a clone of the cocoon repo,
+you can also copy the embedded source directly into your overlay:
+`cp -r internal/plugin/catalog/<id> ~/.cocoon/plugins/<id>/`. A
+single-binary install does not include the embedded source on
+disk, so this shortcut requires either a `git clone` of cocoon
+or unpacking a source tarball (e.g. the GitHub Release source
+archive).
 
 ## 3. Directory layout
 
@@ -116,19 +121,28 @@ is the only plugin that uses it.
 
 ## 6. Environment variables passed to install scripts
 
-Both scripts run inside `bash <<'COCOON_PLUGIN_EOF' … EOF`, with the
-following variables exported on the `RUN` line:
+Both scripts run inside `bash <<'COCOON_PLUGIN_EOF' … EOF`. The
+following names resolve in the script body, with two distinct
+mechanisms:
 
-| Variable | When set | What it is |
+- **Per-RUN env prefix (real bash env vars)**: emitted as
+  `NAME="value"` before the `bash` invocation in the generated
+  Dockerfile. Visible to bash via `$NAME`.
+- **Dockerfile ARG (build-time substitution)**: BuildKit
+  substitutes the value into the RUN body before bash sees it,
+  so the script ends up with the literal value baked in (it is
+  not a runtime env var and `unset NAME` has no effect).
+
+| Variable | How provided | What it is |
 |---|---|---|
-| `RC_FILE`        | always | Absolute path to the user's login-shell rc file (`/home/<user>/.bashrc`, `/home/<user>/.zshrc`, or `~/.config/fish/config.fish`). |
-| `RC_SYNTAX`      | always | `posix` (bash/zsh) or `fish`. Use this to branch when emitting rc lines. |
-| `LOGIN_SHELL`    | always | `bash`, `zsh`, or `fish`. |
-| `USERNAME`       | always | The unprivileged container user name. |
-| `PIN`            | only when `[version].version_capable = true` | Version string from `[plugins.versions.<id>].pin` in `workspace.toml`. Empty means "use upstream latest". |
-| `CHECKSUM_AMD64` | only when `[version].version_capable = true` | `sha256` of the amd64 artifact, or empty (script must skip verification with a warning). |
+| `RC_FILE`        | per-RUN env, always | Absolute path to the user's login-shell rc file (`/home/<user>/.bashrc`, `/home/<user>/.zshrc`, or `~/.config/fish/config.fish`). |
+| `RC_SYNTAX`      | per-RUN env, always | `posix` (bash/zsh) or `fish`. Use this to branch when emitting rc lines. |
+| `LOGIN_SHELL`    | per-RUN env, always | `bash`, `zsh`, or `fish`. |
+| `USERNAME`       | Dockerfile `ARG` (declared at the top of the generated Dockerfile), always | The unprivileged container user name. Reference it as `${USERNAME}` in `install.sh`; BuildKit substitutes the literal value before bash runs the body. |
+| `PIN`            | per-RUN env, only when `[version].version_capable = true` | Version string from `[plugins.versions.<id>].pin` in `workspace.toml`. Empty means "use upstream latest". |
+| `CHECKSUM_AMD64` | per-RUN env, only when `[version].version_capable = true` | `sha256` of the amd64 artifact, or empty (script must skip verification with a warning). |
 | `CHECKSUM_ARM64` | same as above | `sha256` of the arm64 artifact. |
-| `<BUILD_ARG>`    | only when listed in `[install].build_args` | The Dockerfile passes the matching `ARG` value through. Example: `docker-cli` reads `DOCKER_GID`. |
+| `<BUILD_ARG>`    | per-RUN env, only when listed in `[install].build_args` | The Dockerfile declares an `ARG` and the per-RUN prefix passes the value through, so the script sees a real env var. Example: `docker-cli` reads `DOCKER_GID`. |
 
 Inside `install.sh` the body is interpreted by `bash`, but
 `COCOON_PLUGIN_EOF` is single-quoted on the heredoc line, which means
