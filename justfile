@@ -63,9 +63,11 @@ vuln:
     govulncheck ./...
 
 # Run after intentional changes to generators, plugin mutators, or
-# `cocoon init` output, then commit the updated testdata/*.expected
-# (and testdata/init/*.workspace.toml) along with the source change.
-# CI runs without -update-golden, so any drift fails the test job.
+# `cocoon init` output, then commit the updated golden / snapshot
+# files under each package's testdata/ along with the source change
+# (covers `*.expected`, `testdata/init/*.workspace.toml`, and
+# `testdata/mutator/**/after.toml`). CI runs without -update-golden,
+# so any drift fails the test job.
 # Regenerate all golden / snapshot files in one shot.
 regen-snapshots:
     go test ./internal/generate/dockerfile       -update-golden
