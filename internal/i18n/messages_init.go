@@ -79,10 +79,14 @@ var messagesEN_init = map[string]string{
 	"init_next_step_compose": "  2. docker compose -f .devcontainer/docker-compose.yml up -d",
 	"init_next_step_vscode":  `     (or open in VS Code → "Reopen in Container")`,
 	// gen result + next steps
-	"gen_wrote":             "wrote %s",
-	"gen_next_header":       "To start the container:",
-	"gen_next_step_compose": "  docker compose -f .devcontainer/docker-compose.yml up -d",
-	"gen_next_step_vscode":  `  (or open in VS Code → "Reopen in Container")`,
+	"gen_wrote":               "wrote %s",
+	"gen_next_header":         "To start the container:",
+	"gen_next_step_compose":   "  docker compose -f .devcontainer/docker-compose.yml up -d",
+	"gen_next_step_vscode":    `  (or open in VS Code → "Reopen in Container")`,
+	"gen_certs_dir_created":   "created host directory %s (used as the cocoon_user_certs build context)",
+	"gen_certs_notice_header": "Host TLS certificates:",
+	"gen_certs_notice_path":   "  Drop *.crt files into ~/.cocoon/certs/ to bake corporate / private CAs into the container at build time.",
+	"gen_certs_notice_team":   "  Team members who skip VS Code Dev Containers must run `mkdir -p ~/.cocoon/certs` once on their host (VS Code users get this auto-created via initializeCommand).",
 }
 
 // messagesJA_init mirrors messagesEN_init in Japanese. Untranslated keys
@@ -158,8 +162,12 @@ var messagesJA_init = map[string]string{
 	"init_next_step_compose": "  2. docker compose -f .devcontainer/docker-compose.yml up -d",
 	"init_next_step_vscode":  `     (または VS Code で「Reopen in Container」を実行)`,
 	// gen result + next steps
-	"gen_wrote":             "%s を書き出しました",
-	"gen_next_header":       "コンテナを起動するには:",
-	"gen_next_step_compose": "  docker compose -f .devcontainer/docker-compose.yml up -d",
-	"gen_next_step_vscode":  `  (または VS Code で「Reopen in Container」を実行)`,
+	"gen_wrote":               "%s を書き出しました",
+	"gen_next_header":         "コンテナを起動するには:",
+	"gen_next_step_compose":   "  docker compose -f .devcontainer/docker-compose.yml up -d",
+	"gen_next_step_vscode":    `  (または VS Code で「Reopen in Container」を実行)`,
+	"gen_certs_dir_created":   "ホスト側ディレクトリ %s を作成しました (cocoon_user_certs ビルドコンテキストとして使用)",
+	"gen_certs_notice_header": "ホスト TLS 証明書:",
+	"gen_certs_notice_path":   "  社内 / プライベート CA を取り込む場合は `.crt` を `~/.cocoon/certs/` に置いてください。build 時に自動取り込みされます。",
+	"gen_certs_notice_team":   "  VS Code Dev Containers を使わないチームメンバーは初回のみホストで `mkdir -p ~/.cocoon/certs` の実行が必要です (VS Code 経由は initializeCommand で自動)。",
 }

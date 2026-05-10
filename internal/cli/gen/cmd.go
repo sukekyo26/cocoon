@@ -116,12 +116,16 @@ func runGen(stdout, stderr io.Writer, workspaceFlag, outputFlag string) error {
 	if err := generatecli.WriteArtifacts(arts, outDir); err != nil {
 		return fmt.Errorf("%w: %w", ErrFailure, err)
 	}
+	if err := ensureUserCertsDir(stdout, cat); err != nil {
+		return fmt.Errorf("%w: %w", ErrFailure, err)
+	}
 
 	cwd, _ := os.Getwd() //nolint:errcheck // cwd is best-effort for pretty-printing only.
 	for _, a := range arts {
 		fmt.Fprintln(stdout, cat.Msg("gen_wrote", displayPath(cwd, filepath.Join(outDir, a.Rel))))
 	}
 	printNextSteps(stdout, cat, ctx.WS.Workspace.DevContainerOrDefault())
+	printCertNotice(stdout, cat)
 	return nil
 }
 
@@ -176,6 +180,48 @@ func userPluginsDir() (string, error) {
 	return filepath.Join(home, ".cocoon", "plugins"), nil
 }
 
+// ensureUserCertsDir creates ~/.cocoon/certs (mode 0700) if it does not
+// exist yet. The path is referenced by the generated docker-compose.yml's
+// additional_contexts (cocoon_user_certs -> ${HOME}/.cocoon/certs);
+// BuildKit requires the source path to exist before the build starts.
+//
+// VS Code Dev Containers users get this auto-created via the generated
+// devcontainer.json's initializeCommand, but anyone running
+// `docker compose build` directly (CI, terminal-only flows) needs the
+// directory present. Doing it here in `cocoon gen` removes one manual
+// step for the developer who runs the generator. A status line is
+// emitted to stdout only when the directory was actually created (i.e.
+// did not exist before) so re-running gen on an established workspace
+// stays quiet.
+//
+// Permission is 0700 to mirror the security posture of plugin overlays
+// at ~/.cocoon/plugins/ (private user data, never committed to a repo).
+func ensureUserCertsDir(stdout io.Writer, cat *i18n.Catalog) error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("resolve home dir: %w", err)
+	}
+	dir := filepath.Join(home, ".cocoon", "certs")
+	info, err := os.Stat(dir)
+	switch {
+	case err == nil && info.IsDir():
+		return nil
+	case err == nil && !info.IsDir():
+		// A non-directory at the cert path (a stray file, a symlink, etc.)
+		// would silently break BuildKit's additional_contexts resolution
+		// at build time. Surface it now via the package's existing failure
+		// sentinel so callers can map it to the right exit code.
+		return fmt.Errorf("%w: %s exists but is not a directory", ErrFailure, dir)
+	case !os.IsNotExist(err):
+		return fmt.Errorf("stat %s: %w", dir, err)
+	}
+	if mkErr := os.MkdirAll(dir, 0o700); mkErr != nil {
+		return fmt.Errorf("mkdir %s: %w", dir, mkErr)
+	}
+	fmt.Fprintln(stdout, cat.Msg("gen_certs_dir_created", dir))
+	return nil
+}
+
 func printNextSteps(stdout io.Writer, cat *i18n.Catalog, devcontainer bool) {
 	fmt.Fprintln(stdout)
 	fmt.Fprintln(stdout, cat.Msg("gen_next_header"))
@@ -183,4 +229,17 @@ func printNextSteps(stdout io.Writer, cat *i18n.Catalog, devcontainer bool) {
 	if devcontainer {
 		fmt.Fprintln(stdout, cat.Msg("gen_next_step_vscode"))
 	}
+}
+
+// printCertNotice writes a short informational block telling the user
+// that ~/.cocoon/certs is the host-side drop-zone for user CA certs.
+// The block is emitted unconditionally because every team scenario
+// touches the directory in some form (Dockerfile/compose/devcontainer
+// all reference it), and surfacing it once per `cocoon gen` keeps the
+// expectation visible without forcing the user to read configuration.md.
+func printCertNotice(stdout io.Writer, cat *i18n.Catalog) {
+	fmt.Fprintln(stdout)
+	fmt.Fprintln(stdout, cat.Msg("gen_certs_notice_header"))
+	fmt.Fprintln(stdout, cat.Msg("gen_certs_notice_path"))
+	fmt.Fprintln(stdout, cat.Msg("gen_certs_notice_team"))
 }
