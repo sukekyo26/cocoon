@@ -24,6 +24,7 @@ import (
 	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
 	generatecli "github.com/sukekyo26/cocoon/internal/cli/generate"
 	"github.com/sukekyo26/cocoon/internal/config"
+	"github.com/sukekyo26/cocoon/internal/generate"
 	"github.com/sukekyo26/cocoon/internal/i18n"
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
@@ -116,8 +117,13 @@ func runGen(stdout, stderr io.Writer, workspaceFlag, outputFlag string) error {
 	if err := generatecli.WriteArtifacts(arts, outDir); err != nil {
 		return fmt.Errorf("%w: %w", ErrFailure, err)
 	}
-	if err := ensureUserCertsDir(stdout, cat); err != nil {
-		return fmt.Errorf("%w: %w", ErrFailure, err)
+	// Host-side cert directory + notice only land when the workspace
+	// opts into [certificates] enable=true. Teams that never touch certs
+	// get neither the side effect (mkdir on $HOME) nor the notice.
+	if ctx.CertificatesEnabled() {
+		if err := ensureUserCertsDir(stdout, cat); err != nil {
+			return fmt.Errorf("%w: %w", ErrFailure, err)
+		}
 	}
 
 	cwd, _ := os.Getwd() //nolint:errcheck // cwd is best-effort for pretty-printing only.
@@ -125,7 +131,9 @@ func runGen(stdout, stderr io.Writer, workspaceFlag, outputFlag string) error {
 		fmt.Fprintln(stdout, cat.Msg("gen_wrote", displayPath(cwd, filepath.Join(outDir, a.Rel))))
 	}
 	printNextSteps(stdout, cat, ctx.WS.Workspace.DevContainerOrDefault())
-	printCertNotice(stdout, cat)
+	if ctx.CertificatesEnabled() {
+		printCertNotice(stdout, cat)
+	}
 	return nil
 }
 
@@ -201,7 +209,7 @@ func ensureUserCertsDir(stdout io.Writer, cat *i18n.Catalog) error {
 	if err != nil {
 		return fmt.Errorf("resolve home dir: %w", err)
 	}
-	dir := filepath.Join(home, ".cocoon", "certs")
+	dir := filepath.Join(home, generate.CertsHostPathRelative)
 	info, err := os.Stat(dir)
 	switch {
 	case err == nil && info.IsDir():

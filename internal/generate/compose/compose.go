@@ -285,37 +285,48 @@ func buildVolumeMounts(
 }
 
 func buildService(ctx *generate.WorkspaceContext, mounts []*yaml.Node) *yaml.Node {
+	// The compose file lives at .devcontainer/docker-compose.yml;
+	// `context: ..` makes the project root the build context so the
+	// Dockerfile's `COPY .devcontainer/docker-entrypoint.sh ...`
+	// resolves. dockerfile is set explicitly because the default
+	// (./Dockerfile) would point at the project root, not at our
+	// generated .devcontainer/Dockerfile.
+	buildPairs := []yamlx.Pair{
+		{Key: "context", Value: yamlx.QuotedIfSpecial("..")},
+		{Key: "dockerfile", Value: yamlx.QuotedIfSpecial(".devcontainer/Dockerfile")},
+	}
+	if ctx.CertificatesEnabled() {
+		// additional_contexts wires ${HOME}/.cocoon/certs into the build
+		// as a named context so the Dockerfile can mount it via
+		// `RUN --mount=type=bind,from=cocoon_user_certs,...` without a
+		// staging copy in the project tree. Only emitted when the
+		// workspace opts into [certificates] enable=true; cert-free
+		// teams get an additional_contexts-free compose file.
+		//
+		// The path uses Compose's required-variable form (${HOME:?...})
+		// so an unset HOME on the host fails fast with a clear message
+		// instead of silently collapsing the path to "/.cocoon/certs"
+		// and producing a confusing build error.
+		buildPairs = append(buildPairs, yamlx.Pair{
+			Key: "additional_contexts",
+			Value: yamlx.Map(yamlx.Pair{
+				Key:   generate.CertsBuildContextName,
+				Value: yamlx.QuotedIfSpecial(generate.CertsHostPath),
+			}),
+		})
+	}
+	buildPairs = append(buildPairs, yamlx.Pair{Key: "args", Value: yamlx.Seq(
+		yamlx.QuotedIfSpecial("OS_IMAGE=${OS_IMAGE}"),
+		yamlx.QuotedIfSpecial("OS_VERSION=${OS_VERSION}"),
+		yamlx.QuotedIfSpecial("USERNAME=${USERNAME}"),
+		yamlx.QuotedIfSpecial("UID=${UID}"),
+		yamlx.QuotedIfSpecial("GID=${GID}"),
+		yamlx.QuotedIfSpecial("DOCKER_GID=${DOCKER_GID}"),
+	)})
+
 	pairs := []yamlx.Pair{
 		{Key: "container_name", Value: yamlx.QuotedIfSpecial("${CONTAINER_SERVICE_NAME}")},
-		{Key: "build", Value: yamlx.Map(
-			// The compose file lives at .devcontainer/docker-compose.yml;
-			// `context: ..` makes the project root the build context so the
-			// Dockerfile's `COPY .devcontainer/docker-entrypoint.sh ...`
-			// resolves. dockerfile is set explicitly because the default
-			// (./Dockerfile) would point at the project root, not at our
-			// generated .devcontainer/Dockerfile.
-			yamlx.Pair{Key: "context", Value: yamlx.QuotedIfSpecial("..")},
-			yamlx.Pair{Key: "dockerfile", Value: yamlx.QuotedIfSpecial(".devcontainer/Dockerfile")},
-			// additional_contexts wires ${HOME}/.cocoon/certs into the build
-			// as a named context so the Dockerfile can mount it via
-			// `RUN --mount=type=bind,from=cocoon_user_certs,...` without a
-			// staging copy in the project tree. The path must exist on the
-			// host before `docker build`; VS Code Dev Containers users get it
-			// auto-created via the generated devcontainer.json's
-			// initializeCommand, plain compose users run `mkdir -p
-			// ~/.cocoon/certs` once (documented in docs/configuration.md).
-			yamlx.Pair{Key: "additional_contexts", Value: yamlx.Map(
-				yamlx.Pair{Key: "cocoon_user_certs", Value: yamlx.QuotedIfSpecial("${HOME}/.cocoon/certs")},
-			)},
-			yamlx.Pair{Key: "args", Value: yamlx.Seq(
-				yamlx.QuotedIfSpecial("OS_IMAGE=${OS_IMAGE}"),
-				yamlx.QuotedIfSpecial("OS_VERSION=${OS_VERSION}"),
-				yamlx.QuotedIfSpecial("USERNAME=${USERNAME}"),
-				yamlx.QuotedIfSpecial("UID=${UID}"),
-				yamlx.QuotedIfSpecial("GID=${GID}"),
-				yamlx.QuotedIfSpecial("DOCKER_GID=${DOCKER_GID}"),
-			)},
-		)},
+		{Key: "build", Value: yamlx.Map(buildPairs...)},
 		{Key: "user", Value: yamlx.QuotedIfSpecial("${UID}:${GID}")},
 		{Key: "environment", Value: stringSeq(ctx.BuildEnvironment())},
 		{Key: "volumes", Value: yamlx.Seq(mounts...)},

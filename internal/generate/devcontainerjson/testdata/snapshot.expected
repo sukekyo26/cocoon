@@ -5,7 +5,7 @@
 		"docker-compose.yml"
 	],
 	"service": "snapshot-test",
-	"initializeCommand": "mkdir -p ${HOME}/.cocoon/certs",
+	"initializeCommand": "mkdir -p ${HOME:?HOME must be set on the host so cocoon can resolve ~/.cocoon/certs (the user TLS certificate directory)}/.cocoon/certs",
 	"workspaceFolder": "/home/testuser/workspace",
 	"forwardPorts": [
 		3000

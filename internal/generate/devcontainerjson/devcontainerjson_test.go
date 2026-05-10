@@ -46,6 +46,35 @@ func TestGenerateGoldenSnapshot(t *testing.T) {
 	}
 }
 
+// TestGenerateCertificatesDisabledNoInitializeCommand verifies that
+// when [certificates] is absent (or enable=false), the devcontainer.json
+// generator emits no `initializeCommand` key. Cert-free workspaces get
+// no host-side mkdir hook in their VS Code dev container config.
+func TestGenerateCertificatesDisabledNoInitializeCommand(t *testing.T) {
+	t.Parallel()
+	ws, err := config.LoadWorkspace(filepath.Join("..", "..", "..", "tests", "fixtures", "snapshot.workspace.toml"))
+	if err != nil {
+		t.Fatalf("load fixture: %v", err)
+	}
+	ws.Certificates = nil
+
+	ctx := &generate.WorkspaceContext{WS: ws}
+	got, err := devcontainerjson.Generate(ctx)
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+
+	for _, mustNot := range []string{
+		"initializeCommand",
+		"mkdir -p",
+		".cocoon/certs",
+	} {
+		if strings.Contains(got, mustNot) {
+			t.Errorf("devcontainer.json with [certificates] disabled must not contain %q\n--- got ---\n%s", mustNot, got)
+		}
+	}
+}
+
 func TestGenerateMinimalDefaults(t *testing.T) {
 	t.Parallel()
 	ctx := &generate.WorkspaceContext{WS: &config.Workspace{}}
