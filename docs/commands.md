@@ -109,11 +109,11 @@ Inspect and author cocoon plugins. Plugins live in three layers, resolved with p
 
 | Layer | Path | Source |
 |---|---|---|
-| project | `<workspace>/.cocoon/plugins/<id>/` | overlay scaffolded in place or copied with `cp -r` |
-| user | `~/.cocoon/plugins/<id>/` | overlay copied with `cp -r` from another id |
-| embedded | `internal/plugin/catalog/<id>/` (compiled into the binary) | shipped with cocoon |
+| project | `<workspace>/.cocoon/plugins/<id>/` | overlay scaffolded in place or copied from another overlay |
+| user | `~/.cocoon/plugins/<id>/` | overlay scaffolded or copied from another overlay |
+| embedded | `internal/plugin/catalog/<id>/` (in the cocoon source repo, compiled into the binary via `go:embed`) | shipped with cocoon; **not on disk** for single-binary installs |
 
-To enable an embedded plugin, just add its id to `[plugins].enable` in `workspace.toml`. To customise an embedded plugin, copy the embedded source into your overlay (`cp -r internal/plugin/catalog/<id> ~/.cocoon/plugins/`) or scaffold a new id with `cocoon plugin scaffold <new-id>`.
+To enable an embedded plugin, just add its id to `[plugins].enable` in `workspace.toml`. To customise an embedded plugin, the supported workflow is `cocoon plugin scaffold <new-id>` and adapting logic. If you have a clone of the cocoon repo (or an unpacked source tarball), `cp -r internal/plugin/catalog/<id> ~/.cocoon/plugins/<id>/` works as a shortcut; on a single-binary install the embedded source is not present on disk.
 
 Overlays are read at `gen` time only; placing files in `~/.cocoon/plugins/<id>/` does not enable a plugin on its own — `[plugins].enable` is the activation list.
 

@@ -19,8 +19,11 @@ Subcommands:
 
 To use a plugin, add its id to [plugins].enable in workspace.toml — the
 embedded catalog is picked up automatically. To customise an embedded
-plugin, scaffold a new id or copy the embedded source under
-~/.cocoon/plugins/ (or <project>/.cocoon/plugins/) with cp -r.`
+plugin, the supported workflow is "cocoon plugin scaffold <new-id>" and
+adapting the logic. If you have a clone of the cocoon source repo (or an
+unpacked source tarball), copying the embedded source from
+internal/plugin/catalog/<id>/ into ~/.cocoon/plugins/<id>/ is a shortcut;
+single-binary installs do not include the embedded source on disk.`
 
 // NewCommand returns the cobra subtree for ` + "`cocoon plugin`" + `.
 func NewCommand(stdout, stderr io.Writer) *cobra.Command {
