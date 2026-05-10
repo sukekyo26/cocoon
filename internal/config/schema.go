@@ -269,33 +269,16 @@ type GitIdentitySpec struct {
 	UserEmail *string `toml:"user_email,omitempty"`
 }
 
-// CertificatesSpec controls TLS certificate auto-bake from the host's
-// ${HOME}/.cocoon/certs directory. The whole section is optional; when
-// absent, certificate auto-bake stays off and no cert-related wiring
-// (additional_contexts, RUN --mount, initializeCommand mkdir, gen
-// notice) lands in any generated artifact.
-//
-// Enabling this section opts the workspace into:
-//   - compose.go emitting `additional_contexts: cocoon_user_certs: ...`
-//   - dockerfile.go emitting the cert install RUN block + ENV exports
-//   - devcontainerjson.go emitting `initializeCommand: "mkdir -p ..."`
-//   - cocoon gen creating ~/.cocoon/certs (mode 0700) and printing the
-//     TLS notice
-//
-// Teams that never deal with corporate / private CAs leave the section
-// off and get cert-free artifacts they can commit and share.
+// CertificatesSpec gates TLS certificate auto-bake from
+// ~/.cocoon/certs/. See docs/configuration.md `[certificates]`.
 type CertificatesSpec struct {
-	// Enable, when true, turns on host TLS certificate auto-bake from
-	// ${HOME}/.cocoon/certs. nil ⇒ default (false). Pointer so the
-	// loader can distinguish "field omitted" from an explicit
-	// `enable = false`.
+	// nil ⇒ default false (pointer distinguishes "field omitted" from
+	// explicit `enable = false`).
 	Enable *bool `toml:"enable,omitempty"`
 }
 
-// EnableOrDefault returns false unless the user explicitly set
-// `[certificates] enable = true`. Safe to call on a nil receiver so
-// callers can pass `ws.Certificates` directly when the section is
-// absent.
+// EnableOrDefault returns false unless explicitly set true. Safe on a
+// nil receiver.
 func (c *CertificatesSpec) EnableOrDefault() bool {
 	if c == nil || c.Enable == nil {
 		return false

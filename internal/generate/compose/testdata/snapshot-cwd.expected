@@ -6,7 +6,7 @@ services:
       context: ..
       dockerfile: .devcontainer/Dockerfile
       additional_contexts:
-        cocoon_user_certs: "${HOME:?HOME must be set on the host so cocoon can resolve ~/.cocoon/certs (the user TLS certificate directory)}/.cocoon/certs"
+        cocoon_user_certs: "${HOME:?HOME must be set on the host}/.cocoon/certs"
       args:
         - "OS_IMAGE=${OS_IMAGE}"
         - "OS_VERSION=${OS_VERSION}"

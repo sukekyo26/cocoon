@@ -35,11 +35,7 @@ var ErrUsage = errors.New("usage error")
 // ErrFailure signals a runtime failure during generation.
 var ErrFailure = errors.New("gen failed")
 
-// errCertsPathNotDirectory is returned by ensureUserCertsDir when the
-// target ~/.cocoon/certs path exists but is not a directory (a stray
-// regular file, a broken symlink, etc.). Kept package-private because
-// it is not part of the public surface — callers map runtime failures
-// to ErrFailure at the wrap site.
+// errCertsPathNotDirectory: caller wraps with ErrFailure once.
 var errCertsPathNotDirectory = errors.New("cocoon certs path exists but is not a directory")
 
 const genLong = `cocoon gen — generate .devcontainer/{Dockerfile, docker-compose.yml, devcontainer.json}
@@ -124,9 +120,6 @@ func runGen(stdout, stderr io.Writer, workspaceFlag, outputFlag string) error {
 	if err := generatecli.WriteArtifacts(arts, outDir); err != nil {
 		return fmt.Errorf("%w: %w", ErrFailure, err)
 	}
-	// Host-side cert directory + notice only land when the workspace
-	// opts into [certificates] enable=true. Teams that never touch certs
-	// get neither the side effect (mkdir on $HOME) nor the notice.
 	if ctx.CertificatesEnabled() {
 		if err := ensureUserCertsDir(stdout, cat); err != nil {
 			return fmt.Errorf("%w: %w", ErrFailure, err)
@@ -195,22 +188,10 @@ func userPluginsDir() (string, error) {
 	return filepath.Join(home, ".cocoon", "plugins"), nil
 }
 
-// ensureUserCertsDir creates ~/.cocoon/certs (mode 0700) if it does not
-// exist yet. The path is referenced by the generated docker-compose.yml's
-// additional_contexts (cocoon_user_certs -> ${HOME}/.cocoon/certs);
-// BuildKit requires the source path to exist before the build starts.
-//
-// VS Code Dev Containers users get this auto-created via the generated
-// devcontainer.json's initializeCommand, but anyone running
-// `docker compose build` directly (CI, terminal-only flows) needs the
-// directory present. Doing it here in `cocoon gen` removes one manual
-// step for the developer who runs the generator. A status line is
-// emitted to stdout only when the directory was actually created (i.e.
-// did not exist before) so re-running gen on an established workspace
-// stays quiet.
-//
-// Permission is 0700 to mirror the security posture of plugin overlays
-// at ~/.cocoon/plugins/ (private user data, never committed to a repo).
+// ensureUserCertsDir mkdirs ~/.cocoon/certs (mode 0700) if missing so
+// docker-compose's additional_contexts can resolve before the build
+// starts. Only the first-run case prints a status line; re-runs stay
+// quiet. Mirrors the plugin overlay's 0700 posture (private user data).
 func ensureUserCertsDir(stdout io.Writer, cat *i18n.Catalog) error {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -222,11 +203,6 @@ func ensureUserCertsDir(stdout io.Writer, cat *i18n.Catalog) error {
 	case err == nil && info.IsDir():
 		return nil
 	case err == nil && !info.IsDir():
-		// A non-directory at the cert path (a stray file, a symlink, etc.)
-		// would silently break BuildKit's additional_contexts resolution
-		// at build time. Surface it as a plain error; the caller wraps
-		// once with ErrFailure so we do not double-wrap and produce a
-		// `gen failed: gen failed: …` user-facing prefix.
 		return fmt.Errorf("%s: %w", dir, errCertsPathNotDirectory)
 	case !os.IsNotExist(err):
 		return fmt.Errorf("stat %s: %w", dir, err)
@@ -247,12 +223,8 @@ func printNextSteps(stdout io.Writer, cat *i18n.Catalog, devcontainer bool) {
 	}
 }
 
-// printCertNotice writes a short informational block telling the user
-// that ~/.cocoon/certs is the host-side drop-zone for user CA certs.
-// The block is emitted unconditionally because every team scenario
-// touches the directory in some form (Dockerfile/compose/devcontainer
-// all reference it), and surfacing it once per `cocoon gen` keeps the
-// expectation visible without forcing the user to read configuration.md.
+// printCertNotice surfaces `~/.cocoon/certs/` as the drop-zone for user
+// CA certs in stdout, so users do not have to read configuration.md.
 func printCertNotice(stdout io.Writer, cat *i18n.Catalog) {
 	fmt.Fprintln(stdout)
 	fmt.Fprintln(stdout, cat.Msg("gen_certs_notice_header"))
