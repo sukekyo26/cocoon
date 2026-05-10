@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/charmbracelet/huh"
@@ -157,6 +158,46 @@ func TestPromptMissing_CanceledPropagates(t *testing.T) {
 	err := promptMissing(opts, cat, p)
 	if !errors.Is(err, ErrCanceled) {
 		t.Errorf("err = %v, want errors.Is(err, ErrCanceled)", err)
+	}
+}
+
+// TestInstallUserPromptDescription_ContainsUsageGuidance pins down that
+// the scaffold's `Also generate install_user.sh?` prompt carries a
+// description explaining when the file is needed. Authors who hit the
+// prompt without prior context need enough cues (root + user phrasing,
+// rc-file editing, a concrete example) to make a sensible choice
+// without leaving the wizard. Both EN and JA catalogs must carry the
+// same guidance.
+func TestInstallUserPromptDescription_ContainsUsageGuidance(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		lang i18n.Lang
+		want []string
+	}{
+		{
+			name: "en",
+			lang: i18n.LangEN,
+			want: []string{"requires_root", "USERNAME", "starship", "~/.bashrc"},
+		},
+		{
+			name: "ja",
+			lang: i18n.LangJA,
+			want: []string{"requires_root", "USERNAME", "starship", "~/.bashrc"},
+		},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cat := i18n.New(tc.lang)
+			got := cat.Msg("plugin_scaffold_prompt_user_hook_desc")
+			for _, want := range tc.want {
+				if !strings.Contains(got, want) {
+					t.Errorf("description missing %q\n--- got ---\n%s", want, got)
+				}
+			}
+		})
 	}
 }
 
