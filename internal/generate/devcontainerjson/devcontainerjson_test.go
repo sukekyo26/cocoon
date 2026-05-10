@@ -1,6 +1,7 @@
 package devcontainerjson_test
 
 import (
+	"flag"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,13 @@ import (
 	"github.com/sukekyo26/cocoon/internal/generate"
 	"github.com/sukekyo26/cocoon/internal/generate/devcontainerjson"
 )
+
+// updateGolden, when set with `go test -update-golden`, rewrites the
+// testdata/*.expected files from the current generator output instead of
+// asserting against them. Mirrors the dockerfile package convention.
+//
+//nolint:gochecknoglobals // test-only flag scoped to devcontainerjson_test.
+var updateGolden = flag.Bool("update-golden", false, "rewrite testdata/*.expected from current generator output")
 
 func TestGenerateGoldenSnapshot(t *testing.T) {
 	t.Parallel()
@@ -22,7 +30,14 @@ func TestGenerateGoldenSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate: %v", err)
 	}
-	want, err := os.ReadFile(filepath.Join("testdata", "snapshot.expected"))
+	path := filepath.Join("testdata", "snapshot.expected")
+	if *updateGolden {
+		if werr := os.WriteFile(path, []byte(got), 0o600); werr != nil {
+			t.Fatalf("update golden: %v", werr)
+		}
+		return
+	}
+	want, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read golden: %v", err)
 	}

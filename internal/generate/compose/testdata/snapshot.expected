@@ -5,6 +5,8 @@ services:
     build:
       context: ..
       dockerfile: .devcontainer/Dockerfile
+      additional_contexts:
+        cocoon_user_certs: "${HOME}/.cocoon/certs"
       args:
         - "OS_IMAGE=${OS_IMAGE}"
         - "OS_VERSION=${OS_VERSION}"

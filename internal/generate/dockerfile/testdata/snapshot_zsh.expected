@@ -18,6 +18,23 @@ RUN sed -i \
 # Configure apt HTTP(S) proxy from [apt.proxy]
 RUN { echo 'Acquire::http::Proxy "http://proxy.corp:8080";'; echo 'Acquire::https::Proxy "http://proxy.corp:8080";'; } > /etc/apt/apt.conf.d/95proxy
 
+# Install custom CA certificates from ~/.cocoon/certs/ (root stage; runs
+# before any apt-get update so HTTPS apt mirrors / sources signed by a
+# corporate CA can complete TLS handshake). The RUN body is a no-op when
+# ~/.cocoon/certs/ is empty on the build host. Certificates flow in via the
+# cocoon_user_certs named build context declared by docker-compose.yml's
+# additional_contexts (sourced from ${HOME}/.cocoon/certs).
+RUN --mount=type=bind,from=cocoon_user_certs,target=/tmp/cocoon-user-certs \
+    if [ -n "$(find /tmp/cocoon-user-certs -maxdepth 1 -name '*.crt' 2>/dev/null | head -n 1)" ]; then \
+        apt-get update && \
+        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates && \
+        mkdir -p /usr/local/share/ca-certificates/cocoon-user && \
+        find /tmp/cocoon-user-certs -maxdepth 1 -name '*.crt' \
+            -exec cp {} /usr/local/share/ca-certificates/cocoon-user/ \; && \
+        update-ca-certificates && \
+        rm -rf /var/lib/apt/lists/*; \
+    fi
+
 # Pre-install ca-certificates from the default HTTP archive so the
 # subsequent HTTPS [apt.mirror] can complete its TLS handshake.
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
@@ -107,6 +124,14 @@ RUN mkdir -p "$HOME/.cocoon" && \
 # Enable zsh completion + autosuggestions
 RUN echo 'autoload -Uz compinit && compinit' >> "$HOME/.zshrc" && \
     echo 'source /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh 2>/dev/null || true' >> "$HOME/.zshrc"
+
+# CA bundle env vars for various tools. These point at the merged system
+# bundle which always exists regardless of whether ~/.cocoon/certs/ was
+# populated, so emitting them unconditionally is safe.
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+ENV CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+ENV REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
 
 # Prepare volume mount directories with correct ownership
 USER root

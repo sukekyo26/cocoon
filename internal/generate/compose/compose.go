@@ -296,6 +296,17 @@ func buildService(ctx *generate.WorkspaceContext, mounts []*yaml.Node) *yaml.Nod
 			// generated .devcontainer/Dockerfile.
 			yamlx.Pair{Key: "context", Value: yamlx.QuotedIfSpecial("..")},
 			yamlx.Pair{Key: "dockerfile", Value: yamlx.QuotedIfSpecial(".devcontainer/Dockerfile")},
+			// additional_contexts wires ${HOME}/.cocoon/certs into the build
+			// as a named context so the Dockerfile can mount it via
+			// `RUN --mount=type=bind,from=cocoon_user_certs,...` without a
+			// staging copy in the project tree. The path must exist on the
+			// host before `docker build`; VS Code Dev Containers users get it
+			// auto-created via the generated devcontainer.json's
+			// initializeCommand, plain compose users run `mkdir -p
+			// ~/.cocoon/certs` once (documented in docs/configuration.md).
+			yamlx.Pair{Key: "additional_contexts", Value: yamlx.Map(
+				yamlx.Pair{Key: "cocoon_user_certs", Value: yamlx.QuotedIfSpecial("${HOME}/.cocoon/certs")},
+			)},
 			yamlx.Pair{Key: "args", Value: yamlx.Seq(
 				yamlx.QuotedIfSpecial("OS_IMAGE=${OS_IMAGE}"),
 				yamlx.QuotedIfSpecial("OS_VERSION=${OS_VERSION}"),

@@ -186,19 +186,29 @@ timezone = "Asia/Tokyo"
 			},
 		},
 		{
+			// User cert install is now sourced from ~/.cocoon/certs/ via
+			// docker-compose's additional_contexts, not from <project>/certs/.
+			// The cert install RUN block is always emitted, so the assertion
+			// here is decoupled from any project-tree fixture.
 			name: "certificates_section",
 			workspace: tomlBase("svc-cert", "u", nil) + `
 [apt]
 packages = []
 `,
 			useEmptyPluginsDir: true,
-			extras: []seed{{
-				Rel:  "certs/test-ca.crt",
-				Body: "-----BEGIN CERTIFICATE-----\nMIIBoj\n-----END CERTIFICATE-----\n",
-			}},
 			assert: []expect{
 				{path: ".devcontainer/Dockerfile", mustContain: []string{
-					"COPY certs/test-ca.crt", "update-ca-certificates", "SSL_CERT_FILE",
+					"# Install custom CA certificates from ~/.cocoon/certs/",
+					"--mount=type=bind,from=cocoon_user_certs",
+					"update-ca-certificates",
+					"SSL_CERT_FILE",
+				}},
+				{path: ".devcontainer/docker-compose.yml", mustContain: []string{
+					"additional_contexts:",
+					`cocoon_user_certs: "${HOME}/.cocoon/certs"`,
+				}},
+				{path: ".devcontainer/devcontainer.json", mustContain: []string{
+					`"initializeCommand": "mkdir -p ${HOME}/.cocoon/certs"`,
 				}},
 			},
 		},

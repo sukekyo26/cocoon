@@ -366,22 +366,29 @@ func repoRoot(t *testing.T) string {
 	return filepath.Clean(filepath.Join(wd, "..", "..", ".."))
 }
 
-// TestGenerate_CertInstallBeforeAptInstall verifies that when certs/*.crt
-// is present, the COPY + update-ca-certificates RUN is emitted before the
-// main apt install RUN. This is the core CERT-01 regression guard.
+// certInstallHeader is the comment that opens the always-emitted cert
+// install RUN block. Tests use it to anchor ordering assertions instead
+// of pinning the inner shell-conditional body, which would couple them
+// to incidental formatting tweaks.
+const certInstallHeader = "# Install custom CA certificates from ~/.cocoon/certs/"
+
+// TestGenerate_CertInstallBeforeAptInstall verifies the always-emitted
+// cert install RUN block lands before the main apt install RUN. This is
+// the core CERT-01 regression guard: HTTPS apt operations performed by
+// the main install must see any user-provided corporate CAs already in
+// the trust store.
 func TestGenerate_CertInstallBeforeAptInstall(t *testing.T) {
 	t.Parallel()
 
-	root := stagingRootWithCert(t)
+	root := stagingRoot(t)
 	got := generateInStagingRoot(t, root, "https://archive.ubuntu.com/ubuntu/")
 
-	const certCopy = "COPY certs/example-corp.crt /tmp/certs/example-corp.crt"
 	const aptInstallMarker = "rm -f /etc/apt/apt.conf.d/docker-clean"
 
-	certIdx := strings.Index(got, certCopy)
+	certIdx := strings.Index(got, certInstallHeader)
 	aptIdx := strings.Index(got, aptInstallMarker)
 	if certIdx < 0 {
-		t.Fatalf("cert COPY missing from output:\n%s", got)
+		t.Fatalf("cert install block missing from output:\n%s", got)
 	}
 	if aptIdx < 0 {
 		t.Fatalf("main apt install RUN missing from output:\n%s", got)
@@ -390,14 +397,10 @@ func TestGenerate_CertInstallBeforeAptInstall(t *testing.T) {
 		t.Errorf("cert install must precede apt install (certIdx=%d aptIdx=%d)", certIdx, aptIdx)
 	}
 
-	// AptCABootstrap is suppressed when cert install root stage is present
-	// (the cert install RUN already brings in ca-certificates).
-	if strings.Contains(got, "# Pre-install ca-certificates from the default HTTP archive") {
-		t.Errorf("AptCABootstrap should be suppressed when CertInstallRoot is non-empty:\n%s", got)
-	}
-
-	// Env declarations and rc echos must remain on the post-USER stage so
-	// they apply to the unprivileged user's shells.
+	// Env declarations live on the post-USER stage so they apply to the
+	// unprivileged user's shells. They must always be emitted (the bundle
+	// they reference is the merged system bundle which exists regardless
+	// of user-cert presence).
 	envIdx := strings.Index(got, "ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt")
 	userSwitchIdx := strings.Index(got, "USER ${USERNAME}\nWORKDIR")
 	if envIdx < 0 || userSwitchIdx < 0 || envIdx < userSwitchIdx {
@@ -405,47 +408,39 @@ func TestGenerate_CertInstallBeforeAptInstall(t *testing.T) {
 	}
 }
 
-// TestGenerate_NoCertsLeavesNoCertBlock verifies that an empty certs
-// directory produces no cert-related Dockerfile content (regression guard
-// against accidental empty-block emission from the new template).
-func TestGenerate_NoCertsLeavesNoCertBlock(t *testing.T) {
+// TestGenerate_CertInstallAlwaysEmitted verifies the cert install block
+// and ENV declarations land in the Dockerfile regardless of whether the
+// build host has populated ~/.cocoon/certs/. The block is built around a
+// shell-side conditional so the Dockerfile is byte-identical for every
+// team member; only what gets installed at build time depends on the
+// host's directory contents.
+func TestGenerate_CertInstallAlwaysEmitted(t *testing.T) {
 	t.Parallel()
 
 	root := stagingRoot(t)
 	got := generateInStagingRoot(t, root, "http://archive.ubuntu.com/ubuntu/")
 
-	if strings.Contains(got, "/usr/local/share/ca-certificates") {
-		t.Errorf("empty certs/ should not emit cert install block:\n%s", got)
+	if !strings.Contains(got, certInstallHeader) {
+		t.Errorf("cert install block must always be emitted:\n%s", got)
 	}
-	if strings.Contains(got, "ENV SSL_CERT_FILE=") {
-		t.Errorf("empty certs/ should not emit cert ENV exports:\n%s", got)
+	if !strings.Contains(got, "RUN --mount=type=bind,from=cocoon_user_certs") {
+		t.Errorf("cert install RUN must use the cocoon_user_certs build context:\n%s", got)
+	}
+	if !strings.Contains(got, "ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt") {
+		t.Errorf("ENV SSL_CERT_FILE must always be emitted:\n%s", got)
 	}
 }
 
-// stagingRoot creates a temp workspace root with an empty certs/ and an
-// empty config/ directory; the apt base set now lives in
-// internal/aptbase.MinimalBasePackages and no longer needs a copied
-// apt-base-packages.conf for Generate to run end-to-end.
+// stagingRoot creates a temp workspace root with an empty config/ directory.
+// (Earlier versions of cocoon also scanned <root>/certs/ for *.crt files,
+// but the cert install block is now sourced from ~/.cocoon/certs/ via
+// docker-compose's additional_contexts and no longer reads the project
+// tree at gen time.)
 func stagingRoot(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(root, "certs"), 0o755); err != nil {
-		t.Fatalf("mkdir certs: %v", err)
-	}
 	if err := os.MkdirAll(filepath.Join(root, "config"), 0o755); err != nil {
 		t.Fatalf("mkdir config: %v", err)
-	}
-	return root
-}
-
-// stagingRootWithCert returns stagingRoot plus a PEM dummy cert at
-// certs/example-corp.crt.
-func stagingRootWithCert(t *testing.T) string {
-	t.Helper()
-	root := stagingRoot(t)
-	pem := "-----BEGIN CERTIFICATE-----\nMIIBdummyCertificateContentForTesting==\n-----END CERTIFICATE-----\n"
-	if err := os.WriteFile(filepath.Join(root, "certs", "example-corp.crt"), []byte(pem), 0o600); err != nil {
-		t.Fatalf("write cert: %v", err)
 	}
 	return root
 }
@@ -499,26 +494,25 @@ func generateInStagingRootWithProxy(t *testing.T, root, mirrorURL, httpProxy str
 }
 
 // TestGenerate_CertWithHTTPMirror_RewriteBeforeCertInstall verifies that an
-// HTTP [apt.mirror] is rewritten before the cert install RUN. The cert install
-// itself runs apt-get update against archive.ubuntu.com, so on air-gapped
-// hosts the mirror swap must happen first or the build fails before reaching
-// update-ca-certificates.
+// HTTP [apt.mirror] is rewritten before the cert install RUN. The cert
+// install conditionally runs apt-get update against archive.ubuntu.com, so
+// on air-gapped hosts the mirror swap must happen first or the build fails
+// before reaching update-ca-certificates.
 func TestGenerate_CertWithHTTPMirror_RewriteBeforeCertInstall(t *testing.T) {
 	t.Parallel()
 
-	root := stagingRootWithCert(t)
+	root := stagingRoot(t)
 	got := generateInStagingRoot(t, root, "http://internal.mirror.invalid/ubuntu/")
 
 	const rewriteHeader = "# Rewrite upstream apt archive URLs to the configured [apt.mirror].url"
-	const certCopy = "COPY certs/example-corp.crt /tmp/certs/example-corp.crt"
 
 	rewriteIdx := strings.Index(got, rewriteHeader)
-	certIdx := strings.Index(got, certCopy)
+	certIdx := strings.Index(got, certInstallHeader)
 	if rewriteIdx < 0 {
 		t.Fatalf("mirror rewrite block missing from output:\n%s", got)
 	}
 	if certIdx < 0 {
-		t.Fatalf("cert COPY missing from output:\n%s", got)
+		t.Fatalf("cert install block missing from output:\n%s", got)
 	}
 	if rewriteIdx > certIdx {
 		t.Errorf("HTTP mirror rewrite must precede cert install (rewriteIdx=%d certIdx=%d)", rewriteIdx, certIdx)
@@ -532,19 +526,18 @@ func TestGenerate_CertWithHTTPMirror_RewriteBeforeCertInstall(t *testing.T) {
 func TestGenerate_CertWithHTTPSMirror_RewriteAfterCertInstall(t *testing.T) {
 	t.Parallel()
 
-	root := stagingRootWithCert(t)
+	root := stagingRoot(t)
 	got := generateInStagingRoot(t, root, "https://internal.mirror.invalid/ubuntu/")
 
 	const rewriteHeader = "# Rewrite upstream apt archive URLs to the configured [apt.mirror].url"
-	const certCopy = "COPY certs/example-corp.crt /tmp/certs/example-corp.crt"
 
 	rewriteIdx := strings.Index(got, rewriteHeader)
-	certIdx := strings.Index(got, certCopy)
+	certIdx := strings.Index(got, certInstallHeader)
 	if rewriteIdx < 0 {
 		t.Fatalf("mirror rewrite block missing from output:\n%s", got)
 	}
 	if certIdx < 0 {
-		t.Fatalf("cert COPY missing from output:\n%s", got)
+		t.Fatalf("cert install block missing from output:\n%s", got)
 	}
 	if certIdx > rewriteIdx {
 		t.Errorf("cert install must precede HTTPS mirror rewrite (certIdx=%d rewriteIdx=%d)", certIdx, rewriteIdx)
@@ -554,24 +547,22 @@ func TestGenerate_CertWithHTTPSMirror_RewriteAfterCertInstall(t *testing.T) {
 // TestGenerate_CertWithAptProxy_ProxyConfBeforeCertInstall verifies that the
 // 95proxy file is written before the cert install RUN. Cert install's
 // apt-get update must go through the configured proxy to reach the archive
-// at all in proxied corporate networks; the previous ordering hit the network
-// directly and broke those builds.
+// at all in proxied corporate networks.
 func TestGenerate_CertWithAptProxy_ProxyConfBeforeCertInstall(t *testing.T) {
 	t.Parallel()
 
-	root := stagingRootWithCert(t)
+	root := stagingRoot(t)
 	got := generateInStagingRootWithProxy(t, root, "http://archive.ubuntu.com/ubuntu/", "http://proxy.invalid:3128")
 
 	const proxyHeader = "# Configure apt HTTP(S) proxy from [apt.proxy]"
-	const certCopy = "COPY certs/example-corp.crt /tmp/certs/example-corp.crt"
 
 	proxyIdx := strings.Index(got, proxyHeader)
-	certIdx := strings.Index(got, certCopy)
+	certIdx := strings.Index(got, certInstallHeader)
 	if proxyIdx < 0 {
 		t.Fatalf("apt proxy block missing from output:\n%s", got)
 	}
 	if certIdx < 0 {
-		t.Fatalf("cert COPY missing from output:\n%s", got)
+		t.Fatalf("cert install block missing from output:\n%s", got)
 	}
 	if proxyIdx > certIdx {
 		t.Errorf("apt proxy conf must precede cert install (proxyIdx=%d certIdx=%d)", proxyIdx, certIdx)
@@ -579,24 +570,23 @@ func TestGenerate_CertWithAptProxy_ProxyConfBeforeCertInstall(t *testing.T) {
 }
 
 // TestGenerate_CertWithHTTPMirrorAndProxy_BothPreCert verifies the directly
-// orthogonal case: certs + HTTP mirror + apt proxy. Both rewrite blocks must
-// land in the pre-cert slot, in mirror→proxy order, so cert install's own
+// orthogonal case: HTTP mirror + apt proxy. Both rewrite blocks must land
+// in the pre-cert slot, in mirror→proxy order, so cert install's own
 // apt-get update can use the internal mirror through the proxy.
 func TestGenerate_CertWithHTTPMirrorAndProxy_BothPreCert(t *testing.T) {
 	t.Parallel()
 
-	root := stagingRootWithCert(t)
+	root := stagingRoot(t)
 	got := generateInStagingRootWithProxy(t, root, "http://internal.mirror.invalid/ubuntu/", "http://proxy.invalid:3128")
 
 	const rewriteHeader = "# Rewrite upstream apt archive URLs to the configured [apt.mirror].url"
 	const proxyHeader = "# Configure apt HTTP(S) proxy from [apt.proxy]"
-	const certCopy = "COPY certs/example-corp.crt /tmp/certs/example-corp.crt"
 
 	rewriteIdx := strings.Index(got, rewriteHeader)
 	proxyIdx := strings.Index(got, proxyHeader)
-	certIdx := strings.Index(got, certCopy)
+	certIdx := strings.Index(got, certInstallHeader)
 	if rewriteIdx < 0 || proxyIdx < 0 || certIdx < 0 {
-		t.Fatalf("expected mirror, proxy, and cert COPY blocks; got:\n%s", got)
+		t.Fatalf("expected mirror, proxy, and cert install blocks; got:\n%s", got)
 	}
 	if rewriteIdx >= proxyIdx || proxyIdx >= certIdx {
 		t.Errorf("expected mirror→proxy→cert order (rewriteIdx=%d proxyIdx=%d certIdx=%d)", rewriteIdx, proxyIdx, certIdx)
@@ -604,36 +594,36 @@ func TestGenerate_CertWithHTTPMirrorAndProxy_BothPreCert(t *testing.T) {
 }
 
 // TestGenerate_CertWithHTTPSMirrorAndProxy_ProxyPreMirrorPost verifies the
-// split case: certs + HTTPS mirror + apt proxy. The proxy conf must move into
-// the pre-cert slot (cert install needs it to reach the archive) while the
-// HTTPS mirror rewrite must stay in the post-cert slot (cert install can't TLS
-// to the HTTPS mirror without the CA bundle yet).
+// split case: HTTPS mirror + apt proxy. The proxy conf must move into the
+// pre-cert slot (cert install needs it to reach the archive) while the HTTPS
+// mirror rewrite must stay in the post-cert slot (cert install can't TLS to
+// the HTTPS mirror without the CA bundle yet).
 func TestGenerate_CertWithHTTPSMirrorAndProxy_ProxyPreMirrorPost(t *testing.T) {
 	t.Parallel()
 
-	root := stagingRootWithCert(t)
+	root := stagingRoot(t)
 	got := generateInStagingRootWithProxy(t, root, "https://internal.mirror.invalid/ubuntu/", "http://proxy.invalid:3128")
 
 	const proxyHeader = "# Configure apt HTTP(S) proxy from [apt.proxy]"
-	const certCopy = "COPY certs/example-corp.crt /tmp/certs/example-corp.crt"
 	const rewriteHeader = "# Rewrite upstream apt archive URLs to the configured [apt.mirror].url"
 
 	proxyIdx := strings.Index(got, proxyHeader)
-	certIdx := strings.Index(got, certCopy)
+	certIdx := strings.Index(got, certInstallHeader)
 	rewriteIdx := strings.Index(got, rewriteHeader)
 	if proxyIdx < 0 || certIdx < 0 || rewriteIdx < 0 {
-		t.Fatalf("expected proxy, cert COPY, and mirror rewrite blocks; got:\n%s", got)
+		t.Fatalf("expected proxy, cert install, and mirror rewrite blocks; got:\n%s", got)
 	}
 	if proxyIdx >= certIdx || certIdx >= rewriteIdx {
 		t.Errorf("expected proxy→cert→mirror order (proxyIdx=%d certIdx=%d rewriteIdx=%d)", proxyIdx, certIdx, rewriteIdx)
 	}
 }
 
-// TestGenerate_NoCerts_KeepsAptOrderingStable verifies the byte-exact field
-// positions for the no-certs case: AptMirrorRewrite and AptProxyConf must
-// stay in their post-CertInstallRoot slots so an empty certs/ tree produces
-// the same Dockerfile as the v8.5.0 baseline.
-func TestGenerate_NoCerts_KeepsAptOrderingStable(t *testing.T) {
+// TestGenerate_AptOrderingWithMirrorAndProxy_StableShape pins the byte-exact
+// relative positions of AptMirrorRewrite, AptProxyConf, and the main apt
+// install RUN. The cert install block now sits between the proxy conf and
+// the main apt install (always emitted), but the mirror→proxy→apt-install
+// chain must remain monotonic.
+func TestGenerate_AptOrderingWithMirrorAndProxy_StableShape(t *testing.T) {
 	t.Parallel()
 
 	root := stagingRoot(t)
