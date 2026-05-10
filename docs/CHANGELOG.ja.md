@@ -36,6 +36,10 @@ cocoon の主要な変更を記録します。フォーマットは
 
 - `docs/plugins.md` (英語) と `docs/plugins.ja.md` (日本語) を新設。プラグイン作成者向けの単一ソースとして、3 層 LayeredFS / `plugin.toml` 全フィールド表 / `install.sh` と `install_user.sh` の使い分け（判断マトリクス + starship 実例 + fzf / oh-my-zsh / miniconda の仮想例）/ install スクリプトに渡される環境変数 / バージョン pin の契約 / catalog ツアー / トラブルシューティングをまとめた。`plugin-authoring` スキル (SKILL.md) は agent 向け作業手順のみに絞り、仕様面はすべて新ドキュメントへ委譲。
 - `docs/commands.md` の plugin セクションを「目的・実行例・落とし穴」付きで全面増補。先頭にレイヤード FS (project > user > embedded) の説明を置き、`docs/plugins.md` への作成者向けクロスリンクを追加。従来の `add → 編集 → 有効化 → gen` ワークフロー記述は「`[plugins].enable` に id を並べる; カスタマイズしたければ cp -r or scaffold」に置き換えた。
+- `README.md` と `docs/README.ja.md` を全面書き直し。機能列挙ではなく「Docker / docker-compose を書きたくない人向け」という想定ユーザー宣言と Before/After 比較を冒頭に置く構成に変更した。両 README と `docs/{architecture,configuration,commands,plugins}.{md,ja.md}` の冒頭に v0.x alpha 警告ブロックを追加し、どのドキュメント入口からも開発段階の注意事項が見えるようにした。冒頭バッジが MIT License を示しているため、両 README 末尾の `## License` セクションは削除した。
+- `docs/plugins.md` / `docs/plugins.ja.md` の `## 1. … ## 9. …` という番号付き H2 プレフィックスをすべて撤去し、本文中の `§N` 形式の節参照は節タイトル直接参照に書き換えた。今後の編集で anchor が割れにくくなる。
+- `docs/configuration.{md,ja.md}` の `[container.shell]` 節にあった永続シェル rc の実装詳細（重複説明）を 1 文に圧縮し、単一情報源として `architecture.md#shell-injection` へリンクするようにした。
+- `docs/commands.{md,ja.md}` 末尾に「削除済みコマンド」節を追加。撤去された `cocoon config` ノウングループと `cocoon plugin add` / `cocoon plugin remove` を 1 行ずつの移行案内付きで列挙し、古いコマンドを探して辿り着いた読者がすぐに代替手段を見つけられるようにした。
 
 ### 削除
 
