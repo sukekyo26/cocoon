@@ -19,6 +19,7 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ### 変更
 
+- `cocoon plugin scaffold` の対話プロンプト「install_user.sh も生成する?」に複数段落の説明を追加。root + user 分割の趣旨、付けるべきケース／付けないケース、典型例として starship を提示する。EN / JA 両プロンプトカタログを更新。
 - `cocoon gen` がプラグインカタログを `~/.cocoon/cache/build-context/` に展開する処理を廃止。有効化された各プラグインの `install.sh` (および存在すれば `install_user.sh`) は生成 `.devcontainer/Dockerfile` 内へシングルクオートの bash heredoc で直接埋め込まれ、`docker-compose.yml` から `additional_contexts: plugins:` も削除した。これによりビルドはプロジェクトツリー以外を必要とせず、ホストでも dev コンテナ内でも同じように `cocoon gen` を実行できる (従来はキャッシュがホスト `$HOME` 配下に置かれる前提のためビルドは必ずホストで行う必要があった)。残存する `~/.cocoon/cache/build-context/` ディレクトリは再作成されないので、不要なら `rm -rf ~/.cocoon/cache/build-context` で手動削除できる。
 - **BREAKING**: `cocoon plugin scaffold` の `--plugins-dir` デフォルトを `./plugins` から `<workspace>/.cocoon/plugins` (`workspace.toml` から自動検出) に変更。`--plugins-dir` 未指定かつ cocoon プロジェクト外で実行した場合は `./plugins/<id>/` に黙って書き込む代わりに actionable error で停止する。明示的に上書きするには `--plugins-dir <path>` を渡す。
 - **BREAKING**: TLS 証明書自動取り込みの参照元を `<project>/certs/*.crt` から `~/.cocoon/certs/*.crt` に変更し、機能自体を `[certificates] enable = true` による opt-in 化 (デフォルト off)。移行手順: `workspace.toml` に `[certificates]\nenable = true` を追加し、`mkdir -p ~/.cocoon/certs && mv ./certs/*.crt ~/.cocoon/certs/` を実行、続いて `cocoon gen` を再実行。プロジェクト直下の `certs/` ディレクトリはもはやスキャンされず、ワークスペースが opt-in しない限り cert 配線も生成されない。
@@ -32,10 +33,13 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ### ドキュメント
 
-- `docs/commands.md` の plugin セクションを「目的・実行例・落とし穴」付きで全面増補。先頭にレイヤード FS (project > user > embedded) の説明と `add → 編集 → 有効化 → gen` の典型ワークフローを追加。
+- `docs/plugins.md` (英語) と `docs/plugins.ja.md` (日本語) を新設。プラグイン作成者向けの単一ソースとして、3 層 LayeredFS / `plugin.toml` 全フィールド表 / `install.sh` と `install_user.sh` の使い分け（判断マトリクス + starship 実例 + fzf / oh-my-zsh / miniconda の仮想例）/ install スクリプトに渡される環境変数 / バージョン pin の契約 / catalog ツアー / トラブルシューティングをまとめた。`plugin-authoring` スキル (SKILL.md) は agent 向け作業手順のみに絞り、仕様面はすべて新ドキュメントへ委譲。
+- `docs/commands.md` の plugin セクションを「目的・実行例・落とし穴」付きで全面増補。先頭にレイヤード FS (project > user > embedded) の説明を置き、`docs/plugins.md` への作成者向けクロスリンクを追加。従来の `add → 編集 → 有効化 → gen` ワークフロー記述は「`[plugins].enable` に id を並べる; カスタマイズしたければ cp -r or scaffold」に置き換えた。
 
 ### 削除
 
+- **BREAKING**: `cocoon plugin remove` サブコマンドを削除。実装は `os.RemoveAll` の薄いラッパーで `rm -rf <overlay>` と完全に等価だった。移行手順: `cocoon plugin remove <id> --scope user` を `rm -rf ~/.cocoon/plugins/<id>` (project スコープなら `<workspace>/.cocoon/plugins/<id>`) に置き換える。
+- **BREAKING**: `cocoon plugin add` サブコマンドを削除。実装は埋め込みプラグインを書き込み可能な overlay にコピーするだけだったが、「add」という名前が「enable」と誤読されやすかった (LayeredFS のおかげで `[plugins].enable` に id を並べるだけで埋め込みカタログは有効化される)。移行手順: 埋め込みプラグインを使うだけなら `workspace.toml` の `[plugins].enable` に id を列挙する。改変したい場合は `cocoon plugin scaffold <new-id>` で新規 id の雛形を生成しコピーするか、`cp -r internal/plugin/catalog/<id> ~/.cocoon/plugins/` で直接 overlay に置く。`add` が呼んでいた `plugin.Materialize` ヘルパも併せて削除。
 - **BREAKING**: `cocoon config` 名詞グループを削除 (`get` / `list` / `volumes` / `plugin-get` / `plugin-list` / `plugin-volumes` / `plugins-table` / `validate-workspace` / `validate-plugins` / `has-section` / `list-sidecars` / `dump-devcontainer` / `dump-repositories` / `repositories` / `format-repositories`)。これらは v0.1.0 で全廃された bash entry-point スクリプト用の低レベル TOML アクセサで、cocoon 内部では既に未使用。`cocoon config` でスクレイプしていた外部スクリプトは専用の TOML パーサ (`tomlq` / `taplo` や小さな Go / Python ヘルパ) に切り替えてください。
 
 ## [0.1.0] - 2026-05-09
