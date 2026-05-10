@@ -428,6 +428,18 @@ func (c *WorkspaceContext) AptSources() []config.AptSource {
 	return c.WS.Apt.Sources
 }
 
+// CertificatesEnabled reports whether the workspace opts into TLS
+// certificate auto-bake from ${HOME}/.cocoon/certs. Returns false when
+// the [certificates] section is absent or `enable = false`. Generators
+// branch on this to decide whether to emit cert-related wiring at all,
+// so cert-free workspaces produce cert-free artifacts.
+func (c *WorkspaceContext) CertificatesEnabled() bool {
+	if c == nil || c.WS == nil {
+		return false
+	}
+	return c.WS.Certificates.EnableOrDefault()
+}
+
 // GitUserName returns [git].user_name or "".
 func (c *WorkspaceContext) GitUserName() string {
 	if c.WS == nil || c.WS.Git == nil || c.WS.Git.UserName == nil {
