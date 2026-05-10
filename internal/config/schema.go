@@ -23,6 +23,7 @@ type Workspace struct {
 	Mounts       []Mount                   `toml:"mounts,omitempty"`
 	HomeFiles    *HomeFilesSpec            `toml:"home_files,omitempty"`
 	Locale       *LocaleSpec               `toml:"locale,omitempty"`
+	Certificates *CertificatesSpec         `toml:"certificates,omitempty"`
 	Git          *GitIdentitySpec          `toml:"git,omitempty"`
 	Dockerfile   *DockerfileSpec           `toml:"dockerfile,omitempty"`
 	Services     map[string]SidecarService `toml:"services,omitempty"`
@@ -266,6 +267,23 @@ type LocaleSpec struct {
 type GitIdentitySpec struct {
 	UserName  *string `toml:"user_name,omitempty"`
 	UserEmail *string `toml:"user_email,omitempty"`
+}
+
+// CertificatesSpec gates TLS certificate auto-bake from
+// ~/.cocoon/certs/. See docs/configuration.md `[certificates]`.
+type CertificatesSpec struct {
+	// nil ⇒ default false (pointer distinguishes "field omitted" from
+	// explicit `enable = false`).
+	Enable *bool `toml:"enable,omitempty"`
+}
+
+// EnableOrDefault returns false unless explicitly set true. Safe on a
+// nil receiver.
+func (c *CertificatesSpec) EnableOrDefault() bool {
+	if c == nil || c.Enable == nil {
+		return false
+	}
+	return *c.Enable
 }
 
 // DockerfileSpec mirrors src/wsd/config.DockerfileSpec.

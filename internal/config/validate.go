@@ -116,6 +116,9 @@ func (w *Workspace) runValidate(a *errAccumulator) {
 	if w.Locale != nil {
 		w.Locale.validate(a.at("locale"))
 	}
+	if w.Certificates != nil {
+		w.Certificates.validate(a.at("certificates"))
+	}
 	if w.Git != nil {
 		w.Git.validate(a.at("git"))
 	}
@@ -511,6 +514,10 @@ func (g *GitIdentitySpec) validate(a *errAccumulator) {
 		a.add("user_email does not match "+rxEmail.String(), "user_email")
 	}
 }
+
+// validate is a no-op hook (only field is enable: bool); kept so future
+// fields slot in without re-wiring runValidate.
+func (*CertificatesSpec) validate(_ *errAccumulator) {}
 
 func (m *Mount) validate(a *errAccumulator) {
 	if m.Source == "" {

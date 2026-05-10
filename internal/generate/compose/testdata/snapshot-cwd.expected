@@ -1,0 +1,87 @@
+# Auto-generated from workspace.toml — do not edit directly.
+services:
+  snapshot-test:
+    container_name: "${CONTAINER_SERVICE_NAME}"
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+      additional_contexts:
+        cocoon_user_certs: "${HOME:?HOME must be set on the host}/.cocoon/certs"
+      args:
+        - "OS_IMAGE=${OS_IMAGE}"
+        - "OS_VERSION=${OS_VERSION}"
+        - "USERNAME=${USERNAME}"
+        - "UID=${UID}"
+        - "GID=${GID}"
+        - "DOCKER_GID=${DOCKER_GID}"
+    user: "${UID}:${GID}"
+    environment:
+      - "CONTAINER_SERVICE_NAME=${CONTAINER_SERVICE_NAME}"
+    volumes:
+      - "..:/home/${USERNAME}/workspace/snapshot-test:cached"
+      - "local:/home/${USERNAME}/.local"
+      - "cocoon:/home/${USERNAME}/.cocoon"
+      - "proto:/home/${USERNAME}/.proto"
+      - "aws:/home/${USERNAME}/.aws"
+      - "config:/home/${USERNAME}/.config"
+      - "copilot:/home/${USERNAME}/.copilot"
+      - "claude:/home/${USERNAME}/.claude"
+      - "cargo:/home/${USERNAME}/.cargo"
+      - "rustup:/home/${USERNAME}/.rustup"
+      - "go:/home/${USERNAME}/go"
+      - "deno:/home/${USERNAME}/.deno"
+    ports:
+      - "3000:3000"
+    extra_hosts:
+      - "corp.example:10.0.0.42"
+      - "db.local:host-gateway"
+    dns:
+      - 10.0.0.53
+      - 1.1.1.1
+    dns_search:
+      - corp.example.com
+    sysctls:
+      net.ipv4.ip_unprivileged_port_start: 0
+      vm.max_map_count: 262144
+    cap_add:
+      - SYS_PTRACE
+      - NET_ADMIN
+    cap_drop:
+      - AUDIT_WRITE
+    security_opt:
+      - seccomp=unconfined
+      - "no-new-privileges:true"
+    working_dir: "/home/${USERNAME}/workspace/snapshot-test"
+    tty: true
+    init: true
+    command: sleep infinity
+    stop_grace_period: 30s
+    shm_size: 1gb
+    pids_limit: 4096
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 1048576
+volumes:
+  local:
+    name: "${COMPOSE_PROJECT_NAME}_${CONTAINER_SERVICE_NAME}_local"
+  cocoon:
+    name: "${COMPOSE_PROJECT_NAME}_${CONTAINER_SERVICE_NAME}_cocoon"
+  proto:
+    name: "${COMPOSE_PROJECT_NAME}_${CONTAINER_SERVICE_NAME}_proto"
+  aws:
+    name: "${COMPOSE_PROJECT_NAME}_${CONTAINER_SERVICE_NAME}_aws"
+  config:
+    name: "${COMPOSE_PROJECT_NAME}_${CONTAINER_SERVICE_NAME}_config"
+  copilot:
+    name: "${COMPOSE_PROJECT_NAME}_${CONTAINER_SERVICE_NAME}_copilot"
+  claude:
+    name: "${COMPOSE_PROJECT_NAME}_${CONTAINER_SERVICE_NAME}_claude"
+  cargo:
+    name: "${COMPOSE_PROJECT_NAME}_${CONTAINER_SERVICE_NAME}_cargo"
+  rustup:
+    name: "${COMPOSE_PROJECT_NAME}_${CONTAINER_SERVICE_NAME}_rustup"
+  go:
+    name: "${COMPOSE_PROJECT_NAME}_${CONTAINER_SERVICE_NAME}_go"
+  deno:
+    name: "${COMPOSE_PROJECT_NAME}_${CONTAINER_SERVICE_NAME}_deno"

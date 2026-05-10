@@ -62,6 +62,20 @@ cover-check:
 vuln:
     govulncheck ./...
 
+# Run after intentional changes to generators, plugin mutators, or
+# `cocoon init` output, then commit the updated golden / snapshot
+# files under each package's testdata/ along with the source change
+# (covers `*.expected`, `testdata/init/*.workspace.toml`, and
+# `testdata/mutator/**/after.toml`). CI runs without -update-golden,
+# so any drift fails the test job.
+# Regenerate all golden / snapshot files in one shot.
+regen-snapshots:
+    go test ./internal/generate/dockerfile       -update-golden
+    go test ./internal/generate/compose          -update-golden
+    go test ./internal/generate/devcontainerjson -update-golden
+    go test ./internal/plugin                    -update-golden
+    go test ./internal/cli/init                  -update-golden
+
 # Build a cocoon binary for the host OS/arch.
 build:
     @mkdir -p bin
@@ -85,5 +99,20 @@ release-assets: build-all
 mod-verify:
     go mod verify
 
-# Composite pre-push gate mirroring the GitHub Actions Go pipeline.
-ci: fmt-check vet lint test vuln mod-verify
+# Run shellcheck across all *.sh files in the repo (severity=style)
+shellcheck:
+    @command -v shellcheck >/dev/null 2>&1 || { echo >&2 "shellcheck not installed; install via 'apt-get install shellcheck' / 'brew install shellcheck'"; exit 1; }
+    shellcheck --severity=style $(find . -type f -name '*.sh' -not -path './.git/*' -not -path './bin/*')
+
+# Format all *.sh files in-place with shfmt (gofmt-style)
+shfmt:
+    @command -v shfmt >/dev/null 2>&1 || { echo >&2 "shfmt not installed; see https://github.com/mvdan/sh/releases or 'brew install shfmt'"; exit 1; }
+    shfmt -i 2 -ci -w $(find . -type f -name '*.sh' -not -path './.git/*' -not -path './bin/*')
+
+# Verify all *.sh files are shfmt-clean (CI gate)
+shfmt-check:
+    @command -v shfmt >/dev/null 2>&1 || { echo >&2 "shfmt not installed; see https://github.com/mvdan/sh/releases or 'brew install shfmt'"; exit 1; }
+    shfmt -i 2 -ci -d $(find . -type f -name '*.sh' -not -path './.git/*' -not -path './bin/*')
+
+# Composite pre-push gate mirroring the GitHub Actions pipeline.
+ci: fmt-check vet lint test vuln mod-verify shellcheck shfmt-check

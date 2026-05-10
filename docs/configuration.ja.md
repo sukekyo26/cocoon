@@ -1,5 +1,8 @@
 # 設定 (`workspace.toml`)
 
+> [!WARNING]
+> cocoon は v0.x（alpha）開発段階です。お使いになる場合は、1.0 までに `workspace.toml` スキーマ・CLI フラグ・プラグイン契約が変更され得ること、各リリースに breaking change が含まれうることをご了承のうえご利用ください。詳細は [CHANGELOG](CHANGELOG.ja.md) と README の「プロジェクトステータス」を参照してください。
+
 `workspace.toml` は `cocoon gen` の唯一の入力です。本ページではスキーマが受理する全セクション・全フィールドを説明します。
 
 `cocoon init` は妥当なデフォルトとコメントアウト済の雛形を含むファイルを書き出すので、多くの場合は生成物を編集するだけで済みます。本リファレンスは必要に応じて参照してください。
@@ -41,6 +44,7 @@
 | `[[mounts]]` | optional | 追加バインドマウント |
 | `[home_files]` | optional | `~/` 配下のファイル単位 bind mount |
 | `[locale]` | optional | タイムゾーンと言語 |
+| `[certificates]` | optional | `~/.cocoon/certs/` からの TLS 自動取り込み opt-in（デフォルト off） |
 | `[dockerfile]` | optional | Dockerfile への独自フラグメント注入 |
 | `[services.<name>]` | optional | サイドカーサービス |
 | `[devcontainer.*]` | optional | `devcontainer.json` への pass-through |
@@ -122,6 +126,8 @@ env     = { EDITOR = "vim", PAGER = "less -R" }
 ```
 
 > `EDITOR=vim` / `nano` は apt カテゴリ `text-editors` の有効化が前提。`EDITOR=code` は VS Code Dev Containers から起動したとき (VS Code が `code` シムを注入) に使えます。`PAGER=less` は apt カテゴリ `utilities` が前提。
+
+`[container.shell]` はリポジトリにチェックインするプロジェクト共通設定向けです。**個人ごと、コンテナリビルドを跨いで永続化したい**設定は、起動時に rc ファイルから自動 source される `~/.cocoon/.shellrc` (fish の場合 `~/.cocoon/.shellrc.fish`) に書いてください。このパスは Docker named volume でバックされているため、`docker compose down && up --build` を跨いでも編集が残り、`docker compose down -v` でのみリセットされます。rc ファイルがビルド時にどう組み立てられるか、コンテナ内 `~/.cocoon/` とホスト側の cocoon CLI 作業領域がどう違うかは [`architecture.ja.md` の「シェル注入」](architecture.ja.md#シェル注入) を参照してください。
 
 ### `[container.hosts]`
 
@@ -297,6 +303,58 @@ source   = "~/.ssh"
 target   = "/home/${USERNAME}/.ssh"
 readonly = true
 ```
+
+---
+
+## `[certificates]`
+
+`~/.cocoon/certs/` からの TLS 証明書自動取り込みを opt-in で有効化する。
+
+| フィールド | 型 | デフォルト | 備考 |
+|---|---|---|---|
+| `enable` | bool | `false` | `true` のときジェネレータがホスト TLS 証明書を build に配線する。 |
+
+```toml
+[certificates]
+enable = true
+```
+
+セクション不在 / `enable = false` のときは、生成される `Dockerfile` / `docker-compose.yml` / `devcontainer.json` に **cert 関連の配線は一切乗りません** (`additional_contexts` / `RUN --mount=type=bind` / `initializeCommand` / `SSL_CERT_FILE` / `CURL_CA_BUNDLE` / `REQUESTS_CA_BUNDLE` / `NODE_EXTRA_CA_CERTS` ENV のいずれも出力されない)。社内 CA を扱わないチームは、corp-CA 機構ゼロの成果物を commit できます。
+
+有効化時、社内 CA (Zscaler、企業プロキシ、開発用自己署名 CA 等) をコンテナで信頼させたい場合、PEM 形式の `.crt` ファイルを **`~/.cocoon/certs/`** に置きます。コンテナビルド時に自動的にトラストストアへ取り込まれます。
+
+```sh
+mkdir -p ~/.cocoon/certs
+cp /path/to/corp-ca.crt ~/.cocoon/certs/
+docker compose -f .devcontainer/docker-compose.yml build
+```
+
+このディレクトリは `workspace.toml` のセクションではなくホスト側のグローバル設定です。**複数の cocoon プロジェクトで同じ corp CA を共有できます** (プロジェクトごとに証明書をコピーする必要はありません)。
+
+### チーム運用シナリオ
+
+cocoon の生成物 `.devcontainer/*` は、ワークスペースが `[certificates]` を有効化しているかどうかで内容が変わります。有効化したワークスペースは team 全員で同じ cert 配線付き成果物を共有し、無効化 (デフォルト) のワークスペースは cert 配線ゼロの成果物を共有します。
+
+| メンバー | cocoon バイナリ | `~/.cocoon/certs/` 作成 | 必要な操作 |
+|---|---|---|---|
+| 生成担当 (有効化済み) | あり | `cocoon gen` が自動作成 (0700) | `cocoon gen && commit` |
+| 生成担当 (無効化) | あり | 作成されない | cert 関連は何もしなくて良い |
+| VS Code 利用者 (cert 不要) | 不要 | 有効化時のみ `initializeCommand` が自動作成 | なし。dev container を開くだけ |
+| VS Code 利用者 (cert 必要) | 不要 | 有効化時のみ `initializeCommand` が自動作成 | `cp corp.crt ~/.cocoon/certs/` して Rebuild Container |
+| `docker compose` 直接利用 / CI (有効化済み) | 不要 | **手動 `mkdir -p ~/.cocoon/certs`** | 初回のみ手動 mkdir、cert 必要なら配置して build |
+
+> **Note**: VS Code Dev Containers を使わずに `docker compose build` を直接実行する場合は、初回のみホスト側で `mkdir -p ~/.cocoon/certs` を実行してください。VS Code 経由のメンバーは `initializeCommand` により自動作成されます。CI 環境ではセットアップステップに `mkdir -p ~/.cocoon/certs` を 1 行追加してください。
+
+### 仕組み (有効化時)
+
+- `.devcontainer/docker-compose.yml`: `additional_contexts: cocoon_user_certs: ${HOME:?…}/.cocoon/certs` により `~/.cocoon/certs/` をビルドコンテキストとして直接参照 (コピー無し)。`${HOME:?…}` 形式で HOME 未設定環境では fail-fast。
+- `.devcontainer/Dockerfile`: `RUN --mount=type=bind,from=cocoon_user_certs … if find … ; then … update-ca-certificates ; fi` により build 時に `*.crt` を取り込む。main apt install より前に実行されるため、Zscaler 等の TLS インターセプト下でも build が通る。同 RUN の後に `SSL_CERT_FILE` / `CURL_CA_BUNDLE` / `REQUESTS_CA_BUNDLE` / `NODE_EXTRA_CA_CERTS` をマージ済み trust store (`/etc/ssl/certs/ca-certificates.crt`) に設定するため、これら環境変数を読む言語ランタイム (curl / Python requests / Node.js 等) も新しい CA を参照できる。
+- `.devcontainer/devcontainer.json`: `initializeCommand: "mkdir -p ${HOME:?…}/.cocoon/certs"` により VS Code Dev Containers がコンテナ作成前にホスト側ディレクトリを自動作成する。
+
+### 注意点
+
+- `~/.cocoon/certs/` 配下のファイルは **すべて** ビルドコンテキストとして BuildKit に渡されます。`.crt` 以外 (特に秘密鍵 `.key` 等) を置かないでください。
+- 証明書を更新したらコンテナを rebuild してください。BuildKit が bind-mount 内容ハッシュを cache key に含めるため、自動的に層が再構築されます。
 
 ---
 

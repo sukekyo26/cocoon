@@ -11,15 +11,15 @@ ARCH="$(dpkg --print-architecture)"
 case "$ARCH" in
   amd64) CHECKSUM="$CHECKSUM_AMD64" ;;
   arm64) CHECKSUM="$CHECKSUM_ARM64" ;;
-  *)     CHECKSUM="$CHECKSUM_AMD64" ;;
+  *) CHECKSUM="$CHECKSUM_AMD64" ;;
 esac
 
 if [ -n "$PIN" ]; then
   VERSION="$PIN"
 else
   VERSION=$(curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
-    https://checkpoint-api.hashicorp.com/v1/check/terraform \
-    | sed -n 's/.*"current_version":"\([^"]*\)".*/\1/p')
+    https://checkpoint-api.hashicorp.com/v1/check/terraform |
+    sed -n 's/.*"current_version":"\([^"]*\)".*/\1/p')
 fi
 
 curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \

@@ -104,6 +104,14 @@ var messagesEN_initTemplates = map[string]string{
 		"# [locale]\n" +
 		"# timezone = \"Asia/Tokyo\"\n" +
 		"# lang     = \"ja_JP.UTF-8\"",
+	"init_toml_template_certificates": "# [certificates] — opt in to TLS certificate auto-bake from ~/.cocoon/certs/.\n" +
+		"#   When enable = true, `cocoon gen` wires the host directory into the build via\n" +
+		"#   docker-compose's additional_contexts and the Dockerfile's RUN --mount=type=bind,\n" +
+		"#   so any *.crt files placed there land in the container's trust store at build time.\n" +
+		"#   Useful for Zscaler / corporate proxies / private CAs. Default off → no cert wiring\n" +
+		"#   in any generated artifact.\n" +
+		"# [certificates]\n" +
+		"# enable = true",
 	"init_toml_template_dockerfile": "# [dockerfile] — inject custom Dockerfile fragments at well-defined hook points.\n" +
 		"#   pre_user_setup runs before useradd; post_plugins runs after plugin install.sh's.\n" +
 		"# [dockerfile]\n" +
@@ -221,6 +229,13 @@ var messagesJA_initTemplates = map[string]string{
 		"# [locale]\n" +
 		"# timezone = \"Asia/Tokyo\"\n" +
 		"# lang     = \"ja_JP.UTF-8\"",
+	"init_toml_template_certificates": "# [certificates] — ~/.cocoon/certs/ からコンテナイメージへ TLS 証明書を自動取り込み (opt-in)。\n" +
+		"#   enable = true のとき `cocoon gen` が docker-compose の additional_contexts と Dockerfile の\n" +
+		"#   RUN --mount=type=bind を配線し、ホスト側ディレクトリの *.crt がビルド時にトラストストアへ\n" +
+		"#   マージされる。Zscaler / 社内プロキシ / プライベート CA を信頼させたいときに有効化。\n" +
+		"#   デフォルト off → 生成物に cert 関連の配線は一切乗らない。\n" +
+		"# [certificates]\n" +
+		"# enable = true",
 	"init_toml_template_dockerfile": "# [dockerfile] — Dockerfile の所定フックポイントにカスタムフラグメントを注入。\n" +
 		"#   pre_user_setup は useradd の前、post_plugins はプラグイン install.sh の後に実行。\n" +
 		"# [dockerfile]\n" +

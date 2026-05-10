@@ -73,6 +73,10 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 	cmd.Flags().StringVar(&flags.MountRoot, "mount-root", "", `mount range: "." (cwd, default) or ".." (parent)`)
 	cmd.Flags().BoolVar(&flags.Devcontainer, "devcontainer", false, "force-enable .devcontainer/devcontainer.json output")
 	cmd.Flags().BoolVar(&flags.NoDevcontainer, "no-devcontainer", false, "skip .devcontainer/devcontainer.json output")
+	cmd.Flags().BoolVar(&flags.Certificates, "certificates", false,
+		"force-enable [certificates] auto-bake from ~/.cocoon/certs/")
+	cmd.Flags().BoolVar(&flags.NoCertificates, "no-certificates", false,
+		"skip the [certificates] section (default off)")
 	cmd.Flags().StringVar(
 		&flags.AptCategories,
 		"apt-categories",
@@ -84,6 +88,12 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 		"plugins",
 		"",
 		"comma-separated plugin IDs to enable (skips the plugin multi-select prompt)",
+	)
+	cmd.Flags().StringVar(
+		&flags.PluginVersions,
+		"plugin-versions",
+		"",
+		"comma-separated <id>=<ref> pins for version_capable plugins (each <id> must also appear in --plugins)",
 	)
 	cmd.Flags().StringVar(
 		&flags.AliasBundles,
@@ -105,8 +115,11 @@ type initFlags struct {
 	MountRoot      string
 	Devcontainer   bool
 	NoDevcontainer bool
+	Certificates   bool
+	NoCertificates bool
 	AptCategories  string
 	Plugins        string
+	PluginVersions string
 	AliasBundles   string
 	Force          bool
 }
@@ -122,8 +135,11 @@ func zeroFlags() initFlags {
 		MountRoot:      "",
 		Devcontainer:   false,
 		NoDevcontainer: false,
+		Certificates:   false,
+		NoCertificates: false,
 		AptCategories:  "",
 		Plugins:        "",
+		PluginVersions: "",
 		AliasBundles:   "",
 		Force:          false,
 	}
@@ -135,52 +151,63 @@ func zeroFlags() initFlags {
 // flag-set vs prompt-pending would be ambiguous and the prompt builder
 // would skip groups whose value happens to look empty.
 type initAnswers struct {
-	ServiceName     string
-	Username        string
-	OS              string
-	OSSet           bool
-	OSVersion       string
-	OSVersionSet    bool
-	Shell           string
-	ShellSet        bool
-	MountRoot       string
-	MountRootSet    bool
-	Devcontainer    bool
-	DevcontainerSet bool
-	AptCategories   []string
-	AptSet          bool
-	Plugins         []string
-	PluginsSet      bool
-	AliasBundles    []string
-	AliasBundlesSet bool
+	ServiceName       string
+	Username          string
+	OS                string
+	OSSet             bool
+	OSVersion         string
+	OSVersionSet      bool
+	Shell             string
+	ShellSet          bool
+	MountRoot         string
+	MountRootSet      bool
+	Devcontainer      bool
+	DevcontainerSet   bool
+	Certificates      bool
+	CertificatesSet   bool
+	AptCategories     []string
+	AptSet            bool
+	Plugins           []string
+	PluginsSet        bool
+	PluginVersions    map[string]string
+	PluginVersionsSet bool
+	AliasBundles      []string
+	AliasBundlesSet   bool
 }
 
 func zeroAnswers() initAnswers {
 	return initAnswers{
-		ServiceName:     "",
-		Username:        "",
-		OS:              "",
-		OSSet:           false,
-		OSVersion:       "",
-		OSVersionSet:    false,
-		Shell:           "",
-		ShellSet:        false,
-		MountRoot:       "",
-		MountRootSet:    false,
-		Devcontainer:    false,
-		DevcontainerSet: false,
-		AptCategories:   nil,
-		AptSet:          false,
-		Plugins:         nil,
-		PluginsSet:      false,
-		AliasBundles:    nil,
-		AliasBundlesSet: false,
+		ServiceName:       "",
+		Username:          "",
+		OS:                "",
+		OSSet:             false,
+		OSVersion:         "",
+		OSVersionSet:      false,
+		Shell:             "",
+		ShellSet:          false,
+		MountRoot:         "",
+		MountRootSet:      false,
+		Devcontainer:      false,
+		DevcontainerSet:   false,
+		Certificates:      false,
+		CertificatesSet:   false,
+		AptCategories:     nil,
+		AptSet:            false,
+		Plugins:           nil,
+		PluginsSet:        false,
+		PluginVersions:    nil,
+		PluginVersionsSet: false,
+		AliasBundles:      nil,
+		AliasBundlesSet:   false,
 	}
 }
 
 func runInit(cmd *cobra.Command, stdout, _ io.Writer, flags *initFlags) error {
 	if flags.Devcontainer && flags.NoDevcontainer {
 		return fmt.Errorf("%w: --devcontainer and --no-devcontainer are mutually exclusive", ErrUsage)
+	}
+	if flags.Certificates && flags.NoCertificates {
+		return fmt.Errorf("%w: --certificates and --no-certificates are mutually exclusive", ErrUsage)
 	}
 	cat := i18n.New(i18n.Detect())
 
@@ -206,16 +233,18 @@ func runInit(cmd *cobra.Command, stdout, _ io.Writer, flags *initFlags) error {
 	pkgs := aptcategories.ExpandAptCategories(ans.AptCategories)
 	aliases := aliasbundles.ExpandAliasBundles(ans.AliasBundles)
 	content := renderWorkspaceToml(containerSpec{
-		ServiceName:  ans.ServiceName,
-		Username:     ans.Username,
-		OS:           ans.OS,
-		OSVersion:    ans.OSVersion,
-		Shell:        ans.Shell,
-		Aliases:      aliases,
-		MountRoot:    ans.MountRoot,
-		Devcontainer: ans.Devcontainer,
-		Packages:     pkgs,
-		Plugins:      ans.Plugins,
+		ServiceName:    ans.ServiceName,
+		Username:       ans.Username,
+		OS:             ans.OS,
+		OSVersion:      ans.OSVersion,
+		Shell:          ans.Shell,
+		Aliases:        aliases,
+		MountRoot:      ans.MountRoot,
+		Devcontainer:   ans.Devcontainer,
+		Certificates:   ans.Certificates,
+		Packages:       pkgs,
+		Plugins:        ans.Plugins,
+		PluginVersions: ans.PluginVersions,
 	}, cat)
 	if err := os.WriteFile(target, []byte(content), 0o644); err != nil { //nolint:gosec // workspace.toml is user-readable.
 		return fmt.Errorf("%w: write %s: %w", ErrFailure, target, err)
@@ -255,7 +284,7 @@ func collectAnswers(flags *initFlags, cat *i18n.Catalog, plugins map[string]*plu
 // the corresponding *Set flags. Empty flags leave the field zero so the
 // prompt or default layer knows to fill it in.
 //
-//nolint:gocognit,gocyclo // sequence of independent flag checks; splitting hides intent.
+//nolint:gocognit,gocyclo,funlen // sequence of independent flag checks; splitting hides intent.
 func applyFlags(flags *initFlags, plugins map[string]*plugin.Plugin) (initAnswers, error) {
 	ans := zeroAnswers()
 	if flags.ServiceName != "" {
@@ -313,6 +342,12 @@ func applyFlags(flags *initFlags, plugins map[string]*plugin.Plugin) (initAnswer
 	case flags.NoDevcontainer:
 		ans.Devcontainer, ans.DevcontainerSet = false, true
 	}
+	switch {
+	case flags.Certificates:
+		ans.Certificates, ans.CertificatesSet = true, true
+	case flags.NoCertificates:
+		ans.Certificates, ans.CertificatesSet = false, true
+	}
 	if flags.AptCategories != "" {
 		ids, err := parseAptCategories(flags.AptCategories)
 		if err != nil {
@@ -329,6 +364,13 @@ func applyFlags(flags *initFlags, plugins map[string]*plugin.Plugin) (initAnswer
 			return ans, conflictErr
 		}
 		ans.Plugins, ans.PluginsSet = ids, true
+	}
+	if flags.PluginVersions != "" {
+		pins, err := parsePluginVersions(flags.PluginVersions, plugins, ans.Plugins)
+		if err != nil {
+			return ans, err
+		}
+		ans.PluginVersions, ans.PluginVersionsSet = pins, true
 	}
 	if flags.AliasBundles != "" {
 		ids, err := parseAliasBundles(flags.AliasBundles)
@@ -366,6 +408,9 @@ func applyDefaults(ans initAnswers, plugins map[string]*plugin.Plugin) (initAnsw
 	if !ans.DevcontainerSet {
 		ans.Devcontainer, ans.DevcontainerSet = true, true
 	}
+	if !ans.CertificatesSet {
+		ans.Certificates, ans.CertificatesSet = false, true
+	}
 	if !ans.AptSet {
 		ans.AptCategories, ans.AptSet = aptcategories.DefaultAptCategoryIDs(), true
 	}
@@ -379,21 +424,10 @@ func applyDefaults(ans initAnswers, plugins map[string]*plugin.Plugin) (initAnsw
 }
 
 // promptForMissing runs the interactive flow as a sequence of
-// independent single-field huh.Forms — one prompt per screen. Each
-// form is built and Run()d in order; the value picked by an earlier
-// form feeds into how the next form's options are constructed (e.g.
-// the OS-version form computes its option list from the OS the user
-// just picked).
-//
-// We deliberately avoid the multi-Group / OptionsFunc combination.
-// huh's WindowSize-driven viewport sizing was racing with
-// OptionsFunc / TitleFunc async evaluation and the resulting viewport
-// was sometimes smaller than the option list — symptom: cursor
-// "stays put" while the option list scrolls under it. Independent
-// forms with statically-built Options() side-step the race entirely.
-//
-// Tradeoff: shift+tab cannot navigate back across forms. Re-running
-// `cocoon init` is the way to fix an earlier answer.
+// single-field huh.Forms (one prompt per screen). Multi-Group +
+// OptionsFunc had a viewport race vs. async TitleFunc that left the
+// cursor stuck under scrolling options; independent forms side-step
+// it. Tradeoff: no shift+tab back-nav; re-run `cocoon init` to fix.
 //
 //nolint:gocognit,gocyclo // sequence of independent prompt steps; splitting hides intent.
 func promptForMissing(ans initAnswers, cat *i18n.Catalog, plugins map[string]*plugin.Plugin) (initAnswers, error) {
@@ -459,6 +493,13 @@ func promptForMissing(ans initAnswers, cat *i18n.Catalog, plugins map[string]*pl
 			return ans, err
 		}
 		ans.DevcontainerSet = true
+	}
+	if !ans.CertificatesSet {
+		ans.Certificates = false
+		if err := runSingleFieldForm(certificatesConfirm(cat, &ans.Certificates)); err != nil {
+			return ans, err
+		}
+		ans.CertificatesSet = true
 	}
 	if !ans.AptSet {
 		ans.AptCategories = aptcategories.DefaultAptCategoryIDs()
@@ -549,21 +590,10 @@ func identInput(cat *i18n.Catalog, titleKey, descKey, charsKey string,
 		Value(target)
 }
 
-// All Select / MultiSelect helpers below intentionally omit Height().
-// huh's default behaviour with no explicit Height() is:
-//
-//   - Static Options(): viewport.Height equals the rendered options
-//     line count, so every option is always visible and the cursor
-//     moves between them without scrolling.
-//   - OptionsFunc(): height defaults to 10, viewport ends up around
-//     10 minus title+description height — comfortably bigger than
-//     our largest version list (3 entries).
-//
-// We previously set Height(len(options) + 2) to "be safe", which
-// actively backfired: huh subtracts the rendered title+description
-// height from that, so a description long enough to wrap to two
-// lines shrunk the viewport below the options count. The user then
-// saw the `>` cursor stay fixed while options scrolled under it.
+// Select/MultiSelect helpers below omit Height() intentionally: huh's
+// default already covers our options count, but explicit Height(len+2)
+// breaks when the title+description wraps to two lines (cursor stuck
+// under a scrolling viewport).
 
 func osSelect(cat *i18n.Catalog, target *string) *huh.Select[string] {
 	options := make([]huh.Option[string], len(config.SupportedOSes))
@@ -623,6 +653,15 @@ func devcontainerConfirm(cat *i18n.Catalog, target *bool) *huh.Confirm {
 	return huh.NewConfirm().
 		Title(cat.Msg("init_prompt_devcontainer")).
 		Description(cat.Msg("init_desc_devcontainer")).
+		Affirmative(cat.Msg("init_confirm_yes")).
+		Negative(cat.Msg("init_confirm_no")).
+		Value(target)
+}
+
+func certificatesConfirm(cat *i18n.Catalog, target *bool) *huh.Confirm {
+	return huh.NewConfirm().
+		Title(cat.Msg("init_prompt_certificates")).
+		Description(cat.Msg("init_desc_certificates")).
 		Affirmative(cat.Msg("init_confirm_yes")).
 		Negative(cat.Msg("init_confirm_no")).
 		Value(target)
@@ -771,6 +810,64 @@ func parsePlugins(raw string, plugins map[string]*plugin.Plugin) ([]string, erro
 	return ids, nil
 }
 
+// parsePluginVersions parses `--plugin-versions=<id>=<ref>,…` into a map.
+// Each id must be in plugins, in enabled (silent no-op otherwise), and
+// version_capable. Empty input returns a non-nil empty map (nilnil lint).
+// Duplicate ids are rejected so a typo can't silently pick the last value.
+func parsePluginVersions(raw string, plugins map[string]*plugin.Plugin, enabled []string) (map[string]string, error) {
+	enabledSet := make(map[string]struct{}, len(enabled))
+	for _, id := range enabled {
+		enabledSet[id] = struct{}{}
+	}
+	out := map[string]string{}
+	for _, part := range strings.Split(raw, ",") {
+		token := strings.TrimSpace(part)
+		if token == "" {
+			continue
+		}
+		// Require exactly one '=' so typos like "go==1.23" surface as ErrUsage
+		// instead of silently feeding "=1.23" as the pin ref. Real-world pin
+		// refs (version strings, semver, git tags) never contain '='.
+		if strings.Count(token, "=") != 1 {
+			return nil, fmt.Errorf(
+				"%w: --plugin-versions token %q must be <id>=<ref>", ErrUsage, token)
+		}
+		eq := strings.IndexByte(token, '=')
+		id := strings.TrimSpace(token[:eq])
+		ref := strings.TrimSpace(token[eq+1:])
+		if id == "" || ref == "" {
+			return nil, fmt.Errorf(
+				"%w: --plugin-versions token %q must be <id>=<ref>", ErrUsage, token)
+		}
+		p, ok := plugins[id]
+		if !ok {
+			return nil, fmt.Errorf(
+				"%w: --plugin-versions: unknown plugin %q (run `cocoon plugin list`)",
+				ErrUsage, id)
+		}
+		if !p.Version.VersionCapable {
+			return nil, fmt.Errorf(
+				"%w: --plugin-versions: plugin %q is not version_capable",
+				ErrUsage, id)
+		}
+		if _, on := enabledSet[id]; !on {
+			return nil, fmt.Errorf(
+				"%w: --plugin-versions: plugin %q must also appear in --plugins",
+				ErrUsage, id)
+		}
+		if _, dup := out[id]; dup {
+			return nil, fmt.Errorf(
+				"%w: --plugin-versions: duplicate id %q", ErrUsage, id)
+		}
+		out[id] = ref
+	}
+	// Returning an empty (non-nil) map for an all-whitespace input is fine —
+	// the writer falls back to the commented template when len == 0, and
+	// keeping a non-nil sentinel keeps `nilnil` happy without forcing a
+	// custom error for "I parsed your input but it was empty."
+	return out, nil
+}
+
 // validatePluginConflicts reports the first incompatible pair in the
 // enabled list. Conflicts are declared on plugin.toml's metadata.conflicts
 // field; the relation is symmetric (custom-ps1 lists starship and vice
@@ -824,15 +921,9 @@ func sortedPluginIDs(plugins map[string]*plugin.Plugin) []string {
 	return ids
 }
 
-// loadEmbeddedPlugins enumerates every <id>/plugin.toml in the binary's
-// embedded catalog and returns them keyed by id. Mirrors
-// internal/cli/plugin/sources.go::loadPluginFromLayer's parse path so
-// init agrees with `cocoon plugin list` on metadata interpretation.
-//
-// init runs in a fresh project where neither the project layer
-// (<project>/.cocoon/plugins) nor user overlay (~/.cocoon/plugins)
-// is meaningful yet — bootstrapping deliberately stays embedded-only so
-// the option list cannot be tampered with by stray on-disk overlays.
+// loadEmbeddedPlugins reads only the embedded catalog (no project /
+// user overlays); init bootstraps a fresh project where overlays are
+// not meaningful and could not be tampered with by stray files.
 func loadEmbeddedPlugins() (map[string]*plugin.Plugin, error) {
 	fsys, err := plugin.CatalogFS()
 	if err != nil {
@@ -873,23 +964,25 @@ func defaultOSVersion(osID string) string {
 }
 
 type containerSpec struct {
-	ServiceName  string
-	Username     string
-	OS           string
-	OSVersion    string
-	Shell        string
-	Aliases      map[string]string
-	MountRoot    string
-	Devcontainer bool
-	Packages     []string
-	Plugins      []string
+	ServiceName    string
+	Username       string
+	OS             string
+	OSVersion      string
+	Shell          string
+	Aliases        map[string]string
+	MountRoot      string
+	Devcontainer   bool
+	Certificates   bool
+	Packages       []string
+	Plugins        []string
+	PluginVersions map[string]string
 }
 
-// renderWorkspaceToml emits the workspace.toml body. Section comments come
-// from the i18n catalog so users see ja or en text matching their $LANG;
-// because the file is committed and shared, the locale snapshot is whatever
-// the original `cocoon init` runner had — re-run with --force under a
-// different LANG to switch.
+// renderWorkspaceToml emits workspace.toml. Inline comments come from
+// the i18n catalog so the locale matches the original runner's $LANG
+// (re-run with --force under a different LANG to switch).
+//
+//nolint:funlen // sequence of independent section emits; splitting hides the resulting TOML's top-to-bottom structure.
 func renderWorkspaceToml(s containerSpec, cat *i18n.Catalog) string {
 	var sb strings.Builder
 	sb.WriteString(cat.Msg("init_toml_header"))
@@ -948,7 +1041,7 @@ func renderWorkspaceToml(s containerSpec, cat *i18n.Catalog) string {
 		sb.WriteString("]\n\n")
 	}
 
-	emitTemplate(&sb, cat, "init_toml_template_plugins_versions")
+	writePluginVersions(&sb, cat, s.PluginVersions)
 
 	sb.WriteString(cat.Msg("init_toml_section_apt"))
 	sb.WriteByte('\n')
@@ -971,10 +1064,18 @@ func renderWorkspaceToml(s containerSpec, cat *i18n.Catalog) string {
 		emitTemplate(&sb, cat, key)
 	}
 
+	if s.Certificates {
+		sb.WriteString(cat.Msg("init_toml_section_certificates"))
+		sb.WriteByte('\n')
+		sb.WriteString("[certificates]\n")
+		sb.WriteString("enable = true\n\n")
+	}
+
 	// Top-level opt-in extras at the end of the file. Order roughly
 	// follows "compose runtime knobs first, then host-side persistence,
-	// then locale + Dockerfile hooks, then sidecars + IDE config".
-	for _, key := range []string{
+	// then locale + Dockerfile hooks, then certificates, then sidecars +
+	// IDE config".
+	templateKeys := []string{
 		"init_toml_template_ports",
 		"init_toml_template_volumes",
 		"init_toml_template_env",
@@ -982,13 +1083,43 @@ func renderWorkspaceToml(s containerSpec, cat *i18n.Catalog) string {
 		"init_toml_template_home_files",
 		"init_toml_template_locale",
 		"init_toml_template_dockerfile",
+	}
+	if !s.Certificates {
+		templateKeys = append(templateKeys, "init_toml_template_certificates")
+	}
+	templateKeys = append(templateKeys,
 		"init_toml_template_services",
 		"init_toml_template_devcontainer",
-	} {
+	)
+	for _, key := range templateKeys {
 		emitTemplate(&sb, cat, key)
 	}
 
 	return strings.TrimRight(sb.String(), "\n") + "\n"
+}
+
+// writePluginVersions emits the [plugins.versions.<id>] blocks for each pin
+// in deterministic id order. When pins is empty it falls back to the
+// commented-out example template so the reader still discovers the section.
+func writePluginVersions(sb *strings.Builder, cat *i18n.Catalog, pins map[string]string) {
+	if len(pins) == 0 {
+		emitTemplate(sb, cat, "init_toml_template_plugins_versions")
+		return
+	}
+	ids := make([]string, 0, len(pins))
+	for id := range pins {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	sb.WriteString(cat.Msg("init_toml_section_plugins_versions"))
+	sb.WriteByte('\n')
+	for i, id := range ids {
+		if i > 0 {
+			sb.WriteByte('\n')
+		}
+		sb.WriteString(plugin.FormatPinBlock(id, pins[id], "", ""))
+	}
+	sb.WriteByte('\n')
 }
 
 // emitTemplate writes a localized commented-out section template to sb,

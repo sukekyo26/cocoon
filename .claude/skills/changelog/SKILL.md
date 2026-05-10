@@ -1,0 +1,66 @@
+---
+name: changelog
+description: 'CHANGELOG 記載ルールと更新手順。changelog, 変更履歴, CHANGELOG更新, Unreleased に追記するときに使う。Triggers: "changelog", "変更履歴", "CHANGELOG", "Unreleased".'
+---
+
+# changelog
+
+## 対象ファイル
+
+| ファイル | 言語 |
+|:---------|:-----|
+| `CHANGELOG.md` | 英語 |
+| `docs/CHANGELOG.ja.md` | 日本語 |
+
+両ファイルは常に同期させること（同じ内容を各言語で記載する）。
+
+## フォーマット
+
+[Keep a Changelog](https://keepachangelog.com/en/1.0.0/) に準拠。
+
+- `## [Unreleased]` セクションへ追記する
+- カテゴリ見出しは以下を使用する（この順序で並べる）
+  - `CHANGELOG.md`（英語）: `Added` / `Changed` / `Deprecated` / `Removed` / `Fixed` / `Security`
+  - `docs/CHANGELOG.ja.md`（日本語）: `追加` / `変更` / `非推奨` / `削除` / `修正` / `セキュリティ`
+- 各エントリは動詞で始める（英語: Add / Change / Fix …、日本語: 追加 / 変更 / 修正 …）
+
+## 記載対象
+
+**判断基準**: 「エンドユーザーまたはプラグイン作者の操作・設定・動作が変わるか？」→ **No なら記載しない**。
+
+### 記載する ✓
+
+- 新しい `workspace.toml` フィールド・セクション（例: `[repositories]`、`[shell]`、`[devcontainer.forwardPorts]`）
+- 新しいプラグイン、またはプラグイン仕様の変更（`install.sh` インターフェース、`plugin.toml` スキーマ等）
+- 新しい CLI サブコマンド・フラグ（`setup-docker.sh`、`wsd` サブコマンド等）
+- ユーザーが体験していた動作不具合の修正
+- BREAKING changes（設定ファイルの形式変更・フィールド削除・前提条件の変更等）
+- セキュリティ修正
+- 体感できるパフォーマンス改善（例: ビルド時間の大幅短縮）
+
+### 記載しない ✗
+
+- テスト追加・テストカバレッジ閾値の変更（`*_test.go`、`tests/`、`MIN_COVERAGE` 等）
+- CI/CD 設定の変更（`.github/workflows/` 修正、action の SHA pin 更新等）
+- テスト用内部 API の追加（`RunWithRunner`・`NewExecDockerWithRunner` 等の DI ヘルパ）
+- 外部から見て動作が変わらないリファクタリング（内部関数名の変更、ファイル移動、コード整理等）
+- 開発者向けツールのレシピ追加（`just verify-bin`・`just mod-verify` 等）
+- lint・フォーマット設定変更（`.golangci.yml`、`.shellcheckrc` 等）
+- CHANGELOG 自体の修正
+
+## 同一バージョン内の整理
+
+`[Unreleased]` セクションは**前回リリースからの差分**を表す。追記時に既存エントリと重複・矛盾がないか確認し、整理する。
+
+- A→B→A のように元に戻った変更は、差分ゼロなのでエントリを**削除**する
+- A→B→C と変遷した場合は最終状態のみ記載する（A→C）
+- Added した機能を同バージョン内で Removed した場合は両方**削除**する
+
+## 手順
+
+1. 変更が記載対象かどうかを判断する（対象外なら更新しない）
+2. `CHANGELOG.md` の `## [Unreleased]` セクション全体を読み、既存のカテゴリ見出し（`### Added` 等）を把握する
+3. 追記先のカテゴリ見出しが既に存在する場合は**そのセクションの先頭（見出し直後）に追記する**。新しい見出しを重複して作成しない
+4. カテゴリ見出しが存在しない場合のみ、新しい `### <Category>` 見出しを追加する。追加位置は `Added → Changed → Deprecated → Removed → Fixed → Security` の順序を維持する場所に挿入する
+5. 既存エントリとの重複・矛盾を整理する
+6. `docs/CHANGELOG.ja.md` の `## [Unreleased]` セクションも同様に整理・追記する

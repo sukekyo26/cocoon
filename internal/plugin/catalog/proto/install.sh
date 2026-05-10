@@ -21,12 +21,12 @@ if [ "${RC_SYNTAX:-posix}" = "fish" ]; then
     echo 'set -gx PROTO_HOME $HOME/.proto'
     # shellcheck disable=SC2016
     echo 'set -gx PATH $PROTO_HOME/shims $PROTO_HOME/bin $PATH'
-  } >> "$RC_FILE"
+  } >>"$RC_FILE"
 else
   {
     # shellcheck disable=SC2016
     echo 'export PROTO_HOME="$HOME/.proto"'
     # shellcheck disable=SC2016
     echo 'export PATH="$PROTO_HOME/shims:$PROTO_HOME/bin:$PATH"'
-  } >> "$RC_FILE"
+  } >>"$RC_FILE"
 fi

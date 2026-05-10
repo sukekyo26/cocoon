@@ -28,7 +28,6 @@ type Apt struct {
 // Install mirrors plugin.toml [install].
 type Install struct {
 	RequiresRoot bool              `toml:"requires_root"`
-	UserDirs     []string          `toml:"user_dirs,omitempty"`
 	BuildArgs    []string          `toml:"build_args,omitempty"`
 	Env          map[string]string `toml:"env,omitempty"`
 	Volumes      []string          `toml:"volumes,omitempty"`

@@ -1,5 +1,8 @@
 # コマンドリファレンス
 
+> [!WARNING]
+> cocoon は v0.x（alpha）開発段階です。お使いになる場合は、1.0 までに CLI フラグ・サブコマンドが変更され得ること、各リリースに breaking change が含まれうることをご了承のうえご利用ください。詳細は [CHANGELOG](CHANGELOG.ja.md) と README の「プロジェクトステータス」を参照してください。
+
 `cocoon` バイナリが提供する全コマンドのリファレンス。
 
 ## クイックリファレンス
@@ -10,25 +13,8 @@
 | `cocoon gen` | `.devcontainer/` 配下の成果物を生成 |
 | `cocoon plugin list` | 利用可能な全プラグインを表示 (埋め込み + 上書き) |
 | `cocoon plugin show <id>` | 解決後の plugin マニフェストを表示 |
-| `cocoon plugin add <id>` | プラグインを user / project 上書き層にコピー |
-| `cocoon plugin remove <id>` | 上書き層のコピーを削除 |
-| `cocoon plugin pin <id> <ref>` | `[plugins.versions.<id>]` ブロックを stdout 出力 |
+| `cocoon plugin pin <id> <ref>` | `[plugins.versions.<id>]` ブロックを生成 (stdout / `--write` で in-place) |
 | `cocoon plugin scaffold <id>` | テンプレートから新規 `<id>/` ディレクトリを作成 |
-| `cocoon config get <file> <field>` | `workspace.toml` のスカラーを表示 |
-| `cocoon config list <file> <field>` | `workspace.toml` の配列を表示 |
-| `cocoon config volumes <file>` | `[volumes]` エントリを表示 |
-| `cocoon config plugin-get <dir-or-file> <field>` | `plugin.toml` のスカラーを表示 |
-| `cocoon config plugin-list <dir-or-file> <field>` | `plugin.toml` の配列を表示 |
-| `cocoon config plugin-volumes <dir-or-file>` | `plugin.install.volumes` を表示 |
-| `cocoon config plugins-table <dir>` | プラグイン 1 件 1 行で表示 |
-| `cocoon config validate-workspace <file> [plugins]` | `workspace.toml` を検証 |
-| `cocoon config validate-plugins <dir>` | `<dir>` 配下の全プラグインを検証 |
-| `cocoon config has-section <file> <section>` | true / false を表示 |
-| `cocoon config list-sidecars <file>` | `[services.<name>]` キーを 1 行 1 件で表示 |
-| `cocoon config dump-devcontainer <file>` | `[devcontainer]` を TOML で出力 |
-| `cocoon config dump-repositories <file>` | `[repositories]` を TOML で出力 |
-| `cocoon config repositories <file>` | `[repositories].clone` を JSON で出力 |
-| `cocoon config format-repositories <file\|->` | JSON エントリを TOML へ整形 |
 | `cocoon self-update` | 最新 GitHub リリースで自分自身を置換 |
 | `cocoon version` | バイナリのバージョンを表示 |
 | `cocoon help [command]` | ヘルプを表示 (Cobra 標準) |
@@ -53,8 +39,11 @@
 | `--mount-root <path>` | string | マウント範囲: `"."` (cwd) または `".."` (親)。 |
 | `--devcontainer` | bool | `.devcontainer/devcontainer.json` 出力を強制有効化。 |
 | `--no-devcontainer` | bool | `.devcontainer/devcontainer.json` をスキップ。 |
+| `--certificates` | bool | `[certificates] enable = true` を強制有効化（`~/.cocoon/certs/` の自動取り込み）。 |
+| `--no-certificates` | bool | `[certificates]` セクション省略を強制（デフォルト）。 |
 | `--apt-categories <ids>` | string | カンマ区切り apt カテゴリ ID (プロンプトをスキップ)。 |
 | `--plugins <ids>` | string | カンマ区切りで有効化するプラグイン ID。 |
+| `--plugin-versions <id>=<ref>,...` | string | カンマ区切りの `<id>=<ref>` でプラグインを pin する。各 `<id>` は `--plugins` にも含まれ、かつ `version_capable = true` である必要があり、重複は不可。`[plugins.versions]` ブロックを生成 `workspace.toml` に直接書き込む。 |
 | `--alias-bundles <ids>` | string | カンマ区切りエイリアスバンドル ID (例: `git,ls`)。 |
 | `--force` | bool | 既存 `workspace.toml` を上書き。 |
 
@@ -70,8 +59,9 @@
 6. alias bundles (multi-select)
 7. mount range
 8. devcontainer y/n
-9. apt categories (multi-select)
-10. plugins (multi-select)
+9. certificates y/n (`~/.cocoon/certs/` からの TLS 自動取り込みを opt-in。デフォルト no)
+10. apt categories (multi-select)
+11. plugins (multi-select)
 
 ### 例
 
@@ -93,7 +83,7 @@ cocoon init --yes \
 
 ## `cocoon gen`
 
-`workspace.toml` を読み、プラグインを materialize し、`.devcontainer/` を出力。
+`workspace.toml` を読み、レイヤード FS (project ∪ user ∪ embedded) でプラグインカタログを解決し、`.devcontainer/` を出力。プラグインの install スクリプトは生成 Dockerfile 内に直接埋め込まれるため、ビルドはプロジェクトツリー以外を必要としない。
 
 ### フラグ
 
@@ -112,88 +102,158 @@ cocoon gen
 cocoon gen --workspace ./infra/workspace.toml --output ./infra
 ```
 
+### TLS 証明書
+
+生成される `Dockerfile` / `docker-compose.yml` / `devcontainer.json` に cert 自動取り込み配線が乗るのは、ワークスペースが `[certificates] enable = true` (または `cocoon init --certificates`) で opt-in したときのみ。cert を扱わないワークスペースは cert-free 成果物 (`additional_contexts` なし、`RUN --mount=type=bind` なし、`initializeCommand` なし) を commit する。opt-in 時は `~/.cocoon/certs/*.crt` が build 時にトラストストアへマージされる。詳細は [`configuration.ja.md` の `[certificates]`](configuration.ja.md#certificates) を参照。
+
 ---
 
 ## `cocoon plugin`
 
-cocoon プラグインの管理。`LayeredFS` (project > user > embedded) によりプラグイン ID ごとの解決層が決まる。
+cocoon プラグインの参照と作成支援。プラグインは 3 層に分かれ、優先度 **project > user > embedded** で解決される。
+
+| 層 | パス | 出所 |
+|---|---|---|
+| project | `<workspace>/.cocoon/plugins/<id>/` | overlay（同所で scaffold するか、他 overlay からコピー） |
+| user | `~/.cocoon/plugins/<id>/` | overlay（scaffold または他 overlay からコピー） |
+| embedded | `internal/plugin/catalog/<id>/` (cocoon ソースリポジトリ内、`go:embed` でバイナリに同梱) | cocoon 同梱カタログ。**単体バイナリでインストールしたユーザーのディスクには存在しない** |
+
+埋め込みプラグインを使うだけなら `workspace.toml` の `[plugins].enable` に id を並べるだけでよい。embedded を改変したい場合のサポート手順は `cocoon plugin scaffold <new-id>` で新規 id を作りロジックを移植すること。cocoon リポジトリのクローン（または GitHub Release のソース tarball を展開したもの）があるなら `cp -r internal/plugin/catalog/<id> ~/.cocoon/plugins/<id>/` が近道だが、単体バイナリでインストールした場合は embedded ソースがディスクに存在しないため利用できない。
+
+overlay は `gen` 時にのみ参照される。`~/.cocoon/plugins/<id>/` にファイルを置いただけでは有効化されず、`[plugins].enable` への追加が必須。
+
+> プラグインを書く・改修するなら [`docs/plugins.ja.md`](plugins.ja.md) を参照 — `plugin.toml` の全フィールド、`install.sh` / `install_user.sh` の使い分け、バージョン pin の契約がまとまっている。
 
 ### `cocoon plugin list`
 
+**目的:** 層解決後にアクセスできるプラグイン ID 一覧を、各 ID の解決元層付きで表示。
+
+**例:**
+
+```console
+$ cocoon plugin list
+ID            SOURCE    DEFAULT  DESCRIPTION
+claude-code   embedded  false    Claude Code — AI-powered coding assistant ...
+go            embedded  false    Go programming language ...
+my-internal   user      true     internal CLI ...
+```
+
+**フラグ:**
+
 | フラグ | 説明 |
 |---|---|
-| `--source <embedded\|user\|project>` | 単一層から解決されたプラグインのみ表示。 |
+| `--source <embedded\|user\|project>` | 単一層に絞って表示 (複数値不可)。 |
+
+**落とし穴:** 同 id が複数層にある場合、最高優先度の層のみ表示される。下位層を見たい場合は overlay ディレクトリを直接削除する（例: `rm -rf ~/.cocoon/plugins/<id>`）。
 
 ### `cocoon plugin show <id>`
 
-解決後の `plugin.toml` と所属層を表示。
+**目的:** 解決後の `plugin.toml` をパースして安定化された差分しやすい形で再描画し、所属層と併せて表示。
 
-### `cocoon plugin add <id>`
+**例:**
 
-埋め込みプラグインを書き込み可能な上書き層へコピーして編集可能にする。
+```console
+$ cocoon plugin show go
+id: go
+source: embedded
+name: Go
+description: Go programming language ...
+default: false
+requires_root: true
+version_capable: true
+apt_packages: [build-essential]
+env:
+  GOPATH=/home/${USERNAME}/go
+  PATH=/usr/local/go/bin:$GOPATH/bin:$PATH
+volumes: [/home/${USERNAME}/go]
+```
 
-| フラグ | 説明 |
-|---|---|
-| `--scope <user\|project>` | コピー先。デフォルト `user` (`~/.cocoon/plugins/<id>/`)。 |
-| `--force` | 既存上書きコピーを上書き。 |
-
-### `cocoon plugin remove <id>`
-
-上書きコピーを削除。埋め込み版は変更されない。
-
-| フラグ | 説明 |
-|---|---|
-| `--scope <user\|project>` | 削除する上書き層 (必須)。 |
+**落とし穴:** id が見つからなければ `plugin "<id>" not found in any layer` エラー。`apt_packages` / `env` は安定化のためアルファベット順ソート — `plugin.toml` 上の記述順とは一致しない。
 
 ### `cocoon plugin pin <id> <ref>`
 
-`workspace.toml` 用の `[plugins.versions.<id>]` スニペットを stdout に出力。ファイルは編集しない (既存コメントを保つため)。
+**目的:** `version_capable` プラグイン用に上流バージョン (任意で per-arch チェックサム) を `workspace.toml` の `[plugins.versions.<id>]` に記録する。ブロックは `pin = "<ref>"` と任意の `checksum_amd64` / `checksum_arm64` 行を含み、`install.sh` が `$PIN` / `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` から読む。
+
+**例 (デフォルト — stdout, 手動貼り付け):**
+
+```console
+$ cocoon plugin pin go 1.23.4 --amd64-checksum abc123 --arm64-checksum def456
+# Append the following block to workspace.toml under [plugins.versions]:
+
+[plugins.versions.go]
+pin = "1.23.4"
+checksum_amd64 = "abc123"
+checksum_arm64 = "def456"
+```
+
+**例 (`--write` — in-place 編集):**
+
+```console
+$ cocoon plugin pin go 1.23.4 --write
+Updated /home/alice/proj/workspace.toml: [plugins.versions.go]
+```
+
+`--write` は `workspace.toml` を行ベースでパースし、既存 `[plugins.versions.<id>]` ブロックがあれば置換、無ければ最後の `[plugins.versions.*]` ブロックの直後に追加する。対象ブロック外のコメント・空行は保持される。
+
+**フラグ:**
 
 | フラグ | 説明 |
 |---|---|
 | `--amd64-checksum <sha256>` | amd64 アーティファクトの SHA256。 |
 | `--arm64-checksum <sha256>` | arm64 アーティファクトの SHA256。 |
+| `--write` | `workspace.toml` (cwd から自動検出) に in-place 挿入・置換。 |
+
+**落とし穴:**
+
+- `pin` は `[version].version_capable = true` のプラグインでのみ意味を持つ。それ以外では `gen` 時に無視される。
+- チェックサムフラグは `install.sh` が実際に `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` を読む場合 (= `tarball` テンプレート由来) のみ意味を持つ。`curl-pipe` / `generic` では無視される。
+- `--write` は cwd から `workspace.toml` を発見できる必要がある。`--write` 無しなら id 検証用に LayeredFS を解決するだけなので、どこからでも動く。
+- `--write` は multi-line `[plugins.versions.<id>]` 形式のみを編集する。`[plugins.versions]` 直下に任意の key 代入がある場合 — `<id> = "1.23.4"` / `<id> = [..]` / inline-table `<id> = { pin = "..." }` (`init` テンプレートがコメント行で示しているスタイル) のいずれも — `--write` は重複ブロックを追加せず usage error で停止する。各エントリを `[plugins.versions.<id>]` ブロックへ変換するか、`workspace.toml` を手動編集する。
 
 ### `cocoon plugin scaffold <id>`
 
-テンプレート (`curl-pipe` / `tarball` / `generic`) から新規 `<id>/` ディレクトリを作成。
+**目的:** 3 種類のテンプレートから `plugin.toml` + `install.sh` 雛形を含む新規 `<id>/` ディレクトリを生成する。新規 project / user スコーププラグインの初期化用。
+
+**例:**
+
+```console
+$ cd ~/projects/myapp
+$ cocoon plugin scaffold gh-cli \
+    --template curl-pipe --version-capable \
+    --name "GitHub CLI" --description "GitHub CLI (https://cli.github.com)" \
+    --non-interactive
+OK: scaffolded /home/alice/projects/myapp/.cocoon/plugins/gh-cli (2 files)
+```
+
+**テンプレート:**
+
+| テンプレート | 用途 | 雛形 |
+|---|---|---|
+| `curl-pipe` | 上流が `curl ... \| bash` 形式 (uv, proto) | `$PIN` バージョン制御。チェックサム検証なし |
+| `tarball` | 上流が GitHub Release tarball (starship, go) | `$PIN` + `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` + `dpkg --print-architecture` 分岐 (`--version-capable` 強制) |
+| `generic` | apt パッケージ or freeform | 最小雛形、`$PIN` 配線なし |
+
+**フラグ:**
 
 | フラグ | 説明 |
 |---|---|
-| `--plugins-dir <path>` | 出力ディレクトリ。デフォルト `plugins`。 |
+| `--plugins-dir <path>` | 出力ディレクトリ。デフォルト: `<workspace>/.cocoon/plugins` (`workspace.toml` から自動検出)。 |
 | `--name <name>` | 表示名 (例: `"GitHub CLI"`)。 |
-| `--description <text>` | 短い説明。 |
+| `--description <text>` | 短い説明。括弧内に上流 URL を含める必要あり。 |
 | `--default` | デフォルト有効化フラグを立てる。 |
 | `--requires-root` | `install.sh` を root 実行に。 |
 | `--version-capable` | `$PIN` / `$CHECKSUM_*` の雛形を生成。 |
 | `--template <kind>` | `curl-pipe` \| `tarball` \| `generic`。 |
-| `--with-install-user` | `install_user.sh` も生成。 |
+| `--with-install-user` | `install_user.sh` も生成 (`install.sh` の後に非特権ユーザーで走る)。 |
 | `--non-interactive` | プロンプトをスキップ (上記すべて要指定)。 |
-| `--force` | 既存 `<id>/` を上書き。 |
+| `--force` | `<plugins-dir>/<id>/` が既存なら上書き。 |
 
----
+**落とし穴:**
 
-## `cocoon config`
-
-`workspace.toml` / `plugin.toml` のパースと検証。これらのサブコマンドは旧来の bash 連携用で、将来削減される可能性があります。
-
-| サブコマンド | 役割 |
-|---|---|
-| `get <file> <field>` | `workspace.toml` のスカラー値を表示。 |
-| `list <file> <field>` | `workspace.toml` の配列を 1 件 1 行で表示。 |
-| `volumes <file>` | `[volumes]` エントリを `name<TAB>path` 形式で表示。 |
-| `plugin-get <dir-or-file> <field>` | `plugin.toml` のスカラーを表示。 |
-| `plugin-list <dir-or-file> <field>` | `plugin.toml` の配列を表示。 |
-| `plugin-volumes <dir-or-file>` | `plugin.install.volumes` を `name<TAB>path` で表示。 |
-| `plugins-table <dir>` | プラグイン 1 件 1 行で `id<TAB>name<TAB>default<TAB>description`。 |
-| `validate-workspace <file> [plugins]` | `workspace.toml` を検証 (プラグインディレクトリ任意)。 |
-| `validate-plugins <dir>` | `<dir>` 配下の `plugin.toml` を全件検証。 |
-| `has-section <file> <section>` | `true` / `false` を表示。 |
-| `list-sidecars <file>` | `[services.<name>]` キーを 1 行 1 件で表示。 |
-| `dump-devcontainer <file>` | `[devcontainer]` を TOML で出力。 |
-| `dump-repositories <file>` | `[repositories]` を TOML で出力。 |
-| `repositories <file>` | `[repositories].clone` を JSON で出力。 |
-| `format-repositories <file\|->` | JSON エントリを TOML へ整形 (`-` で stdin)。 |
+- `--plugins-dir` を指定せず、cocoon プロジェクト外 (workspace.toml 未発見) で実行すると、`./plugins/<id>/` に黙って書く代わりに actionable error で停止する。
+- `--template tarball` は `--version-capable` を要求する。`tarball` 単体だと拒否される。
+- scaffold 後、生成された `plugin.toml` は runtime と同じ strict validator で再ロードされる。失敗 (不正な name、description に URL なし、等) すればディレクトリはロールバックされる。
+- `add` 由来の overlay と同様、scaffold 直後でも `[plugins].enable` に `<id>` を追加しないと `gen` で反映されない。
 
 ---
 
@@ -258,3 +318,13 @@ cocoon completion powershell | Out-String | Invoke-Expression
 | `1` | 失敗 (`ErrFailure` ラップ) |
 | `2` | usage エラー (`ErrUsage` ラップ) |
 | `100` | `cocoon self-update --check-only`: 更新あり |
+
+---
+
+## 削除済みコマンド
+
+以下のノウングループ・サブコマンドは過去のリリースに存在しましたが **削除済み** です。古いコマンドを探して辿り着いた読者向けに、移行先を記載します。完全な移行手順は [CHANGELOG](CHANGELOG.ja.md) を参照してください。
+
+- **`cocoon config` (ノウングループ全体)** — `get` / `list` / `volumes` / `plugin-get` / `plugin-list` / `plugin-volumes` / `plugins-table` / `validate-workspace` / `validate-plugins` / `has-section` / `list-sidecars` / `dump-devcontainer` / `dump-repositories` / `repositories` / `format-repositories`。これらは引退済みの bash entry-point スクリプト用の低レベル TOML アクセサでした。`cocoon config` でスクレイプしていた外部スクリプトは専用の TOML パーサ (`tomlq` / `taplo` / 小さな Go / Python ヘルパ) に切り替えてください。
+- **`cocoon plugin add`** — 代わりに `[plugins].enable` に id を列挙してください（埋め込みカタログは LayeredFS でコピーなしに公開されます）。埋め込みプラグインを改変したい場合は `cocoon plugin scaffold <new-id>` で新しい id を作りロジックを移植する手順がサポート対象です。
+- **`cocoon plugin remove`** — `rm -rf ~/.cocoon/plugins/<id>` (ユーザースコープ) もしくは `rm -rf <workspace>/.cocoon/plugins/<id>` (プロジェクトスコープ) で代替できます。

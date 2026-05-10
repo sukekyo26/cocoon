@@ -1,10 +1,11 @@
 package dockerfile
 
 import (
+	"errors"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
+	"io/fs"
+	"path"
 	"sort"
 	"strings"
 
@@ -13,22 +14,63 @@ import (
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
 
-func fileExists(p string) bool {
-	st, err := os.Stat(p)
-	return err == nil && !st.IsDir()
+// installHeredocDelim must match the literal in installRunTmpl. A plugin
+// script line equal to this would silently truncate the heredoc, hence
+// the up-front check in checkHeredocCollision.
+const installHeredocDelim = "COCOON_PLUGIN_EOF"
+
+// ErrHeredocCollision is returned when a plugin install script
+// contains a line that exactly matches installHeredocDelim. Exposed as
+// a sentinel so external callers (and tests) can match the failure
+// class with errors.Is without scraping the message.
+var ErrHeredocCollision = errors.New("dockerfile: plugin install script collides with heredoc delimiter")
+
+// fileExistsInFS returns (false, nil) when name is missing or a directory,
+// and (false, err) for permission / I/O failures so the caller can surface
+// them instead of silently dropping the plugin. fsys must be non-nil.
+func fileExistsInFS(fsys fs.FS, name string) (bool, error) {
+	st, err := fs.Stat(fsys, name)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return false, nil
+		}
+		return false, fmt.Errorf("stat %s: %w", name, err)
+	}
+	return !st.IsDir(), nil
 }
 
-func joinPath(parts ...string) string { return filepath.Join(parts...) }
-
-// readEnvKeyOrder parses plugin.toml and returns the key declaration order of
-// the [install.env] table. Order matters because Dockerfile output mirrors
-// Python's dict insertion order, but go-toml/v2 decodes into Go maps which
-// are unordered.
-func readEnvKeyOrder(pluginTomlPath string) ([]string, error) {
-	data, err := os.ReadFile(pluginTomlPath)
-	if err != nil {
-		return nil, fmt.Errorf("read plugin.toml: %w", err)
+// checkHeredocCollision scans scriptBody for a line equal to
+// installHeredocDelim. The heredoc form `bash <<'EOF' … EOF` terminates
+// at the first line that exactly matches the closing delimiter, so a
+// third-party plugin whose install script happens to contain that
+// literal would be silently truncated mid-build. We reject it here so
+// the failure is loud and points at the offending plugin id.
+func checkHeredocCollision(pluginID string, scriptBody []byte) error {
+	for _, line := range strings.Split(string(scriptBody), "\n") {
+		if line == installHeredocDelim {
+			return fmt.Errorf("%w: plugin %q contains the literal %s; rename it in the script",
+				ErrHeredocCollision, pluginID, installHeredocDelim)
+		}
 	}
+	return nil
+}
+
+// readFileFromFS reads name out of fsys, wrapping errors with the
+// fs-relative path so renderer failures point at the offending file.
+// fsys must be non-nil; see fileExistsInFS for the contract.
+func readFileFromFS(fsys fs.FS, name string) ([]byte, error) {
+	data, err := fs.ReadFile(fsys, name)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", name, err)
+	}
+	return data, nil
+}
+
+// readEnvKeyOrderBytes parses plugin.toml bytes and returns the key
+// declaration order of the [install.env] table. Order matters because
+// Dockerfile output mirrors Python's dict insertion order, but
+// go-toml/v2 decodes into Go maps which are unordered.
+func readEnvKeyOrderBytes(data []byte) []string {
 	var keys []string
 	inEnv := false
 	for _, raw := range strings.Split(string(data), "\n") {
@@ -50,7 +92,7 @@ func readEnvKeyOrder(pluginTomlPath string) ([]string, error) {
 			keys = append(keys, key)
 		}
 	}
-	return keys, nil
+	return keys
 }
 
 // pluginSnippets describes the install/install_user snippets generated for one
@@ -74,23 +116,23 @@ type shellEnv struct {
 func buildPluginSnippets(
 	id string,
 	p *plugin.Plugin,
-	pluginsDir string,
+	pluginsFS fs.FS,
 	overrides map[string]config.PluginVersionOverride,
 	sh shellEnv,
 ) (pluginSnippets, bool, error) {
 	install := p.Install
-	versionCapable := p.Version.VersionCapable
-	var override config.PluginVersionOverride
-	hasOverride := false
-	if versionCapable {
-		if o, ok := overrides[id]; ok {
-			override = o
-			hasOverride = true
-		}
-	}
+	override, hasOverride := resolveOverride(id, p.Version.VersionCapable, overrides)
 
-	hasInstall := fileExists(joinPath(pluginsDir, id, "install.sh"))
-	hasUserInstall := fileExists(joinPath(pluginsDir, id, "install_user.sh"))
+	installPath := path.Join(id, "install.sh")
+	userPath := path.Join(id, "install_user.sh")
+	hasInstall, err := fileExistsInFS(pluginsFS, installPath)
+	if err != nil {
+		return pluginSnippets{}, false, err
+	}
+	hasUserInstall, err := fileExistsInFS(pluginsFS, userPath)
+	if err != nil {
+		return pluginSnippets{}, false, err
+	}
 	if !hasInstall && !hasUserInstall && len(install.BuildArgs) == 0 && len(install.Env) == 0 {
 		return pluginSnippets{install: "", userInstall: "", requiresRoot: false}, false, nil
 	}
@@ -104,34 +146,134 @@ func buildPluginSnippets(
 		argLines = append(argLines, "ARG "+a)
 	}
 
+	envBlock, err := renderEnvBlock(install.Env, pluginsFS, id)
+	if err != nil {
+		return pluginSnippets{}, false, err
+	}
+	rs := runSpec{
+		id:             id,
+		comment:        comment,
+		argLines:       argLines,
+		pluginsFS:      pluginsFS,
+		envBlock:       envBlock,
+		versionCapable: p.Version.VersionCapable,
+		hasOverride:    hasOverride,
+		override:       override,
+		buildArgs:      install.BuildArgs,
+		sh:             sh,
+	}
+
 	out := pluginSnippets{install: "", userInstall: "", requiresRoot: install.RequiresRoot}
-	if hasInstall {
-		snippet := renderInstallRun(id, "# Install "+comment, argLines, "install.sh",
-			versionCapable, hasOverride, override, install.BuildArgs, sh)
-		envBlock, err := renderEnvBlock(install.Env, joinPath(pluginsDir, id, "plugin.toml"))
+	out.install, err = renderInstallSnippet(rs, hasInstall, installPath)
+	if err != nil {
+		return pluginSnippets{}, false, err
+	}
+	if hasUserInstall {
+		// Plugin-level ARG declarations need to be in scope for the
+		// install_user.sh RUN as well so its per-RUN env prefix
+		// (`<name>="${<name>}"`) resolves to a real value rather than
+		// an empty string. ARG scope is stage-wide, so when install.sh
+		// already emitted the ARG lines we skip them here to avoid a
+		// redundant duplicate declaration. When install.sh is absent,
+		// emit them from the install_user.sh snippet so build_args
+		// works symmetrically across both hooks.
+		var userArgLines []string
+		if !hasInstall {
+			userArgLines = rs.argLines
+		}
+		out.userInstall, err = renderUserInstallSnippet(rs, userPath, userArgLines)
 		if err != nil {
 			return pluginSnippets{}, false, err
 		}
-		if envBlock != "" {
-			snippet = snippet + "\n" + envBlock
-		}
-		out.install = snippet
-	}
-	if hasUserInstall {
-		out.userInstall = renderInstallRun(id, "# Configure "+comment+" (user)", nil, "install_user.sh",
-			versionCapable, hasOverride, override, install.BuildArgs, sh)
 	}
 	return out, true, nil
 }
 
-func renderEnvBlock(env map[string]string, pluginTomlPath string) (string, error) {
-	if len(env) == 0 {
-		return "", nil
+// runSpec bundles the per-plugin context shared by the install and
+// install_user emitters so buildPluginSnippets does not have to
+// thread a dozen positional args through each helper.
+type runSpec struct {
+	id             string
+	comment        string
+	argLines       []string
+	pluginsFS      fs.FS
+	envBlock       string
+	versionCapable bool
+	hasOverride    bool
+	override       config.PluginVersionOverride
+	buildArgs      []string
+	sh             shellEnv
+}
+
+// resolveOverride collapses the version-pin lookup into a single call
+// site so buildPluginSnippets stays focused on the snippet layout.
+func resolveOverride(
+	id string,
+	versionCapable bool,
+	overrides map[string]config.PluginVersionOverride,
+) (config.PluginVersionOverride, bool) {
+	if !versionCapable {
+		return config.PluginVersionOverride{}, false //nolint:exhaustruct // zero value signals "no override"
 	}
-	keys, err := readEnvKeyOrder(pluginTomlPath)
+	o, ok := overrides[id]
+	if !ok {
+		return config.PluginVersionOverride{}, false //nolint:exhaustruct // zero value signals "no override"
+	}
+	return o, true
+}
+
+// renderInstallSnippet emits the heredoc RUN + env block when install.sh
+// exists, or just the env block (with an "(env)" marker) when only
+// [install.env] is set. ENV is USER-agnostic, so an env-only entry can
+// land in either bucket without changing semantics.
+func renderInstallSnippet(rs runSpec, hasInstall bool, installPath string) (string, error) {
+	if hasInstall {
+		body, err := readFileFromFS(rs.pluginsFS, installPath)
+		if err != nil {
+			return "", err
+		}
+		if err := checkHeredocCollision(rs.id, body); err != nil {
+			return "", err
+		}
+		snippet := renderInstallRun(rs.id, "# Install "+rs.comment, rs.argLines, body,
+			rs.versionCapable, rs.hasOverride, rs.override, rs.buildArgs, rs.sh)
+		if rs.envBlock != "" {
+			snippet = snippet + "\n" + rs.envBlock
+		}
+		return snippet, nil
+	}
+	if rs.envBlock != "" {
+		return "# Configure " + rs.comment + " (env)\n" + rs.envBlock, nil
+	}
+	return "", nil
+}
+
+// renderUserInstallSnippet renders the install_user.sh heredoc with
+// the "# Configure … (user)" comment used in the non-root bucket.
+// argLines carries plugin-level ARG declarations to emit before the
+// RUN; pass nil when install.sh already emitted them (their scope is
+// the whole stage, so a second declaration is redundant).
+func renderUserInstallSnippet(rs runSpec, userPath string, argLines []string) (string, error) {
+	body, err := readFileFromFS(rs.pluginsFS, userPath)
 	if err != nil {
 		return "", err
 	}
+	if err := checkHeredocCollision(rs.id, body); err != nil {
+		return "", err
+	}
+	return renderInstallRun(rs.id, "# Configure "+rs.comment+" (user)", argLines, body,
+		rs.versionCapable, rs.hasOverride, rs.override, rs.buildArgs, rs.sh), nil
+}
+
+func renderEnvBlock(env map[string]string, pluginsFS fs.FS, id string) (string, error) {
+	if len(env) == 0 {
+		return "", nil
+	}
+	tomlBytes, err := readFileFromFS(pluginsFS, path.Join(id, "plugin.toml"))
+	if err != nil {
+		return "", err
+	}
+	keys := readEnvKeyOrderBytes(tomlBytes)
 	envLines := make([]string, 0, len(keys))
 	for _, k := range keys {
 		if v, ok := env[k]; ok {
@@ -141,9 +283,13 @@ func renderEnvBlock(env map[string]string, pluginTomlPath string) (string, error
 	return strings.Join(envLines, "\n"), nil
 }
 
-// generatePluginInstalls renders the {{PLUGIN_INSTALLS}} block. enabled
-// preserves user-declared order (matches Python dict insertion order). Missing
-// plugin entries are silently skipped (callers warn elsewhere).
+// collectAllUserDirs collects every container-side directory the user-dirs
+// mkdir block must own. Plugin entries contribute their [install].volumes
+// (validated to live under /home/${USERNAME}/...), and the caller-supplied
+// `extra` slice carries `[volumes]` targets from workspace.toml — those can
+// point anywhere inside the container, including paths outside the user
+// home (e.g. /var/cache/...). enabled preserves user-declared order.
+// Missing plugin entries are silently skipped (callers warn elsewhere).
 func collectAllUserDirs(plugins map[string]*plugin.Plugin, enabled, extra []string) []string {
 	out := make([]string, 0)
 	for _, id := range enabled {
@@ -151,7 +297,6 @@ func collectAllUserDirs(plugins map[string]*plugin.Plugin, enabled, extra []stri
 		if !ok {
 			continue
 		}
-		out = append(out, p.Install.UserDirs...)
 		out = append(out, p.Install.Volumes...)
 	}
 	out = append(out, extra...)
@@ -165,7 +310,7 @@ type snippetGroups struct {
 func collectPluginSnippets(
 	plugins map[string]*plugin.Plugin,
 	enabled []string,
-	pluginsDir string,
+	pluginsFS fs.FS,
 	overrides map[string]config.PluginVersionOverride,
 	sh shellEnv,
 ) (snippetGroups, error) {
@@ -175,7 +320,7 @@ func collectPluginSnippets(
 		if !ok {
 			continue
 		}
-		snips, emit, err := buildPluginSnippets(id, p, pluginsDir, overrides, sh)
+		snips, emit, err := buildPluginSnippets(id, p, pluginsFS, overrides, sh)
 		if err != nil {
 			return snippetGroups{root: nil, nonRoot: nil, userPost: nil}, err
 		}
@@ -199,12 +344,27 @@ func collectPluginSnippets(
 func generatePluginInstalls(
 	plugins map[string]*plugin.Plugin,
 	enabled []string,
-	pluginsDir string,
+	pluginsFS fs.FS,
 	extraUserDirs []string,
 	overrides map[string]config.PluginVersionOverride,
 	warnings io.Writer,
 	sh shellEnv,
 ) (string, error) {
+	// Fail fast when any enabled plugin actually got loaded but the
+	// caller forgot to wire up PluginsFS. Without this check, downstream
+	// fileExistsInFS calls would silently report "no install.sh" for
+	// every plugin and emit a Dockerfile that ignores the plugin set
+	// entirely. Plugins listed in enabled but absent from `plugins`
+	// (already warned about elsewhere) do not trip the check, so a
+	// project that lists no plugins keeps working with PluginsFS = nil.
+	if pluginsFS == nil {
+		for _, id := range enabled {
+			if _, ok := plugins[id]; ok {
+				return "", fmt.Errorf("dockerfile: %w", plugin.ErrNilPluginsFS)
+			}
+		}
+	}
+
 	if len(overrides) > 0 {
 		if err := validateVersionOverrides(plugins, overrides, warnings); err != nil {
 			return "", err
@@ -212,7 +372,7 @@ func generatePluginInstalls(
 	}
 
 	dirBlock := generateUserDirsBlock(collectAllUserDirs(plugins, enabled, extraUserDirs))
-	g, err := collectPluginSnippets(plugins, enabled, pluginsDir, overrides, sh)
+	g, err := collectPluginSnippets(plugins, enabled, pluginsFS, overrides, sh)
 	if err != nil {
 		return "", err
 	}
@@ -245,39 +405,47 @@ func generatePluginInstalls(
 }
 
 type installRunData struct {
-	Comment  string
-	ArgLines []string
-	PluginID string
-	Script   string
-	EnvPairs []string
+	Comment    string
+	ArgLines   []string
+	EnvPairs   []string
+	ScriptBody string
 }
 
+// installRunTmpl emits the plugin install script as a single RUN with
+// the shell body inlined via a quoted heredoc. Single-quoted
+// 'COCOON_PLUGIN_EOF' suppresses parameter and command substitution so
+// the catalog install.sh contents land verbatim, and per-RUN env vars
+// (PIN / RC_FILE / etc.) stay scoped to that step rather than leaking
+// into subsequent layers.
 var installRunTmpl = tmplx.MustParse("dockerfile-plugin-install", `{{ .Comment }}
 {{- range .ArgLines }}
 {{ . }}
 {{- end }}
-RUN --mount=type=bind,from=plugins,source={{ .PluginID }},target=/tmp/plugin \
-{{- range .EnvPairs }}
-    {{ . }} \
-{{- end }}
-    bash /tmp/plugin/{{ .Script }}`, nil)
+RUN {{ range .EnvPairs }}{{ . }} {{ end }}bash <<'COCOON_PLUGIN_EOF'
+{{ .ScriptBody }}COCOON_PLUGIN_EOF`, nil)
 
+// renderInstallRun normalises the trailing newline so the closing
+// COCOON_PLUGIN_EOF lands on its own line regardless of input shape.
 func renderInstallRun(
 	pluginID, comment string,
 	argLines []string,
-	script string,
+	scriptBody []byte,
 	versionCapable, hasOverride bool,
 	override config.PluginVersionOverride,
 	buildArgs []string,
 	sh shellEnv,
 ) string {
+	_ = pluginID // reserved for future log/comment hooks; kept to preserve callers.
 	envPairs := buildInstallEnvPairs(versionCapable, hasOverride, override, buildArgs, sh)
+	body := string(scriptBody)
+	if !strings.HasSuffix(body, "\n") {
+		body += "\n"
+	}
 	out, err := tmplx.Render(installRunTmpl, installRunData{
-		Comment:  comment,
-		ArgLines: argLines,
-		PluginID: pluginID,
-		Script:   script,
-		EnvPairs: envPairs,
+		Comment:    comment,
+		ArgLines:   argLines,
+		EnvPairs:   envPairs,
+		ScriptBody: body,
 	})
 	if err != nil {
 		// Static template, well-formed input — unreachable in practice.

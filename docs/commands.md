@@ -1,5 +1,8 @@
 # Commands
 
+> [!WARNING]
+> cocoon is in v0.x (alpha). By using it, please understand and accept that the CLI flags and subcommands may change before 1.0, and that breaking changes can land in any release. See the [CHANGELOG](../CHANGELOG.md) and the README's "Project status" section.
+
 Reference for every command exposed by the `cocoon` binary.
 
 ## Quick reference
@@ -10,25 +13,8 @@ Reference for every command exposed by the `cocoon` binary.
 | `cocoon gen` | Generate `.devcontainer/` artifacts |
 | `cocoon plugin list` | List every available plugin (embedded + overlays) |
 | `cocoon plugin show <id>` | Print the resolved manifest for one plugin |
-| `cocoon plugin add <id>` | Copy a plugin into a user / project overlay |
-| `cocoon plugin remove <id>` | Delete a user / project overlay copy |
-| `cocoon plugin pin <id> <ref>` | Print a `[plugins.versions.<id>]` block |
+| `cocoon plugin pin <id> <ref>` | Emit a `[plugins.versions.<id>]` block (stdout, or in-place with `--write`) |
 | `cocoon plugin scaffold <id>` | Create a new `<id>/` directory from a template |
-| `cocoon config get <file> <field>` | Print scalar from `workspace.toml` |
-| `cocoon config list <file> <field>` | Print array from `workspace.toml` |
-| `cocoon config volumes <file>` | Print `[volumes]` entries |
-| `cocoon config plugin-get <dir-or-file> <field>` | Print scalar from `plugin.toml` |
-| `cocoon config plugin-list <dir-or-file> <field>` | Print array from `plugin.toml` |
-| `cocoon config plugin-volumes <dir-or-file>` | Print `plugin.install.volumes` |
-| `cocoon config plugins-table <dir>` | Print one plugin row per line |
-| `cocoon config validate-workspace <file> [plugins]` | Validate `workspace.toml` |
-| `cocoon config validate-plugins <dir>` | Validate every plugin under `<dir>` |
-| `cocoon config has-section <file> <section>` | Print true / false |
-| `cocoon config list-sidecars <file>` | Print one `[services.<name>]` key per line |
-| `cocoon config dump-devcontainer <file>` | Dump `[devcontainer]` as TOML |
-| `cocoon config dump-repositories <file>` | Dump `[repositories]` as TOML |
-| `cocoon config repositories <file>` | Emit `[repositories].clone` as JSON |
-| `cocoon config format-repositories <file\|->` | Format JSON entries as TOML |
 | `cocoon self-update` | Replace this binary with the latest GitHub release |
 | `cocoon version` | Print binary version |
 | `cocoon help [command]` | Print help (Cobra builtin) |
@@ -53,8 +39,11 @@ Generate `workspace.toml` in the current directory.
 | `--mount-root <path>` | string | Mount range: `"."` (cwd) or `".."` (parent). |
 | `--devcontainer` | bool | Force-enable `.devcontainer/devcontainer.json` output. |
 | `--no-devcontainer` | bool | Skip `.devcontainer/devcontainer.json`. |
+| `--certificates` | bool | Force-enable `[certificates] enable = true` (host TLS auto-bake from `~/.cocoon/certs/`). |
+| `--no-certificates` | bool | Force-disable; omit the `[certificates]` section (default). |
 | `--apt-categories <ids>` | string | Comma-separated apt category IDs (skips the prompt). |
 | `--plugins <ids>` | string | Comma-separated plugin IDs to enable. |
+| `--plugin-versions <id>=<ref>,...` | string | Comma-separated `<id>=<ref>` pins for `version_capable` plugins. Each `<id>` must also appear in `--plugins`, must be `version_capable`, and may not repeat. Emits a `[plugins.versions]` block directly in the generated `workspace.toml`. |
 | `--alias-bundles <ids>` | string | Comma-separated shell-alias bundle IDs (e.g. `git,ls`). |
 | `--force` | bool | Overwrite an existing `workspace.toml`. |
 
@@ -70,8 +59,9 @@ When run without `--yes`, prompts are shown one screen at a time:
 6. alias bundles (multi-select)
 7. mount range
 8. devcontainer y/n
-9. apt categories (multi-select)
-10. plugins (multi-select)
+9. certificates y/n (opt in to host TLS auto-bake from `~/.cocoon/certs/`; default no)
+10. apt categories (multi-select)
+11. plugins (multi-select)
 
 ### Examples
 
@@ -93,7 +83,7 @@ cocoon init --yes \
 
 ## `cocoon gen`
 
-Read `workspace.toml`, materialize plugins, and write `.devcontainer/`.
+Read `workspace.toml`, resolve the layered plugin catalog (project ∪ user ∪ embedded), and write `.devcontainer/`. Plugin install scripts are inlined directly into the generated Dockerfile, so the build needs no external context beyond the project tree.
 
 ### Flags
 
@@ -112,88 +102,158 @@ cocoon gen
 cocoon gen --workspace ./infra/workspace.toml --output ./infra
 ```
 
+### TLS certificates
+
+The generated `Dockerfile` / `docker-compose.yml` / `devcontainer.json` carry cert auto-bake wiring **only when the workspace opts in** via `[certificates] enable = true` (or `cocoon init --certificates`). Cert-free workspaces commit cert-free artifacts (no `additional_contexts`, no `RUN --mount=type=bind`, no `initializeCommand`). When opted in, the trust store ingests any `~/.cocoon/certs/*.crt` files at build time. See [`[certificates]` in `configuration.md`](configuration.md#certificates) for the full setup and team workflow.
+
 ---
 
 ## `cocoon plugin`
 
-Manage cocoon plugins. The `LayeredFS` (project > user > embedded) determines which definition wins for a given plugin ID.
+Inspect and author cocoon plugins. Plugins live in three layers, resolved with priority **project > user > embedded**:
+
+| Layer | Path | Source |
+|---|---|---|
+| project | `<workspace>/.cocoon/plugins/<id>/` | overlay scaffolded in place or copied from another overlay |
+| user | `~/.cocoon/plugins/<id>/` | overlay scaffolded or copied from another overlay |
+| embedded | `internal/plugin/catalog/<id>/` (in the cocoon source repo, compiled into the binary via `go:embed`) | shipped with cocoon; **not on disk** for single-binary installs |
+
+To enable an embedded plugin, just add its id to `[plugins].enable` in `workspace.toml`. To customise an embedded plugin, the supported workflow is `cocoon plugin scaffold <new-id>` and adapting logic. If you have a clone of the cocoon repo (or an unpacked source tarball), `cp -r internal/plugin/catalog/<id> ~/.cocoon/plugins/<id>/` works as a shortcut; on a single-binary install the embedded source is not present on disk.
+
+Overlays are read at `gen` time only; placing files in `~/.cocoon/plugins/<id>/` does not enable a plugin on its own — `[plugins].enable` is the activation list.
+
+> Authoring a plugin? See [`docs/plugins.md`](plugins.md) for the full `plugin.toml` schema, the `install.sh` / `install_user.sh` rules, and the version-pin contract.
 
 ### `cocoon plugin list`
 
+**Purpose:** show every plugin id reachable through the layered view, with the source layer that wins for each id.
+
+**Example:**
+
+```console
+$ cocoon plugin list
+ID            SOURCE    DEFAULT  DESCRIPTION
+claude-code   embedded  false    Claude Code — AI-powered coding assistant ...
+go            embedded  false    Go programming language ...
+my-internal   user      true     internal CLI ...
+```
+
+**Flags:**
+
 | Flag | Description |
 |---|---|
-| `--source <embedded\|user\|project>` | Filter to plugins resolved from a single layer. |
+| `--source <embedded\|user\|project>` | Filter to plugins resolved from a single layer (single value only). |
+
+**Gotchas:** when the same id exists in multiple layers, only the highest-priority layer is shown. Delete the overlay directory directly (e.g. `rm -rf ~/.cocoon/plugins/<id>`) to reveal the next layer.
 
 ### `cocoon plugin show <id>`
 
-Print the resolved `plugin.toml` plus its source layer.
+**Purpose:** print the resolved `plugin.toml` (parsed and re-rendered into a stable diff-friendly form) plus the source layer that owns it.
 
-### `cocoon plugin add <id>`
+**Example:**
 
-Copy an embedded plugin into a writable overlay so it can be edited.
+```console
+$ cocoon plugin show go
+id: go
+source: embedded
+name: Go
+description: Go programming language ...
+default: false
+requires_root: true
+version_capable: true
+apt_packages: [build-essential]
+env:
+  GOPATH=/home/${USERNAME}/go
+  PATH=/usr/local/go/bin:$GOPATH/bin:$PATH
+volumes: [/home/${USERNAME}/go]
+```
 
-| Flag | Description |
-|---|---|
-| `--scope <user\|project>` | Where to copy. Default `user` (`~/.cocoon/plugins/<id>/`). |
-| `--force` | Overwrite an existing overlay copy. |
-
-### `cocoon plugin remove <id>`
-
-Delete an overlay copy. The embedded version is never affected.
-
-| Flag | Description |
-|---|---|
-| `--scope <user\|project>` | Which overlay to delete (required). |
+**Gotchas:** errors with `plugin "<id>" not found in any layer` if the id is unknown. `apt_packages` and `env` are sorted alphabetically for stable diffs — the order does not match `plugin.toml` source order.
 
 ### `cocoon plugin pin <id> <ref>`
 
-Print a `[plugins.versions.<id>]` snippet for `workspace.toml`. Stdout-only — does not edit the file (preserves any existing comments).
+**Purpose:** record an upstream version (and optional per-arch checksums) for a `version_capable` plugin in `workspace.toml` under `[plugins.versions.<id>]`. The block declares `pin = "<ref>"` plus optional `checksum_amd64` / `checksum_arm64` lines that `install.sh` reads via `$PIN` and `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64`.
+
+**Example (default — stdout, manual paste):**
+
+```console
+$ cocoon plugin pin go 1.23.4 --amd64-checksum abc123 --arm64-checksum def456
+# Append the following block to workspace.toml under [plugins.versions]:
+
+[plugins.versions.go]
+pin = "1.23.4"
+checksum_amd64 = "abc123"
+checksum_arm64 = "def456"
+```
+
+**Example (`--write` — in-place mutation):**
+
+```console
+$ cocoon plugin pin go 1.23.4 --write
+Updated /home/alice/proj/workspace.toml: [plugins.versions.go]
+```
+
+`--write` parses `workspace.toml` line-by-line and replaces the existing block (if any) or appends a new one after the last `[plugins.versions.*]` block. Comments and blank lines outside the target block are preserved.
+
+**Flags:**
 
 | Flag | Description |
 |---|---|
 | `--amd64-checksum <sha256>` | SHA256 of the amd64 artifact. |
 | `--arm64-checksum <sha256>` | SHA256 of the arm64 artifact. |
+| `--write` | Insert (or replace) the block in `workspace.toml` (auto-discovered from cwd). |
+
+**Gotchas:**
+
+- `pin` only makes sense for plugins whose `[version].version_capable = true`. The pin block is ignored at `gen` time for non-version-capable plugins.
+- Checksum flags only matter when the plugin's `install.sh` actually reads `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` (i.e. `tarball` template plugins). They are silently inert for `curl-pipe` / `generic` templates.
+- `--write` requires a discoverable `workspace.toml` from cwd; without `--write`, the command works from anywhere because it only resolves the layered FS for id validation.
+- `--write` only edits the multi-line `[plugins.versions.<id>]` form. If `workspace.toml` has any per-id key assignment directly under `[plugins.versions]` — `<id> = "1.23.4"`, `<id> = [..]`, or the inline-table `<id> = { pin = "..." }` style the `init` template suggests in commented-out lines — `--write` refuses with a usage error rather than appending a duplicate block. Convert each entry to a `[plugins.versions.<id>]` block first, or edit `workspace.toml` manually.
 
 ### `cocoon plugin scaffold <id>`
 
-Create a new `<id>/` directory from a template (`curl-pipe` / `tarball` / `generic`).
+**Purpose:** create a new `<id>/` directory containing a `plugin.toml` and an `install.sh` skeleton from one of three templates. Use it to bootstrap a new project- or user-scope plugin without copying boilerplate by hand.
+
+**Example:**
+
+```console
+$ cd ~/projects/myapp
+$ cocoon plugin scaffold gh-cli \
+    --template curl-pipe --version-capable \
+    --name "GitHub CLI" --description "GitHub CLI (https://cli.github.com)" \
+    --non-interactive
+OK: scaffolded /home/alice/projects/myapp/.cocoon/plugins/gh-cli (2 files)
+```
+
+**Templates:**
+
+| Template | Use when | Boilerplate |
+|---|---|---|
+| `curl-pipe` | upstream ships `curl ... \| bash` (uv, proto) | `$PIN` env-var-driven version; no checksum verification |
+| `tarball` | upstream ships GitHub Release tarballs (starship, go) | `$PIN` + `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` + `dpkg --print-architecture` switch (forces `--version-capable`) |
+| `generic` | apt packages or freeform install | minimal skeleton, no `$PIN` plumbing |
+
+**Flags:**
 
 | Flag | Description |
 |---|---|
-| `--plugins-dir <path>` | Output directory. Default `plugins`. |
+| `--plugins-dir <path>` | Output directory. Default: `<workspace>/.cocoon/plugins` (auto-discovered from `workspace.toml`). |
 | `--name <name>` | Display name (e.g. `"GitHub CLI"`). |
-| `--description <text>` | Short description. |
+| `--description <text>` | Short description. Must embed an upstream URL in parentheses. |
 | `--default` | Mark plugin enabled by default. |
 | `--requires-root` | `install.sh` runs as root. |
 | `--version-capable` | Generate `$PIN` / `$CHECKSUM_*` boilerplate. |
 | `--template <kind>` | `curl-pipe` \| `tarball` \| `generic`. |
-| `--with-install-user` | Also generate `install_user.sh`. |
+| `--with-install-user` | Also generate `install_user.sh` (runs as the unprivileged user after `install.sh`). |
 | `--non-interactive` | Skip prompts; require all fields above. |
-| `--force` | Overwrite `<id>/` if it already exists. |
+| `--force` | Overwrite `<plugins-dir>/<id>/` if it already exists. |
 
----
+**Gotchas:**
 
-## `cocoon config`
-
-Parse and validate `workspace.toml` / `plugin.toml`. These subcommands exist for legacy bash-bridge integration; future versions may trim them.
-
-| Subcommand | Purpose |
-|---|---|
-| `get <file> <field>` | Print a scalar from `workspace.toml`. |
-| `list <file> <field>` | Print an array from `workspace.toml`, one entry per line. |
-| `volumes <file>` | Print `[volumes]` entries as `name<TAB>path`. |
-| `plugin-get <dir-or-file> <field>` | Print a scalar from `plugin.toml`. |
-| `plugin-list <dir-or-file> <field>` | Print an array from `plugin.toml`. |
-| `plugin-volumes <dir-or-file>` | Print `plugin.install.volumes` as `name<TAB>path`. |
-| `plugins-table <dir>` | Print one plugin row per line: `id<TAB>name<TAB>default<TAB>description`. |
-| `validate-workspace <file> [plugins]` | Validate `workspace.toml`; optional plugin dir for cross-checks. |
-| `validate-plugins <dir>` | Validate every `plugin.toml` under `<dir>`. |
-| `has-section <file> <section>` | Print `true` or `false`. |
-| `list-sidecars <file>` | Print one `[services.<name>]` key per line. |
-| `dump-devcontainer <file>` | Dump `[devcontainer]` as TOML. |
-| `dump-repositories <file>` | Dump `[repositories]` as TOML. |
-| `repositories <file>` | Emit `[repositories].clone` as JSON. |
-| `format-repositories <file\|->` | Format JSON entries as TOML (`-` reads stdin). |
+- Without `--plugins-dir` and outside a cocoon project (no discoverable `workspace.toml`), scaffold refuses with an actionable error rather than silently writing to `./plugins/<id>/`.
+- `--template tarball` implies `--version-capable`; the scaffold rejects the combination of `tarball` without `--version-capable`.
+- After scaffolding, the generated `plugin.toml` is reloaded under the same strict validator the runtime uses; if it fails (bad name, missing URL in description, etc.), the directory is rolled back.
+- Like overlays from `add`, a scaffolded plugin still needs to be listed in `[plugins].enable` to take effect at `gen` time.
 
 ---
 
@@ -258,3 +318,13 @@ cocoon completion powershell | Out-String | Invoke-Expression
 | `1` | Failure (`ErrFailure`-wrapped) |
 | `2` | Usage error (`ErrUsage`-wrapped) |
 | `100` | `cocoon self-update --check-only`: an update is available |
+
+---
+
+## Removed commands
+
+The following noun groups and subcommands existed in earlier releases and have been **removed**. They are documented here so readers searching for an old command know where they went; full migration notes live in the [CHANGELOG](../CHANGELOG.md).
+
+- **`cocoon config` (entire noun group)** — `get`, `list`, `volumes`, `plugin-get`, `plugin-list`, `plugin-volumes`, `plugins-table`, `validate-workspace`, `validate-plugins`, `has-section`, `list-sidecars`, `dump-devcontainer`, `dump-repositories`, `repositories`, `format-repositories`. These were low-level TOML accessors used by retired bash entry-point scripts. External scripts that scraped `workspace.toml` via `cocoon config` should switch to a dedicated TOML parser (`tomlq`, `taplo`, or a small Go / Python helper).
+- **`cocoon plugin add`** — replaced by listing the id under `[plugins].enable` (the embedded catalog is exposed through LayeredFS without a copy step). To customise an embedded plugin, run `cocoon plugin scaffold <new-id>` and adapt logic from there.
+- **`cocoon plugin remove`** — replaced by `rm -rf ~/.cocoon/plugins/<id>` (user scope) or `rm -rf <workspace>/.cocoon/plugins/<id>` (project scope).

@@ -1,8 +1,11 @@
 # アーキテクチャ
 
+> [!WARNING]
+> cocoon は v0.x（alpha）開発段階です。お使いになる場合は、1.0 までに CLI フラグ・`workspace.toml` スキーマ・プラグイン契約が変更され得ること、各リリースに breaking change が含まれうることをご了承のうえご利用ください。詳細は [CHANGELOG](CHANGELOG.ja.md) と README の「プロジェクトステータス」を参照してください。
+
 ## 設計思想
 
-cocoon はプロジェクト直下の `workspace.toml` を読み、必要なプラグイン資産を materialize し、`.devcontainer/` 一式を書き出すジェネレータです。コンテナのライフサイクル (build / up / down / exec) は `docker compose` か VS Code Dev Containers が担当します。
+cocoon はプロジェクト直下の `workspace.toml` を読み、レイヤード FS でプラグイン資産を解決し、`.devcontainer/` 一式を書き出すジェネレータです。コンテナのライフサイクル (build / up / down / exec) は `docker compose` か VS Code Dev Containers が担当します。
 
 設計を貫く 3 つのルール:
 
@@ -34,8 +37,7 @@ flowchart LR
 |---|---|---|
 | Discovery | `internal/config/discovery.go` | cwd → `.cocoon/` → 親ディレクトリ方向に `workspace.toml` を探索 (`.git` か `$HOME` で停止)。 |
 | Plugin LayeredFS | `internal/plugin/layered.go` | プロジェクト / ユーザー / 埋め込みプラグインツリーを `project > user > embedded` の優先度でオーバーレイ。 |
-| Plugin Materialize | `internal/plugin/materialize.go` | 解決されたプラグインツリーを `~/.cocoon/cache/build-context/` に展開 (Docker BuildKit の bind-mount 用)。 |
-| Generators | `internal/generate/{dockerfile,compose,devcontainerjson,envfile,shellrc}` | `.devcontainer/` 配下の各成果物を生成。 |
+| Generators | `internal/generate/{dockerfile,compose,devcontainerjson,envfile,shellrc}` | `.devcontainer/` 配下の各成果物を生成。プラグインの install スクリプトは LayeredFS から直接読み出し、bash heredoc で Dockerfile に埋め込む。 |
 | i18n catalog | `internal/i18n/` | CLI プロンプトと `workspace.toml` 内コメントを英語 / 日本語で切替。 |
 
 ## プラグインシステム
@@ -48,13 +50,12 @@ flowchart TB
     layered -->|1st priority| project["&lt;project&gt;/.cocoon/plugins/"]
     layered -->|2nd priority| usr["~/.cocoon/plugins/"]
     layered -->|3rd priority| embedded["go:embed catalog"]
-    project --> mat["Materialize → ~/.cocoon/cache/build-context"]
-    usr --> mat
-    embedded --> mat
-    mat --> dockerfile["Dockerfile RUN --mount=type=bind,from=plugins,..."]
+    project --> dockerfile["Dockerfile RUN bash &lt;&lt;'COCOON_PLUGIN_EOF' ..."]
+    usr --> dockerfile
+    embedded --> dockerfile
 ```
 
-Materialize 後のキャッシュは Docker Compose の `additional_contexts` から参照され、生成 Dockerfile は `RUN --mount=type=bind,from=plugins,source=<id>,target=/tmp/plugin` でマウントします。
+ジェネレータは有効化された各プラグインの `install.sh` (および存在すれば `install_user.sh`) を LayeredFS から直接読み込み、シングルクオートの heredoc (`bash <<'COCOON_PLUGIN_EOF' … COCOON_PLUGIN_EOF`) でその内容をそのまま Dockerfile に埋め込みます。スクリプト固有の env (PIN / CHECKSUM_* / RC_FILE 等) は同じ `RUN` 行に並べることで、後段のレイヤに `ENV` として漏らさず当該ステップに閉じ込めます。ホスト側のキャッシュディレクトリは作りません — ビルドはプロジェクトツリー以外を必要としないため、ホストでも dev コンテナ内でも同じように `cocoon gen` が動作します。
 
 ## ジェネレータパイプライン
 
@@ -63,14 +64,12 @@ sequenceDiagram
     participant cli as cocoon gen
     participant cfg as config.Discover
     participant fs as plugin.LayeredFS
-    participant mat as plugin.Materialize
     participant gen as Generators
     cli->>cfg: find workspace.toml
     cfg-->>cli: WorkspaceContext
     cli->>fs: build LayeredFS (project ∪ user ∪ embedded)
     fs-->>cli: fs.FS
-    cli->>mat: stage enabled plugins to cache dir
-    cli->>gen: dockerfile / compose / devcontainerjson / envfile / shellrc
+    cli->>gen: dockerfile / compose / devcontainerjson / envfile / shellrc (install.sh は fs.FS 経由で読む)
     gen-->>cli: artifacts
     cli->>cli: write to .devcontainer/
 ```
@@ -101,9 +100,22 @@ sequenceDiagram
 
 `devcontainer.json::workspaceFolder` も同じ選択に追従するので、VS Code が正しいディレクトリで開きます。
 
+### 永続化ボリューム
+
+ユーザー編集のファイルがコンテナリビルドで初期化されないよう、以下の named volume が常時マウントされます:
+
+| ボリューム | コンテナ側パス | 用途 |
+|---|---|---|
+| `local` | `/home/$USER/.local` | XDG runtime / state — シェル履歴、言語ツールチェーンのキャッシュなど |
+| `cocoon` | `/home/$USER/.cocoon` | ユーザー個人のシェル設定: `.shellrc` (POSIX) / `.shellrc.fish` |
+
+イメージは `~/.cocoon/.shellrc{,.fish}` をコメントだけのプレースホルダで焼き込んでおき、初回 `docker compose up` で Docker が空 volume にコピーします。以降は volume が永続層を担い、`docker compose down -v` でのみリセットされます。ホスト `~/.cocoon/` とは無関係 (ホスト側はプラグインオーバーレイと証明書置き場として cocoon CLI が使う作業領域)。
+
 ## シェル注入
 
 `[container.shell] env` と `aliases` は、イメージビルド時に Dockerfile heredoc でコンテナ内の rc ファイル (`~/.bashrc` / `~/.zshrc` / `~/.config/fish/config.fish`) に直接追記されます。`bash` / `zsh` / `fish` の構文差 (`alias k='v'` 対 `alias k 'v'`、`export K=V` 対 `set -gx K V`) はジェネレータが自動翻訳します。
+
+同じ heredoc の末尾に、`cocoon` named volume にある永続シェル設定を source する 1 行も常時追加されます。これによりユーザーごとの編集がコンテナリビルドを跨いでも残ります:
 
 ```dockerfile
 RUN <<COCOON_RC_BLOCK
@@ -111,9 +123,14 @@ cat >>"$HOME/.bashrc" <<'COCOON_RC'
 # Auto-generated from [container.shell] of workspace.toml.
 export EDITOR='vim'
 alias gs='git status'
+
+# Source persistent user shellrc from the cocoon named volume
+[ -f "$HOME/.cocoon/.shellrc" ] && . "$HOME/.cocoon/.shellrc"
 COCOON_RC
 COCOON_RC_BLOCK
 ```
+
+bash / zsh は `~/.cocoon/.shellrc`、fish は `~/.cocoon/.shellrc.fish` を source します。`[container.shell]` 未設定でも常に出力されるので、ユーザーは再生成なしで永続ファイルを編集できます。
 
 ## 国際化 (i18n)
 

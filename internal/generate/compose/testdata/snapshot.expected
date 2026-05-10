@@ -6,7 +6,7 @@ services:
       context: ..
       dockerfile: .devcontainer/Dockerfile
       additional_contexts:
-        plugins: "${HOME}/.cocoon/cache/build-context"
+        cocoon_user_certs: "${HOME:?HOME must be set on the host}/.cocoon/certs"
       args:
         - "OS_IMAGE=${OS_IMAGE}"
         - "OS_VERSION=${OS_VERSION}"
@@ -18,8 +18,9 @@ services:
     environment:
       - "CONTAINER_SERVICE_NAME=${CONTAINER_SERVICE_NAME}"
     volumes:
-      - "..:/home/${USERNAME}/workspace:cached"
+      - "../..:/home/${USERNAME}/workspace:cached"
       - "local:/home/${USERNAME}/.local"
+      - "cocoon:/home/${USERNAME}/.cocoon"
       - "proto:/home/${USERNAME}/.proto"
       - "aws:/home/${USERNAME}/.aws"
       - "config:/home/${USERNAME}/.config"
@@ -63,6 +64,8 @@ services:
 volumes:
   local:
     name: "${COMPOSE_PROJECT_NAME}_${CONTAINER_SERVICE_NAME}_local"
+  cocoon:
+    name: "${COMPOSE_PROJECT_NAME}_${CONTAINER_SERVICE_NAME}_cocoon"
   proto:
     name: "${COMPOSE_PROJECT_NAME}_${CONTAINER_SERVICE_NAME}_proto"
   aws:

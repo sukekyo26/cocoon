@@ -23,5 +23,10 @@ __pycache__/
 # VS Code user-specific
 .vscode/
 
-# Local agent notes
-agent/lessons.md
+# cocoon
+.cocoon/
+.devcontainer/
+workspace.toml
+
+# claude
+.claude/scheduled_tasks.lock

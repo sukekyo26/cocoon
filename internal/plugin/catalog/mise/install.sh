@@ -19,11 +19,11 @@ fi
 shell="${LOGIN_SHELL:-bash}"
 if [ "$shell" = "fish" ]; then
   # shellcheck disable=SC2016
-  echo 'set -gx PATH $HOME/.local/bin $PATH' >> "$RC_FILE"
+  echo 'set -gx PATH $HOME/.local/bin $PATH' >>"$RC_FILE"
   # shellcheck disable=SC2016
-  echo '$HOME/.local/bin/mise activate fish | source' >> "$RC_FILE"
+  echo '$HOME/.local/bin/mise activate fish | source' >>"$RC_FILE"
 else
   # shellcheck disable=SC2016
-  echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$RC_FILE"
-  echo "eval \"\$(\$HOME/.local/bin/mise activate ${shell})\"" >> "$RC_FILE"
+  echo 'export PATH="$HOME/.local/bin:$PATH"' >>"$RC_FILE"
+  echo "eval \"\$(\$HOME/.local/bin/mise activate ${shell})\"" >>"$RC_FILE"
 fi

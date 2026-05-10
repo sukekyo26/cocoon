@@ -35,6 +35,12 @@ func buildConfig(ctx *generate.WorkspaceContext) *orderedMap {
 	base.set("name", ctx.ServiceName())
 	base.set("dockerComposeFile", []string{"docker-compose.yml"})
 	base.set("service", ctx.ServiceName())
+	if ctx.CertificatesEnabled() {
+		// initializeCommand runs on the host before container create
+		// to mkdir the additional_contexts source path; without it
+		// VS Code Dev Containers users would hit a BuildKit error.
+		base.set("initializeCommand", "mkdir -p "+generate.CertsHostPath)
+	}
 	workspaceFolder := "/home/" + ctx.Username() + "/workspace"
 	if ctx.WS.Workspace.MountRootOrDefault() == "." {
 		// Match the compose working_dir so VS Code opens the same

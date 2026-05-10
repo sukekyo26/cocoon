@@ -9,8 +9,8 @@ set -euo pipefail
 
 shell="${LOGIN_SHELL:-bash}"
 if [ "${RC_SYNTAX:-posix}" = "fish" ]; then
-  echo "starship init ${shell} | source" >> "$RC_FILE"
+  echo "starship init ${shell} | source" >>"$RC_FILE"
 else
   # shellcheck disable=SC2016
-  echo "eval \"\$(starship init ${shell})\"" >> "$RC_FILE"
+  echo "eval \"\$(starship init ${shell})\"" >>"$RC_FILE"
 fi

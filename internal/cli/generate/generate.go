@@ -40,15 +40,23 @@ type Artifact struct {
 }
 
 // LoadContext loads workspace.toml, the enabled plugins from
-// pluginsDir, and runs plugin conflict checks, returning a
-// WorkspaceContext ready for BuildArtifacts. Stderr receives
-// plugin-loader warnings.
-func LoadContext(wsPath, pluginsDir string, stderr io.Writer) (*generate.WorkspaceContext, error) {
+// pluginsFS (a layered fs.FS rooted at the plugin catalog: each
+// top-level entry is a plugin id), and runs plugin conflict checks,
+// returning a WorkspaceContext ready for BuildArtifacts. Stderr
+// receives plugin-loader warnings. pluginsPathHint is used purely to
+// decorate "plugin not found" warnings with a human-readable path; pass
+// "" when the source has no on-disk anchor.
+func LoadContext(
+	wsPath string,
+	pluginsFS fs.FS,
+	pluginsPathHint string,
+	stderr io.Writer,
+) (*generate.WorkspaceContext, error) {
 	ws, err := config.LoadWorkspace(wsPath)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrFailure, err)
 	}
-	plugins, err := plugin.LoadEnabled(pluginsDir, ws.Plugins.Enable, stderr)
+	plugins, err := plugin.LoadEnabledFromFS(pluginsFS, ws.Plugins.Enable, stderr, pluginsPathHint)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrFailure, err)
 	}
@@ -57,7 +65,7 @@ func LoadContext(wsPath, pluginsDir string, stderr io.Writer) (*generate.Workspa
 	}
 	return &generate.WorkspaceContext{
 		WS:         ws,
-		PluginsDir: pluginsDir,
+		PluginsFS:  pluginsFS,
 		ProjectDir: filepath.Dir(wsPath),
 		Plugins:    plugins,
 		Warnings:   stderr,
@@ -67,12 +75,7 @@ func LoadContext(wsPath, pluginsDir string, stderr io.Writer) (*generate.Workspa
 // BuildArtifacts produces the in-memory list of generated files
 // (compose, Dockerfile, devcontainer.json when enabled, shellrc) for
 // the given loaded WorkspaceContext.
-func BuildArtifacts(ctx *generate.WorkspaceContext, pluginsDir string, stderr io.Writer) ([]Artifact, error) {
-	absPlugins, err := filepath.Abs(pluginsDir)
-	if err != nil {
-		return nil, fmt.Errorf("%w: abs(%s): %w", ErrFailure, pluginsDir, err)
-	}
-	wsRoot := filepath.Dir(absPlugins)
+func BuildArtifacts(ctx *generate.WorkspaceContext, stderr io.Writer) ([]Artifact, error) {
 	arts := make([]Artifact, 0, 5)
 
 	body, err := compose.Generate(ctx, compose.Options{Plugins: ctx.Plugins, Warnings: stderr})
@@ -82,7 +85,7 @@ func BuildArtifacts(ctx *generate.WorkspaceContext, pluginsDir string, stderr io
 	arts = append(arts, Artifact{Rel: ".devcontainer/docker-compose.yml", Body: body, Mode: 0})
 
 	body, err = dockerfile.Generate(ctx, dockerfile.Options{
-		WorkspaceRoot: wsRoot,
+		WorkspaceRoot: ctx.ProjectDir,
 		RepoDir:       "",
 		Plugins:       ctx.Plugins,
 		Warnings:      stderr,

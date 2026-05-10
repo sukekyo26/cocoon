@@ -1,0 +1,212 @@
+package plugincli_test
+
+import (
+	"bytes"
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	plugincli "github.com/sukekyo26/cocoon/internal/cli/plugin"
+)
+
+// runPinCmd is the pin-flavored peer of runCmd that scopes args to the pin
+// subcommand. It avoids depending on PATH expansion or the full root CLI.
+func runPinCmd(t *testing.T, args ...string) (string, string, error) {
+	t.Helper()
+	var stdout, stderr bytes.Buffer
+	cmd := plugincli.NewCommand(&stdout, &stderr)
+	cmd.SetArgs(append([]string{"pin"}, args...))
+	err := cmd.Execute()
+	return stdout.String(), stderr.String(), err
+}
+
+// seedWorkspace writes a minimal workspace.toml at <dir>/workspace.toml so
+// config.Discover() finds it from cwd and pin --write has a target.
+func seedWorkspace(t *testing.T, dir, body string) string {
+	t.Helper()
+	path := filepath.Join(dir, "workspace.toml")
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatalf("seed workspace: %v", err)
+	}
+	return path
+}
+
+// Without --write, pin should print the snippet to stdout and leave the
+// filesystem untouched. Locks the legacy behavior.
+//
+//nolint:paralleltest // t.Chdir mutates process cwd.
+func TestPin_StdoutOnlyByDefault(t *testing.T) {
+	withIsolatedHome(t)
+	dir := t.TempDir()
+	path := seedWorkspace(t, dir, "[plugins]\nenable = []\n")
+	t.Chdir(dir)
+
+	stdout, stderr, err := runPinCmd(t, "go", "1.23.4")
+	if err != nil {
+		t.Fatalf("pin: err=%v stderr=%s", err, stderr)
+	}
+	if !strings.Contains(stdout, "[plugins.versions.go]") || !strings.Contains(stdout, `pin = "1.23.4"`) {
+		t.Errorf("stdout missing pin block:\n%s", stdout)
+	}
+	body, rerr := os.ReadFile(path) //nolint:gosec // tmp under t.TempDir
+	if rerr != nil {
+		t.Fatalf("read: %v", rerr)
+	}
+	if string(body) != "[plugins]\nenable = []\n" {
+		t.Errorf("workspace.toml was modified despite --write absent:\n%s", body)
+	}
+}
+
+// --write happy path: workspace.toml gets the new block appended in place,
+// stdout reports the path that was edited.
+//
+//nolint:paralleltest // t.Chdir mutates process cwd.
+func TestPin_WriteAppendsBlockInPlace(t *testing.T) {
+	withIsolatedHome(t)
+	dir := t.TempDir()
+	path := seedWorkspace(t, dir, "[plugins]\nenable = [\"go\"]\n")
+	t.Chdir(dir)
+
+	stdout, stderr, err := runPinCmd(t, "go", "1.23.4", "--write")
+	if err != nil {
+		t.Fatalf("pin --write: err=%v stderr=%s", err, stderr)
+	}
+	if !strings.Contains(stdout, "Updated") || !strings.Contains(stdout, "[plugins.versions.go]") {
+		t.Errorf("stdout missing Updated marker:\n%s", stdout)
+	}
+	got, rerr := os.ReadFile(path) //nolint:gosec // tmp under t.TempDir
+	if rerr != nil {
+		t.Fatalf("read: %v", rerr)
+	}
+	if !strings.Contains(string(got), "[plugins.versions.go]") || !strings.Contains(string(got), `pin = "1.23.4"`) {
+		t.Errorf("workspace.toml missing new block:\n%s", got)
+	}
+}
+
+// --write on a workspace.toml that already has [plugins.versions.<other>]
+// must append the new block alongside (appendAfterVersions path), not at EOF.
+// This locks the layout `pin uv 0.5.7 --write` produces when go is already
+// pinned: both blocks live together, the new one inserted right after the
+// existing versions cluster.
+//
+//nolint:paralleltest // t.Chdir mutates process cwd.
+func TestPin_WriteAppendsAlongsideExisting(t *testing.T) {
+	withIsolatedHome(t)
+	dir := t.TempDir()
+	path := seedWorkspace(t, dir, `[plugins]
+enable = ["go", "uv"]
+
+[plugins.versions.go]
+pin = "1.23.4"
+
+[mounts]
+host = "./src"
+`)
+	t.Chdir(dir)
+
+	if _, stderr, err := runPinCmd(t, "uv", "0.5.7", "--write"); err != nil {
+		t.Fatalf("pin --write: err=%v stderr=%s", err, stderr)
+	}
+	got, rerr := os.ReadFile(path) //nolint:gosec // tmp under t.TempDir
+	if rerr != nil {
+		t.Fatalf("read: %v", rerr)
+	}
+	body := string(got)
+	// Both blocks must be present, in the order go → uv (uv inserted after
+	// the existing versions cluster).
+	goIdx := strings.Index(body, "[plugins.versions.go]")
+	uvIdx := strings.Index(body, "[plugins.versions.uv]")
+	mountsIdx := strings.Index(body, "[mounts]")
+	if goIdx < 0 || uvIdx < 0 {
+		t.Fatalf("expected both blocks present:\n%s", body)
+	}
+	if goIdx >= uvIdx || uvIdx >= mountsIdx {
+		t.Errorf("expected order: go < uv < mounts; got %d / %d / %d\n%s", goIdx, uvIdx, mountsIdx, body)
+	}
+	if !strings.Contains(body, "host = \"./src\"") {
+		t.Errorf("[mounts] body lost in append:\n%s", body)
+	}
+}
+
+// --write on a workspace.toml that already has [plugins.versions.go] must
+// replace the existing block (pin/checksums) rather than append a duplicate.
+//
+//nolint:paralleltest // t.Chdir mutates process cwd.
+func TestPin_WriteReplacesExistingBlock(t *testing.T) {
+	withIsolatedHome(t)
+	dir := t.TempDir()
+	path := seedWorkspace(t, dir, `[plugins]
+enable = ["go"]
+
+[plugins.versions.go]
+pin = "1.22.0"
+`)
+	t.Chdir(dir)
+
+	if _, stderr, err := runPinCmd(t, "go", "1.23.4", "--write"); err != nil {
+		t.Fatalf("pin --write: err=%v stderr=%s", err, stderr)
+	}
+	got, rerr := os.ReadFile(path) //nolint:gosec // tmp under t.TempDir
+	if rerr != nil {
+		t.Fatalf("read: %v", rerr)
+	}
+	if strings.Contains(string(got), `pin = "1.22.0"`) {
+		t.Errorf("old pin not replaced:\n%s", got)
+	}
+	if strings.Count(string(got), "[plugins.versions.go]") != 1 {
+		t.Errorf("expected exactly one [plugins.versions.go] block:\n%s", got)
+	}
+}
+
+// --write on a workspace.toml using the inline-table form must refuse with
+// ErrUsage rather than appending a duplicate-key block. This locks the
+// pin.go side mapping of plugin.ErrPinBlockVersionsKeyAssign → ErrUsage.
+//
+//nolint:paralleltest // t.Chdir mutates process cwd.
+func TestPin_WriteRefusesInlineForm(t *testing.T) {
+	withIsolatedHome(t)
+	dir := t.TempDir()
+	original := `[plugins]
+enable = ["go"]
+
+[plugins.versions]
+go = { pin = "1.22.5" }
+`
+	path := seedWorkspace(t, dir, original)
+	t.Chdir(dir)
+
+	_, stderr, err := runPinCmd(t, "go", "1.23.4", "--write")
+	if !errors.Is(err, plugincli.ErrUsage) {
+		t.Fatalf("err = %v, want ErrUsage", err)
+	}
+	if !strings.Contains(err.Error(), "key assignments") {
+		t.Errorf("err should mention key assignments: %v\nstderr: %s", err, stderr)
+	}
+	got, rerr := os.ReadFile(path) //nolint:gosec // tmp under t.TempDir
+	if rerr != nil {
+		t.Fatalf("read: %v", rerr)
+	}
+	if string(got) != original {
+		t.Errorf("workspace.toml modified despite refusal:\n--- got ---\n%s", got)
+	}
+}
+
+// --write with no discoverable workspace.toml from cwd must surface ErrUsage
+// with an actionable message rather than silently writing somewhere odd.
+//
+//nolint:paralleltest // t.Chdir mutates process cwd.
+func TestPin_WriteRequiresWorkspace(t *testing.T) {
+	withIsolatedHome(t)
+	dir := t.TempDir()
+	t.Chdir(dir)
+
+	_, _, err := runPinCmd(t, "go", "1.23.4", "--write")
+	if !errors.Is(err, plugincli.ErrUsage) {
+		t.Fatalf("err = %v, want ErrUsage", err)
+	}
+	if !strings.Contains(err.Error(), "workspace.toml") {
+		t.Errorf("err should mention workspace.toml: %v", err)
+	}
+}

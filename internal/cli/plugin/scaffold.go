@@ -186,6 +186,7 @@ func promptMissing(opts *scaffoldOpts, cat *i18n.Catalog, p prompter) error {
 		groups = append(groups, huh.NewGroup(
 			huh.NewConfirm().
 				Title(cat.Msg("plugin_scaffold_prompt_user_hook")).
+				Description(cat.Msg("plugin_scaffold_prompt_user_hook_desc")).
 				Value(&opts.withInstallUser),
 		))
 	}
@@ -250,8 +251,57 @@ func finalizeOpts(opts *scaffoldOpts, cat *i18n.Catalog, stderr io.Writer) error
 	return nil
 }
 
+// resolvePluginsDir returns opts.pluginsDir verbatim when set, or
+// auto-discovers <workspace>/.cocoon/plugins from cwd.
+//
+// Error semantics mirror projectPluginsDir:
+//   - (path, nil)                   when --plugins-dir was set or discovery succeeded
+//   - ("", ErrWorkspaceNotFound)   when running outside a cocoon project — the
+//     caller turns this into an actionable ErrUsage with a localized message
+//   - ("", wrapped err)             on filesystem-level failures, mapped to
+//     ErrFailure by the caller so context is preserved
+func resolvePluginsDir(opts scaffoldOpts) (string, error) {
+	if opts.pluginsDir != "" {
+		return opts.pluginsDir, nil
+	}
+	return projectPluginsDir()
+}
+
+// renderAndWrite renders a single scaffold file via render and writes it under
+// dir/name with the given mode. On failure it logs and triggers cleanup.
+// Returns the path written on success — relative if dir was relative.
+func renderAndWrite(
+	dir, name string, mode os.FileMode,
+	render func() (string, error),
+	log *logx.Logger, cleanup func(),
+) (string, error) {
+	body, err := render()
+	if err != nil {
+		cleanup()
+		log.Errorf("ERROR: render %s: %s", name, err)
+		return "", ErrFailure
+	}
+	path := filepath.Join(dir, name)
+	if writeErr := fsx.AtomicWriteFile(path, []byte(body), mode); writeErr != nil {
+		cleanup()
+		log.Errorf("ERROR: write %s: %s", path, writeErr)
+		return "", ErrFailure
+	}
+	return path, nil
+}
+
 func runScaffold(opts scaffoldOpts, cat *i18n.Catalog, stdout, stderr io.Writer) error {
 	log := logx.New(stdout, stderr)
+	pluginsDir, err := resolvePluginsDir(opts)
+	switch {
+	case errors.Is(err, ErrWorkspaceNotFound):
+		log.Error("ERROR: " + cat.Msg("plugin_scaffold_no_plugins_dir"))
+		return ErrUsage
+	case err != nil:
+		log.Errorf("ERROR: resolve plugins dir: %s", err)
+		return ErrFailure
+	}
+	opts.pluginsDir = pluginsDir
 	dir := filepath.Join(opts.pluginsDir, opts.id)
 	dirExisted, err := dirExists(dir)
 	if err != nil {
@@ -278,7 +328,6 @@ func runScaffold(opts scaffoldOpts, cat *i18n.Catalog, stdout, stderr io.Writer)
 		WithUserHook:   opts.withInstallUser,
 	} //nolint:exhaustruct // every field is populated above
 
-	written := make([]string, 0, 3)
 	cleanup := func() {
 		if dirExisted {
 			// We did not create the directory, so leave it alone — the
@@ -288,46 +337,26 @@ func runScaffold(opts scaffoldOpts, cat *i18n.Catalog, stdout, stderr io.Writer)
 		_ = os.RemoveAll(dir)
 	}
 
-	tomlBody, err := renderPluginTOML(data)
-	if err != nil {
-		cleanup()
-		log.Errorf("ERROR: render plugin.toml: %s", err)
-		return ErrFailure
-	}
-	tomlPath := filepath.Join(dir, "plugin.toml")
-	if writeErr := fsx.AtomicWriteFile(tomlPath, []byte(tomlBody), 0o644); writeErr != nil {
-		cleanup()
-		log.Errorf("ERROR: write %s: %s", tomlPath, writeErr)
-		return ErrFailure
+	written := make([]string, 0, 3)
+	tomlPath, terr := renderAndWrite(dir, "plugin.toml", 0o644,
+		func() (string, error) { return renderPluginTOML(data) }, log, cleanup)
+	if terr != nil {
+		return terr
 	}
 	written = append(written, tomlPath)
 
-	installBody, err := renderInstallSh(data)
-	if err != nil {
-		cleanup()
-		log.Errorf("ERROR: render install.sh: %s", err)
-		return ErrFailure
-	}
-	installPath := filepath.Join(dir, "install.sh")
-	if writeErr := fsx.AtomicWriteFile(installPath, []byte(installBody), 0o755); writeErr != nil {
-		cleanup()
-		log.Errorf("ERROR: write %s: %s", installPath, writeErr)
-		return ErrFailure
+	installPath, ierr := renderAndWrite(dir, "install.sh", 0o755,
+		func() (string, error) { return renderInstallSh(data) }, log, cleanup)
+	if ierr != nil {
+		return ierr
 	}
 	written = append(written, installPath)
 
 	if opts.withInstallUser {
-		userBody, renderErr := renderInstallUserSh(data)
-		if renderErr != nil {
-			cleanup()
-			log.Errorf("ERROR: render install_user.sh: %s", renderErr)
-			return ErrFailure
-		}
-		userPath := filepath.Join(dir, "install_user.sh")
-		if writeErr := fsx.AtomicWriteFile(userPath, []byte(userBody), 0o755); writeErr != nil {
-			cleanup()
-			log.Errorf("ERROR: write %s: %s", userPath, writeErr)
-			return ErrFailure
+		userPath, uerr := renderAndWrite(dir, "install_user.sh", 0o755,
+			func() (string, error) { return renderInstallUserSh(data) }, log, cleanup)
+		if uerr != nil {
+			return uerr
 		}
 		written = append(written, userPath)
 	}

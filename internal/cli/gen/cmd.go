@@ -1,11 +1,13 @@
 // Package gencli implements `cocoon gen`, the central generator command.
 //
-// `cocoon gen` discovers workspace.toml from the current directory (or an
-// explicit --workspace path), materializes the embedded plugin catalog
-// into ~/.cocoon/cache/build-context, then writes Dockerfile,
+// `cocoon gen` discovers workspace.toml from the current directory (or
+// an explicit --workspace path), assembles the layered plugin catalog
+// (embedded < user < project), and writes Dockerfile,
 // docker-compose.yml, and (when [workspace].devcontainer is true)
-// devcontainer.json into .devcontainer/. Container start-up itself is
-// left to the user — `docker compose -f .devcontainer/docker-compose.yml
+// devcontainer.json into .devcontainer/. Plugin install scripts are
+// inlined directly into the generated Dockerfile so the build needs no
+// external context beyond the project tree. Container start-up itself
+// is left to the user — `docker compose -f .devcontainer/docker-compose.yml
 // up -d` or VS Code's "Reopen in Container" both consume the output.
 package gencli
 
@@ -22,6 +24,7 @@ import (
 	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
 	generatecli "github.com/sukekyo26/cocoon/internal/cli/generate"
 	"github.com/sukekyo26/cocoon/internal/config"
+	"github.com/sukekyo26/cocoon/internal/generate"
 	"github.com/sukekyo26/cocoon/internal/i18n"
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
@@ -32,12 +35,17 @@ var ErrUsage = errors.New("usage error")
 // ErrFailure signals a runtime failure during generation.
 var ErrFailure = errors.New("gen failed")
 
+// errCertsPathNotDirectory: caller wraps with ErrFailure once.
+var errCertsPathNotDirectory = errors.New("cocoon certs path exists but is not a directory")
+
 const genLong = `cocoon gen — generate .devcontainer/{Dockerfile, docker-compose.yml, devcontainer.json}
 
 Discovers workspace.toml from the current directory (walking parent
-directories until a .git boundary or $HOME), materializes the embedded
-plugin catalog into ~/.cocoon/cache/build-context, and writes the
-generated artifacts under .devcontainer/.
+directories until a .git boundary or $HOME), assembles the layered
+plugin catalog (embedded < user < project), and writes the generated
+artifacts under .devcontainer/. Plugin install scripts are inlined into
+the generated Dockerfile, so the build needs no external context
+beyond the project tree.
 
 After generation, start the container yourself:
 
@@ -89,16 +97,6 @@ func runGen(stdout, stderr io.Writer, workspaceFlag, outputFlag string) error {
 		outDir = filepath.Dir(wsPath)
 	}
 
-	cacheDir, err := defaultBuildContextDir()
-	if err != nil {
-		return fmt.Errorf("%w: %w", ErrFailure, err)
-	}
-
-	ws, err := config.LoadWorkspace(wsPath)
-	if err != nil {
-		return fmt.Errorf("%w: load workspace.toml: %w", ErrFailure, err)
-	}
-
 	catalog, err := plugin.CatalogFS()
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrFailure, err)
@@ -110,27 +108,32 @@ func runGen(stdout, stderr io.Writer, workspaceFlag, outputFlag string) error {
 	projectPluginDir := filepath.Join(filepath.Dir(wsPath), ".cocoon", "plugins")
 	layered := plugin.NewLayeredFS(catalog, userPluginDir, projectPluginDir)
 	layered.LogOverrides(stderr)
-	if matErr := plugin.Materialize(layered, ws.Plugins.Enable, cacheDir); matErr != nil {
-		return fmt.Errorf("%w: materialize plugins: %w", ErrFailure, matErr)
-	}
 
-	ctx, err := generatecli.LoadContext(wsPath, cacheDir, stderr)
+	ctx, err := generatecli.LoadContext(wsPath, layered, "", stderr)
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrFailure, err)
 	}
-	arts, err := generatecli.BuildArtifacts(ctx, cacheDir, stderr)
+	arts, err := generatecli.BuildArtifacts(ctx, stderr)
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrFailure, err)
 	}
 	if err := generatecli.WriteArtifacts(arts, outDir); err != nil {
 		return fmt.Errorf("%w: %w", ErrFailure, err)
 	}
+	if ctx.CertificatesEnabled() {
+		if err := ensureUserCertsDir(stdout, cat); err != nil {
+			return fmt.Errorf("%w: %w", ErrFailure, err)
+		}
+	}
 
 	cwd, _ := os.Getwd() //nolint:errcheck // cwd is best-effort for pretty-printing only.
 	for _, a := range arts {
 		fmt.Fprintln(stdout, cat.Msg("gen_wrote", displayPath(cwd, filepath.Join(outDir, a.Rel))))
 	}
-	printNextSteps(stdout, cat, ws.Workspace.DevContainerOrDefault())
+	printNextSteps(stdout, cat, ctx.WS.Workspace.DevContainerOrDefault())
+	if ctx.CertificatesEnabled() {
+		printCertNotice(stdout, cat)
+	}
 	return nil
 }
 
@@ -176,14 +179,6 @@ func resolveWorkspace(flag string) (string, error) {
 	return found, nil
 }
 
-func defaultBuildContextDir() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("resolve home dir: %w", err)
-	}
-	return filepath.Join(home, ".cocoon", "cache", "build-context"), nil
-}
-
 // userPluginsDir returns ~/.cocoon/plugins, the LayeredFS user layer root.
 func userPluginsDir() (string, error) {
 	home, err := os.UserHomeDir()
@@ -193,6 +188,32 @@ func userPluginsDir() (string, error) {
 	return filepath.Join(home, ".cocoon", "plugins"), nil
 }
 
+// ensureUserCertsDir mkdirs ~/.cocoon/certs (mode 0700) if missing so
+// docker-compose's additional_contexts can resolve before the build
+// starts. Only the first-run case prints a status line; re-runs stay
+// quiet. Mirrors the plugin overlay's 0700 posture (private user data).
+func ensureUserCertsDir(stdout io.Writer, cat *i18n.Catalog) error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("resolve home dir: %w", err)
+	}
+	dir := filepath.Join(home, generate.CertsHostPathRelative)
+	info, err := os.Stat(dir)
+	switch {
+	case err == nil && info.IsDir():
+		return nil
+	case err == nil && !info.IsDir():
+		return fmt.Errorf("%s: %w", dir, errCertsPathNotDirectory)
+	case !os.IsNotExist(err):
+		return fmt.Errorf("stat %s: %w", dir, err)
+	}
+	if mkErr := os.MkdirAll(dir, 0o700); mkErr != nil {
+		return fmt.Errorf("mkdir %s: %w", dir, mkErr)
+	}
+	fmt.Fprintln(stdout, cat.Msg("gen_certs_dir_created", dir))
+	return nil
+}
+
 func printNextSteps(stdout io.Writer, cat *i18n.Catalog, devcontainer bool) {
 	fmt.Fprintln(stdout)
 	fmt.Fprintln(stdout, cat.Msg("gen_next_header"))
@@ -200,4 +221,13 @@ func printNextSteps(stdout io.Writer, cat *i18n.Catalog, devcontainer bool) {
 	if devcontainer {
 		fmt.Fprintln(stdout, cat.Msg("gen_next_step_vscode"))
 	}
+}
+
+// printCertNotice surfaces `~/.cocoon/certs/` as the drop-zone for user
+// CA certs in stdout, so users do not have to read configuration.md.
+func printCertNotice(stdout io.Writer, cat *i18n.Catalog) {
+	fmt.Fprintln(stdout)
+	fmt.Fprintln(stdout, cat.Msg("gen_certs_notice_header"))
+	fmt.Fprintln(stdout, cat.Msg("gen_certs_notice_path"))
+	fmt.Fprintln(stdout, cat.Msg("gen_certs_notice_team"))
 }

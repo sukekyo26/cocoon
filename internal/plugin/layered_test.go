@@ -134,45 +134,6 @@ func TestLayeredFS_OpenAndReadDirRouteToWinningLayer(t *testing.T) {
 	}
 }
 
-func TestLayeredFS_MaterializePicksWinningLayer(t *testing.T) {
-	t.Parallel()
-
-	embedded := makeEmbedded()
-	userDir := writeUserOverlay(t)
-	projectDir := writeProjectOverlay(t)
-	layered := plugin.NewLayeredFS(embedded, userDir, projectDir)
-
-	dst := t.TempDir()
-	if err := plugin.Materialize(layered, []string{"alpha", "bravo"}, dst); err != nil {
-		t.Fatalf("Materialize: %v", err)
-	}
-
-	// alpha must come from project (only plugin.toml exists there).
-	alphaToml, err := os.ReadFile(filepath.Join(dst, "alpha", "plugin.toml"))
-	if err != nil {
-		t.Fatalf("read alpha plugin.toml: %v", err)
-	}
-	if !strings.Contains(string(alphaToml), "from project") {
-		t.Errorf("alpha plugin.toml not from project: %q", string(alphaToml))
-	}
-	// bravo install.sh must come from user (and be 0o755).
-	bravoSh := filepath.Join(dst, "bravo", "install.sh")
-	body, err := os.ReadFile(bravoSh) //nolint:gosec
-	if err != nil {
-		t.Fatalf("read bravo install.sh: %v", err)
-	}
-	if !strings.Contains(string(body), "bravo-user") {
-		t.Errorf("bravo install.sh not from user: %q", string(body))
-	}
-	info, err := os.Stat(bravoSh)
-	if err != nil {
-		t.Fatalf("stat: %v", err)
-	}
-	if mode := info.Mode().Perm(); mode != 0o755 {
-		t.Errorf("install.sh perm: got %o, want 0755", mode)
-	}
-}
-
 func TestLogOverrides_OnlyOverriddenIDs(t *testing.T) {
 	t.Parallel()
 

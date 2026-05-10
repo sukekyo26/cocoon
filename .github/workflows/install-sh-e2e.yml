@@ -1,0 +1,116 @@
+name: install.sh E2E
+
+# Real network smoke test for the public installer. The httptest-driven Go
+# tests under tests/installer/ cover install.sh's logic against mocked
+# endpoints; this workflow proves the full chain still works against the
+# real api.github.com / github.com release downloads on every supported
+# OS+arch combo.
+#
+# Catches drift the mocked tests cannot:
+#   - GitHub API response-shape changes (e.g. `tag_name` rename / removal)
+#   - Release asset naming-convention drift
+#   - SHA256SUMS path / format changes
+#   - Real binary executes on the matrix runner (catches binary-corruption
+#     regressions in the upstream release pipeline)
+#   - Platform-specific shell differences (e.g. macOS's `shasum` vs Linux's
+#     `sha256sum`) — install.sh wraps the two but only the matrix proves it
+#
+# The matrix exercises three of the four release-asset variants cocoon
+# publishes:
+#   linux/amd64  (ubuntu-latest)
+#   linux/arm64  (ubuntu-24.04-arm)
+#   darwin/arm64 (macos-latest, currently macos-15)
+#
+# `darwin/amd64` (macos-13) is intentionally NOT in the matrix here.
+# Intel-macOS GitHub-hosted runners have very long queue times, so when
+# combined with this workflow's `cancel-in-progress: true` every push to
+# the feature branch cancels the previous queued run before it starts —
+# the slot is consumed without ever validating anything (false-confidence
+# silent skip). A follow-up PR will move darwin/amd64 onto the schedule /
+# release / workflow_dispatch triggers only, where queue time isn't on
+# the PR critical path.
+
+on:
+  # Push fires for in-progress branches. develop / main are excluded so a
+  # merge does not double up with the pull_request run that already gated it.
+  push:
+    branches: ["feature/*", "fix/*", "refactor/*"]
+    paths:
+      - install.sh
+      - .github/workflows/install-sh-e2e.yml
+  pull_request:
+    branches: [develop, main]
+    paths:
+      - install.sh
+      - .github/workflows/install-sh-e2e.yml
+  schedule:
+    # Weekly Monday 06:00 UTC — catches GitHub-side drift between PRs.
+    - cron: "0 6 * * 1"
+  release:
+    # Re-validates the installer end-to-end immediately after a new release
+    # is published, so a bad asset / missing SHA256SUMS surfaces in CI
+    # rather than from a user.
+    types: [published]
+  workflow_dispatch:
+  workflow_call:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.runs-on }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: linux / amd64
+            runs-on: ubuntu-latest
+          - label: linux / arm64
+            runs-on: ubuntu-24.04-arm
+          - label: darwin / arm64
+            runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # Latest path: hits api.github.com to resolve `tag_name`, downloads
+      # cocoon-<os>-<arch> + SHA256SUMS, verifies, drops binary into a
+      # tempdir. Fails on any drift in the API response shape, asset
+      # naming, or checksum file format.
+      #
+      # COCOON_API_TOKEN is set so install.sh's authenticated branch is
+      # exercised and so this matrix isn't subject to the 60-req/hour
+      # anonymous rate limit on shared GitHub-runner IP pools (which
+      # otherwise produces sporadic 403s when push + pull_request runs hit
+      # the same IP).
+      - name: install.sh — latest
+        env:
+          COCOON_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euxo pipefail
+          dst="$RUNNER_TEMP/inst-latest"
+          mkdir -p "$dst"
+          COCOON_INSTALL_DIR="$dst" sh ./install.sh
+          test -x "$dst/cocoon"
+          "$dst/cocoon" --version
+
+      # Pinned path: exercises the COCOON_VERSION branch (no API call) and
+      # asserts that the binary self-reports the requested version, which
+      # transitively proves the SHA256-verified bytes are the right ones.
+      - name: install.sh — pinned v0.1.0
+        run: |
+          set -euxo pipefail
+          dst="$RUNNER_TEMP/inst-pinned"
+          mkdir -p "$dst"
+          COCOON_INSTALL_DIR="$dst" COCOON_VERSION=0.1.0 sh ./install.sh
+          got=$("$dst/cocoon" --version)
+          case "$got" in
+            *0.1.0*) echo "ok: $got" ;;
+            *) echo "::error::pinned v0.1.0 reported '$got'"; exit 1 ;;
+          esac

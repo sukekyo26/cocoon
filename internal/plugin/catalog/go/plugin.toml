@@ -3,6 +3,9 @@ name = "Go"
 description = "Go programming language (https://github.com/golang/go)"
 default = false
 
+[apt]
+packages = ["build-essential"]
+
 [install]
 requires_root = true
 volumes = ["/home/${USERNAME}/go"]

@@ -713,6 +713,100 @@ func TestRunInit_DevcontainerConflict(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // t.Chdir
+func TestRunInit_CertificatesConflict(t *testing.T) {
+	pinEnglish(t)
+	work := t.TempDir()
+	t.Chdir(work)
+	cmd := NewCommand(io.Discard, io.Discard)
+	cmd.SetArgs([]string{
+		"--yes", "--service-name", "x", "--username", "y",
+		"--certificates", "--no-certificates",
+	})
+	if err := cmd.Execute(); !errors.Is(err, ErrUsage) {
+		t.Errorf("conflicting --certificates flags should be ErrUsage, got %v", err)
+	}
+}
+
+// TestRunInit_CertificatesFlag verifies that --certificates emits the
+// live [certificates] section and the absence of the flag emits the
+// commented template. Both branches sit through the same renderer so
+// this protects against regressions where the toggle desyncs from the
+// emit path.
+//
+//nolint:paralleltest // t.Chdir
+func TestRunInit_CertificatesFlag(t *testing.T) {
+	pinEnglish(t)
+
+	cases := []struct {
+		name           string
+		extraArgs      []string
+		mustContain    []string
+		mustNotContain []string
+	}{
+		{
+			name:      "enabled",
+			extraArgs: []string{"--certificates"},
+			mustContain: []string{
+				"\n[certificates]\nenable = true\n",
+			},
+			mustNotContain: []string{
+				// Commented template (init_toml_template_certificates)
+				// uses "opt in to" wording; the live section header
+				// (init_toml_section_certificates) does not.
+				"opt in to TLS certificate auto-bake",
+				"# enable = true",
+			},
+		},
+		{
+			name:           "default-off",
+			extraArgs:      nil,
+			mustContain:    []string{"opt in to TLS certificate auto-bake", "# enable = true"},
+			mustNotContain: []string{"\n[certificates]\nenable = true\n"},
+		},
+		{
+			name:      "explicit-off",
+			extraArgs: []string{"--no-certificates"},
+			mustContain: []string{
+				"opt in to TLS certificate auto-bake",
+				"# enable = true",
+			},
+			mustNotContain: []string{"\n[certificates]\nenable = true\n"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			work := t.TempDir()
+			t.Chdir(work)
+			args := append([]string{
+				"--yes", "--service-name", "dev", "--username", "dev",
+				"--os", "ubuntu", "--os-version", "22.04",
+				"--mount-root", ".", "--no-devcontainer",
+			}, tc.extraArgs...)
+			cmd := NewCommand(io.Discard, io.Discard)
+			cmd.SetArgs(args)
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("init: %v", err)
+			}
+			body, err := os.ReadFile(filepath.Join(work, "workspace.toml"))
+			if err != nil {
+				t.Fatalf("read workspace.toml: %v", err)
+			}
+			out := string(body)
+			for _, want := range tc.mustContain {
+				if !strings.Contains(out, want) {
+					t.Errorf("workspace.toml missing %q\n--- got ---\n%s", want, out)
+				}
+			}
+			for _, mustNot := range tc.mustNotContain {
+				if strings.Contains(out, mustNot) {
+					t.Errorf("workspace.toml must not contain %q\n--- got ---\n%s", mustNot, out)
+				}
+			}
+		})
+	}
+}
+
 // ---------------------------------------------------------------------
 // Plugin selection: --plugins flag, conflicts validation, defaults.
 // ---------------------------------------------------------------------
@@ -863,6 +957,142 @@ func TestRunInit_YesDefaultsToDockerCli(t *testing.T) {
 	want := "[plugins]\nenable = [\n    \"docker-cli\",\n]"
 	if !strings.Contains(string(body), want) {
 		t.Errorf("workspace.toml missing %q\n--- got ---\n%s", want, body)
+	}
+}
+
+// ---------------------------------------------------------------------
+// Plugin version pins: --plugin-versions flag, parser, render output.
+// ---------------------------------------------------------------------
+
+func TestParsePluginVersions(t *testing.T) {
+	t.Parallel()
+	plugins := loadPluginsForTest(t)
+	enabled := []string{"go", "uv", "starship"}
+
+	out, err := parsePluginVersions("go=1.23.4,uv=0.5.7", plugins, enabled)
+	if err != nil {
+		t.Fatalf("happy path: %v", err)
+	}
+	if out["go"] != "1.23.4" || out["uv"] != "0.5.7" || len(out) != 2 {
+		t.Errorf("happy path map: %v", out)
+	}
+
+	// parsePluginVersions returns a non-nil empty map for whitespace-only
+	// or empty input so it doesn't trip golangci-lint's `nilnil` rule. The
+	// writer keys behavior on len(...) == 0, so the empty-vs-nil distinction
+	// is invisible to callers in practice.
+	if out, err := parsePluginVersions("", plugins, enabled); err != nil || len(out) != 0 {
+		t.Errorf("empty input: out=%v err=%v", out, err)
+	}
+
+	if out, err := parsePluginVersions(" go = 1.23.4 ,  uv=0.5.7 ", plugins, enabled); err != nil ||
+		out["go"] != "1.23.4" || out["uv"] != "0.5.7" {
+		t.Errorf("whitespace handling: out=%v err=%v", out, err)
+	}
+
+	for _, bad := range []string{"go", "go=", "=1.23", "go==1.23"} {
+		if _, err := parsePluginVersions(bad, plugins, enabled); !errors.Is(err, ErrUsage) {
+			t.Errorf("malformed token %q: expected ErrUsage, got %v", bad, err)
+		}
+	}
+
+	if _, err := parsePluginVersions("does-not-exist=1.0", plugins, enabled); !errors.Is(err, ErrUsage) {
+		t.Errorf("unknown plugin: expected ErrUsage, got %v", err)
+	}
+
+	// docker-cli ships in the embedded catalog but is `version_capable=false`.
+	if _, err := parsePluginVersions("docker-cli=1.0", plugins, []string{"docker-cli"}); !errors.Is(err, ErrUsage) {
+		t.Errorf("non-version-capable: expected ErrUsage, got %v", err)
+	}
+
+	// `go` is version_capable but the caller did not list it in --plugins.
+	if _, err := parsePluginVersions("go=1.23.4", plugins, []string{"uv"}); !errors.Is(err, ErrUsage) {
+		t.Errorf("missing-from-enable: expected ErrUsage, got %v", err)
+	}
+
+	if _, err := parsePluginVersions("go=1.23.4,go=1.24.0", plugins, enabled); !errors.Is(err, ErrUsage) {
+		t.Errorf("duplicate id: expected ErrUsage, got %v", err)
+	}
+}
+
+//nolint:paralleltest // t.Chdir
+func TestRunInit_PluginVersionsFlagWritesBlock(t *testing.T) {
+	pinEnglish(t)
+	work := t.TempDir()
+	t.Chdir(work)
+
+	cmd := NewCommand(io.Discard, io.Discard)
+	cmd.SetArgs([]string{
+		"--yes", "--service-name", "myapp", "--username", "dev",
+		"--plugins", "go,uv,starship",
+		"--plugin-versions", "go=1.23.4,starship=1.21.1",
+	})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("init --plugin-versions: %v", err)
+	}
+	body, err := os.ReadFile(filepath.Join(work, "workspace.toml"))
+	if err != nil {
+		t.Fatalf("read workspace.toml: %v", err)
+	}
+	// Sorted by id: go before starship; each block is the canonical
+	// FormatPinBlock output (no checksums).
+	want := "[plugins.versions.go]\npin = \"1.23.4\"\n\n[plugins.versions.starship]\npin = \"1.21.1\"\n"
+	if !strings.Contains(string(body), want) {
+		t.Errorf("workspace.toml missing pin blocks\n--- want ---\n%s\n--- got ---\n%s", want, body)
+	}
+	// The commented-out example template must NOT appear when real pins
+	// were emitted — otherwise the user sees both the example and their own
+	// block. The template's leading comment is unique to the example.
+	if strings.Contains(string(body), "pin specific versions for version_capable plugins") {
+		t.Errorf("commented [plugins.versions] template should not coexist with real pins\n--- got ---\n%s", body)
+	}
+}
+
+//nolint:paralleltest // t.Chdir
+func TestRunInit_PluginVersionsRejectsUnknownPlugin(t *testing.T) {
+	pinEnglish(t)
+	work := t.TempDir()
+	t.Chdir(work)
+	cmd := NewCommand(io.Discard, io.Discard)
+	cmd.SetArgs([]string{
+		"--yes", "--service-name", "x", "--username", "y",
+		"--plugins", "go",
+		"--plugin-versions", "does-not-exist=1.0",
+	})
+	if err := cmd.Execute(); !errors.Is(err, ErrUsage) {
+		t.Errorf("expected ErrUsage, got %v", err)
+	}
+}
+
+//nolint:paralleltest // t.Chdir
+func TestRunInit_PluginVersionsRejectsNonVersionCapable(t *testing.T) {
+	pinEnglish(t)
+	work := t.TempDir()
+	t.Chdir(work)
+	cmd := NewCommand(io.Discard, io.Discard)
+	cmd.SetArgs([]string{
+		"--yes", "--service-name", "x", "--username", "y",
+		"--plugins", "docker-cli",
+		"--plugin-versions", "docker-cli=1.0",
+	})
+	if err := cmd.Execute(); !errors.Is(err, ErrUsage) {
+		t.Errorf("expected ErrUsage for non-version-capable docker-cli, got %v", err)
+	}
+}
+
+//nolint:paralleltest // t.Chdir
+func TestRunInit_PluginVersionsRejectsMissingFromEnable(t *testing.T) {
+	pinEnglish(t)
+	work := t.TempDir()
+	t.Chdir(work)
+	cmd := NewCommand(io.Discard, io.Discard)
+	cmd.SetArgs([]string{
+		"--yes", "--service-name", "x", "--username", "y",
+		"--plugins", "uv",
+		"--plugin-versions", "go=1.23.4",
+	})
+	if err := cmd.Execute(); !errors.Is(err, ErrUsage) {
+		t.Errorf("expected ErrUsage when pin is for a non-enabled plugin, got %v", err)
 	}
 }
 
