@@ -1,0 +1,8 @@
+# ShellCheck configuration
+# https://github.com/koalaman/shellcheck/wiki/Directives
+
+# Follow source directives (equivalent to -x flag)
+external-sources=true
+
+# Look for sourced files relative to the script's directory
+source-path=SCRIPTDIR
