@@ -57,16 +57,21 @@ archive).
 ```
 plugins/<id>/
 ├── plugin.toml         # required
-├── install.sh          # optional (skip if [install.env] alone is enough)
+├── install.sh          # optional (skip if the plugin only needs [install.env],
+│                       #   [install.build_args], or an install_user.sh hook)
 └── install_user.sh     # optional (only when §5 applies)
 ```
+
+The generator emits nothing for a plugin that has none of `install.sh`,
+`install_user.sh`, `[install.build_args]`, and `[install.env]` — at least
+one must be present.
 
 ## 4. `plugin.toml` schema
 
 | Section | Field | Type | Default | Required | Meaning |
 |---|---|---|---|---|---|
 | `[metadata]` | `name`            | string             | —     | ✓ | Human-readable display name. |
-| `[metadata]` | `description`     | string             | —     | ✓ | Short description; **must include the upstream URL in parentheses**. |
+| `[metadata]` | `description`     | string             | —     | ✓ | Short description. By convention, embed the upstream URL in parentheses (e.g. `"… (https://example.com)"`); `cocoon plugin scaffold` enforces this for new plugins, the runtime loader does not. |
 | `[metadata]` | `default`         | bool               | `false` |   | If true, `cocoon init`'s default plugin set includes this id. |
 | `[metadata]` | `conflicts`       | list of strings    | `[]`  |   | Plugin ids that must not be enabled at the same time. |
 | `[apt]`      | `packages`        | list of strings    | `[]`  |   | Apt packages installed before `install.sh` runs. |
@@ -122,42 +127,39 @@ is the only plugin that uses it.
 ## 6. Environment variables passed to install scripts
 
 Both scripts run inside `bash <<'COCOON_PLUGIN_EOF' … COCOON_PLUGIN_EOF`.
-The following names resolve in the script body, with two distinct
-mechanisms:
+The single-quoted heredoc terminator means the body passes through
+BuildKit and `/bin/sh` verbatim — no `${VAR}` substitution happens
+at parse / heredoc-read time. **bash, executing the body, expands
+`$VAR` references at runtime using its environment.** The plugin
+author writes `${USERNAME}`, `$RC_FILE`, etc. directly in the script;
+they are resolved when bash runs the body.
 
-- **Per-RUN env prefix (real bash env vars)**: emitted as
-  `NAME="value"` before the `bash` invocation in the generated
-  Dockerfile. Visible to bash via `$NAME`.
-- **Dockerfile ARG (build-time substitution)**: BuildKit
-  substitutes the value into the RUN body before bash sees it,
-  so the script ends up with the literal value baked in (it is
-  not a runtime env var and `unset NAME` has no effect).
+bash's environment for that step is composed from two sources:
 
-| Variable | How provided | What it is |
+- **Per-RUN env prefix**: the generator emits `NAME="value"` pairs on
+  the `bash …` line in the Dockerfile (e.g. `RC_FILE="…" bash <<'EOF'`).
+  These bind `NAME` for that single RUN step only.
+- **Dockerfile `ARG` promotion**: BuildKit promotes every `ARG`
+  declared in the Dockerfile to a real environment variable for
+  subsequent `RUN` commands (with a couple of internal-only
+  exceptions). So `ARG USERNAME` makes `$USERNAME` available to the
+  bash body without any per-RUN prefix.
+
+| Variable | Source | What it is |
 |---|---|---|
 | `RC_FILE`        | per-RUN env, always | Absolute path to the user's login-shell rc file (`/home/<user>/.bashrc`, `/home/<user>/.zshrc`, or `~/.config/fish/config.fish`). |
 | `RC_SYNTAX`      | per-RUN env, always | `posix` (bash/zsh) or `fish`. Use this to branch when emitting rc lines. |
 | `LOGIN_SHELL`    | per-RUN env, always | `bash`, `zsh`, or `fish`. |
-| `USERNAME`       | Dockerfile `ARG` (declared at the top of the generated Dockerfile), always | The unprivileged container user name. Reference it as `${USERNAME}` in `install.sh`; BuildKit substitutes the literal value before bash runs the body. |
+| `USERNAME`       | Dockerfile `ARG`, always | The unprivileged container user name (declared via `ARG USERNAME` near the top of the generated Dockerfile and promoted to env by BuildKit). |
+| `UID` / `GID`    | Dockerfile `ARG`, always | Numeric UID and GID of the unprivileged user (same `ARG` mechanism as `USERNAME`). |
 | `PIN`            | per-RUN env, only when `[version].version_capable = true` | Version string from `[plugins.versions.<id>].pin` in `workspace.toml`. Empty means "use upstream latest". |
 | `CHECKSUM_AMD64` | per-RUN env, only when `[version].version_capable = true` | `sha256` of the amd64 artifact, or empty (script must skip verification with a warning). |
 | `CHECKSUM_ARM64` | same as above | `sha256` of the arm64 artifact. |
-| `<BUILD_ARG>`    | per-RUN env, only when listed in `[install].build_args` | The Dockerfile declares an `ARG` and the per-RUN prefix passes the value through, so the script sees a real env var. Example: `docker-cli` reads `DOCKER_GID`. |
+| `<BUILD_ARG>`    | per-RUN env (also declared as `ARG`), only when listed in `[install].build_args` | The generator emits an `ARG <name>` line and threads `<name>="${<name>}"` into the per-RUN prefix; the Dockerfile substitutes the value on the prefix line at build time. Example: `docker-cli` reads `DOCKER_GID`. |
 
-Inside `install.sh` and `install_user.sh`, `$VAR` references resolve in
-two stages:
-
-1. **BuildKit** substitutes Dockerfile-level `ARG` references
-   (`${USERNAME}`, `${UID}`, …) in the heredoc body before bash starts.
-   This is how plugins reach `${USERNAME}` without any per-RUN prefix.
-2. **bash** then expands per-RUN env vars (`$RC_FILE`, `$DOCKER_GID`, …)
-   while it executes the script.
-
-The single-quoted heredoc terminator (`<<'COCOON_PLUGIN_EOF'`) prevents
-the outer shell from interfering during the heredoc-read phase, so the
-text passes through unchanged and both stages work as expected. Nothing
-on the developer's host machine evaluates the script — both stages run
-inside the build environment.
+Nothing on the developer's host machine evaluates the script — bash
+runs the body inside the build environment, with the env composed as
+above.
 
 The literal string `COCOON_PLUGIN_EOF` must not appear on a line by
 itself anywhere in `install.sh` / `install_user.sh` — that would

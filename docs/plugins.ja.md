@@ -51,16 +51,20 @@ embedded プラグインを改変したい場合のサポート手順は
 ```
 plugins/<id>/
 ├── plugin.toml         # 必須
-├── install.sh          # 任意（[install.env] だけで完結するなら省略可）
+├── install.sh          # 任意（[install.env] / [install.build_args] /
+│                       #   install_user.sh のいずれかで足りるなら省略可）
 └── install_user.sh     # 任意（§5 のケースのみ）
 ```
+
+`install.sh` / `install_user.sh` / `[install.build_args]` / `[install.env]`
+の **どれか 1 つ** は必要 — 全部空ならジェネレータは何も出力しない。
 
 ## 4. `plugin.toml` スキーマ
 
 | Section | Field | Type | Default | 必須 | 意味 |
 |---|---|---|---|---|---|
 | `[metadata]` | `name`            | string             | —     | ✓ | 表示名 |
-| `[metadata]` | `description`     | string             | —     | ✓ | 説明文。**上流 URL を括弧内に含めること** |
+| `[metadata]` | `description`     | string             | —     | ✓ | 説明文。慣習として上流 URL を括弧内に含める (例: `"… (https://example.com)"`)。`cocoon plugin scaffold` は新規生成時にこの慣習を強制するが、ランタイムローダーはチェックしない |
 | `[metadata]` | `default`         | bool               | `false` |   | true なら `cocoon init` のデフォルト選択肢に含まれる |
 | `[metadata]` | `conflicts`       | list of strings    | `[]`  |   | 同時に enable できない id 群 |
 | `[apt]`      | `packages`        | list of strings    | `[]`  |   | `install.sh` の前に apt-get install されるパッケージ |
@@ -114,38 +118,36 @@ rc 編集も user 所有 config の書き込みも要らないなら `install_us
 ## 6. install スクリプトに渡される環境変数
 
 `install.sh` も `install_user.sh` も `bash <<'COCOON_PLUGIN_EOF' … COCOON_PLUGIN_EOF`
-の中で実行される。スクリプト本体から参照できる名前は次の 2 経路で
-解決される:
+の中で実行される。heredoc terminator がシングルクォートなので、本体は
+BuildKit / `/bin/sh` を **そのまま透過** する — parse / heredoc 読込時点で
+`${VAR}` の置換は **行われない**。**bash がスクリプトを実行する時点で、
+自身の環境変数を使って `$VAR` を展開する。** プラグイン作者は `${USERNAME}`
+や `$RC_FILE` などを普通に書けばよい — bash 実行時に解決される。
 
-- **per-RUN env prefix（実 bash 環境変数）**: 生成 Dockerfile の `bash`
-  起動行に `NAME="value"` の形で前置される。bash から `$NAME` で見える。
-- **Dockerfile `ARG`（build-time 置換）**: BuildKit が RUN 本文（heredoc 内も含む）の
-  `${NAME}` を build 時にリテラル値へ置換する。bash がスクリプトを実行する時点で値はすでに
-  焼き込まれており、ランタイム環境変数ではないため `unset NAME` しても効果はない。
+その bash の環境は次の 2 ソースから作られる:
 
-| 変数 | 渡され方 | 意味 |
+- **Per-RUN env prefix**: ジェネレータが生成 Dockerfile の `bash …` 行に
+  `NAME="value"` ペアを前置する (例: `RC_FILE="…" bash <<'EOF'`)。
+  この変数バインドはその RUN ステップの中だけ有効。
+- **Dockerfile `ARG` の env 昇格**: BuildKit は Dockerfile で宣言された
+  `ARG` 値を後続 `RUN` 命令の実環境変数として昇格させる (内部用の
+  特殊キーを除いて)。`ARG USERNAME` の宣言があれば `$USERNAME` は
+  per-RUN prefix なしでも bash から参照できる。
+
+| 変数 | ソース | 意味 |
 |---|---|---|
 | `RC_FILE`        | per-RUN env、常に | ユーザー login-shell の rc ファイル絶対パス（`/home/<user>/.bashrc`、`/home/<user>/.zshrc`、`~/.config/fish/config.fish`） |
 | `RC_SYNTAX`      | per-RUN env、常に | `posix`（bash/zsh）または `fish`。rc 行を出すときの分岐に使う |
 | `LOGIN_SHELL`    | per-RUN env、常に | `bash` / `zsh` / `fish` |
-| `USERNAME`       | Dockerfile `ARG`（生成 Dockerfile 冒頭で宣言）、常に | コンテナ内の非特権ユーザー名。`install.sh` 内で `${USERNAME}` と書けば、bash 実行前に BuildKit がリテラル値へ置換する |
+| `USERNAME`       | Dockerfile `ARG`、常に | コンテナ内の非特権ユーザー名（生成 Dockerfile 冒頭の `ARG USERNAME` を BuildKit が env に昇格させる） |
+| `UID` / `GID`    | Dockerfile `ARG`、常に | 非特権ユーザーの数値 UID / GID（同じく `ARG` 由来） |
 | `PIN`            | per-RUN env、`[version].version_capable = true` のときのみ | `workspace.toml` の `[plugins.versions.<id>].pin` の値。空なら upstream 最新を使う |
 | `CHECKSUM_AMD64` | per-RUN env、`[version].version_capable = true` のときのみ | amd64 アーティファクトの `sha256`。空ならスクリプトは検証スキップ＋警告 |
 | `CHECKSUM_ARM64` | 同上 | arm64 アーティファクトの `sha256` |
-| `<BUILD_ARG>`    | per-RUN env、`[install].build_args` に列挙されたときのみ | Dockerfile が同名 `ARG` を宣言し、per-RUN prefix で値を渡すためスクリプトからは実 env として見える（例: `docker-cli` の `DOCKER_GID`） |
+| `<BUILD_ARG>`    | per-RUN env (`ARG` 宣言も併発)、`[install].build_args` に列挙されたときのみ | ジェネレータが `ARG <name>` 行と per-RUN prefix の `<name>="${<name>}"` を自動で出力し、Dockerfile が prefix 行で値を置換する（例: `docker-cli` の `DOCKER_GID`） |
 
-`install.sh` と `install_user.sh` 内の `$VAR` 参照は 2 段階で解決される:
-
-1. **BuildKit** が Dockerfile レベルの `ARG` 参照 (`${USERNAME}` /
-   `${UID}` など) を heredoc 本体に対して bash 起動前に置換する。
-   per-RUN prefix に載っていない `${USERNAME}` がプラグインから参照できるのはこの仕組みのおかげ。
-2. 続いて **bash** が per-RUN env で渡された変数 (`$RC_FILE` /
-   `$DOCKER_GID` など) をスクリプト実行時に展開する。
-
-heredoc terminator がシングルクォート (`<<'COCOON_PLUGIN_EOF'`) なのは、
-外側シェルの heredoc 読込フェーズで本体テキストを透過させて 2 段階の置換が
-正しく機能するようにするため。**ホスト側での評価は一切行われない** — どちらの
-段階もビルド環境内で実行される。
+ホスト側での評価は一切行われない — bash はビルド環境内で本体を実行し、
+その環境変数は上記 2 ソースから組み立てられる。
 
 リテラル文字列 `COCOON_PLUGIN_EOF` を `install.sh` / `install_user.sh`
 内で **行頭から行末まで一致する形で書いてはならない**。書くと
