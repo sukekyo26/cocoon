@@ -424,21 +424,10 @@ func applyDefaults(ans initAnswers, plugins map[string]*plugin.Plugin) (initAnsw
 }
 
 // promptForMissing runs the interactive flow as a sequence of
-// independent single-field huh.Forms — one prompt per screen. Each
-// form is built and Run()d in order; the value picked by an earlier
-// form feeds into how the next form's options are constructed (e.g.
-// the OS-version form computes its option list from the OS the user
-// just picked).
-//
-// We deliberately avoid the multi-Group / OptionsFunc combination.
-// huh's WindowSize-driven viewport sizing was racing with
-// OptionsFunc / TitleFunc async evaluation and the resulting viewport
-// was sometimes smaller than the option list — symptom: cursor
-// "stays put" while the option list scrolls under it. Independent
-// forms with statically-built Options() side-step the race entirely.
-//
-// Tradeoff: shift+tab cannot navigate back across forms. Re-running
-// `cocoon init` is the way to fix an earlier answer.
+// single-field huh.Forms (one prompt per screen). Multi-Group +
+// OptionsFunc had a viewport race vs. async TitleFunc that left the
+// cursor stuck under scrolling options; independent forms side-step
+// it. Tradeoff: no shift+tab back-nav; re-run `cocoon init` to fix.
 //
 //nolint:gocognit,gocyclo // sequence of independent prompt steps; splitting hides intent.
 func promptForMissing(ans initAnswers, cat *i18n.Catalog, plugins map[string]*plugin.Plugin) (initAnswers, error) {
@@ -601,21 +590,10 @@ func identInput(cat *i18n.Catalog, titleKey, descKey, charsKey string,
 		Value(target)
 }
 
-// All Select / MultiSelect helpers below intentionally omit Height().
-// huh's default behaviour with no explicit Height() is:
-//
-//   - Static Options(): viewport.Height equals the rendered options
-//     line count, so every option is always visible and the cursor
-//     moves between them without scrolling.
-//   - OptionsFunc(): height defaults to 10, viewport ends up around
-//     10 minus title+description height — comfortably bigger than
-//     our largest version list (3 entries).
-//
-// We previously set Height(len(options) + 2) to "be safe", which
-// actively backfired: huh subtracts the rendered title+description
-// height from that, so a description long enough to wrap to two
-// lines shrunk the viewport below the options count. The user then
-// saw the `>` cursor stay fixed while options scrolled under it.
+// Select/MultiSelect helpers below omit Height() intentionally: huh's
+// default already covers our options count, but explicit Height(len+2)
+// breaks when the title+description wraps to two lines (cursor stuck
+// under a scrolling viewport).
 
 func osSelect(cat *i18n.Catalog, target *string) *huh.Select[string] {
 	options := make([]huh.Option[string], len(config.SupportedOSes))
@@ -832,20 +810,10 @@ func parsePlugins(raw string, plugins map[string]*plugin.Plugin) ([]string, erro
 	return ids, nil
 }
 
-// parsePluginVersions parses `--plugin-versions=<id>=<ref>,<id>=<ref>,...`
-// into a map keyed by plugin id. Each id must:
-//   - exist in the loaded catalog (`plugins`),
-//   - be in the caller-supplied `enabled` list (the resolved `[plugins].enable`
-//     for this run; pinning a plugin that is not enabled is a usage error
-//     because the pin would silently never apply),
-//   - have `[version] version_capable = true` in its plugin.toml.
-//
-// Empty / whitespace-only input returns an empty (non-nil) map. The writer
-// keys behavior on len(...) == 0, so the empty-vs-nil distinction is invisible
-// to callers; we keep the result non-nil to satisfy golangci-lint's `nilnil`
-// rule without inventing a sentinel error for "input parsed cleanly but was
-// empty." Whitespace around id / ref is trimmed. Duplicate ids are rejected
-// so a typo (`go=1.23,go=1.24`) cannot silently pick the last value.
+// parsePluginVersions parses `--plugin-versions=<id>=<ref>,…` into a map.
+// Each id must be in plugins, in enabled (silent no-op otherwise), and
+// version_capable. Empty input returns a non-nil empty map (nilnil lint).
+// Duplicate ids are rejected so a typo can't silently pick the last value.
 func parsePluginVersions(raw string, plugins map[string]*plugin.Plugin, enabled []string) (map[string]string, error) {
 	enabledSet := make(map[string]struct{}, len(enabled))
 	for _, id := range enabled {
@@ -953,15 +921,9 @@ func sortedPluginIDs(plugins map[string]*plugin.Plugin) []string {
 	return ids
 }
 
-// loadEmbeddedPlugins enumerates every <id>/plugin.toml in the binary's
-// embedded catalog and returns them keyed by id. Mirrors
-// internal/cli/plugin/sources.go::loadPluginFromLayer's parse path so
-// init agrees with `cocoon plugin list` on metadata interpretation.
-//
-// init runs in a fresh project where neither the project layer
-// (<project>/.cocoon/plugins) nor user overlay (~/.cocoon/plugins)
-// is meaningful yet — bootstrapping deliberately stays embedded-only so
-// the option list cannot be tampered with by stray on-disk overlays.
+// loadEmbeddedPlugins reads only the embedded catalog (no project /
+// user overlays); init bootstraps a fresh project where overlays are
+// not meaningful and could not be tampered with by stray files.
 func loadEmbeddedPlugins() (map[string]*plugin.Plugin, error) {
 	fsys, err := plugin.CatalogFS()
 	if err != nil {
@@ -1016,11 +978,9 @@ type containerSpec struct {
 	PluginVersions map[string]string
 }
 
-// renderWorkspaceToml emits the workspace.toml body. Section comments come
-// from the i18n catalog so users see ja or en text matching their $LANG;
-// because the file is committed and shared, the locale snapshot is whatever
-// the original `cocoon init` runner had — re-run with --force under a
-// different LANG to switch.
+// renderWorkspaceToml emits workspace.toml. Inline comments come from
+// the i18n catalog so the locale matches the original runner's $LANG
+// (re-run with --force under a different LANG to switch).
 //
 //nolint:funlen // sequence of independent section emits; splitting hides the resulting TOML's top-to-bottom structure.
 func renderWorkspaceToml(s containerSpec, cat *i18n.Catalog) string {
