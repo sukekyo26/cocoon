@@ -15,10 +15,20 @@ name: install.sh E2E
 #   - Platform-specific shell differences (e.g. macOS's `shasum` vs Linux's
 #     `sha256sum`) — install.sh wraps the two but only the matrix proves it
 #
-# The matrix exercises the four release-asset variants cocoon publishes:
-#   linux/amd64 (ubuntu-latest), linux/arm64 (ubuntu-24.04-arm),
-#   darwin/arm64 (macos-latest, currently macos-15), darwin/amd64 (macos-13,
-#   the last Intel macOS image).
+# The matrix exercises three of the four release-asset variants cocoon
+# publishes:
+#   linux/amd64  (ubuntu-latest)
+#   linux/arm64  (ubuntu-24.04-arm)
+#   darwin/arm64 (macos-latest, currently macos-15)
+#
+# `darwin/amd64` (macos-13) is intentionally NOT in the matrix here.
+# Intel-macOS GitHub-hosted runners have very long queue times, so when
+# combined with this workflow's `cancel-in-progress: true` every push to
+# the feature branch cancels the previous queued run before it starts —
+# the slot is consumed without ever validating anything (false-confidence
+# silent skip). A follow-up PR will move darwin/amd64 onto the schedule /
+# release / workflow_dispatch triggers only, where queue time isn't on
+# the PR critical path.
 
 on:
   # Push fires for in-progress branches. develop / main are excluded so a
@@ -66,8 +76,6 @@ jobs:
             runs-on: ubuntu-24.04-arm
           - label: darwin / arm64
             runs-on: macos-latest
-          - label: darwin / amd64
-            runs-on: macos-13
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
