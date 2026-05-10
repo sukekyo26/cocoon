@@ -101,6 +101,10 @@ cocoon gen --workspace ./infra/workspace.toml --output ./infra
 
 The generated `Dockerfile` / `docker-compose.yml` / `devcontainer.json` always contain the wiring that bakes any `~/.cocoon/certs/*.crt` files into the container trust store at build time. The artifacts are byte-identical regardless of whether the developer has any certs configured, so teams can commit them and share. See [the TLS certificates section in `configuration.md`](configuration.md#tls-certificates-cocooncerts) for the full setup.
 
+---
+
+## `cocoon plugin`
+
 Manage cocoon plugins. Plugins live in three layers, resolved with priority **project > user > embedded**:
 
 | Layer | Path | Source |
