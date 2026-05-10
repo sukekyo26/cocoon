@@ -23,16 +23,20 @@ RUN { echo 'Acquire::http::Proxy "http://proxy.corp:8080";'; echo 'Acquire::http
 # corporate CA can complete TLS handshake). The RUN body is a no-op when
 # ~/.cocoon/certs/ is empty on the build host. Certificates flow in via the
 # cocoon_user_certs named build context declared by docker-compose.yml's
-# additional_contexts (sourced from ${HOME}/.cocoon/certs).
+# additional_contexts (sourced from ${HOME}/.cocoon/certs). The apt cache
+# / lists mounts mirror buildAptCABootstrap and the main apt install RUN
+# so repeated builds reuse cached package indexes and the layer stays
+# clean (no /var/lib/apt/lists/* in the image).
 RUN --mount=type=bind,from=cocoon_user_certs,target=/tmp/cocoon-user-certs \
+    --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
     if [ -n "$(find /tmp/cocoon-user-certs -maxdepth 1 -name '*.crt' 2>/dev/null | head -n 1)" ]; then \
         apt-get update && \
         DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates && \
         mkdir -p /usr/local/share/ca-certificates/cocoon-user && \
         find /tmp/cocoon-user-certs -maxdepth 1 -name '*.crt' \
             -exec cp {} /usr/local/share/ca-certificates/cocoon-user/ \; && \
-        update-ca-certificates && \
-        rm -rf /var/lib/apt/lists/*; \
+        update-ca-certificates; \
     fi
 
 # Pre-install ca-certificates from the default HTTP archive so the
