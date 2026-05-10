@@ -11,6 +11,9 @@
 #   COCOON_API_BASE      GitHub API base URL; default "https://api.github.com".
 #                        Useful for GitHub Enterprise Server or test mocks.
 #   COCOON_RELEASE_BASE  GitHub release host; default "https://github.com".
+#   COCOON_API_TOKEN     Optional bearer token sent to COCOON_API_BASE. Lifts the
+#                        anonymous rate limit (60 req/hour per IP → 5000 with a
+#                        GitHub token); typically only set in CI / automation.
 #
 # The script verifies the binary's SHA-256 against the SHA256SUMS asset
 # from the same release before installing.
@@ -22,6 +25,7 @@ INSTALL_DIR="${COCOON_INSTALL_DIR:-$HOME/.local/bin}"
 VERSION="${COCOON_VERSION:-latest}"
 API_BASE="${COCOON_API_BASE:-https://api.github.com}"
 RELEASE_BASE="${COCOON_RELEASE_BASE:-https://github.com}"
+API_TOKEN="${COCOON_API_TOKEN:-}"
 
 err() { printf "cocoon-install: %s\n" "$*" >&2; }
 die() {
@@ -66,8 +70,13 @@ if [ "$VERSION" = "latest" ]; then
   # message instead of being masked by the pipeline's last-command exit
   # status (POSIX sh has no `pipefail`).
   releases_url="$API_BASE/repos/$REPO/releases/latest"
-  api_response=$(curl -fsSL "$releases_url") ||
-    die "failed to fetch release metadata: $releases_url"
+  if [ -n "$API_TOKEN" ]; then
+    api_response=$(curl -fsSL -H "Authorization: Bearer $API_TOKEN" "$releases_url") ||
+      die "failed to fetch release metadata: $releases_url"
+  else
+    api_response=$(curl -fsSL "$releases_url") ||
+      die "failed to fetch release metadata: $releases_url"
+  fi
   tag=$(printf '%s' "$api_response" |
     sed -n 's/.*"tag_name": *"\(v\{0,1\}[^"]*\)".*/\1/p' |
     head -n1)

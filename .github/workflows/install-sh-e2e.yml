@@ -75,7 +75,15 @@ jobs:
       # cocoon-<os>-<arch> + SHA256SUMS, verifies, drops binary into a
       # tempdir. Fails on any drift in the API response shape, asset
       # naming, or checksum file format.
+      #
+      # COCOON_API_TOKEN is set so install.sh's authenticated branch is
+      # exercised and so this matrix isn't subject to the 60-req/hour
+      # anonymous rate limit on shared GitHub-runner IP pools (which
+      # otherwise produces sporadic 403s when push + pull_request runs hit
+      # the same IP).
       - name: install.sh — latest
+        env:
+          COCOON_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euxo pipefail
           dst="$RUNNER_TEMP/inst-latest"

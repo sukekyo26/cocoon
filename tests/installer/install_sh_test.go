@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 )
@@ -100,6 +101,17 @@ type mockServer struct {
 	apiHits  *int32
 	dlHits   *int32
 	sumsHits *int32
+
+	authMu      *sync.Mutex
+	lastAPIAuth *string // captured Authorization header from the API endpoint
+}
+
+// LastAPIAuth returns the most recent Authorization header observed by the
+// /releases/latest endpoint (empty if no header was sent or no request).
+func (m *mockServer) LastAPIAuth() string {
+	m.authMu.Lock()
+	defer m.authMu.Unlock()
+	return *m.lastAPIAuth
 }
 
 func newMockServer(t *testing.T, m mockRelease) *mockServer {
@@ -125,10 +137,15 @@ func newMockServer(t *testing.T, m mockRelease) *mockServer {
 	}
 
 	var apiHits, dlHits, sumsHits int32
+	var lastAPIAuth string
+	var authMu sync.Mutex
 	mux := http.NewServeMux()
 	mux.HandleFunc(fmt.Sprintf("/repos/%s/releases/latest", mockRepo),
-		func(w http.ResponseWriter, _ *http.Request) {
+		func(w http.ResponseWriter, r *http.Request) {
 			atomic.AddInt32(&apiHits, 1)
+			authMu.Lock()
+			lastAPIAuth = r.Header.Get("Authorization")
+			authMu.Unlock()
 			w.WriteHeader(m.apiCode)
 			writeMock(w, []byte(m.apiBody))
 		})
@@ -145,7 +162,14 @@ func newMockServer(t *testing.T, m mockRelease) *mockServer {
 
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
-	return &mockServer{srv: srv, apiHits: &apiHits, dlHits: &dlHits, sumsHits: &sumsHits}
+	return &mockServer{
+		srv:         srv,
+		apiHits:     &apiHits,
+		dlHits:      &dlHits,
+		sumsHits:    &sumsHits,
+		authMu:      &authMu,
+		lastAPIAuth: &lastAPIAuth,
+	}
 }
 
 // runInstallSh executes `sh install.sh` with the supplied env overrides
@@ -360,6 +384,50 @@ func TestInstallSh_AssetMissingFromSums(t *testing.T) {
 	}
 	if !strings.Contains(stderr, "not listed in SHA256SUMS") {
 		t.Errorf("stderr missing missing-asset message: %q", stderr)
+	}
+}
+
+func TestInstallSh_APITokenForwarded(t *testing.T) {
+	t.Parallel()
+	srv := newMockServer(t, mockRelease{})
+	dst := t.TempDir()
+	const token = "ghs_dummy_test_token" //nolint:gosec // mock token for test assertion only
+
+	stderr, exit := runInstallSh(t, map[string]string{
+		"COCOON_REPO":         mockRepo,
+		"COCOON_API_BASE":     srv.baseURL(t),
+		"COCOON_RELEASE_BASE": srv.baseURL(t),
+		"COCOON_API_TOKEN":    token,
+		"COCOON_INSTALL_DIR":  dst,
+	})
+	if exit != 0 {
+		t.Fatalf("exit=%d, stderr=%q", exit, stderr)
+	}
+	if got := srv.LastAPIAuth(); got != "Bearer "+token {
+		t.Errorf("Authorization header forwarded = %q, want %q", got, "Bearer "+token)
+	}
+}
+
+// TestInstallSh_NoTokenNoAuthHeader pins the contract that the
+// non-COCOON_API_TOKEN code path must not attach an Authorization header
+// (avoids accidentally leaking shell environment auth to api.github.com).
+func TestInstallSh_NoTokenNoAuthHeader(t *testing.T) {
+	t.Parallel()
+	srv := newMockServer(t, mockRelease{})
+	dst := t.TempDir()
+
+	stderr, exit := runInstallSh(t, map[string]string{
+		"COCOON_REPO":         mockRepo,
+		"COCOON_API_BASE":     srv.baseURL(t),
+		"COCOON_RELEASE_BASE": srv.baseURL(t),
+		"COCOON_INSTALL_DIR":  dst,
+		// COCOON_API_TOKEN deliberately unset
+	})
+	if exit != 0 {
+		t.Fatalf("exit=%d, stderr=%q", exit, stderr)
+	}
+	if got := srv.LastAPIAuth(); got != "" {
+		t.Errorf("expected no Authorization header without token, got %q", got)
 	}
 }
 
