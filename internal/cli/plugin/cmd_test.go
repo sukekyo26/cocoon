@@ -9,8 +9,15 @@ import (
 	plugincli "github.com/sukekyo26/cocoon/internal/cli/plugin"
 )
 
+// TestPluginAdd_NoLongerRegistered locks in the removal of the
+// `cocoon plugin add` subcommand: the parent command must surface
+// it as an unknown subcommand (ErrUsage) instead of silently
+// accepting it. The name is deliberate — "no longer registered"
+// signals "used to exist, has been removed", so a future reader
+// does not assume `add` is supported behaviour.
+//
 //nolint:paralleltest // t.Setenv on HOME forbids t.Parallel.
-func TestPluginAdd_RejectsUnknownSubcommand(t *testing.T) {
+func TestPluginAdd_NoLongerRegistered(t *testing.T) {
 	withIsolatedHome(t)
 	var stdout, stderr bytes.Buffer
 	cmd := plugincli.NewCommand(&stdout, &stderr)
@@ -26,8 +33,12 @@ func TestPluginAdd_RejectsUnknownSubcommand(t *testing.T) {
 	}
 }
 
+// TestPluginRemove_NoLongerRegistered locks in the removal of the
+// `cocoon plugin remove` subcommand. Same shape as the add test
+// above; the name mirrors it.
+//
 //nolint:paralleltest // t.Setenv on HOME forbids t.Parallel.
-func TestPluginRemove_RejectsUnknownSubcommand(t *testing.T) {
+func TestPluginRemove_NoLongerRegistered(t *testing.T) {
 	withIsolatedHome(t)
 	var stdout, stderr bytes.Buffer
 	cmd := plugincli.NewCommand(&stdout, &stderr)
