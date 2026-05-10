@@ -31,18 +31,24 @@ func TestPluginAdd_NoLongerRegistered(t *testing.T) {
 	if !errors.Is(err, plugincli.ErrUsage) {
 		t.Errorf("expected ErrUsage, got %v", err)
 	}
+	if !strings.Contains(err.Error(), "unknown subcommand") {
+		t.Errorf("expected unknown-subcommand path, got %v", err)
+	}
 }
 
 // TestPluginRemove_NoLongerRegistered locks in the removal of the
 // `cocoon plugin remove` subcommand. Same shape as the add test
-// above; the name mirrors it.
+// above; the name mirrors it. The args intentionally omit the old
+// `--scope` flag so cobra reaches the unknown-subcommand path
+// (rejectUnknownSubcommand) instead of failing earlier on an
+// unrecognised flag at the parent `plugin` level.
 //
 //nolint:paralleltest // t.Setenv on HOME forbids t.Parallel.
 func TestPluginRemove_NoLongerRegistered(t *testing.T) {
 	withIsolatedHome(t)
 	var stdout, stderr bytes.Buffer
 	cmd := plugincli.NewCommand(&stdout, &stderr)
-	cmd.SetArgs([]string{"remove", "uv", "--scope", "user"})
+	cmd.SetArgs([]string{"remove", "uv"})
 	cmd.SetOut(&stdout)
 	cmd.SetErr(&stderr)
 	err := cmd.Execute()
@@ -51,6 +57,9 @@ func TestPluginRemove_NoLongerRegistered(t *testing.T) {
 	}
 	if !errors.Is(err, plugincli.ErrUsage) {
 		t.Errorf("expected ErrUsage, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "unknown subcommand") {
+		t.Errorf("expected unknown-subcommand path, got %v", err)
 	}
 }
 
