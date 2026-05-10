@@ -99,5 +99,10 @@ release-assets: build-all
 mod-verify:
     go mod verify
 
-# Composite pre-push gate mirroring the GitHub Actions Go pipeline.
-ci: fmt-check vet lint test vuln mod-verify
+# Run shellcheck across all *.sh files in the repo (severity=style)
+shellcheck:
+    @command -v shellcheck >/dev/null 2>&1 || { echo >&2 "shellcheck not installed; install via 'apt-get install shellcheck' / 'brew install shellcheck'"; exit 1; }
+    shellcheck --severity=style $(find . -type f -name '*.sh' -not -path './.git/*' -not -path './bin/*')
+
+# Composite pre-push gate mirroring the GitHub Actions pipeline.
+ci: fmt-check vet lint test vuln mod-verify shellcheck

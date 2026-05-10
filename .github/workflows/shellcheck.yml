@@ -1,0 +1,28 @@
+name: ShellCheck
+
+on:
+  push:
+    branches: ["feature/*", "fix/*", "refactor/*"]
+  pull_request:
+    branches: [develop, main]
+  workflow_dispatch:
+  workflow_call:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  shellcheck:
+    name: ShellCheck (severity=style)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: ludeeus/action-shellcheck@00cae500b08a931fb5698e11e79bfbd38e612a38 # v2.0.0
+        with:
+          severity: style
+          scandir: "."
+          ignore_paths: "bin"
