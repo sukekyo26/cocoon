@@ -193,16 +193,23 @@ jobs:
           # The generated docker-compose.yml declares
           # `additional_contexts: cocoon_user_certs: ${HOME}/.cocoon/certs`
           # so users can drop corp CA certs (e.g. Zscaler) into a host-side
-          # directory and have them auto-baked at build time. BuildKit
-          # resolves the named context path before the build starts and
-          # errors out if the directory does not exist. VS Code Dev
-          # Containers users get the directory created by
-          # devcontainer.json's initializeCommand; a plain `docker buildx
-          # bake` invocation (this CI step, or a developer running compose
-          # directly without VS Code) skips that hook and needs the
-          # one-time mkdir explicitly. The directory stays empty in CI so
-          # the Dockerfile's `if find ... ; then ... fi` branch no-ops and
-          # no certs are installed into the image.
+          # directory and have them auto-baked at build time.
+          #
+          # Two CI-side concerns we have to handle that end users don't:
+          #   1. Path existence — BuildKit resolves the named context path
+          #      before the build starts and errors if the directory does
+          #      not exist. VS Code Dev Containers users get this auto-
+          #      created via devcontainer.json's initializeCommand; bake
+          #      (this CI) and `docker compose build` directly don't run
+          #      that hook, so we mkdir explicitly. The directory stays
+          #      empty in CI, so the Dockerfile's `if find ... ; then ...
+          #      fi` branch no-ops and no certs land in the image.
+          #   2. Filesystem entitlement (bake-only) — `docker buildx bake`
+          #      treats build contexts outside the bake working dir as
+          #      privileged reads and refuses to start without an explicit
+          #      `--allow=fs.read=<path>` grant. `docker compose build`
+          #      does NOT enforce this, so end users running compose
+          #      directly are unaffected. We pass the flag below.
           mkdir -p "$HOME/.cocoon/certs"
           env_args=()
           while IFS= read -r line || [ -n "$line" ]; do
@@ -213,6 +220,7 @@ jobs:
           done < .devcontainer/.env
           env "${env_args[@]}" docker buildx bake \
             -f .devcontainer/docker-compose.yml \
+            --allow="fs.read=$HOME/.cocoon/certs" \
             --load \
             --set "*.context=$PWD" \
             --set "*.dockerfile=$PWD/.devcontainer/Dockerfile" \
