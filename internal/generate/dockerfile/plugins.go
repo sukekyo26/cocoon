@@ -100,15 +100,7 @@ func buildPluginSnippets(
 	sh shellEnv,
 ) (pluginSnippets, bool, error) {
 	install := p.Install
-	versionCapable := p.Version.VersionCapable
-	var override config.PluginVersionOverride
-	hasOverride := false
-	if versionCapable {
-		if o, ok := overrides[id]; ok {
-			override = o
-			hasOverride = true
-		}
-	}
+	override, hasOverride := resolveOverride(id, p.Version.VersionCapable, overrides)
 
 	installPath := path.Join(id, "install.sh")
 	userPath := path.Join(id, "install_user.sh")
@@ -127,32 +119,109 @@ func buildPluginSnippets(
 		argLines = append(argLines, "ARG "+a)
 	}
 
+	envBlock, err := renderEnvBlock(install.Env, pluginsFS, id)
+	if err != nil {
+		return pluginSnippets{}, false, err
+	}
+	rs := runSpec{
+		id:             id,
+		comment:        comment,
+		argLines:       argLines,
+		pluginsFS:      pluginsFS,
+		envBlock:       envBlock,
+		versionCapable: p.Version.VersionCapable,
+		hasOverride:    hasOverride,
+		override:       override,
+		buildArgs:      install.BuildArgs,
+		sh:             sh,
+	}
+
 	out := pluginSnippets{install: "", userInstall: "", requiresRoot: install.RequiresRoot}
-	if hasInstall {
-		body, err := readFileFromFS(pluginsFS, installPath)
-		if err != nil {
-			return pluginSnippets{}, false, err
-		}
-		snippet := renderInstallRun(id, "# Install "+comment, argLines, body,
-			versionCapable, hasOverride, override, install.BuildArgs, sh)
-		envBlock, err := renderEnvBlock(install.Env, pluginsFS, id)
-		if err != nil {
-			return pluginSnippets{}, false, err
-		}
-		if envBlock != "" {
-			snippet = snippet + "\n" + envBlock
-		}
-		out.install = snippet
+	out.install, err = renderInstallSnippet(rs, hasInstall, installPath)
+	if err != nil {
+		return pluginSnippets{}, false, err
 	}
 	if hasUserInstall {
-		body, err := readFileFromFS(pluginsFS, userPath)
+		out.userInstall, err = renderUserInstallSnippet(rs, userPath)
 		if err != nil {
 			return pluginSnippets{}, false, err
 		}
-		out.userInstall = renderInstallRun(id, "# Configure "+comment+" (user)", nil, body,
-			versionCapable, hasOverride, override, install.BuildArgs, sh)
 	}
 	return out, true, nil
+}
+
+// runSpec bundles the per-plugin context shared by the install and
+// install_user emitters so buildPluginSnippets does not have to
+// thread a dozen positional args through each helper.
+type runSpec struct {
+	id             string
+	comment        string
+	argLines       []string
+	pluginsFS      fs.FS
+	envBlock       string
+	versionCapable bool
+	hasOverride    bool
+	override       config.PluginVersionOverride
+	buildArgs      []string
+	sh             shellEnv
+}
+
+// resolveOverride collapses the version-pin lookup into a single call
+// site so buildPluginSnippets stays focused on the snippet layout.
+func resolveOverride(
+	id string,
+	versionCapable bool,
+	overrides map[string]config.PluginVersionOverride,
+) (config.PluginVersionOverride, bool) {
+	if !versionCapable {
+		return config.PluginVersionOverride{}, false //nolint:exhaustruct // zero value signals "no override"
+	}
+	o, ok := overrides[id]
+	if !ok {
+		return config.PluginVersionOverride{}, false //nolint:exhaustruct // zero value signals "no override"
+	}
+	return o, true
+}
+
+// renderInstallSnippet returns the snippet that goes into the
+// "# Install" bucket. It handles three cases in one place so the
+// caller stays linear:
+//
+//  1. install.sh present — render the heredoc RUN and append the env
+//     block (if any) to the same snippet.
+//  2. no install.sh but [install.env] is set — emit the env block on
+//     its own with a "(env)" comment so the ENV directives still land
+//     in the image. ENV is unaffected by the active USER, so this
+//     entry can sit in either bucket without changing semantics.
+//  3. neither — return "".
+func renderInstallSnippet(rs runSpec, hasInstall bool, installPath string) (string, error) {
+	if hasInstall {
+		body, err := readFileFromFS(rs.pluginsFS, installPath)
+		if err != nil {
+			return "", err
+		}
+		snippet := renderInstallRun(rs.id, "# Install "+rs.comment, rs.argLines, body,
+			rs.versionCapable, rs.hasOverride, rs.override, rs.buildArgs, rs.sh)
+		if rs.envBlock != "" {
+			snippet = snippet + "\n" + rs.envBlock
+		}
+		return snippet, nil
+	}
+	if rs.envBlock != "" {
+		return "# Configure " + rs.comment + " (env)\n" + rs.envBlock, nil
+	}
+	return "", nil
+}
+
+// renderUserInstallSnippet renders the install_user.sh heredoc with
+// the "# Configure … (user)" comment used in the non-root bucket.
+func renderUserInstallSnippet(rs runSpec, userPath string) (string, error) {
+	body, err := readFileFromFS(rs.pluginsFS, userPath)
+	if err != nil {
+		return "", err
+	}
+	return renderInstallRun(rs.id, "# Configure "+rs.comment+" (user)", nil, body,
+		rs.versionCapable, rs.hasOverride, rs.override, rs.buildArgs, rs.sh), nil
 }
 
 func renderEnvBlock(env map[string]string, pluginsFS fs.FS, id string) (string, error) {

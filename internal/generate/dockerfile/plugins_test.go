@@ -135,3 +135,75 @@ func seedPluginInstall(t *testing.T, pluginsDir, id string) {
 		t.Fatalf("write install.sh: %v", err)
 	}
 }
+
+// TestGeneratePluginInstalls_EnvOnlyPluginEmitsEnv covers the case
+// where a plugin defines [install.env] but ships no install.sh. Before
+// the fix the env block sat inside the hasInstall branch and was
+// silently dropped, even though buildPluginSnippets reported the
+// plugin as non-empty. The output must contain the rendered ENV lines
+// in [install.env] declaration order.
+func TestGeneratePluginInstalls_EnvOnlyPluginEmitsEnv(t *testing.T) {
+	t.Parallel()
+
+	plugins := map[string]*plugin.Plugin{
+		"env-only": {
+			Metadata: plugin.Metadata{Name: "Env Only"}, //nolint:exhaustruct // unused metadata fields
+			Install: plugin.Install{ //nolint:exhaustruct // Volumes / UserDirs / BuildArgs unused
+				Env: map[string]string{
+					"PATH":   "/opt/env-only/bin:$PATH",
+					"FOO":    "bar",
+					"PYPATH": "/opt/env-only/lib",
+				},
+			},
+		}, //nolint:exhaustruct // Apt / Version not exercised by this test
+	}
+	enabled := []string{"env-only"}
+	pluginsDir := t.TempDir()
+	seedEnvOnlyPlugin(t, pluginsDir, "env-only")
+
+	out, err := generatePluginInstalls(
+		plugins, enabled, os.DirFS(pluginsDir), nil,
+		map[string]config.PluginVersionOverride{},
+		&bytes.Buffer{},
+		shellEnv{rcFileAbs: "/home/${USERNAME}/.bashrc", rcSyntax: "posix", loginShell: "bash"},
+	)
+	if err != nil {
+		t.Fatalf("generatePluginInstalls: %v", err)
+	}
+
+	for _, want := range []string{
+		`ENV PATH="/opt/env-only/bin:$PATH"`,
+		`ENV FOO="bar"`,
+		`ENV PYPATH="/opt/env-only/lib"`,
+		"# Configure Env Only (env)",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output missing %q\n--- got ---\n%s", want, out)
+		}
+	}
+	// And the env-only snippet must NOT introduce a stray RUN bash heredoc
+	// (that would imply the renderer emitted a script for a plugin that
+	// has no script).
+	if strings.Contains(out, "bash <<'COCOON_PLUGIN_EOF'") {
+		t.Errorf("env-only plugin should not produce a bash heredoc:\n%s", out)
+	}
+}
+
+// seedEnvOnlyPlugin lays down a plugin.toml whose [install.env] table
+// preserves declaration order (PATH, FOO, PYPATH) so the rendered
+// output is deterministic. No install.sh / install_user.sh is written,
+// which is the whole point of the fixture.
+func seedEnvOnlyPlugin(t *testing.T, pluginsDir, id string) {
+	t.Helper()
+	dir := filepath.Join(pluginsDir, id)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", dir, err)
+	}
+	body := "[install.env]\n" +
+		"PATH = \"/opt/env-only/bin:$PATH\"\n" +
+		"FOO = \"bar\"\n" +
+		"PYPATH = \"/opt/env-only/lib\"\n"
+	if err := os.WriteFile(filepath.Join(dir, "plugin.toml"), []byte(body), 0o600); err != nil {
+		t.Fatalf("write plugin.toml: %v", err)
+	}
+}

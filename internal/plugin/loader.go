@@ -43,6 +43,12 @@ func parsePluginTOML(label string, data []byte) (*Plugin, error) {
 	return &p, nil
 }
 
+// ErrNilPluginsFS is returned by LoadEnabledFromFS when called with a
+// nil source. Callers can identify it via errors.Is to distinguish a
+// programming error (forgot to wire the LayeredFS) from a missing
+// plugin on a real filesystem.
+var ErrNilPluginsFS = errors.New("plugin: source fs is nil")
+
 // LoadEnabled loads plugin.toml for every id in `enabled` from `pluginsDir`.
 // Missing plugins emit a stderr-style warning to `warnings` (mirroring the
 // Python `_load_plugin_data` warning) and are skipped.
@@ -54,7 +60,14 @@ func LoadEnabled(pluginsDir string, enabled []string, warnings io.Writer) (map[s
 // optional pathPrefix is only used to decorate the warning message for
 // missing plugins so on-disk callers can keep their absolute-path
 // diagnostic; pass "" for embedded sources.
+//
+// Returns ErrNilPluginsFS when src is nil. (fs.Stat / fs.ReadFile would
+// otherwise panic on the nil interface, masking the actual configuration
+// bug — a caller built a WorkspaceContext without wiring PluginsFS.)
 func LoadEnabledFromFS(src fs.FS, enabled []string, warnings io.Writer, pathPrefix string) (map[string]*Plugin, error) {
+	if src == nil {
+		return nil, ErrNilPluginsFS
+	}
 	out := make(map[string]*Plugin, len(enabled))
 	for _, id := range enabled {
 		rel := path.Join(id, "plugin.toml")

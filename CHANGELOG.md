@@ -20,6 +20,7 @@ adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - `[workspace] mount_root` resolution in the generated `docker-compose.yml`. Compose resolves bind-mount relative paths against the compose file's directory (`.devcontainer/`), so the previous output was one level too shallow: `mount_root = ".."` mounted the project root instead of its parent (sibling repos were not visible) and `mount_root = "."` mounted `.devcontainer/` itself instead of the project. Both cases now emit one extra `..` so they resolve to the user-facing target.
+- Plugin authors that ship an `[install.env]` table without an `install.sh` (env-only plugins) no longer have the `ENV` directives silently dropped from the generated Dockerfile; the env block is emitted as its own snippet so the variables still land in the image.
 - Catalog `claude-code` and `copilot-cli` plugins now export `~/.local/bin` to `PATH` via `[install.env]` so the installed CLIs are reachable in interactive shells without depending on another plugin (e.g. `uv`) to set the same PATH.
 - Catalog `go` plugin now installs `build-essential` (gcc / make) so cgo builds and `go install` of native-dependent tools work out of the box.
 
