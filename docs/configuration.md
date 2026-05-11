@@ -79,7 +79,7 @@ Image identity. `service_name`, `username`, `image`, `image_version` are all req
 | `service_name` | string | `^[a-z][a-z0-9_-]*$` | Compose `services:` key. Used as `docker compose exec <service_name>`. |
 | `username` | string | `^[a-z_][a-z0-9_-]*$` | Linux user created inside the container. |
 | `image` | string | `ubuntu` \| `debian` \| `node` \| `python` \| `golang` \| `rust` \| `denoland/deno` | Base image for `FROM`, written **verbatim** as DockerHub's canonical image name — `golang` (not `go`) and `denoland/deno` (vendor namespace) — so a reader can recreate the FROM line from workspace.toml alone, with no cocoon-side alias resolution. |
-| `image_version` | string | plain Docker tag (alnum + `.` + `_` + `-`); no slash or colon | Image tag (e.g. `26.04`, `24-bookworm-slim`, `1.26.3-bookworm`, `debian-2.7.14`). The table below is the curated suggestion list cocoon offers in `cocoon init`; **any well-formed tag the upstream registry publishes is accepted**, so you can pin a patch or new minor (e.g. `1.26.4-bookworm` the day it ships) without waiting for a cocoon release. |
+| `image_version` | string | plain Docker tag: first character must be alnum or `_`; trailing characters add `.` / `-`; no slash, no colon | Image tag (e.g. `26.04`, `24-bookworm-slim`, `1.26.3-bookworm`, `debian-2.7.14`). The table below is the curated suggestion list cocoon offers in `cocoon init`; **any well-formed tag the upstream registry publishes is accepted**, so you can pin a patch or new minor (e.g. `1.26.4-bookworm` the day it ships) without waiting for a cocoon release. |
 | `docker_socket` | bool | — | Mount `/var/run/docker.sock` for docker-in-docker. Default `false`. |
 
 **Suggested image / version pairs** (not exhaustive — any well-formed tag is accepted):

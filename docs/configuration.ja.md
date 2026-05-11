@@ -79,7 +79,7 @@ devcontainer = true
 | `service_name` | string | `^[a-z][a-z0-9_-]*$` | Compose の `services:` キー。`docker compose exec <service_name>` で参照される。 |
 | `username` | string | `^[a-z_][a-z0-9_-]*$` | コンテナ内に作成される Linux ユーザー。 |
 | `image` | string | `ubuntu` \| `debian` \| `node` \| `python` \| `golang` \| `rust` \| `denoland/deno` | ベースイメージ。DockerHub の **正式名称** をそのまま記述します (`go` ではなく `golang`、deno は vendor namespace 込みで `denoland/deno`)。workspace.toml だけ見れば FROM 行が一意に決まり、cocoon 側のエイリアス解決は不要。 |
-| `image_version` | string | プレーンな Docker タグ (英数字 + `.` + `_` + `-`、スラッシュやコロン禁止) | イメージタグ (例: `26.04` / `24-bookworm-slim` / `1.26.3-bookworm` / `debian-2.7.14`)。下表は `cocoon init` で提示される推奨候補で、**正しい形式であれば上流レジストリが公開している任意のタグを受理**します。パッチや新マイナーが出た日にすぐ pin できます (例: `1.26.4-bookworm` を cocoon リリースを待たずに使う)。 |
+| `image_version` | string | プレーンな Docker タグ: 先頭は英数字または `_`、2 文字目以降は `.` / `-` も可、スラッシュ・コロン禁止 | イメージタグ (例: `26.04` / `24-bookworm-slim` / `1.26.3-bookworm` / `debian-2.7.14`)。下表は `cocoon init` で提示される推奨候補で、**正しい形式であれば上流レジストリが公開している任意のタグを受理**します。パッチや新マイナーが出た日にすぐ pin できます (例: `1.26.4-bookworm` を cocoon リリースを待たずに使う)。 |
 | `docker_socket` | bool | — | `/var/run/docker.sock` をマウントして docker-in-docker を有効化。デフォルト `false`。 |
 
 **推奨される image / version の組合せ** (固定リストではありません — 正しい形式の任意タグを受理):
