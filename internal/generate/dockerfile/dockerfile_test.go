@@ -104,9 +104,10 @@ func TestGenerate_Snapshot(t *testing.T) {
 //
 // Each case picks the first whitelisted version per image (the same
 // default cocoon init writes) and asserts on the literal ARG IMAGE,
-// ARG IMAGE_VERSION and FROM lines the template emits. deno is the
-// only image whose IMAGE arg differs from the user-facing id; the
-// remaining six are library/ namespace and round-trip verbatim.
+// ARG IMAGE_VERSION and FROM lines the template emits. Image ids are
+// canonical DockerHub names, so the ARG IMAGE value round-trips
+// verbatim for every image — including denoland/deno's vendor
+// namespace and golang's library/ short name.
 //
 //nolint:paralleltest // mutates ws.Container in each iteration
 func TestGenerate_FromLineForEachImage(t *testing.T) {

@@ -374,11 +374,15 @@ func (f *imageVersionField) RunAccessible(w io.Writer, r io.Reader) error {
 	for {
 		fmt.Fprint(w, "Choose by number or type a tag: ")
 		var choice string
-		// Ignore Fscanln's error: a partial / empty read is handled by
-		// the next blank-input check, and a real I/O failure surfaces
-		// later through Fprint when the same reader is reused.
-		if _, err := fmt.Fscanln(r, &choice); err != nil {
-			_ = err
+		_, err := fmt.Fscanln(r, &choice)
+		// EOF (or any persistent read error) means the reader is closed —
+		// keep looping in that state would spin forever on the empty-input
+		// branch below, so surface it as a wrapped error and let the
+		// caller decide. "unexpected newline" (blank line on a live tty)
+		// returns n=0 with a non-EOF error and falls through to the
+		// empty-input retry, which is the right behavior.
+		if err != nil && errors.Is(err, io.EOF) {
+			return fmt.Errorf("imageVersionField: stdin closed before answer: %w", err)
 		}
 		choice = strings.TrimSpace(choice)
 		if choice == "" {
@@ -439,11 +443,3 @@ func (f *imageVersionField) assignTarget(v string) {
 
 // Compile-time assertion that imageVersionField fully satisfies huh.Field.
 var _ huh.Field = (*imageVersionField)(nil)
-
-// errImageVersionFieldUnused is reserved for future test wiring (e.g.
-// asserting validator failure paths through commit() without driving a
-// Bubble Tea program). It's exported via the package-private sentinel
-// pattern used elsewhere in this package.
-var errImageVersionFieldUnused = errors.New("imageVersionField: unused sentinel")
-
-var _ = errImageVersionFieldUnused

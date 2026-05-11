@@ -145,10 +145,10 @@ func TestApplyFlags_AllValid(t *testing.T) {
 		t.Errorf("Username = %q", ans.Username)
 	}
 	if ans.Image != "ubuntu" || !ans.ImageSet {
-		t.Errorf("OS = %q ImageSet=%v", ans.Image, ans.ImageSet)
+		t.Errorf("Image = %q ImageSet=%v", ans.Image, ans.ImageSet)
 	}
 	if ans.ImageVersion != "24.04" || !ans.ImageVersionSet {
-		t.Errorf("OSVersion = %q ImageVersionSet=%v", ans.ImageVersion, ans.ImageVersionSet)
+		t.Errorf("ImageVersion = %q ImageVersionSet=%v", ans.ImageVersion, ans.ImageVersionSet)
 	}
 	if ans.MountRoot != ".." || !ans.MountRootSet {
 		t.Errorf("MountRoot = %q MountRootSet=%v", ans.MountRoot, ans.MountRootSet)
@@ -340,10 +340,10 @@ func TestApplyDefaults_FillsMissingDefaults(t *testing.T) {
 		t.Fatal(err)
 	}
 	if ans.Image != "ubuntu" || !ans.ImageSet {
-		t.Errorf("OS default = %q ImageSet=%v", ans.Image, ans.ImageSet)
+		t.Errorf("Image default = %q ImageSet=%v", ans.Image, ans.ImageSet)
 	}
 	if ans.ImageVersion != "26.04" || !ans.ImageVersionSet {
-		t.Errorf("OSVersion default = %q", ans.ImageVersion)
+		t.Errorf("ImageVersion default = %q", ans.ImageVersion)
 	}
 	if ans.MountRoot != "." || !ans.MountRootSet {
 		t.Errorf("MountRoot default = %q", ans.MountRoot)

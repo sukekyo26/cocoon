@@ -140,8 +140,11 @@ func (c *ContainerSpec) DockerSocketEnabled() bool {
 //   - Vendor-published runtime: "denoland/deno" — vendor namespace,
 //     spelled out so the FROM line is unambiguous.
 //
-// All seven resolve to Debian (bookworm) variants so the apt-based plugin
-// catalog continues to work.
+// Every image is apt-based so the cocoon plugin catalog works the same
+// way across all of them. ubuntu pulls its own archive (archive.ubuntu.com);
+// the other six are Debian (bookworm) variants and pull from
+// deb.debian.org. apt-mirror rewriting keys off this distinction —
+// see aptMirrorOriginHosts in internal/generate/dockerfile/dockerfile.go.
 //
 //nolint:gochecknoglobals // tabular configuration data, file-scoped by design.
 var SupportedImages = []string{"ubuntu", "debian", "node", "python", "golang", "rust", "denoland/deno"}
