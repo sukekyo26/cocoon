@@ -50,8 +50,10 @@ var (
 	// rxImageVersionInput mirrors config.validate's rxImageVersion so the
 	// "Other (manual input)" prompt rejects bad input in the form rather
 	// than letting it slip through to `cocoon gen` and surface as a
-	// container.image_version validation error.
-	rxImageVersionInput = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
+	// container.image_version validation error. Keep this pattern in
+	// lockstep with rxImageVersion (Docker tag spec: alnum / underscore
+	// can lead, period / hyphen cannot).
+	rxImageVersionInput = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._-]*$`)
 )
 
 // NewCommand returns the cobra command for ` + "`cocoon init`" + `.
@@ -73,7 +75,8 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 	cmd.Flags().StringVar(&flags.Username, "username", "", "in-container user (required with --yes)")
 	cmd.Flags().StringVar(&flags.Image, "image", "",
 		fmt.Sprintf("base image: %s", strings.Join(config.SupportedImages, ", ")))
-	cmd.Flags().StringVar(&flags.ImageVersion, "image-version", "", "base image version/tag (must match --image)")
+	cmd.Flags().StringVar(&flags.ImageVersion, "image-version", "",
+		"base image tag — any well-formed Docker tag is accepted; --image must also be set")
 	cmd.Flags().StringVar(&flags.Shell, "shell", "",
 		fmt.Sprintf("container login shell: %s (default: bash)", strings.Join(config.SupportedShells, ", ")))
 	cmd.Flags().StringVar(&flags.MountRoot, "mount-root", "", `mount range: "." (cwd, default) or ".." (parent)`)

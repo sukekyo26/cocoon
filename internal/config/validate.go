@@ -37,15 +37,17 @@ var (
 	rxAptSuite     = regexp.MustCompile(`^[a-z][a-z0-9._-]*$`)
 	rxAptComponent = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
 	rxAptArch      = regexp.MustCompile(`^(amd64|arm64|i386|armhf|ppc64el|s390x)$`)
-	// rxImageVersion bounds image_version to characters legal in a Docker
-	// image tag minus the colon and the registry-path slash, both of which
-	// would let a user smuggle a second `<image>:<tag>` segment past the
-	// FROM template and break the generated Dockerfile. Alnum / dot /
-	// underscore / hyphen is enough to express every Docker tag we ship
-	// in SupportedImageVersions and every tag the upstream registries
-	// publish today (e.g. "1.26.3-bookworm", "debian-2.7.14",
-	// "24-bookworm-slim").
-	rxImageVersion = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
+	// rxImageVersion bounds image_version to the Docker tag character set
+	// minus the colon and the registry-path slash, both of which would let
+	// a user smuggle a second `<image>:<tag>` segment past the FROM
+	// template and break the generated Dockerfile. Per the Docker
+	// reference spec a tag is alnum / underscore / period / hyphen with
+	// the first character restricted to alnum or underscore (a leading
+	// period or hyphen is forbidden because it collides with the digest
+	// separator and POSIX option syntax respectively). The regex mirrors
+	// that contract so tags like `_internal` or `2.7.14` are accepted and
+	// `.hidden` / `-foo` / `library/node` / `node:24` are rejected.
+	rxImageVersion = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._-]*$`)
 )
 
 // portMin and portMax bound ports forwarded into the dev container.
