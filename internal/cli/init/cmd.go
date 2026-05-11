@@ -459,15 +459,26 @@ func promptForMissing(ans initAnswers, cat *i18n.Catalog, plugins map[string]*pl
 		ans.ImageSet = true
 	}
 	if !ans.ImageVersionSet {
-		// Text input with the curated whitelist wired in as Tab-completion
-		// suggestions. Users can press Tab through the recommended tags
-		// or type any other well-formed Docker tag (e.g. the day a new
-		// patch / minor ships) — all on the same screen, no follow-up form.
+		// Custom huh.Field: curated suggestions stacked above an inline
+		// free-text input row. Cursor on a suggestion = select; cursor
+		// on the input row = type. See internal/cli/init/field_image_version.go.
 		versions := config.SupportedImageVersions[ans.Image]
 		if ans.ImageVersion == "" {
 			ans.ImageVersion = defaultImageVersion(ans.Image)
 		}
-		if err := runSingleFieldForm(imageVersionInput(cat, versions, &ans.ImageVersion)); err != nil {
+		field := newImageVersionField(&ans.ImageVersion, versions, cat.Msg("init_option_image_version_other")).
+			Title(cat.Msg("init_prompt_image_version_static")).
+			Description(cat.Msg("init_desc_image_version_static")).
+			Validate(func(s string) error {
+				if s == "" {
+					return errors.New(cat.Msg("init_err_required")) //nolint:err113 // user-facing prompt
+				}
+				if !rxImageVersionInput.MatchString(s) {
+					return errors.New(cat.Msg("init_err_image_version_fmt")) //nolint:err113 // user-facing prompt
+				}
+				return nil
+			})
+		if err := runSingleFieldForm(field); err != nil {
 			return ans, err
 		}
 		ans.ImageVersionSet = true
@@ -622,30 +633,6 @@ func imageSelect(cat *i18n.Catalog, target *string) *huh.Select[string] {
 		Title(cat.Msg("init_prompt_image")).
 		Description(cat.Msg("init_desc_image")).
 		Options(options...).
-		Value(target)
-}
-
-// imageVersionInput is a single-screen text prompt with Tab-completion
-// suggestions sourced from SupportedImageVersions for the chosen image.
-// Users can Tab-cycle through the curated whitelist or type any other
-// well-formed Docker tag the upstream registry publishes (e.g.
-// golang:1.26.4-bookworm the day it ships). The validator mirrors
-// config.rxImageVersion server-side so users see the rejection inline
-// in the form rather than as a validateImage error later in `cocoon gen`.
-func imageVersionInput(cat *i18n.Catalog, suggestions []string, target *string) *huh.Input {
-	return huh.NewInput().
-		Title(cat.Msg("init_prompt_image_version_static")).
-		Description(cat.Msg("init_desc_image_version_static")).
-		Suggestions(suggestions).
-		Validate(func(s string) error {
-			if s == "" {
-				return errors.New(cat.Msg("init_err_required")) //nolint:err113 // user-facing prompt
-			}
-			if !rxImageVersionInput.MatchString(s) {
-				return errors.New(cat.Msg("init_err_image_version_fmt")) //nolint:err113 // user-facing prompt
-			}
-			return nil
-		}).
 		Value(target)
 }
 
