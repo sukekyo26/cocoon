@@ -242,7 +242,7 @@ func TestApplyFlags_ImageVersionAcceptsOffWhitelist(t *testing.T) {
 	// Off-whitelist but well-formed: future Go patch and an oddly-cased
 	// suffix neither cocoon nor the registry necessarily ship today.
 	for _, tag := range []string{"1.26.4-bookworm", "26-bookworm-slim", "edge"} {
-		ans, err := applyFlags(&initFlags{Image: "go", ImageVersion: tag}, plugins)
+		ans, err := applyFlags(&initFlags{Image: "golang", ImageVersion: tag}, plugins)
 		if err != nil {
 			t.Errorf("off-whitelist tag %q should be accepted, got %v", tag, err)
 			continue

@@ -78,7 +78,7 @@ devcontainer = true
 |---|---|---|---|
 | `service_name` | string | `^[a-z][a-z0-9_-]*$` | Compose の `services:` キー。`docker compose exec <service_name>` で参照される。 |
 | `username` | string | `^[a-z_][a-z0-9_-]*$` | コンテナ内に作成される Linux ユーザー。 |
-| `image` | string | `ubuntu` \| `debian` \| `node` \| `python` \| `go` \| `rust` \| `deno` | ベースイメージ。前 2 つは Linux ディストロ、残り 5 つは DockerHub の言語ランタイム公式イメージ (deno は `denoland/deno`、それ以外は `library/<image>` に展開)。 |
+| `image` | string | `ubuntu` \| `debian` \| `node` \| `python` \| `golang` \| `rust` \| `denoland/deno` | ベースイメージ。DockerHub の **正式名称** をそのまま記述します (`go` ではなく `golang`、deno は vendor namespace 込みで `denoland/deno`)。workspace.toml だけ見れば FROM 行が一意に決まり、cocoon 側のエイリアス解決は不要。 |
 | `image_version` | string | プレーンな Docker タグ (英数字 + `.` + `_` + `-`、スラッシュやコロン禁止) | イメージタグ (例: `26.04` / `24-bookworm-slim` / `1.26.3-bookworm` / `debian-2.7.14`)。下表は `cocoon init` で提示される推奨候補で、**正しい形式であれば上流レジストリが公開している任意のタグを受理**します。パッチや新マイナーが出た日にすぐ pin できます (例: `1.26.4-bookworm` を cocoon リリースを待たずに使う)。 |
 | `docker_socket` | bool | — | `/var/run/docker.sock` をマウントして docker-in-docker を有効化。デフォルト `false`。 |
 
@@ -90,9 +90,9 @@ devcontainer = true
 | `debian` | `13`, `12` | `FROM debian:<v>` |
 | `node` | `26-bookworm-slim`, `24-bookworm-slim`, `22-bookworm-slim` | `FROM node:<v>` |
 | `python` | `3.14-slim-bookworm`, `3.13-slim-bookworm`, `3.12-slim-bookworm` | `FROM python:<v>` |
-| `go` | `1.26-bookworm`, `1.26.3-bookworm`, `1.25-bookworm`, `1.24-bookworm` | `FROM golang:<v>` (Docker official `library/golang`) |
+| `golang` | `1.26-bookworm`, `1.26.3-bookworm`, `1.25-bookworm`, `1.24-bookworm` | `FROM golang:<v>` |
 | `rust` | `1.95-bookworm`, `1.94-bookworm`, `1.93-bookworm` | `FROM rust:<v>` |
-| `deno` | `debian-2.7.14`, `debian-2.6.10`, `debian-2.5.7` | `FROM denoland/deno:<v>` |
+| `denoland/deno` | `debian-2.7.14`, `debian-2.6.10`, `debian-2.5.7` | `FROM denoland/deno:<v>` |
 
 `cocoon init` ではこれらがバージョン入力欄の **Tab 補完候補** として並びます。Tab キーで循環するか、任意のタグを直接入力できます。`--image-version <tag>` も非対話パスで同様に任意タグを受理します。バリデーションはタグの形式 (スラッシュ・コロン禁止) のみチェックし、レジストリ上の実在性は `docker pull` (ビルド時) に委ねます。
 
@@ -102,10 +102,10 @@ devcontainer = true
 
 | 選んだ `image` | プラグイン有効化 | 結果 |
 |---|---|---|
-| `go` | `go` | **reject** — ベースが Go を提供済み |
+| `golang` | `go` | **reject** — ベースが Go を提供済み |
 | `rust` | `rust` | **reject** — ベースが Rust を提供済み |
 | `python` | `uv` | 受理 — uv はバイナリ追加のみで Python に触らない |
-| `node` / `deno` / `python` | (対応プラグインなし) | n/a |
+| `node` / `denoland/deno` / `python` | (対応プラグインなし) | n/a |
 
 ```toml
 [container]

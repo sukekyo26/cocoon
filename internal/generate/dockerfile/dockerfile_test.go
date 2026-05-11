@@ -117,7 +117,6 @@ func TestGenerate_FromLineForEachImage(t *testing.T) {
 	for _, image := range config.SupportedImages {
 		image := image
 		version := config.SupportedImageVersions[image][0]
-		wantRegistry := config.ResolveImageRegistry(image)
 		t.Run(image, func(t *testing.T) {
 			ws, err := config.LoadWorkspace(wsPath)
 			if err != nil {
@@ -139,7 +138,9 @@ func TestGenerate_FromLineForEachImage(t *testing.T) {
 			if err != nil {
 				t.Fatalf("generate: %v", err)
 			}
-			wantArgImage := "ARG IMAGE=" + wantRegistry
+			// Canonical image names mean the FROM line is image:version
+			// verbatim — no registry mapping.
+			wantArgImage := "ARG IMAGE=" + image
 			wantArgVersion := "ARG IMAGE_VERSION=" + version
 			wantFrom := "FROM ${IMAGE}:${IMAGE_VERSION}"
 			for _, want := range []string{wantArgImage, wantArgVersion, wantFrom} {

@@ -15,7 +15,6 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/sukekyo26/cocoon/internal/config"
 	"github.com/sukekyo26/cocoon/internal/dockersock"
 	"github.com/sukekyo26/cocoon/internal/generate"
 )
@@ -61,7 +60,7 @@ func Generate(ctx *generate.WorkspaceContext) (string, error) {
 	fmt.Fprintf(&b, "UID=%d\n", uid)
 	fmt.Fprintf(&b, "GID=%d\n", gid)
 	fmt.Fprintf(&b, "DOCKER_GID=%d\n", dockerGID)
-	fmt.Fprintf(&b, "IMAGE=%s\n", config.ResolveImageRegistry(ctx.WS.Container.Image))
+	fmt.Fprintf(&b, "IMAGE=%s\n", ctx.WS.Container.Image)
 	fmt.Fprintf(&b, "IMAGE_VERSION=%s\n", ctx.WS.Container.ImageVersion)
 	return b.String(), nil
 }

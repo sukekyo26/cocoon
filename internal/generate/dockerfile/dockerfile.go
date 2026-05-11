@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/sukekyo26/cocoon/internal/aptbase"
-	"github.com/sukekyo26/cocoon/internal/config"
 	"github.com/sukekyo26/cocoon/internal/generate"
 	"github.com/sukekyo26/cocoon/internal/generate/shellrc"
 	"github.com/sukekyo26/cocoon/internal/generate/shellx"
@@ -282,7 +281,7 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 	}
 
 	data := templateData{
-		Image:                  config.ResolveImageRegistry(ctx.WS.Container.Image),
+		Image:                  ctx.WS.Container.Image,
 		ImageVersion:           ctx.WS.Container.ImageVersion,
 		AptMirrorRewritePre:    mirrorRewritePre,
 		AptProxyConfPre:        proxyConfPre,

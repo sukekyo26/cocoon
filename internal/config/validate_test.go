@@ -231,11 +231,11 @@ func TestValidate_ImageAcceptsOffWhitelist(t *testing.T) {
 		image   string
 		version string
 	}{
-		{"go", "1.26.4-bookworm"},    // hypothetical future patch
-		{"go", "1.99-bookworm"},      // hypothetical future minor
-		{"node", "27-bookworm-slim"}, // hypothetical future major
+		{"golang", "1.26.4-bookworm"}, // hypothetical future patch
+		{"golang", "1.99-bookworm"},   // hypothetical future minor
+		{"node", "27-bookworm-slim"},  // hypothetical future major
 		{"python", "3.15-slim-bookworm"},
-		{"deno", "debian-2.7.99"},
+		{"denoland/deno", "debian-2.7.99"},
 		{"ubuntu", "27.04"},
 	}
 	for _, tc := range cases {
@@ -253,12 +253,13 @@ func TestValidate_ImageAcceptsOffWhitelist(t *testing.T) {
 	}
 }
 
-// TestValidate_ImagePluginConflict exercises the cross-section check that
-// rejects workspace.toml files combining a language-runtime base image
-// with the matching cocoon plugin. The conflict pairs come from
-// ImageProvidesPlugin (image="go" ↔ plugin "go", image="rust" ↔ plugin
-// "rust"); other combinations (image="python" + uv plugin, image="ubuntu"
-// + go plugin) must remain accepted because they coexist cleanly.
+// TestValidate_ImagePluginConflict exercises the cross-section check
+// that rejects workspace.toml files combining a language-runtime base
+// image with the matching cocoon plugin. The conflict pairs come from
+// ImageProvidesPlugin (image="golang" ↔ plugin "go", image="rust" ↔
+// plugin "rust"); other combinations (image="python" + uv plugin,
+// image="ubuntu" + go plugin) must remain accepted because they
+// coexist cleanly.
 func TestValidate_ImagePluginConflict(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -270,11 +271,11 @@ func TestValidate_ImagePluginConflict(t *testing.T) {
 		mustContain string
 	}{
 		{
-			name:  "go_image_plus_go_plugin",
-			image: "go", version: "1.26-bookworm",
+			name:  "golang_image_plus_go_plugin",
+			image: "golang", version: "1.26-bookworm",
 			enable:      `["go"]`,
 			wantErr:     true,
-			mustContain: `image = "go" already provides go`,
+			mustContain: `image = "golang" already provides go`,
 		},
 		{
 			name:  "rust_image_plus_rust_plugin",
@@ -296,8 +297,8 @@ func TestValidate_ImagePluginConflict(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:  "go_image_alone_ok",
-			image: "go", version: "1.26-bookworm",
+			name:  "golang_image_alone_ok",
+			image: "golang", version: "1.26-bookworm",
 			enable:  `[]`,
 			wantErr: false,
 		},
@@ -322,32 +323,6 @@ func TestValidate_ImagePluginConflict(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
-		})
-	}
-}
-
-// TestResolveImageRegistry pins the registry-path mapping used by both the
-// Dockerfile FROM line and the .env IMAGE= entry. Every supported image
-// either resolves verbatim (library/<id>) or appears as an explicit
-// ImageRegistryPath override — currently only deno. Adding or removing a
-// vendor-namespaced image is therefore a one-line edit to the map and a
-// matching case here.
-func TestResolveImageRegistry(t *testing.T) {
-	t.Parallel()
-	cases := map[string]string{
-		"ubuntu": "ubuntu",
-		"debian": "debian",
-		"node":   "node",
-		"python": "python",
-		"go":     "golang",
-		"rust":   "rust",
-		"deno":   "denoland/deno",
-	}
-	for image, want := range cases {
-		image, want := image, want
-		t.Run(image, func(t *testing.T) {
-			t.Parallel()
-			require.Equal(t, want, config.ResolveImageRegistry(image))
 		})
 	}
 }

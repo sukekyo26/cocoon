@@ -11,7 +11,7 @@ devcontainer = false
 # [container] — image identity.
 #   service_name: docker-compose `services:` <key>. Used by `docker compose exec <name>`.
 #   username / image / image_version: in-container account and FROM <image>:<image_version>.
-#   image candidates: ubuntu, debian, node, python, go, rust, deno (deno resolves to denoland/deno).
+#   image candidates (DockerHub canonical names): ubuntu, debian, node, python, golang, rust, denoland/deno.
 [container]
 service_name = "dev"
 username = "dev"

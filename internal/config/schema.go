@@ -72,15 +72,17 @@ func (w *WorkspaceSpec) DevContainerOrDefault() bool {
 	return *w.DevContainer
 }
 
-// ContainerSpec mirrors src/wsd/config.ContainerSpec. Image selects the base
-// container image ("ubuntu", "debian", "node", "python", "go", "rust" or
-// "deno"); ImageVersion is the image-specific tag string ("26.04" for
-// Ubuntu, "13" for Debian, "26-bookworm-slim" for Node, "3.14-slim-bookworm"
-// for Python, "1.26-bookworm" for Go, "1.95-bookworm" for Rust,
-// "debian-2.7.14" for Deno). The closed sets are defined by SupportedImages
-// and SupportedImageVersions and the Dockerfile generator turns these into
-// the FROM line via ImageRegistryPath (deno maps to denoland/deno; the
-// other six are pulled from library/<image>).
+// ContainerSpec mirrors src/wsd/config.ContainerSpec. Image is the
+// canonical DockerHub image name pulled verbatim into the FROM line:
+// "ubuntu" / "debian" / "node" / "python" / "golang" / "rust" /
+// "denoland/deno". ImageVersion is the image-specific tag ("26.04" for
+// Ubuntu, "13" for Debian, "26-bookworm-slim" for Node,
+// "3.14-slim-bookworm" for Python, "1.26.3-bookworm" for Golang,
+// "1.95-bookworm" for Rust, "debian-2.7.14" for denoland/deno). The
+// closed image set lives in SupportedImages; per-image suggestions in
+// SupportedImageVersions. Using canonical names means a reader can
+// recreate the FROM line from workspace.toml alone — no alias
+// resolution required.
 type ContainerSpec struct {
 	ServiceName  string `toml:"service_name"`
 	Username     string `toml:"username"`
@@ -125,18 +127,24 @@ func (c *ContainerSpec) DockerSocketEnabled() bool {
 
 // SupportedImages is the closed set of base container images the generator
 // can build a Dockerfile for. Validation, the interactive picker and the
-// Dockerfile template all key off this list. The seven entries are split into
-// two groups:
+// Dockerfile template all key off this list.
 //
-//   - Linux distributions: "ubuntu" / "debian" — the user installs everything
-//     on top via apt and cocoon plugins.
-//   - Language-runtime official images: "node" / "python" / "go" / "rust" /
-//     "deno" — the runtime is pre-installed; cocoon plugins add tools around
-//     it. All five resolve to Debian (bookworm) variants so the apt-based
-//     plugin catalog continues to work.
+// Each id is the **canonical DockerHub image name** — exactly what appears
+// in the FROM line — so users can read a workspace.toml and know which
+// image is pulled without any cocoon-side aliasing:
+//
+//   - Linux distributions: "ubuntu" / "debian" — library/ namespace.
+//   - Language-runtime official images: "node" / "python" / "golang" / "rust"
+//     — library/ namespace. The runtime is pre-installed; cocoon plugins
+//     add tools around it.
+//   - Vendor-published runtime: "denoland/deno" — vendor namespace,
+//     spelled out so the FROM line is unambiguous.
+//
+// All seven resolve to Debian (bookworm) variants so the apt-based plugin
+// catalog continues to work.
 //
 //nolint:gochecknoglobals // tabular configuration data, file-scoped by design.
-var SupportedImages = []string{"ubuntu", "debian", "node", "python", "go", "rust", "deno"}
+var SupportedImages = []string{"ubuntu", "debian", "node", "python", "golang", "rust", "denoland/deno"}
 
 // SupportedShells is the closed set of login shells `cocoon init` can pick
 // and that [container.shell].default validates against. The Dockerfile and
@@ -158,59 +166,25 @@ var SupportedShells = []string{"bash", "zsh", "fish"}
 //
 //nolint:gochecknoglobals // tabular configuration data, file-scoped by design.
 var SupportedImageVersions = map[string][]string{
-	"ubuntu": {"26.04", "24.04", "22.04"},
-	"debian": {"13", "12"},
-	"node":   {"26-bookworm-slim", "24-bookworm-slim", "22-bookworm-slim"},
-	"python": {"3.14-slim-bookworm", "3.13-slim-bookworm", "3.12-slim-bookworm"},
-	"go":     {"1.26-bookworm", "1.26.3-bookworm", "1.25-bookworm", "1.24-bookworm"},
-	"rust":   {"1.95-bookworm", "1.94-bookworm", "1.93-bookworm"},
-	"deno":   {"debian-2.7.14", "debian-2.6.10", "debian-2.5.7"},
+	"ubuntu":        {"26.04", "24.04", "22.04"},
+	"debian":        {"13", "12"},
+	"node":          {"26-bookworm-slim", "24-bookworm-slim", "22-bookworm-slim"},
+	"python":        {"3.14-slim-bookworm", "3.13-slim-bookworm", "3.12-slim-bookworm"},
+	"golang":        {"1.26-bookworm", "1.26.3-bookworm", "1.25-bookworm", "1.24-bookworm"},
+	"rust":          {"1.95-bookworm", "1.94-bookworm", "1.93-bookworm"},
+	"denoland/deno": {"debian-2.7.14", "debian-2.6.10", "debian-2.5.7"},
 }
 
-// ImageRegistryPath maps an image id to the DockerHub registry path used in
-// the Dockerfile FROM line. Entries here override the default `library/<id>`
-// (implicit `docker.io/library/`):
-//
-//   - "go" → "golang" because the Docker official Go image is published as
-//     `library/golang`, not `library/go`. cocoon exposes the friendlier
-//     short id to users while emitting the canonical registry name in the
-//     generated Dockerfile.
-//   - "deno" → "denoland/deno" because deno is a vendor-published image
-//     under the Deno Land namespace rather than the Docker official
-//     `library/` namespace.
-//
-// The remaining five images (ubuntu, debian, node, python, rust) live
-// under `library/<id>` and round-trip verbatim, so they are intentionally
-// absent from this map.
-//
-//nolint:gochecknoglobals // tabular configuration data, file-scoped by design.
-var ImageRegistryPath = map[string]string{
-	"go":   "golang",
-	"deno": "denoland/deno",
-}
-
-// ResolveImageRegistry returns the DockerHub registry path for the given
-// image id. Most images live under the implicit library/ namespace
-// (`docker.io/library/<image>`) and the id is returned verbatim; deno is the
-// only vendor-published image currently shipped and maps to "denoland/deno"
-// via ImageRegistryPath. Callers concatenate the result with
-// ":<image_version>" to build the FROM line and the IMAGE compose-arg.
-func ResolveImageRegistry(image string) string {
-	if path, ok := ImageRegistryPath[image]; ok {
-		return path
-	}
-	return image
-}
-
-// ImageProvidesPlugin marks images that already pre-install a language and
-// must not be combined with the cocoon plugin of the same name. The mapping
-// is image id → conflicting plugin id; validation rejects workspace.toml
-// files that set `image = <key>` AND enable the named plugin so users get a
+// ImageProvidesPlugin marks images that already pre-install a language
+// and must not be combined with the cocoon plugin of the same name. The
+// mapping is image id (= canonical DockerHub name) → conflicting plugin
+// id (= cocoon catalog id); validation rejects workspace.toml files that
+// set `image = <key>` AND enable the named plugin so users get a
 // fail-fast error instead of silently wasting docker-build time.
 //
 // Why the listed pairs conflict:
 //
-//   - "go" → "go": the go plugin runs `tar -C /usr/local -xzf go.tar.gz`
+//   - "golang" → "go": the go plugin runs `tar -C /usr/local -xzf go.tar.gz`
 //     which directly overwrites the /usr/local/go directory the golang
 //     base image ships, making the base layer dead weight.
 //   - "rust" → "rust": the rust plugin's PATH = "$HOME/.cargo/bin:$PATH"
@@ -218,13 +192,14 @@ func ResolveImageRegistry(image string) string {
 //     /usr/local/cargo/bin, so the base toolchain is shadowed and never
 //     used.
 //
-// The other supported images (ubuntu, debian, node, python, deno) have no
-// matching plugin in the catalog and therefore no conflict to declare here.
+// Other supported images (ubuntu, debian, node, python, denoland/deno)
+// have no matching plugin in the catalog and therefore no conflict to
+// declare here.
 //
 //nolint:gochecknoglobals // tabular configuration data, file-scoped by design.
 var ImageProvidesPlugin = map[string]string{
-	"go":   "go",
-	"rust": "rust",
+	"golang": "go",
+	"rust":   "rust",
 }
 
 // SkelEntry mirrors one [[container.skel]] entry. Source is a path relative
