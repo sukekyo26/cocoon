@@ -495,8 +495,9 @@ func buildAptMirrorRewrite(ctx *generate.WorkspaceContext) string {
 // build does not emit useless Ubuntu sed expressions (and vice versa).
 //
 // Only "ubuntu" maps to the Ubuntu archive hosts; every other supported
-// image (debian, node, python, go, rust, deno) is Debian-based and uses
-// deb.debian.org regardless of which language-runtime layer sits on top.
+// image (debian, node, python, golang, rust, denoland/deno) is
+// Debian-based and uses deb.debian.org regardless of which
+// language-runtime layer sits on top.
 //
 // Order matters. The slice is consumed top-down by sed -e expressions, and
 // each expression sees the line as already-rewritten by every earlier one.

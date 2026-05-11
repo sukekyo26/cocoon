@@ -90,7 +90,7 @@ Image identity. `service_name`, `username`, `image`, `image_version` are all req
 | `debian` | `13`, `12` | `FROM debian:<v>` |
 | `node` | `26-bookworm-slim`, `24-bookworm-slim`, `22-bookworm-slim` | `FROM node:<v>` |
 | `python` | `3.14-slim-bookworm`, `3.13-slim-bookworm`, `3.12-slim-bookworm` | `FROM python:<v>` |
-| `golang` | `1.26-bookworm`, `1.26.3-bookworm`, `1.25-bookworm`, `1.24-bookworm` | `FROM golang:<v>` |
+| `golang` | `1.26.3-bookworm`, `1.26-bookworm`, `1.25-bookworm`, `1.24-bookworm` | `FROM golang:<v>` |
 | `rust` | `1.95-bookworm`, `1.94-bookworm`, `1.93-bookworm` | `FROM rust:<v>` |
 | `denoland/deno` | `debian-2.7.14`, `debian-2.6.10`, `debian-2.5.7` | `FROM denoland/deno:<v>` |
 

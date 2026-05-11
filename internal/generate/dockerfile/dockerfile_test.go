@@ -124,6 +124,25 @@ func TestGenerate_FromLineForEachImage(t *testing.T) {
 			}
 			ws.Container.Image = image
 			ws.Container.ImageVersion = version
+			// snapshot.workspace.toml enables every plugin including
+			// "go" and "rust", which collide with image=golang / rust
+			// under the v0.3 mutually exclusive rule. Drop the conflict
+			// plugin (and its version override, since the generator
+			// rejects orphan version pins) per image so the test never
+			// exercises an invalid workspace state — keeps the test
+			// honest in case generators ever start asserting validated
+			// inputs.
+			if conflict, hit := config.ImageProvidesPlugin[image]; hit {
+				filtered := ws.Plugins.Enable[:0]
+				for _, id := range ws.Plugins.Enable {
+					if id == conflict {
+						continue
+					}
+					filtered = append(filtered, id)
+				}
+				ws.Plugins.Enable = filtered
+				delete(ws.Plugins.Versions, conflict)
+			}
 
 			var warns bytes.Buffer
 			plugins, err := plugin.LoadEnabled(pluginsDir, ws.Plugins.Enable, &warns)

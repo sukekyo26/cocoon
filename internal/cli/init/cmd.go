@@ -275,15 +275,49 @@ func printNextSteps(stdout io.Writer, cat *i18n.Catalog, devcontainer bool) {
 // collectAnswers folds CLI flags into initAnswers, then either applies
 // safe defaults (when --yes is set) or runs an interactive form for
 // whatever is still missing.
+//
+// A final image/plugin cross-check runs in both paths so the
+// non-interactive route (`--plugins go --image golang`) fails fast
+// here instead of writing a workspace.toml that `cocoon gen` would
+// later reject via validateImagePluginConflict. The interactive
+// picker already filters the conflict out of the multi-select, so
+// the check is a no-op there — it's the guard for scripted runs.
 func collectAnswers(flags *initFlags, cat *i18n.Catalog, plugins map[string]*plugin.Plugin) (initAnswers, error) {
 	ans, err := applyFlags(flags, plugins)
 	if err != nil {
 		return ans, err
 	}
 	if flags.AutoYes {
-		return applyDefaults(ans, plugins)
+		ans, err = applyDefaults(ans, plugins)
+	} else {
+		ans, err = promptForMissing(ans, cat, plugins)
 	}
-	return promptForMissing(ans, cat, plugins)
+	if err != nil {
+		return ans, err
+	}
+	if err := assertNoImagePluginConflict(ans); err != nil {
+		return ans, err
+	}
+	return ans, nil
+}
+
+// assertNoImagePluginConflict fails fast when the chosen image
+// duplicates a language-runtime plugin (image=golang + go plugin,
+// image=rust + rust plugin). The user-facing message names the
+// matching --plugins / --image rewrite so the fix is one edit.
+func assertNoImagePluginConflict(ans initAnswers) error {
+	conflict, hit := config.ImageProvidesPlugin[ans.Image]
+	if !hit {
+		return nil
+	}
+	if !slices.Contains(ans.Plugins, conflict) {
+		return nil
+	}
+	return fmt.Errorf(
+		"%w: image=%q already provides %s; drop %q from --plugins, "+
+			"or pick --image=ubuntu/debian to pin a custom %s via the plugin",
+		ErrUsage, ans.Image, conflict, conflict, conflict,
+	)
 }
 
 // applyFlags copies validated CLI-flag values into initAnswers and marks
@@ -995,8 +1029,8 @@ func loadEmbeddedPlugins() (map[string]*plugin.Plugin, error) {
 // defaultImageVersion returns the first listed version for the image,
 // which SupportedImageVersions orders newest-first. ubuntu therefore
 // defaults to 26.04, debian to 13, node to 26-bookworm-slim, python to
-// 3.14-slim-bookworm, go to 1.26-bookworm, rust to 1.95-bookworm, and
-// deno to debian-2.7.14.
+// 3.14-slim-bookworm, golang to 1.26.3-bookworm, rust to
+// 1.95-bookworm, and denoland/deno to debian-2.7.14.
 func defaultImageVersion(image string) string {
 	versions := config.SupportedImageVersions[image]
 	if len(versions) == 0 {

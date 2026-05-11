@@ -174,7 +174,7 @@ func (c *ContainerSpec) validate(a *errAccumulator) {
 			`os / os_version are no longer supported. Replace them with two fields under [container]:`+"\n"+
 				`        image = "`+legacyOs+`"`+"\n"+
 				`        image_version = "`+legacyVersion+`"`+"\n"+
-				`    Other supported images: debian, node, python, go, rust, deno. `+
+				`    Other supported images: debian, node, python, golang, rust, denoland/deno. `+
 				`See CHANGELOG.md for the migration notes.`,
 			"os",
 		)
