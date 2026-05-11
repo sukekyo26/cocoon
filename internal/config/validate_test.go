@@ -11,11 +11,15 @@ import (
 	"github.com/sukekyo26/cocoon/internal/config"
 )
 
-// tomlQuote returns s as a TOML basic-string literal (`"..."` with the
-// same backslash escapes Go's strconv.Quote produces — TOML's basic
-// string accepts the same set: \n \t \r \b \" \\ \uXXXX). Used to embed
-// adversarial test inputs (containing whitespace, quotes, control
-// chars) into a workspace.toml body verbatim.
+// tomlQuote returns s as a TOML basic-string literal (`"..."`) suitable
+// for embedding adversarial test inputs into a workspace.toml body. The
+// callers in this file only feed characters whose Go-style escape from
+// strconv.Quote happens to overlap with TOML basic-string escapes:
+// \n \t \r \\ \" plus printable ASCII passed verbatim. Callers must
+// not pass arbitrary bytes here — strconv.Quote also emits \a, \v, \f
+// and \xNN hex escapes for other control / non-ASCII bytes, none of
+// which TOML basic strings accept, and the resulting body would fail to
+// parse before validate even runs.
 func tomlQuote(s string) string { return strconv.Quote(s) }
 
 // minimalWorkspace returns a TOML string for a syntactically valid workspace
