@@ -8,12 +8,16 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ### 追加
 
+- `cocoon gen` が `[home_files].files` の各エントリをホスト側 (`~/<rel>`) で mode `0600` の空ファイルとして自動 touch するようになった (idempotent — 既存ファイルは触らず、シンボリックリンクは尊重、既存ディレクトリは `rm -rf <path>` を案内するエラーになる)。併せて生成された `devcontainer.json` の `initializeCommand` でも同等の touch が走るので、VS Code「Reopen in Container」ユーザーは `cocoon gen` を介さなくても準備される。これまでファイル不在のまま `docker compose up` すると Docker が bind source を空ディレクトリとして自動作成してしまい、ファイル前提のリーダーが silent failure を起こしていた問題を解消する。
+- `cocoon gen` の終了時に `[home_files]` の各ファイルを `~/<rel>` 形式で列挙する「Host files for [home_files]:」notice を表示。VS Code Dev Containers を経由しない (compose 直叩きの) 開発者が `docker compose up` 前にホスト側のファイル存在を確認できるようにする。
+- `cocoon gen` をコンテナ内 (`/.dockerenv` 存在) で実行し、かつ `[home_files]` が非空の場合に stderr に警告を出す。compose のソースは `${HOME:?…}` 補間なので後から `docker compose up` をホストで実行すれば bind 自体は解決されるが、touch はコンテナ内 HOME に対して走ってしまう点を明示する (gen 自体は続行)。
 - `[container].image` の選択肢を従来の `ubuntu` / `debian` に加えて 5 種の言語ランタイム公式イメージに拡張: `node` (`26-bookworm-slim` / `24-bookworm-slim` / `22-bookworm-slim`)、`python` (`3.14-slim-bookworm` / `3.13-slim-bookworm` / `3.12-slim-bookworm`)、`golang` (`1.26.3-bookworm` / `1.26-bookworm` / `1.25-bookworm` / `1.24-bookworm`)、`rust` (`1.95-bookworm` / `1.94-bookworm` / `1.93-bookworm`)、`denoland/deno` (`debian-2.7.14` / `debian-2.6.10` / `debian-2.5.7`)。すべて Debian (bookworm) ベース。image id は DockerHub の **正式名称** をそのまま記述します (`go` ではなく `golang`、deno は vendor namespace 込みで `denoland/deno`) — workspace.toml だけ見れば FROM 行が一意に決まり、cocoon 側のエイリアス解決は不要。言語ランタイムイメージを選ぶと apt インストール 1 ステップを省ける代わりに FROM レイヤーが少し大きくなります。
 - `cocoon init` のインタラクティブピッカーが 7 種のイメージを提示し、選んだイメージごとの推奨候補がバージョン選択肢として並びます。非対話パスは `--image <id>` / `--image-version <tag>`。
 - `cocoon init` のバージョン選択を、推奨候補を Tab キーで循環できる **1 画面テキスト入力** に変更。候補を Tab で送るか、任意の正しい形式のタグを直接入力できます (例: `golang:1.26.4-bookworm` を新パッチ公開日にすぐ pin)。非対話パス (`--image-version <tag>`) も同様の集合を受理。
 
 ### 変更
 
+- 生成 `docker-compose.yml` の `[home_files]` bind ソースが、`cocoon gen` 実行時の絶対パス展開から `${HOME:?HOME must be set on the host}/<rel>` 形式に変わった。gen を実行した環境と `docker compose up` を実行するホストが異なっていても compose が機能する (両者の `$HOME` が一致している必要が無くなる)。`HOME` 未設定のホストで up したときの failure mode は、サイレントな `/<rel>` 折りたたみではなく明確な shell エラーになる。既存の `.devcontainer/docker-compose.yml` は `cocoon gen` で再生成して新形式に追従させてください。
 - `image_version` の whitelist 厳格チェックを撤廃。Docker タグ文字集合 (英数字・ドット・アンダースコア・ハイフン、スラッシュ / コロン禁止) の形式チェックだけに緩和し、上流レジストリが公開するパッチ・新マイナーをすぐに pin できるようにしました (例: `golang:1.26.4-bookworm`)。`SupportedImageVersions` は `cocoon init` の推奨候補と `docs/configuration.md` の推奨タグ表に位置づけが変わります。タグがレジストリに実在するかは `docker pull` (ビルド時) に委ねます。
 - **BREAKING**: `[container].os` / `os_version` を `[container].image` / `image_version` にリネームしました。サポート対象が 2 種の Linux ディストロから 7 種のイメージに広がったため「OS」という名前は実態と乖離しています。マイグレーション: `os = "ubuntu"` → `image = "ubuntu"`、`os_version = "26.04"` → `image_version = "26.04"`。旧キーを残した `workspace.toml` を読み込ませると validator がリライト例入りの fail-fast エラーを出すので、ファイル単位で 1 回の置換で済みます。
 - **BREAKING**: `cocoon init` の `--os` / `--os-version` フラグを `--image` / `--image-version` にリネーム。旧フラグの alias は提供しないので、CI で旧フラグを固定指定している箇所は置換が必要です。

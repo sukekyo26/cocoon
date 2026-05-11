@@ -400,6 +400,13 @@ Files persisted via per-file bind mounts. Each path is relative to `~/` (no lead
 files = [".gitconfig", ".claude.json"]
 ```
 
+**How the host file is prepared.** The generated `docker-compose.yml` references the host source as `${HOME:?HOME must be set on the host}/<rel>`, so the bind path is resolved at `docker compose up` time on whichever host the user actually runs it from (the gen environment and the up environment can differ). To avoid Docker auto-creating the bind source as an empty directory when the file is missing, two safeguards `touch` the file on the host with mode `0600`:
+
+- `cocoon gen` itself touches each entry under `~/` (idempotent — existing files are left untouched, existing directories are surfaced as an error pointing at `rm -rf <path>` for recovery, symlinks are trusted as-is).
+- The generated `devcontainer.json` runs the same `touch` via its `initializeCommand`, so VS Code "Reopen in Container" users do not need to invoke `cocoon gen` separately.
+
+**Running `cocoon gen` inside a container.** If `/.dockerenv` is detected, `cocoon gen` emits a warning to stderr and still proceeds — the compose source is `${HOME:?…}` so the file does resolve correctly when `docker compose up` is later invoked from the host, but the host-side `touch` will have run inside the inner container, not on the Docker host. Run `cocoon gen` on the host before `docker compose up` to actually create the host files.
+
 ---
 
 ## `[locale]`
