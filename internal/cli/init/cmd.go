@@ -25,7 +25,7 @@ import (
 const initLong = `cocoon init — generate workspace.toml in the current directory
 
 Asks (when running interactively) for the container service name, the
-inside-the-container username, the base OS / version, the mount range,
+inside-the-container username, the base image / version, the mount range,
 whether to emit .devcontainer/devcontainer.json, and which categories
 of common apt packages to install. service_name and username have no
 default — you must type them — because cocoon refuses to bake either
@@ -40,7 +40,7 @@ that caused the cursor indicator to stay pinned while options
 scrolled under it.)
 
 Use --yes plus --service-name / --username (both required when --yes
-is set) and any of --os / --os-version / --shell / --mount-root /
+is set) and any of --image / --image-version / --shell / --mount-root /
 --devcontainer / --apt-categories / --plugins / --alias-bundles to drive
 non-interactively from CI.`
 
@@ -66,8 +66,9 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 	cmd.Flags().BoolVar(&flags.AutoYes, "yes", false, "skip optional prompts; --service-name and --username then required")
 	cmd.Flags().StringVar(&flags.ServiceName, "service-name", "", "compose service name (required with --yes)")
 	cmd.Flags().StringVar(&flags.Username, "username", "", "in-container user (required with --yes)")
-	cmd.Flags().StringVar(&flags.OS, "os", "", fmt.Sprintf("base OS: %s", strings.Join(config.SupportedOSes, ", ")))
-	cmd.Flags().StringVar(&flags.OSVersion, "os-version", "", "base OS version (must match --os)")
+	cmd.Flags().StringVar(&flags.Image, "image", "",
+		fmt.Sprintf("base image: %s", strings.Join(config.SupportedImages, ", ")))
+	cmd.Flags().StringVar(&flags.ImageVersion, "image-version", "", "base image version/tag (must match --image)")
 	cmd.Flags().StringVar(&flags.Shell, "shell", "",
 		fmt.Sprintf("container login shell: %s (default: bash)", strings.Join(config.SupportedShells, ", ")))
 	cmd.Flags().StringVar(&flags.MountRoot, "mount-root", "", `mount range: "." (cwd, default) or ".." (parent)`)
@@ -109,8 +110,8 @@ type initFlags struct {
 	AutoYes        bool
 	ServiceName    string
 	Username       string
-	OS             string
-	OSVersion      string
+	Image          string
+	ImageVersion   string
 	Shell          string
 	MountRoot      string
 	Devcontainer   bool
@@ -129,8 +130,8 @@ func zeroFlags() initFlags {
 		AutoYes:        false,
 		ServiceName:    "",
 		Username:       "",
-		OS:             "",
-		OSVersion:      "",
+		Image:          "",
+		ImageVersion:   "",
 		Shell:          "",
 		MountRoot:      "",
 		Devcontainer:   false,
@@ -153,10 +154,10 @@ func zeroFlags() initFlags {
 type initAnswers struct {
 	ServiceName       string
 	Username          string
-	OS                string
-	OSSet             bool
-	OSVersion         string
-	OSVersionSet      bool
+	Image             string
+	ImageSet          bool
+	ImageVersion      string
+	ImageVersionSet   bool
 	Shell             string
 	ShellSet          bool
 	MountRoot         string
@@ -179,10 +180,10 @@ func zeroAnswers() initAnswers {
 	return initAnswers{
 		ServiceName:       "",
 		Username:          "",
-		OS:                "",
-		OSSet:             false,
-		OSVersion:         "",
-		OSVersionSet:      false,
+		Image:             "",
+		ImageSet:          false,
+		ImageVersion:      "",
+		ImageVersionSet:   false,
 		Shell:             "",
 		ShellSet:          false,
 		MountRoot:         "",
@@ -235,8 +236,8 @@ func runInit(cmd *cobra.Command, stdout, _ io.Writer, flags *initFlags) error {
 	content := renderWorkspaceToml(containerSpec{
 		ServiceName:    ans.ServiceName,
 		Username:       ans.Username,
-		OS:             ans.OS,
-		OSVersion:      ans.OSVersion,
+		Image:          ans.Image,
+		ImageVersion:   ans.ImageVersion,
 		Shell:          ans.Shell,
 		Aliases:        aliases,
 		MountRoot:      ans.MountRoot,
@@ -301,27 +302,27 @@ func applyFlags(flags *initFlags, plugins map[string]*plugin.Plugin) (initAnswer
 		}
 		ans.Username = flags.Username
 	}
-	if flags.OS != "" {
-		if _, ok := config.SupportedOsVersions[flags.OS]; !ok {
-			return ans, fmt.Errorf("%w: --os %q not in %s",
-				ErrUsage, flags.OS, strings.Join(config.SupportedOSes, ", "))
+	if flags.Image != "" {
+		if _, ok := config.SupportedImageVersions[flags.Image]; !ok {
+			return ans, fmt.Errorf("%w: --image %q not in %s",
+				ErrUsage, flags.Image, strings.Join(config.SupportedImages, ", "))
 		}
-		ans.OS, ans.OSSet = flags.OS, true
+		ans.Image, ans.ImageSet = flags.Image, true
 	}
-	if flags.OSVersion != "" {
-		if !versionMatchesOS(flags.OS, flags.OSVersion) {
-			osID := flags.OS
-			if osID == "" {
-				osID = "(unset; pass --os too)"
+	if flags.ImageVersion != "" {
+		if !versionMatchesImage(flags.Image, flags.ImageVersion) {
+			imageID := flags.Image
+			if imageID == "" {
+				imageID = "(unset; pass --image too)"
 			}
-			supported := strings.Join(config.SupportedOsVersions[flags.OS], ", ")
+			supported := strings.Join(config.SupportedImageVersions[flags.Image], ", ")
 			if supported == "" {
-				supported = "(none — set --os first)"
+				supported = "(none — set --image first)"
 			}
-			return ans, fmt.Errorf("%w: --os-version %q not in %s for %s",
-				ErrUsage, flags.OSVersion, supported, osID)
+			return ans, fmt.Errorf("%w: --image-version %q not in %s for %s",
+				ErrUsage, flags.ImageVersion, supported, imageID)
 		}
-		ans.OSVersion, ans.OSVersionSet = flags.OSVersion, true
+		ans.ImageVersion, ans.ImageVersionSet = flags.ImageVersion, true
 	}
 	if flags.Shell != "" {
 		if !slices.Contains(config.SupportedShells, flags.Shell) {
@@ -393,11 +394,11 @@ func applyDefaults(ans initAnswers, plugins map[string]*plugin.Plugin) (initAnsw
 	if ans.Username == "" {
 		return ans, fmt.Errorf("%w: --yes requires --username", ErrUsage)
 	}
-	if !ans.OSSet {
-		ans.OS, ans.OSSet = "ubuntu", true
+	if !ans.ImageSet {
+		ans.Image, ans.ImageSet = "ubuntu", true
 	}
-	if !ans.OSVersionSet {
-		ans.OSVersion, ans.OSVersionSet = defaultOSVersion(ans.OS), true
+	if !ans.ImageVersionSet {
+		ans.ImageVersion, ans.ImageVersionSet = defaultImageVersion(ans.Image), true
 	}
 	if !ans.ShellSet {
 		ans.Shell, ans.ShellSet = "bash", true
@@ -445,26 +446,26 @@ func promptForMissing(ans initAnswers, cat *i18n.Catalog, plugins map[string]*pl
 			return ans, err
 		}
 	}
-	if !ans.OSSet {
-		if ans.OS == "" {
-			ans.OS = "ubuntu"
+	if !ans.ImageSet {
+		if ans.Image == "" {
+			ans.Image = "ubuntu"
 		}
-		if err := runSingleFieldForm(osSelect(cat, &ans.OS)); err != nil {
+		if err := runSingleFieldForm(imageSelect(cat, &ans.Image)); err != nil {
 			return ans, err
 		}
-		ans.OSSet = true
+		ans.ImageSet = true
 	}
-	if !ans.OSVersionSet {
-		// Build the version Select's options from the now-known OS so
+	if !ans.ImageVersionSet {
+		// Build the version Select's options from the now-known image so
 		// no OptionsFunc binding / async evaluation is needed.
-		versions := config.SupportedOsVersions[ans.OS]
-		if ans.OSVersion == "" {
-			ans.OSVersion = defaultOSVersion(ans.OS)
+		versions := config.SupportedImageVersions[ans.Image]
+		if ans.ImageVersion == "" {
+			ans.ImageVersion = defaultImageVersion(ans.Image)
 		}
-		if err := runSingleFieldForm(osVersionSelect(cat, versions, &ans.OSVersion)); err != nil {
+		if err := runSingleFieldForm(imageVersionSelect(cat, versions, &ans.ImageVersion)); err != nil {
 			return ans, err
 		}
-		ans.OSVersionSet = true
+		ans.ImageVersionSet = true
 	}
 	if !ans.ShellSet {
 		ans.Shell = "bash"
@@ -515,8 +516,8 @@ func promptForMissing(ans initAnswers, cat *i18n.Catalog, plugins map[string]*pl
 		}
 		ans.PluginsSet = true
 	}
-	if !versionMatchesOS(ans.OS, ans.OSVersion) {
-		ans.OSVersion = defaultOSVersion(ans.OS)
+	if !versionMatchesImage(ans.Image, ans.ImageVersion) {
+		ans.ImageVersion = defaultImageVersion(ans.Image)
 	}
 	return ans, nil
 }
@@ -567,12 +568,14 @@ func runStrictIdentForm(cat *i18n.Catalog, titleKey, descKey, charsKey string,
 	return runSingleFieldForm(identInput(cat, titleKey, descKey, charsKey, pattern, target))
 }
 
-// versionMatchesOS reports whether the given version is in the
-// supported set for the given OS. Used by applyFlags to validate the
-// --os-version + --os pair, and by promptForMissing as a final
-// sanity check against stale combinations.
-func versionMatchesOS(osID, version string) bool {
-	for _, v := range config.SupportedOsVersions[osID] {
+// versionMatchesImage reports whether the given version is in the
+// supported set for the given image. Used by applyFlags to validate the
+// --image-version + --image pair, and by promptForMissing as a final
+// sanity check against stale combinations (e.g. the user picked node but
+// then never moved past the image-version prompt, leaving a debian-shaped
+// version string in ans).
+func versionMatchesImage(image, version string) bool {
+	for _, v := range config.SupportedImageVersions[image] {
 		if v == version {
 			return true
 		}
@@ -595,21 +598,21 @@ func identInput(cat *i18n.Catalog, titleKey, descKey, charsKey string,
 // breaks when the title+description wraps to two lines (cursor stuck
 // under a scrolling viewport).
 
-func osSelect(cat *i18n.Catalog, target *string) *huh.Select[string] {
-	options := make([]huh.Option[string], len(config.SupportedOSes))
-	for i, id := range config.SupportedOSes {
+func imageSelect(cat *i18n.Catalog, target *string) *huh.Select[string] {
+	options := make([]huh.Option[string], len(config.SupportedImages))
+	for i, id := range config.SupportedImages {
 		options[i] = huh.NewOption(id, id)
 	}
 	return huh.NewSelect[string]().
-		Title(cat.Msg("init_prompt_os")).
-		Description(cat.Msg("init_desc_os")).
+		Title(cat.Msg("init_prompt_image")).
+		Description(cat.Msg("init_desc_image")).
 		Options(options...).
 		Value(target)
 }
 
-func osVersionSelect(cat *i18n.Catalog, versions []string, target *string) *huh.Select[string] {
-	// Static Title / Description / Options. The OS is already known by
-	// the time this form is built (the OS picker ran in a prior form),
+func imageVersionSelect(cat *i18n.Catalog, versions []string, target *string) *huh.Select[string] {
+	// Static Title / Description / Options. The image is already known by
+	// the time this form is built (the image picker ran in a prior form),
 	// so we have the version list up front and never need OptionsFunc.
 	// Avoiding OptionsFunc avoids huh's WindowSize-vs-async-eval race
 	// that was shrinking the viewport below the option count and
@@ -620,8 +623,8 @@ func osVersionSelect(cat *i18n.Catalog, versions []string, target *string) *huh.
 		options[i] = huh.NewOption(v, v)
 	}
 	return huh.NewSelect[string]().
-		Title(cat.Msg("init_prompt_os_version_static")).
-		Description(cat.Msg("init_desc_os_version_static")).
+		Title(cat.Msg("init_prompt_image_version_static")).
+		Description(cat.Msg("init_desc_image_version_static")).
 		Options(options...).
 		Value(target)
 }
@@ -952,11 +955,13 @@ func loadEmbeddedPlugins() (map[string]*plugin.Plugin, error) {
 	return out, nil
 }
 
-// defaultOSVersion returns the first listed version for the OS, which
-// SupportedOsVersions orders newest-first. ubuntu therefore defaults to
-// 26.04, debian to 13.
-func defaultOSVersion(osID string) string {
-	versions := config.SupportedOsVersions[osID]
+// defaultImageVersion returns the first listed version for the image,
+// which SupportedImageVersions orders newest-first. ubuntu therefore
+// defaults to 26.04, debian to 13, node to 26-bookworm-slim, python to
+// 3.14-slim-bookworm, go to 1.26-bookworm, rust to 1.95-bookworm, and
+// deno to debian-2.7.14.
+func defaultImageVersion(image string) string {
+	versions := config.SupportedImageVersions[image]
 	if len(versions) == 0 {
 		return ""
 	}
@@ -966,8 +971,8 @@ func defaultOSVersion(osID string) string {
 type containerSpec struct {
 	ServiceName    string
 	Username       string
-	OS             string
-	OSVersion      string
+	Image          string
+	ImageVersion   string
 	Shell          string
 	Aliases        map[string]string
 	MountRoot      string
@@ -999,8 +1004,8 @@ func renderWorkspaceToml(s containerSpec, cat *i18n.Catalog) string {
 	sb.WriteString("[container]\n")
 	fmt.Fprintf(&sb, "service_name = %q\n", s.ServiceName)
 	fmt.Fprintf(&sb, "username = %q\n", s.Username)
-	fmt.Fprintf(&sb, "os = %q\n", s.OS)
-	fmt.Fprintf(&sb, "os_version = %q\n\n", s.OSVersion)
+	fmt.Fprintf(&sb, "image = %q\n", s.Image)
+	fmt.Fprintf(&sb, "image_version = %q\n\n", s.ImageVersion)
 
 	// Commented-out templates for [container.*] opt-in extras. Grouped
 	// under [container] so a reader scanning the file finds related

@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/sukekyo26/cocoon/internal/aptbase"
+	"github.com/sukekyo26/cocoon/internal/config"
 	"github.com/sukekyo26/cocoon/internal/generate"
 	"github.com/sukekyo26/cocoon/internal/generate/shellrc"
 	"github.com/sukekyo26/cocoon/internal/generate/shellx"
@@ -48,8 +49,8 @@ type Options struct {
 }
 
 type templateData struct {
-	OsImage                string
-	OsVersion              string
+	Image                  string
+	ImageVersion           string
 	AptMirrorRewritePre    string
 	AptProxyConfPre        string
 	CertInstallRoot        string
@@ -80,9 +81,9 @@ type templateData struct {
 //nolint:lll // Dockerfile RUN/echo lines cannot be wrapped without changing semantics.
 var tmpl = tmplx.MustParse("dockerfile", `# syntax=docker/dockerfile:1.7
 # Auto-generated from workspace.toml — do not edit directly.
-ARG OS_IMAGE={{ .OsImage }}
-ARG OS_VERSION={{ .OsVersion }}
-FROM ${OS_IMAGE}:${OS_VERSION}
+ARG IMAGE={{ .Image }}
+ARG IMAGE_VERSION={{ .ImageVersion }}
+FROM ${IMAGE}:${IMAGE_VERSION}
 
 ARG USERNAME
 ARG UID
@@ -281,8 +282,8 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 	}
 
 	data := templateData{
-		OsImage:                ctx.WS.Container.Os,
-		OsVersion:              ctx.WS.Container.OsVersion,
+		Image:                  config.ResolveImageRegistry(ctx.WS.Container.Image),
+		ImageVersion:           ctx.WS.Container.ImageVersion,
 		AptMirrorRewritePre:    mirrorRewritePre,
 		AptProxyConfPre:        proxyConfPre,
 		CertInstallRoot:        certInstallRoot,
@@ -478,7 +479,7 @@ func buildAptMirrorRewrite(ctx *generate.WorkspaceContext) string {
 	if url == "" {
 		return ""
 	}
-	originHosts := aptMirrorOriginHosts(ctx.WS.Container.Os)
+	originHosts := aptMirrorOriginHosts(ctx.WS.Container.Image)
 	var sedLines strings.Builder
 	for _, host := range originHosts {
 		sedLines.WriteString("    -e 's|" + host + "|" + url + "|g' \\\n")
@@ -491,8 +492,12 @@ func buildAptMirrorRewrite(ctx *generate.WorkspaceContext) string {
 
 // aptMirrorOriginHosts returns the set of upstream archive URL prefixes the
 // generator rewrites when [apt.mirror].url is set. Ubuntu and Debian publish
-// from disjoint hosts; the list is keyed off [container].os so a Debian build
-// does not emit useless Ubuntu sed expressions (and vice versa).
+// from disjoint hosts; the list is keyed off [container].image so a Debian
+// build does not emit useless Ubuntu sed expressions (and vice versa).
+//
+// Only "ubuntu" maps to the Ubuntu archive hosts; every other supported
+// image (debian, node, python, go, rust, deno) is Debian-based and uses
+// deb.debian.org regardless of which language-runtime layer sits on top.
 //
 // Order matters. The slice is consumed top-down by sed -e expressions, and
 // each expression sees the line as already-rewritten by every earlier one.
@@ -502,19 +507,17 @@ func buildAptMirrorRewrite(ctx *generate.WorkspaceContext) string {
 // nonsensical "<mirror>-security" tail. The Ubuntu entries do not overlap
 // (different hostnames), but they are listed longest-first too so that the
 // invariant "more specific patterns precede their prefixes" stays uniform.
-func aptMirrorOriginHosts(osID string) []string {
-	switch osID {
-	case "debian":
-		return []string{
-			"http://deb.debian.org/debian-security",
-			"http://deb.debian.org/debian",
-		}
-	default:
+func aptMirrorOriginHosts(image string) []string {
+	if image == "ubuntu" {
 		return []string{
 			"http://archive.ubuntu.com/ubuntu/",
 			"http://security.ubuntu.com/ubuntu/",
 			"http://ports.ubuntu.com/ubuntu-ports/",
 		}
+	}
+	return []string{
+		"http://deb.debian.org/debian-security",
+		"http://deb.debian.org/debian",
 	}
 }
 

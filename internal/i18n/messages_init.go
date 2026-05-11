@@ -20,12 +20,12 @@ var messagesEN_init = map[string]string{
 	"init_desc_username":                "In-container user account (e.g. \"dev\").",
 	"init_err_username_fmt":             "must start with a lowercase letter or _; only lowercase letters, digits, _ and - allowed",
 	"init_err_required":                 "required — please enter a value",
-	"init_prompt_os":                    "Base OS",
-	"init_desc_os":                      "Linux distribution that backs the container image (FROM <os>:<os_version>).",
-	"init_prompt_os_version":            "%s version",
-	"init_desc_os_version":              "Pulled as FROM %s:<version> in the generated Dockerfile.",
-	"init_prompt_os_version_static":     "OS version",
-	"init_desc_os_version_static":       "Pulled as FROM <os>:<version> in the generated Dockerfile.",
+	"init_prompt_image":                 "Base image",
+	"init_desc_image":                   "Container base image. Pick ubuntu/debian for plain Linux, or a language-runtime image (node, python, go, rust, deno) to skip an apt install step. Note: picking go or rust here disables the matching cocoon plugin (no double-install).",
+	"init_prompt_image_version":         "%s version",
+	"init_desc_image_version":           "Pulled as FROM %s:<version> in the generated Dockerfile.",
+	"init_prompt_image_version_static":  "Image version",
+	"init_desc_image_version_static":    "Pulled as FROM <image>:<version> in the generated Dockerfile.",
 	"init_prompt_shell":                 "Login shell",
 	"init_desc_shell":                   "Container login shell. bash is the cocoon default; zsh / fish drive shellrc generation differently.",
 	"init_prompt_mount_root":            "Mount range",
@@ -55,7 +55,8 @@ var messagesEN_init = map[string]string{
 		"#   devcontainer: emit .devcontainer/devcontainer.json for VS Code Reopen-in-Container.",
 	"init_toml_section_container": "# [container] — image identity.\n" +
 		"#   service_name: docker-compose `services:` <key>. Used by `docker compose exec <name>`.\n" +
-		"#   username / os / os_version: in-container account and FROM <os>:<os_version>.",
+		"#   username / image / image_version: in-container account and FROM <image>:<image_version>.\n" +
+		"#   image candidates: ubuntu, debian, node, python, go, rust, deno (deno resolves to denoland/deno).",
 	"init_toml_section_container_shell": "# [container.shell] — login shell + per-shell rc injection.\n" +
 		"#   default: bash | zsh | fish. The generator picks ~/.bashrc / ~/.zshrc / ~/.config/fish/config.fish.\n" +
 		"#   aliases / env: appended to the rc file inside the image at build time.\n" +
@@ -109,12 +110,12 @@ var messagesJA_init = map[string]string{
 	"init_desc_username":                "コンテナ内ユーザーのアカウント名 (例: \"dev\")。",
 	"init_err_username_fmt":             "英小文字または _ で始め、英小文字・数字・_・- のみ使用可です",
 	"init_err_required":                 "必須項目です。値を入力してください",
-	"init_prompt_os":                    "ベース OS",
-	"init_desc_os":                      "コンテナイメージのベース Linux ディストリビューション (FROM <os>:<os_version>)。",
-	"init_prompt_os_version":            "%s のバージョン",
-	"init_desc_os_version":              "生成される Dockerfile の FROM %s:<version> に展開されます。",
-	"init_prompt_os_version_static":     "OS バージョン",
-	"init_desc_os_version_static":       "生成される Dockerfile の FROM <os>:<version> に展開されます。",
+	"init_prompt_image":                 "ベースイメージ",
+	"init_desc_image":                   "コンテナのベースイメージ。Linux のみなら ubuntu/debian を、言語ランタイム入りなら node / python / go / rust / deno を選ぶと apt 1 ステップ省ける。go / rust を選んだ場合は同名の cocoon プラグインが無効化される（二重インストール回避）。",
+	"init_prompt_image_version":         "%s のバージョン",
+	"init_desc_image_version":           "生成される Dockerfile の FROM %s:<version> に展開されます。",
+	"init_prompt_image_version_static":  "イメージのバージョン",
+	"init_desc_image_version_static":    "生成される Dockerfile の FROM <image>:<version> に展開されます。",
 	"init_prompt_shell":                 "ログインシェル",
 	"init_desc_shell":                   "コンテナ内のログインシェル。bash が cocoon のデフォルト。zsh / fish は shellrc 生成が分岐します。",
 	"init_prompt_mount_root":            "マウント範囲",
@@ -144,7 +145,8 @@ var messagesJA_init = map[string]string{
 		"#   devcontainer: VS Code Reopen-in-Container 用の devcontainer.json を生成するか。",
 	"init_toml_section_container": "# [container] — イメージの素性。\n" +
 		"#   service_name: docker-compose の `services:` <キー>。`docker compose exec <名前>` で使う。\n" +
-		"#   username / os / os_version: コンテナ内ユーザー名と FROM <os>:<os_version>。",
+		"#   username / image / image_version: コンテナ内ユーザー名と FROM <image>:<image_version>。\n" +
+		"#   image 候補: ubuntu, debian, node, python, go, rust, deno (deno は denoland/deno に展開)。",
 	"init_toml_section_container_shell": "# [container.shell] — ログインシェル + シェル別 rc 注入。\n" +
 		"#   default: bash | zsh | fish。生成系が ~/.bashrc / ~/.zshrc / ~/.config/fish/config.fish を選ぶ。\n" +
 		"#   aliases / env: イメージビルド時に rc ファイルへ追記される。\n" +

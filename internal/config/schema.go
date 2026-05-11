@@ -72,22 +72,31 @@ func (w *WorkspaceSpec) DevContainerOrDefault() bool {
 	return *w.DevContainer
 }
 
-// ContainerSpec mirrors src/wsd/config.ContainerSpec. Os selects the base
-// distribution ("ubuntu" or "debian"); OsVersion is the distribution-specific
-// version string ("24.04" / "26.04" for Ubuntu; "12" / "13" for Debian).
+// ContainerSpec mirrors src/wsd/config.ContainerSpec. Image selects the base
+// container image ("ubuntu", "debian", "node", "python", "go", "rust" or
+// "deno"); ImageVersion is the image-specific tag string ("26.04" for
+// Ubuntu, "13" for Debian, "26-bookworm-slim" for Node, "3.14-slim-bookworm"
+// for Python, "1.26-bookworm" for Go, "1.95-bookworm" for Rust,
+// "debian-2.7.14" for Deno). The closed sets are defined by SupportedImages
+// and SupportedImageVersions and the Dockerfile generator turns these into
+// the FROM line via ImageRegistryPath (deno maps to denoland/deno; the
+// other six are pulled from library/<image>).
 type ContainerSpec struct {
-	ServiceName string `toml:"service_name"`
-	Username    string `toml:"username"`
-	Os          string `toml:"os"`
-	OsVersion   string `toml:"os_version"`
+	ServiceName  string `toml:"service_name"`
+	Username     string `toml:"username"`
+	Image        string `toml:"image"`
+	ImageVersion string `toml:"image_version"`
 
-	// DeprecatedUbuntuVersion exists solely so a legacy workspace.toml that
-	// still uses `ubuntu_version = "..."` can be detected and rejected with a
-	// migration message. It must not be read or written outside of
-	// validation. Do not feed this value into generators. The `jsonschema:"-"`
-	// tag keeps the legacy field out of schemas/workspace.schema.json so editor
-	// autocomplete does not advertise a key that the validator rejects.
-	DeprecatedUbuntuVersion string `toml:"ubuntu_version,omitempty" jsonschema:"-"`
+	// DeprecatedOs / DeprecatedOsVersion exist solely so a legacy
+	// workspace.toml that still uses `os = "..."` / `os_version = "..."` (the
+	// v0.2.x shape) can be detected and rejected with a migration message
+	// pointing at the new `image` / `image_version` keys. They must not be
+	// read or written outside of validation; do not feed these values into
+	// generators. The `jsonschema:"-"` tag keeps the legacy fields out of
+	// schemas/workspace.schema.json so editor autocomplete does not advertise
+	// keys that the validator rejects.
+	DeprecatedOs        string `toml:"os,omitempty" jsonschema:"-"`
+	DeprecatedOsVersion string `toml:"os_version,omitempty" jsonschema:"-"`
 
 	Resources    *Resources          `toml:"resources,omitempty"`
 	Shell        *ContainerShellSpec `toml:"shell,omitempty"`
@@ -114,12 +123,20 @@ func (c *ContainerSpec) DockerSocketEnabled() bool {
 	return c.DockerSocket != nil && *c.DockerSocket
 }
 
-// SupportedOSes is the closed set of base distributions the generator can
-// build a Dockerfile for. Validation, the interactive picker and the
-// Dockerfile template all key off this list.
+// SupportedImages is the closed set of base container images the generator
+// can build a Dockerfile for. Validation, the interactive picker and the
+// Dockerfile template all key off this list. The seven entries are split into
+// two groups:
+//
+//   - Linux distributions: "ubuntu" / "debian" — the user installs everything
+//     on top via apt and cocoon plugins.
+//   - Language-runtime official images: "node" / "python" / "go" / "rust" /
+//     "deno" — the runtime is pre-installed; cocoon plugins add tools around
+//     it. All five resolve to Debian (bookworm) variants so the apt-based
+//     plugin catalog continues to work.
 //
 //nolint:gochecknoglobals // tabular configuration data, file-scoped by design.
-var SupportedOSes = []string{"ubuntu", "debian"}
+var SupportedImages = []string{"ubuntu", "debian", "node", "python", "go", "rust", "deno"}
 
 // SupportedShells is the closed set of login shells `cocoon init` can pick
 // and that [container.shell].default validates against. The Dockerfile and
@@ -128,15 +145,82 @@ var SupportedOSes = []string{"ubuntu", "debian"}
 //nolint:gochecknoglobals // tabular configuration data, file-scoped by design.
 var SupportedShells = []string{"bash", "zsh", "fish"}
 
-// SupportedOsVersions maps an OS id to the closed set of version values that
-// validation accepts. Keys must match SupportedOSes; the version strings are
-// what users put in `os_version = "..."` and what gets baked into the
-// Dockerfile FROM line (e.g. `FROM debian:12`, `FROM ubuntu:24.04`).
+// SupportedImageVersions maps an image id to the closed set of tag values
+// that validation accepts. Keys must match SupportedImages; the tag strings
+// are what users put in `image_version = "..."` and what gets baked into the
+// Dockerfile FROM line (e.g. `FROM debian:12`, `FROM node:24-bookworm-slim`,
+// `FROM denoland/deno:debian-2.7.14`). The first entry per key is the
+// default `cocoon init` picks when `--image-version` is omitted.
 //
 //nolint:gochecknoglobals // tabular configuration data, file-scoped by design.
-var SupportedOsVersions = map[string][]string{
+var SupportedImageVersions = map[string][]string{
 	"ubuntu": {"26.04", "24.04", "22.04"},
 	"debian": {"13", "12"},
+	"node":   {"26-bookworm-slim", "24-bookworm-slim", "22-bookworm-slim"},
+	"python": {"3.14-slim-bookworm", "3.13-slim-bookworm", "3.12-slim-bookworm"},
+	"go":     {"1.26-bookworm", "1.25-bookworm", "1.24-bookworm"},
+	"rust":   {"1.95-bookworm", "1.94-bookworm", "1.93-bookworm"},
+	"deno":   {"debian-2.7.14", "debian-2.6.10", "debian-2.5.7"},
+}
+
+// ImageRegistryPath maps an image id to the DockerHub registry path used in
+// the Dockerfile FROM line. Entries here override the default `library/<id>`
+// (implicit `docker.io/library/`):
+//
+//   - "go" → "golang" because the Docker official Go image is published as
+//     `library/golang`, not `library/go`. cocoon exposes the friendlier
+//     short id to users while emitting the canonical registry name in the
+//     generated Dockerfile.
+//   - "deno" → "denoland/deno" because deno is a vendor-published image
+//     under the Deno Land namespace rather than the Docker official
+//     `library/` namespace.
+//
+// The remaining five images (ubuntu, debian, node, python, rust) live
+// under `library/<id>` and round-trip verbatim, so they are intentionally
+// absent from this map.
+//
+//nolint:gochecknoglobals // tabular configuration data, file-scoped by design.
+var ImageRegistryPath = map[string]string{
+	"go":   "golang",
+	"deno": "denoland/deno",
+}
+
+// ResolveImageRegistry returns the DockerHub registry path for the given
+// image id. Most images live under the implicit library/ namespace
+// (`docker.io/library/<image>`) and the id is returned verbatim; deno is the
+// only vendor-published image currently shipped and maps to "denoland/deno"
+// via ImageRegistryPath. Callers concatenate the result with
+// ":<image_version>" to build the FROM line and the IMAGE compose-arg.
+func ResolveImageRegistry(image string) string {
+	if path, ok := ImageRegistryPath[image]; ok {
+		return path
+	}
+	return image
+}
+
+// ImageProvidesPlugin marks images that already pre-install a language and
+// must not be combined with the cocoon plugin of the same name. The mapping
+// is image id → conflicting plugin id; validation rejects workspace.toml
+// files that set `image = <key>` AND enable the named plugin so users get a
+// fail-fast error instead of silently wasting docker-build time.
+//
+// Why the listed pairs conflict:
+//
+//   - "go" → "go": the go plugin runs `tar -C /usr/local -xzf go.tar.gz`
+//     which directly overwrites the /usr/local/go directory the golang
+//     base image ships, making the base layer dead weight.
+//   - "rust" → "rust": the rust plugin's PATH = "$HOME/.cargo/bin:$PATH"
+//     prepends the user-local cargo dir ahead of the base image's
+//     /usr/local/cargo/bin, so the base toolchain is shadowed and never
+//     used.
+//
+// The other supported images (ubuntu, debian, node, python, deno) have no
+// matching plugin in the catalog and therefore no conflict to declare here.
+//
+//nolint:gochecknoglobals // tabular configuration data, file-scoped by design.
+var ImageProvidesPlugin = map[string]string{
+	"go":   "go",
+	"rust": "rust",
 }
 
 // SkelEntry mirrors one [[container.skel]] entry. Source is a path relative
