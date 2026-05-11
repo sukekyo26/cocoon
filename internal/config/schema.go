@@ -170,7 +170,7 @@ var SupportedImageVersions = map[string][]string{
 	"debian":        {"13", "12"},
 	"node":          {"26-bookworm-slim", "24-bookworm-slim", "22-bookworm-slim"},
 	"python":        {"3.14-slim-bookworm", "3.13-slim-bookworm", "3.12-slim-bookworm"},
-	"golang":        {"1.26-bookworm", "1.26.3-bookworm", "1.25-bookworm", "1.24-bookworm"},
+	"golang":        {"1.26.3-bookworm", "1.26-bookworm", "1.25-bookworm", "1.24-bookworm"},
 	"rust":          {"1.95-bookworm", "1.94-bookworm", "1.93-bookworm"},
 	"denoland/deno": {"debian-2.7.14", "debian-2.6.10", "debian-2.5.7"},
 }
