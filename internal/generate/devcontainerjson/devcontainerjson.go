@@ -88,7 +88,12 @@ func initializeCommand(ctx *generate.WorkspaceContext) string {
 	}
 	for _, rel := range ctx.HomeFilesEntries() {
 		p := generate.HomeFilesHostPathPrefix + "/" + rel
-		cmds = append(cmds, "mkdir -p $(dirname "+p+") && (umask 077 && touch "+p+")")
+		// umask 077 must wrap both mkdir and touch so the parent dir
+		// (e.g. ~/.gemini for .gemini/oauth_creds.json) inherits 0700,
+		// matching ensureHomeFiles in cli/gen. Otherwise the parent
+		// would be 0755 (default umask) and a 0600 file would sit in
+		// a world-readable dir.
+		cmds = append(cmds, "(umask 077 && mkdir -p $(dirname "+p+") && touch "+p+")")
 	}
 	return strings.Join(cmds, " && ")
 }
