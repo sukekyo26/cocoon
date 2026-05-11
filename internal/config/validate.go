@@ -5,6 +5,7 @@ import (
 	"net"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -36,6 +37,15 @@ var (
 	rxAptSuite     = regexp.MustCompile(`^[a-z][a-z0-9._-]*$`)
 	rxAptComponent = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
 	rxAptArch      = regexp.MustCompile(`^(amd64|arm64|i386|armhf|ppc64el|s390x)$`)
+	// rxImageVersion bounds image_version to characters legal in a Docker
+	// image tag minus the colon and the registry-path slash, both of which
+	// would let a user smuggle a second `<image>:<tag>` segment past the
+	// FROM template and break the generated Dockerfile. Alnum / dot /
+	// underscore / hyphen is enough to express every Docker tag we ship
+	// in SupportedImageVersions and every tag the upstream registries
+	// publish today (e.g. "1.26.3-bookworm", "debian-2.7.14",
+	// "24-bookworm-slim").
+	rxImageVersion = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 )
 
 // portMin and portMax bound ports forwarded into the dev container.
@@ -215,32 +225,40 @@ func validateSkel(a *errAccumulator, entries []SkelEntry) {
 	}
 }
 
-// validateImage checks [container].image against SupportedImages and
-// [container].image_version against the per-image SupportedImageVersions
-// list. Both fields are required: an empty image trips the first branch
-// with an explicit list of allowed values, and an image_version that does
-// not match the picked image's version table emits the allowed-values list
-// inline. Together with the os / os_version legacy check in
-// (*ContainerSpec).validate, this is the only gate that determines which
-// base image the generator may emit.
+// validateImage checks [container].image against the closed SupportedImages
+// set and [container].image_version against rxImageVersion. Both fields are
+// required.
+//
+// image_version is intentionally NOT restricted to SupportedImageVersions —
+// that map is a curated suggestion list (cocoon's picker defaults) but
+// users may pin any patch / new-minor tag the upstream registry publishes
+// (e.g. golang:1.26.4-bookworm) without waiting for a cocoon release. The
+// only constraint is the regex: alnum + dot + underscore + hyphen, which
+// excludes the colon and slash that would let a malformed tag smuggle a
+// second `<image>:<tag>` segment past the FROM template.
 func validateImage(a *errAccumulator, image, imageVersion string) {
 	if image == "" {
 		a.add("image is required and must be one of "+strings.Join(SupportedImages, ", "), "image")
 		return
 	}
-	versions, known := SupportedImageVersions[image]
+	suggestions, known := SupportedImageVersions[image]
 	if !known {
 		a.add("image must be one of "+strings.Join(SupportedImages, ", ")+" (got "+image+")", "image")
 		return
 	}
 	if imageVersion == "" {
-		a.add("image_version is required for image="+image+" (one of "+strings.Join(versions, ", ")+")", "image_version")
+		a.add(
+			"image_version is required for image="+image+
+				" (suggestions: "+strings.Join(suggestions, ", ")+
+				"; any tag matching "+rxImageVersion.String()+" is accepted)",
+			"image_version",
+		)
 		return
 	}
-	if !slices.Contains(versions, imageVersion) {
+	if !rxImageVersion.MatchString(imageVersion) {
 		a.add(
-			"image_version "+imageVersion+" is not supported for image="+image+
-				" (allowed: "+strings.Join(versions, ", ")+")",
+			"image_version "+strconv.Quote(imageVersion)+" does not match "+rxImageVersion.String()+
+				" (use a plain Docker tag, e.g. "+suggestions[0]+")",
 			"image_version",
 		)
 	}

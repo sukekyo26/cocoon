@@ -47,6 +47,11 @@ non-interactively from CI.`
 var (
 	rxServiceName = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
 	rxUsername    = regexp.MustCompile(`^[a-z_][a-z0-9_-]*$`)
+	// rxImageVersionInput mirrors config.validate's rxImageVersion so the
+	// "Other (manual input)" prompt rejects bad input in the form rather
+	// than letting it slip through to `cocoon gen` and surface as a
+	// container.image_version validation error.
+	rxImageVersionInput = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 )
 
 // NewCommand returns the cobra command for ` + "`cocoon init`" + `.
@@ -310,17 +315,15 @@ func applyFlags(flags *initFlags, plugins map[string]*plugin.Plugin) (initAnswer
 		ans.Image, ans.ImageSet = flags.Image, true
 	}
 	if flags.ImageVersion != "" {
-		if !versionMatchesImage(flags.Image, flags.ImageVersion) {
-			imageID := flags.Image
-			if imageID == "" {
-				imageID = "(unset; pass --image too)"
-			}
-			supported := strings.Join(config.SupportedImageVersions[flags.Image], ", ")
-			if supported == "" {
-				supported = "(none — set --image first)"
-			}
-			return ans, fmt.Errorf("%w: --image-version %q not in %s for %s",
-				ErrUsage, flags.ImageVersion, supported, imageID)
+		if flags.Image == "" {
+			return ans, fmt.Errorf(
+				"%w: --image-version %q requires --image (so the registry path is known)",
+				ErrUsage, flags.ImageVersion)
+		}
+		if !rxImageVersionInput.MatchString(flags.ImageVersion) {
+			return ans, fmt.Errorf(
+				"%w: --image-version %q must match %s",
+				ErrUsage, flags.ImageVersion, rxImageVersionInput.String())
 		}
 		ans.ImageVersion, ans.ImageVersionSet = flags.ImageVersion, true
 	}
@@ -457,13 +460,22 @@ func promptForMissing(ans initAnswers, cat *i18n.Catalog, plugins map[string]*pl
 	}
 	if !ans.ImageVersionSet {
 		// Build the version Select's options from the now-known image so
-		// no OptionsFunc binding / async evaluation is needed.
+		// no OptionsFunc binding / async evaluation is needed. The Select
+		// appends an "Other (manual input)" sentinel so users can pin a
+		// patch / new-minor tag the cocoon whitelist has not caught up
+		// with yet (e.g. golang:1.26.4-bookworm the day it ships).
 		versions := config.SupportedImageVersions[ans.Image]
 		if ans.ImageVersion == "" {
 			ans.ImageVersion = defaultImageVersion(ans.Image)
 		}
 		if err := runSingleFieldForm(imageVersionSelect(cat, versions, &ans.ImageVersion)); err != nil {
 			return ans, err
+		}
+		if ans.ImageVersion == imageVersionOtherSentinel {
+			ans.ImageVersion = ""
+			if err := runSingleFieldForm(imageVersionInput(cat, &ans.ImageVersion)); err != nil {
+				return ans, err
+			}
 		}
 		ans.ImageVersionSet = true
 	}
@@ -520,9 +532,6 @@ func promptForMissing(ans initAnswers, cat *i18n.Catalog, plugins map[string]*pl
 			return ans, err
 		}
 		ans.PluginsSet = true
-	}
-	if !versionMatchesImage(ans.Image, ans.ImageVersion) {
-		ans.ImageVersion = defaultImageVersion(ans.Image)
 	}
 	return ans, nil
 }
@@ -596,21 +605,6 @@ func runStrictIdentForm(cat *i18n.Catalog, titleKey, descKey, charsKey string,
 	return runSingleFieldForm(identInput(cat, titleKey, descKey, charsKey, pattern, target))
 }
 
-// versionMatchesImage reports whether the given version is in the
-// supported set for the given image. Used by applyFlags to validate the
-// --image-version + --image pair, and by promptForMissing as a final
-// sanity check against stale combinations (e.g. the user picked node but
-// then never moved past the image-version prompt, leaving a debian-shaped
-// version string in ans).
-func versionMatchesImage(image, version string) bool {
-	for _, v := range config.SupportedImageVersions[image] {
-		if v == version {
-			return true
-		}
-	}
-	return false
-}
-
 func identInput(cat *i18n.Catalog, titleKey, descKey, charsKey string,
 	pattern *regexp.Regexp, target *string,
 ) *huh.Input {
@@ -638,6 +632,15 @@ func imageSelect(cat *i18n.Catalog, target *string) *huh.Select[string] {
 		Value(target)
 }
 
+// imageVersionOtherSentinel is the magic value the image-version Select
+// stores in the answer struct when the user picks "Other (manual input)".
+// promptForMissing checks for this exact string and routes the user into
+// a follow-up huh.Input so they can type any tag the upstream registry
+// publishes. The sentinel is namespaced (slash + colon) to make accidental
+// collision with a real tag impossible — rxImageVersion would reject it
+// even if a registry started shipping that name.
+const imageVersionOtherSentinel = "__cocoon:image_version:other__"
+
 func imageVersionSelect(cat *i18n.Catalog, versions []string, target *string) *huh.Select[string] {
 	// Static Title / Description / Options. The image is already known by
 	// the time this form is built (the image picker ran in a prior form),
@@ -645,15 +648,39 @@ func imageVersionSelect(cat *i18n.Catalog, versions []string, target *string) *h
 	// Avoiding OptionsFunc avoids huh's WindowSize-vs-async-eval race
 	// that was shrinking the viewport below the option count and
 	// turning Down into "scroll the option list" rather than "advance
-	// the cursor".
-	options := make([]huh.Option[string], len(versions))
-	for i, v := range versions {
-		options[i] = huh.NewOption(v, v)
+	// the cursor". An "Other" sentinel is appended so users can pin tags
+	// outside the curated suggestions; promptForMissing handles the
+	// follow-up Input.
+	options := make([]huh.Option[string], 0, len(versions)+1)
+	for _, v := range versions {
+		options = append(options, huh.NewOption(v, v))
 	}
+	options = append(options, huh.NewOption(cat.Msg("init_option_image_version_other"), imageVersionOtherSentinel))
 	return huh.NewSelect[string]().
 		Title(cat.Msg("init_prompt_image_version_static")).
 		Description(cat.Msg("init_desc_image_version_static")).
 		Options(options...).
+		Value(target)
+}
+
+// imageVersionInput is the follow-up text prompt shown when the user
+// picks "Other (manual input)" in imageVersionSelect. The validator
+// mirrors rxImageVersion server-side so users see the rejection right
+// in the form instead of getting a validateImage error later in
+// `cocoon gen`.
+func imageVersionInput(cat *i18n.Catalog, target *string) *huh.Input {
+	return huh.NewInput().
+		Title(cat.Msg("init_prompt_image_version_other")).
+		Description(cat.Msg("init_desc_image_version_other")).
+		Validate(func(s string) error {
+			if s == "" {
+				return errors.New(cat.Msg("init_err_required")) //nolint:err113 // user-facing prompt
+			}
+			if !rxImageVersionInput.MatchString(s) {
+				return errors.New(cat.Msg("init_err_image_version_fmt")) //nolint:err113 // user-facing prompt
+			}
+			return nil
+		}).
 		Value(target)
 }
 

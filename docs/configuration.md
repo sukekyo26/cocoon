@@ -79,20 +79,22 @@ Image identity. `service_name`, `username`, `image`, `image_version` are all req
 | `service_name` | string | `^[a-z][a-z0-9_-]*$` | Compose `services:` key. Used as `docker compose exec <service_name>`. |
 | `username` | string | `^[a-z_][a-z0-9_-]*$` | Linux user created inside the container. |
 | `image` | string | `ubuntu` \| `debian` \| `node` \| `python` \| `go` \| `rust` \| `deno` | Base image for `FROM`. The first two are Linux distributions; the remaining five are language-runtime images from DockerHub (deno resolves to `denoland/deno`, the rest to `library/<image>`). |
-| `image_version` | string | matches the chosen `image` (see below) | Image tag (e.g. `26.04`, `24-bookworm-slim`, `1.95-bookworm`, `debian-2.7.14`). |
+| `image_version` | string | plain Docker tag (alnum + `.` + `_` + `-`); no slash or colon | Image tag (e.g. `26.04`, `24-bookworm-slim`, `1.26.3-bookworm`, `debian-2.7.14`). The table below is the curated suggestion list cocoon offers in `cocoon init`; **any well-formed tag the upstream registry publishes is accepted**, so you can pin a patch or new minor (e.g. `1.26.4-bookworm` the day it ships) without waiting for a cocoon release. |
 | `docker_socket` | bool | — | Mount `/var/run/docker.sock` for docker-in-docker. Default `false`. |
 
-**Supported image / version pairs:**
+**Suggested image / version pairs** (not exhaustive — any well-formed tag is accepted):
 
-| `image` | `image_version` | FROM line emitted |
+| `image` | `image_version` (suggestions) | FROM line emitted |
 |---|---|---|
 | `ubuntu` | `26.04`, `24.04`, `22.04` | `FROM ubuntu:<v>` |
 | `debian` | `13`, `12` | `FROM debian:<v>` |
 | `node` | `26-bookworm-slim`, `24-bookworm-slim`, `22-bookworm-slim` | `FROM node:<v>` |
 | `python` | `3.14-slim-bookworm`, `3.13-slim-bookworm`, `3.12-slim-bookworm` | `FROM python:<v>` |
-| `go` | `1.26-bookworm`, `1.25-bookworm`, `1.24-bookworm` | `FROM golang:<v>` (Docker official `library/golang`) |
+| `go` | `1.26-bookworm`, `1.26.3-bookworm`, `1.25-bookworm`, `1.24-bookworm` | `FROM golang:<v>` (Docker official `library/golang`) |
 | `rust` | `1.95-bookworm`, `1.94-bookworm`, `1.93-bookworm` | `FROM rust:<v>` |
 | `deno` | `debian-2.7.14`, `debian-2.6.10`, `debian-2.5.7` | `FROM denoland/deno:<v>` |
+
+`cocoon init` shows these as quick picks; selecting **"Other (manual input)"** at the version prompt lets you type any tag, and `--image-version <tag>` accepts the same set on the non-interactive path. Validation only enforces the tag format (no slash, no colon); whether the tag actually exists in the upstream registry is left to `docker pull` at build time.
 
 Every supported image is Debian-based (bookworm or compatible), so the existing apt-based plugin catalog continues to work regardless of the chosen image.
 

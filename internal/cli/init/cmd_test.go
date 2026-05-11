@@ -214,16 +214,46 @@ func TestApplyFlags_OSVersionWithoutOS(t *testing.T) {
 	}
 }
 
-func TestApplyFlags_OSVersionMismatch(t *testing.T) {
+// TestApplyFlags_ImageVersionBadFormat covers the format-only check that
+// replaces the old whitelist match. Tags with spaces, slashes, or colons
+// must be rejected at the flag layer so the user sees a clear error
+// before `cocoon gen` runs.
+func TestApplyFlags_ImageVersionBadFormat(t *testing.T) {
 	t.Parallel()
 	plugins := loadPluginsForTest(t)
-	_, err := applyFlags(&initFlags{Image: "debian", ImageVersion: "24.04"}, plugins)
-	if !errors.Is(err, ErrUsage) {
-		t.Errorf("ubuntu version on debian should be ErrUsage, got %v", err)
+	for _, bad := range []string{"with space", "ubuntu/22.04", "node:24", "tab\there", ""} {
+		if bad == "" {
+			continue // empty means "flag not set", which is allowed
+		}
+		_, err := applyFlags(&initFlags{Image: "ubuntu", ImageVersion: bad}, plugins)
+		if !errors.Is(err, ErrUsage) {
+			t.Errorf("bad image-version %q should be ErrUsage, got %v", bad, err)
+		}
 	}
 }
 
-func TestApplyFlags_OSVersionValidPair(t *testing.T) {
+// TestApplyFlags_ImageVersionAcceptsOffWhitelist verifies the new behavior:
+// any tag matching rxImageVersionInput is accepted, even when not in
+// SupportedImageVersions. This lets users pin patch tags or new minors
+// (e.g. golang:1.26.4-bookworm) without waiting for a cocoon release.
+func TestApplyFlags_ImageVersionAcceptsOffWhitelist(t *testing.T) {
+	t.Parallel()
+	plugins := loadPluginsForTest(t)
+	// Off-whitelist but well-formed: future Go patch and an oddly-cased
+	// suffix neither cocoon nor the registry necessarily ship today.
+	for _, tag := range []string{"1.26.4-bookworm", "26-bookworm-slim", "edge"} {
+		ans, err := applyFlags(&initFlags{Image: "go", ImageVersion: tag}, plugins)
+		if err != nil {
+			t.Errorf("off-whitelist tag %q should be accepted, got %v", tag, err)
+			continue
+		}
+		if ans.ImageVersion != tag || !ans.ImageVersionSet {
+			t.Errorf("got %+v", ans)
+		}
+	}
+}
+
+func TestApplyFlags_ImageVersionWhitelistedPair(t *testing.T) {
 	t.Parallel()
 	plugins := loadPluginsForTest(t)
 	ans, err := applyFlags(&initFlags{Image: "debian", ImageVersion: "13"}, plugins)
@@ -365,26 +395,6 @@ func TestDefaultOSVersion(t *testing.T) {
 	}
 	if got := defaultImageVersion("alpine"); got != "" {
 		t.Errorf("unknown OS default should be \"\", got %q", got)
-	}
-}
-
-// ---------------------------------------------------------------------
-// versionMatchesImage: catches stale version after OS change in form.
-// ---------------------------------------------------------------------
-
-func TestVersionMatchesOS(t *testing.T) {
-	t.Parallel()
-	if !versionMatchesImage("ubuntu", "24.04") {
-		t.Error("ubuntu 24.04 should match")
-	}
-	if versionMatchesImage("ubuntu", "13") {
-		t.Error("ubuntu 13 should NOT match")
-	}
-	if versionMatchesImage("debian", "24.04") {
-		t.Error("debian 24.04 should NOT match")
-	}
-	if versionMatchesImage("alpine", "any") {
-		t.Error("alpine should not match anything")
 	}
 }
 

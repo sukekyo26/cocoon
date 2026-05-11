@@ -151,11 +151,15 @@ func TestValidate_ImageWhitelist(t *testing.T) {
 	}
 }
 
-// TestValidate_ImageRejected covers the four ways validateImage emits an
-// error: unknown image id, missing version when the image is set, unknown
-// version for a known image, and missing image with a version set. Each
-// case asserts on the message substring users actually see (not on a
+// TestValidate_ImageRejected covers every way validateImage emits an
+// error: unknown image id, missing version when the image is set, badly
+// formatted version (slash, space, colon — anything outside
+// rxImageVersion), and missing image with a version set. Each case
+// asserts on the message substring users actually see (not on a
 // sentinel — validate.go uses FieldError, not exported sentinels).
+//
+// Note: an off-whitelist but well-formed tag (e.g. "1.26.4-bookworm")
+// is intentionally NOT rejected — that's TestValidate_ImageAcceptsOffWhitelist.
 func TestValidate_ImageRejected(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -171,10 +175,22 @@ func TestValidate_ImageRejected(t *testing.T) {
 			mustContain: "image must be one of",
 		},
 		{
-			name:        "image_version_mismatch",
+			name:        "image_version_bad_format_slash",
 			imageLine:   `image = "node"`,
-			versionLine: `image_version = "alpine"`,
-			mustContain: "image_version alpine is not supported for image=node",
+			versionLine: `image_version = "library/node:24"`,
+			mustContain: "does not match",
+		},
+		{
+			name:        "image_version_bad_format_space",
+			imageLine:   `image = "node"`,
+			versionLine: `image_version = "with space"`,
+			mustContain: "does not match",
+		},
+		{
+			name:        "image_version_bad_format_colon",
+			imageLine:   `image = "node"`,
+			versionLine: `image_version = "24:bookworm"`,
+			mustContain: "does not match",
 		},
 		{
 			name:        "image_version_missing",
@@ -200,6 +216,39 @@ func TestValidate_ImageRejected(t *testing.T) {
 			err := loadWS(t, body)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), tc.mustContain)
+		})
+	}
+}
+
+// TestValidate_ImageAcceptsOffWhitelist pins the relaxed behavior: any
+// tag matching rxImageVersion is accepted even when SupportedImageVersions
+// does not list it. That lets users pin patches / new minors the day
+// upstream publishes them, instead of waiting for a cocoon release to
+// extend the whitelist.
+func TestValidate_ImageAcceptsOffWhitelist(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		image   string
+		version string
+	}{
+		{"go", "1.26.4-bookworm"},    // hypothetical future patch
+		{"go", "1.99-bookworm"},      // hypothetical future minor
+		{"node", "27-bookworm-slim"}, // hypothetical future major
+		{"python", "3.15-slim-bookworm"},
+		{"deno", "debian-2.7.99"},
+		{"ubuntu", "27.04"},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.image+"_"+tc.version, func(t *testing.T) {
+			t.Parallel()
+			body := strings.ReplaceAll(
+				strings.ReplaceAll(minimalWorkspace(),
+					`image = "ubuntu"`,
+					`image = "`+tc.image+`"`),
+				`image_version = "24.04"`,
+				`image_version = "`+tc.version+`"`)
+			require.NoError(t, loadWS(t, body))
 		})
 	}
 }

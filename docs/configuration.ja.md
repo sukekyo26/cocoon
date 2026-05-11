@@ -79,20 +79,22 @@ devcontainer = true
 | `service_name` | string | `^[a-z][a-z0-9_-]*$` | Compose の `services:` キー。`docker compose exec <service_name>` で参照される。 |
 | `username` | string | `^[a-z_][a-z0-9_-]*$` | コンテナ内に作成される Linux ユーザー。 |
 | `image` | string | `ubuntu` \| `debian` \| `node` \| `python` \| `go` \| `rust` \| `deno` | ベースイメージ。前 2 つは Linux ディストロ、残り 5 つは DockerHub の言語ランタイム公式イメージ (deno は `denoland/deno`、それ以外は `library/<image>` に展開)。 |
-| `image_version` | string | 選択した `image` に対応する版 (下記) | イメージタグ (例: `26.04` / `24-bookworm-slim` / `1.95-bookworm` / `debian-2.7.14`)。 |
+| `image_version` | string | プレーンな Docker タグ (英数字 + `.` + `_` + `-`、スラッシュやコロン禁止) | イメージタグ (例: `26.04` / `24-bookworm-slim` / `1.26.3-bookworm` / `debian-2.7.14`)。下表は `cocoon init` で提示される推奨候補で、**正しい形式であれば上流レジストリが公開している任意のタグを受理**します。パッチや新マイナーが出た日にすぐ pin できます (例: `1.26.4-bookworm` を cocoon リリースを待たずに使う)。 |
 | `docker_socket` | bool | — | `/var/run/docker.sock` をマウントして docker-in-docker を有効化。デフォルト `false`。 |
 
-**サポートされる image / version の組合せ:**
+**推奨される image / version の組合せ** (固定リストではありません — 正しい形式の任意タグを受理):
 
-| `image` | `image_version` | 生成される FROM 行 |
+| `image` | `image_version` (推奨候補) | 生成される FROM 行 |
 |---|---|---|
 | `ubuntu` | `26.04`, `24.04`, `22.04` | `FROM ubuntu:<v>` |
 | `debian` | `13`, `12` | `FROM debian:<v>` |
 | `node` | `26-bookworm-slim`, `24-bookworm-slim`, `22-bookworm-slim` | `FROM node:<v>` |
 | `python` | `3.14-slim-bookworm`, `3.13-slim-bookworm`, `3.12-slim-bookworm` | `FROM python:<v>` |
-| `go` | `1.26-bookworm`, `1.25-bookworm`, `1.24-bookworm` | `FROM golang:<v>` (Docker official `library/golang`) |
+| `go` | `1.26-bookworm`, `1.26.3-bookworm`, `1.25-bookworm`, `1.24-bookworm` | `FROM golang:<v>` (Docker official `library/golang`) |
 | `rust` | `1.95-bookworm`, `1.94-bookworm`, `1.93-bookworm` | `FROM rust:<v>` |
 | `deno` | `debian-2.7.14`, `debian-2.6.10`, `debian-2.5.7` | `FROM denoland/deno:<v>` |
+
+`cocoon init` ではこれらが候補として並びます。バージョン選択時の **「その他 (手動入力)」** を選ぶと任意タグを入力できます。`--image-version <tag>` も非対話パスで同様に任意タグを受理します。バリデーションはタグの形式 (スラッシュ・コロン禁止) のみチェックし、レジストリ上の実在性は `docker pull` (ビルド時) に委ねます。
 
 すべての候補イメージは Debian (bookworm 系) ベースなので、既存の apt ベースのプラグインカタログがそのまま機能します。
 

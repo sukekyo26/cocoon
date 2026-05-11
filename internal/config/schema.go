@@ -145,12 +145,16 @@ var SupportedImages = []string{"ubuntu", "debian", "node", "python", "go", "rust
 //nolint:gochecknoglobals // tabular configuration data, file-scoped by design.
 var SupportedShells = []string{"bash", "zsh", "fish"}
 
-// SupportedImageVersions maps an image id to the closed set of tag values
-// that validation accepts. Keys must match SupportedImages; the tag strings
-// are what users put in `image_version = "..."` and what gets baked into the
-// Dockerfile FROM line (e.g. `FROM debian:12`, `FROM node:24-bookworm-slim`,
-// `FROM denoland/deno:debian-2.7.14`). The first entry per key is the
-// default `cocoon init` picks when `--image-version` is omitted.
+// SupportedImageVersions maps an image id to the curated tag list cocoon
+// suggests in `cocoon init`'s picker and validates auto-completion against.
+// Unlike SupportedImages, this is **not a closed set** for validation —
+// validateImage accepts any tag that matches rxImageVersion (alnum + dot +
+// underscore + hyphen) so users can pin patch versions or new minors that
+// cocoon has not yet baked into its whitelist (e.g. golang:1.26.4-bookworm
+// the day it ships). Tags in this map appear as quick picks in the
+// interactive flow; an "Other (manual input)" option lets users type any
+// other tag at the prompt. The first entry per key is the default
+// `cocoon init` picks when `--image-version` is omitted.
 //
 //nolint:gochecknoglobals // tabular configuration data, file-scoped by design.
 var SupportedImageVersions = map[string][]string{
@@ -158,7 +162,7 @@ var SupportedImageVersions = map[string][]string{
 	"debian": {"13", "12"},
 	"node":   {"26-bookworm-slim", "24-bookworm-slim", "22-bookworm-slim"},
 	"python": {"3.14-slim-bookworm", "3.13-slim-bookworm", "3.12-slim-bookworm"},
-	"go":     {"1.26-bookworm", "1.25-bookworm", "1.24-bookworm"},
+	"go":     {"1.26-bookworm", "1.26.3-bookworm", "1.25-bookworm", "1.24-bookworm"},
 	"rust":   {"1.95-bookworm", "1.94-bookworm", "1.93-bookworm"},
 	"deno":   {"debian-2.7.14", "debian-2.6.10", "debian-2.5.7"},
 }
