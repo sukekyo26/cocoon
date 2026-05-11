@@ -259,10 +259,10 @@ func TestPortsSpec_Validate_TypeMismatches(t *testing.T) {
 			t.Parallel()
 			ws := &config.Workspace{
 				Container: config.ContainerSpec{
-					ServiceName: "dev",
-					Username:    "developer",
-					Os:          "ubuntu",
-					OsVersion:   "24.04",
+					ServiceName:  "dev",
+					Username:     "developer",
+					Image:        "ubuntu",
+					ImageVersion: "24.04",
 				},
 				Ports: &config.PortsSpec{Forward: tc.forward},
 			}
@@ -441,10 +441,10 @@ func TestPortsSpec_Validate(t *testing.T) {
 			t.Parallel()
 			ws := &config.Workspace{
 				Container: config.ContainerSpec{
-					ServiceName: "dev",
-					Username:    "developer",
-					Os:          "ubuntu",
-					OsVersion:   "24.04",
+					ServiceName:  "dev",
+					Username:     "developer",
+					Image:        "ubuntu",
+					ImageVersion: "24.04",
 				},
 				Ports: &config.PortsSpec{Forward: tc.forward},
 			}

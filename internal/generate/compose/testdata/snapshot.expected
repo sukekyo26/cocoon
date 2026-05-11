@@ -8,8 +8,8 @@ services:
       additional_contexts:
         cocoon_user_certs: "${HOME:?HOME must be set on the host}/.cocoon/certs"
       args:
-        - "OS_IMAGE=${OS_IMAGE}"
-        - "OS_VERSION=${OS_VERSION}"
+        - "IMAGE=${IMAGE}"
+        - "IMAGE_VERSION=${IMAGE_VERSION}"
         - "USERNAME=${USERNAME}"
         - "UID=${UID}"
         - "GID=${GID}"

@@ -17,8 +17,8 @@ func minimalWorkspace() string {
 [container]
 service_name = "dev"
 username = "developer"
-os = "ubuntu"
-os_version = "24.04"
+image = "ubuntu"
+image_version = "24.04"
 
 [plugins]
 enable = []
@@ -43,56 +43,55 @@ func TestValidate_ContainerInvalidServiceName(t *testing.T) {
 	require.Contains(t, v.Errors[0].Message, "service_name does not match")
 }
 
-// TestValidate_LegacyUbuntuVersionRejected pins the migration error message
-// so the rewrite snippet does not silently regress. A workspace.toml that
-// still uses the pre-multi-OS `ubuntu_version = "..."` field must emit a
-// container.ubuntu_version error containing both the new field names
-// (os / os_version) and the value the user had set, so they can copy the
-// snippet straight from the error and re-run setup.
-func TestValidate_LegacyUbuntuVersionRejected(t *testing.T) {
+// TestValidate_LegacyOsRejected pins the migration error message so the
+// rewrite snippet does not silently regress. A workspace.toml that still
+// uses the pre-v0.3 `os = "..." / os_version = "..."` fields must emit a
+// container.os error containing both the new field names (image /
+// image_version) and the original values, so the user can copy the snippet
+// straight from the error and re-run.
+func TestValidate_LegacyOsRejected(t *testing.T) {
 	t.Parallel()
 	body := strings.ReplaceAll(
 		minimalWorkspace(),
+		`image = "ubuntu"
+image_version = "24.04"`,
 		`os = "ubuntu"
 os_version = "24.04"`,
-		`ubuntu_version = "24.04"`,
 	)
 	err := loadWS(t, body)
 	require.Error(t, err)
 	v, ok := config.AsValidationError(err)
 	require.True(t, ok)
-	// Locate the deprecation entry by Loc; relying on Errors[0] would couple
-	// the test to the order in which container.validate emits errors.
 	var got *config.FieldError
 	for i := range v.Errors {
-		if len(v.Errors[i].Loc) > 0 && v.Errors[i].Loc[len(v.Errors[i].Loc)-1] == "ubuntu_version" {
+		if len(v.Errors[i].Loc) > 0 && v.Errors[i].Loc[len(v.Errors[i].Loc)-1] == "os" {
 			got = &v.Errors[i]
 			break
 		}
 	}
-	require.NotNilf(t, got, "no ubuntu_version error in: %v", v.Errors)
+	require.NotNilf(t, got, "no os deprecation error in: %v", v.Errors)
 	for _, want := range []string{
-		"ubuntu_version is no longer supported",
-		`os = "ubuntu"`,
-		`os_version = "24.04"`,
+		"os / os_version are no longer supported",
+		`image = "ubuntu"`,
+		`image_version = "24.04"`,
 	} {
 		require.Containsf(t, got.Message, want, "migration error must contain %q", want)
 	}
 }
 
-// TestValidate_LegacyUbuntuVersionSuppressesOsErrors verifies that when the
-// legacy ubuntu_version field is present (and os/os_version are therefore
-// missing), the migration error is the only container-OS error emitted.
-// Previously validateOs ran unconditionally and stacked "os is required" /
-// "os_version is required" pairs on top of the migration snippet, burying
-// the actionable rewrite the user actually needs.
-func TestValidate_LegacyUbuntuVersionSuppressesOsErrors(t *testing.T) {
+// TestValidate_LegacyOsSuppressesImageErrors verifies that when the legacy
+// `os` / `os_version` fields are present (and image / image_version are
+// therefore missing), the migration error is the only container-image
+// error emitted. Stacking "image is required" / "image_version is required"
+// on top of the migration snippet would bury the actionable rewrite.
+func TestValidate_LegacyOsSuppressesImageErrors(t *testing.T) {
 	t.Parallel()
 	body := strings.ReplaceAll(
 		minimalWorkspace(),
+		`image = "ubuntu"
+image_version = "24.04"`,
 		`os = "ubuntu"
 os_version = "24.04"`,
-		`ubuntu_version = "24.04"`,
 	)
 	err := loadWS(t, body)
 	require.Error(t, err)
@@ -104,8 +103,11 @@ os_version = "24.04"`,
 			continue
 		}
 		last := loc[len(loc)-1]
-		if last == "os" || last == "os_version" {
-			t.Errorf("validateOs error must be suppressed while ubuntu_version is set, got %v: %q", loc, v.Errors[i].Message)
+		if last == "image" && !strings.Contains(v.Errors[i].Message, "no longer supported") {
+			t.Errorf("validateImage error must be suppressed while os/os_version is set, got %v: %q", loc, v.Errors[i].Message)
+		}
+		if last == "image_version" {
+			t.Errorf("validateImage error must be suppressed while os/os_version is set, got %v: %q", loc, v.Errors[i].Message)
 		}
 	}
 }
@@ -117,6 +119,188 @@ func TestValidate_DuplicatePlugins(t *testing.T) {
 	require.Error(t, err)
 	v, _ := config.AsValidationError(err)
 	require.Contains(t, v.Error(), "duplicate")
+}
+
+// TestValidate_ImageWhitelist exercises validateImage across all seven
+// supported images and every entry in their per-image SupportedImageVersions
+// list. The point is two-fold: catch a future SupportedImageVersions edit
+// that desynchronises from validateImage's lookup, and catch a future
+// SupportedImages edit that adds an entry without the corresponding
+// SupportedImageVersions row. The closed set is small enough that exhausting
+// it here costs <1ms but keeps the validator and the whitelist in lockstep.
+func TestValidate_ImageWhitelist(t *testing.T) {
+	t.Parallel()
+	for _, image := range config.SupportedImages {
+		image := image
+		for _, version := range config.SupportedImageVersions[image] {
+			version := version
+			t.Run(image+"/"+version, func(t *testing.T) {
+				t.Parallel()
+				body := strings.ReplaceAll(
+					strings.ReplaceAll(
+						minimalWorkspace(),
+						`image = "ubuntu"`,
+						`image = "`+image+`"`,
+					),
+					`image_version = "24.04"`,
+					`image_version = "`+version+`"`,
+				)
+				require.NoError(t, loadWS(t, body))
+			})
+		}
+	}
+}
+
+// TestValidate_ImageRejected covers the four ways validateImage emits an
+// error: unknown image id, missing version when the image is set, unknown
+// version for a known image, and missing image with a version set. Each
+// case asserts on the message substring users actually see (not on a
+// sentinel — validate.go uses FieldError, not exported sentinels).
+func TestValidate_ImageRejected(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name        string
+		imageLine   string
+		versionLine string
+		mustContain string
+	}{
+		{
+			name:        "unknown_image",
+			imageLine:   `image = "alpine"`,
+			versionLine: `image_version = "3.20"`,
+			mustContain: "image must be one of",
+		},
+		{
+			name:        "image_version_mismatch",
+			imageLine:   `image = "node"`,
+			versionLine: `image_version = "alpine"`,
+			mustContain: "image_version alpine is not supported for image=node",
+		},
+		{
+			name:        "image_version_missing",
+			imageLine:   `image = "node"`,
+			versionLine: `image_version = ""`,
+			mustContain: "image_version is required for image=node",
+		},
+		{
+			name:        "image_missing",
+			imageLine:   `image = ""`,
+			versionLine: `image_version = "26.04"`,
+			mustContain: "image is required",
+		},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			body := strings.ReplaceAll(
+				strings.ReplaceAll(minimalWorkspace(),
+					`image = "ubuntu"`, tc.imageLine),
+				`image_version = "24.04"`, tc.versionLine)
+			err := loadWS(t, body)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.mustContain)
+		})
+	}
+}
+
+// TestValidate_ImagePluginConflict exercises the cross-section check that
+// rejects workspace.toml files combining a language-runtime base image
+// with the matching cocoon plugin. The conflict pairs come from
+// ImageProvidesPlugin (image="go" ↔ plugin "go", image="rust" ↔ plugin
+// "rust"); other combinations (image="python" + uv plugin, image="ubuntu"
+// + go plugin) must remain accepted because they coexist cleanly.
+func TestValidate_ImagePluginConflict(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name        string
+		image       string
+		version     string
+		enable      string
+		wantErr     bool
+		mustContain string
+	}{
+		{
+			name:  "go_image_plus_go_plugin",
+			image: "go", version: "1.26-bookworm",
+			enable:      `["go"]`,
+			wantErr:     true,
+			mustContain: `image = "go" already provides go`,
+		},
+		{
+			name:  "rust_image_plus_rust_plugin",
+			image: "rust", version: "1.95-bookworm",
+			enable:      `["rust"]`,
+			wantErr:     true,
+			mustContain: `image = "rust" already provides rust`,
+		},
+		{
+			name:  "ubuntu_image_plus_go_plugin_ok",
+			image: "ubuntu", version: "24.04",
+			enable:  `["go"]`,
+			wantErr: false,
+		},
+		{
+			name:  "python_image_plus_uv_plugin_ok",
+			image: "python", version: "3.13-slim-bookworm",
+			enable:  `["uv"]`,
+			wantErr: false,
+		},
+		{
+			name:  "go_image_alone_ok",
+			image: "go", version: "1.26-bookworm",
+			enable:  `[]`,
+			wantErr: false,
+		},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			body := strings.ReplaceAll(
+				strings.ReplaceAll(
+					strings.ReplaceAll(minimalWorkspace(),
+						`image = "ubuntu"`,
+						`image = "`+tc.image+`"`),
+					`image_version = "24.04"`,
+					`image_version = "`+tc.version+`"`),
+				"enable = []",
+				"enable = "+tc.enable)
+			err := loadWS(t, body)
+			if tc.wantErr {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tc.mustContain)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+// TestResolveImageRegistry pins the registry-path mapping used by both the
+// Dockerfile FROM line and the .env IMAGE= entry. Every supported image
+// either resolves verbatim (library/<id>) or appears as an explicit
+// ImageRegistryPath override — currently only deno. Adding or removing a
+// vendor-namespaced image is therefore a one-line edit to the map and a
+// matching case here.
+func TestResolveImageRegistry(t *testing.T) {
+	t.Parallel()
+	cases := map[string]string{
+		"ubuntu": "ubuntu",
+		"debian": "debian",
+		"node":   "node",
+		"python": "python",
+		"go":     "golang",
+		"rust":   "rust",
+		"deno":   "denoland/deno",
+	}
+	for image, want := range cases {
+		image, want := image, want
+		t.Run(image, func(t *testing.T) {
+			t.Parallel()
+			require.Equal(t, want, config.ResolveImageRegistry(image))
+		})
+	}
 }
 
 func TestValidate_InvalidEnvKey(t *testing.T) {

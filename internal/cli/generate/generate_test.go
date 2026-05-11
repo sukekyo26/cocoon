@@ -341,8 +341,8 @@ version_capable = false
 	body := `[container]
 service_name = "dev"
 username = "dev"
-os = "ubuntu"
-os_version = "24.04"
+image = "ubuntu"
+image_version = "24.04"
 
 [plugins]
 enable = ["a", "b"]
@@ -364,8 +364,8 @@ func TestRun_MissingPluginsDir(t *testing.T) {
 	body := `[container]
 service_name = "dev"
 username = "dev"
-os = "ubuntu"
-os_version = "24.04"
+image = "ubuntu"
+image_version = "24.04"
 
 [plugins]
 enable = []
@@ -432,8 +432,8 @@ func tomlBase(serviceName, username string, plugins []string) string {
 	b.WriteString("[container]\n")
 	b.WriteString(`service_name = "` + serviceName + "\"\n")
 	b.WriteString(`username = "` + username + "\"\n")
-	b.WriteString("os = \"ubuntu\"\n")
-	b.WriteString("os_version = \"24.04\"\n\n")
+	b.WriteString("image = \"ubuntu\"\n")
+	b.WriteString("image_version = \"24.04\"\n\n")
 	b.WriteString("[plugins]\n")
 	b.WriteString("enable = " + pluginsList.String() + "\n\n")
 	b.WriteString("[ports]\n")

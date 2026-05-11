@@ -19,7 +19,7 @@ func TestGenerate_WithSidecars(t *testing.T) {
 	restart := config.RestartUnlessStopped
 	ws := &config.Workspace{
 		Container: config.ContainerSpec{
-			ServiceName: "dev", Username: "dev", Os: "ubuntu", OsVersion: "24.04",
+			ServiceName: "dev", Username: "dev", Image: "ubuntu", ImageVersion: "24.04",
 		},
 		Plugins: config.PluginsSpec{Enable: []string{}},
 		Services: map[string]config.SidecarService{
@@ -76,7 +76,7 @@ func TestGenerate_WithResources(t *testing.T) {
 	nofileSoft, nofileHard := 4096, 8192
 	ws := &config.Workspace{
 		Container: config.ContainerSpec{
-			ServiceName: "dev", Username: "dev", Os: "ubuntu", OsVersion: "24.04",
+			ServiceName: "dev", Username: "dev", Image: "ubuntu", ImageVersion: "24.04",
 			Resources: &config.Resources{
 				ShmSize:         ptr("2g"),
 				PidsLimit:       &pids,

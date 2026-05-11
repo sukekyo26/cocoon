@@ -10,12 +10,13 @@ devcontainer = false
 
 # [container] — image identity.
 #   service_name: docker-compose `services:` <key>. Used by `docker compose exec <name>`.
-#   username / os / os_version: in-container account and FROM <os>:<os_version>.
+#   username / image / image_version: in-container account and FROM <image>:<image_version>.
+#   image candidates: ubuntu, debian, node, python, go, rust, deno (deno resolves to denoland/deno).
 [container]
 service_name = "dev"
 username = "dev"
-os = "ubuntu"
-os_version = "22.04"
+image = "ubuntu"
+image_version = "22.04"
 
 # [container.resources] — override compose resource defaults (Docker uses unset = unlimited).
 #   Tune shm_size, pids_limit, cpus, memory.

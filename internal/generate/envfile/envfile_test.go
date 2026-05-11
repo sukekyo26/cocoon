@@ -17,10 +17,10 @@ func minimalCtx(projectDir string) *generate.WorkspaceContext {
 		ProjectDir: projectDir,
 		WS: &config.Workspace{
 			Container: config.ContainerSpec{
-				ServiceName: "dev",
-				Username:    "developer",
-				Os:          "ubuntu",
-				OsVersion:   "24.04",
+				ServiceName:  "dev",
+				Username:     "developer",
+				Image:        "ubuntu",
+				ImageVersion: "24.04",
 			},
 		},
 	}

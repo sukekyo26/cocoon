@@ -46,7 +46,7 @@ func TestRunInit_Snapshot(t *testing.T) {
 			golden: "default.workspace.toml",
 			args: []string{
 				"--yes", "--service-name", "dev", "--username", "dev",
-				"--os", "ubuntu", "--os-version", "22.04",
+				"--image", "ubuntu", "--image-version", "22.04",
 				"--mount-root", ".", "--no-devcontainer",
 				"--apt-categories", "text-editors,vcs,utilities,compression,build",
 			},
@@ -59,7 +59,7 @@ func TestRunInit_Snapshot(t *testing.T) {
 			golden: "default-with-certificates.workspace.toml",
 			args: []string{
 				"--yes", "--service-name", "dev", "--username", "dev",
-				"--os", "ubuntu", "--os-version", "22.04",
+				"--image", "ubuntu", "--image-version", "22.04",
 				"--mount-root", ".", "--no-devcontainer", "--certificates",
 				"--apt-categories", "text-editors,vcs,utilities,compression,build",
 			},
@@ -69,7 +69,7 @@ func TestRunInit_Snapshot(t *testing.T) {
 			golden: "plugins-amd64-full.workspace.toml",
 			args: []string{
 				"--yes", "--service-name", "dev", "--username", "dev",
-				"--os", "ubuntu", "--os-version", "22.04",
+				"--image", "ubuntu", "--image-version", "22.04",
 				"--mount-root", ".", "--no-devcontainer",
 				"--apt-categories", "text-editors,vcs,utilities,compression,build",
 				"--plugins",
@@ -87,7 +87,7 @@ func TestRunInit_Snapshot(t *testing.T) {
 			golden: "plugins-arm64-full.workspace.toml",
 			args: []string{
 				"--yes", "--service-name", "dev", "--username", "dev",
-				"--os", "ubuntu", "--os-version", "22.04",
+				"--image", "ubuntu", "--image-version", "22.04",
 				"--mount-root", ".", "--no-devcontainer",
 				"--apt-categories", "text-editors,vcs,utilities,compression,build",
 				"--plugins",
@@ -103,7 +103,7 @@ func TestRunInit_Snapshot(t *testing.T) {
 			golden: "plugins-versions-minimal.workspace.toml",
 			args: []string{
 				"--yes", "--service-name", "dev", "--username", "dev",
-				"--os", "ubuntu", "--os-version", "22.04",
+				"--image", "ubuntu", "--image-version", "22.04",
 				"--mount-root", ".", "--no-devcontainer",
 				"--apt-categories", "text-editors,vcs,utilities,compression,build",
 				"--plugins", "go,uv",

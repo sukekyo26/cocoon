@@ -96,6 +96,72 @@ func TestGenerate_Snapshot(t *testing.T) {
 	}
 }
 
+// TestGenerate_FromLineForEachImage walks every supported base image and
+// verifies the Dockerfile FROM line matches the expected registry path +
+// version pair. The point is to catch a future SupportedImages change
+// (new image, dropped image, renamed deno vendor namespace) that would
+// otherwise only surface as a runtime error during `docker build`.
+//
+// Each case picks the first whitelisted version per image (the same
+// default cocoon init writes) and asserts on the literal ARG IMAGE,
+// ARG IMAGE_VERSION and FROM lines the template emits. deno is the
+// only image whose IMAGE arg differs from the user-facing id; the
+// remaining six are library/ namespace and round-trip verbatim.
+//
+//nolint:paralleltest // mutates ws.Container in each iteration
+func TestGenerate_FromLineForEachImage(t *testing.T) {
+	root := repoRoot(t)
+	wsPath := filepath.Join(root, "tests", "fixtures", "snapshot.workspace.toml")
+	pluginsDir := filepath.Join(root, "internal", "plugin", "catalog")
+
+	for _, image := range config.SupportedImages {
+		image := image
+		version := config.SupportedImageVersions[image][0]
+		wantRegistry := config.ResolveImageRegistry(image)
+		t.Run(image, func(t *testing.T) {
+			ws, err := config.LoadWorkspace(wsPath)
+			if err != nil {
+				t.Fatalf("load workspace: %v", err)
+			}
+			ws.Container.Image = image
+			ws.Container.ImageVersion = version
+
+			var warns bytes.Buffer
+			plugins, err := plugin.LoadEnabled(pluginsDir, ws.Plugins.Enable, &warns)
+			if err != nil {
+				t.Fatalf("load plugins: %v", err)
+			}
+			ctx := &generate.WorkspaceContext{WS: ws, PluginsFS: os.DirFS(pluginsDir), Plugins: plugins, Warnings: &warns}
+			got, err := dockerfile.Generate(ctx, dockerfile.Options{
+				WorkspaceRoot: root, RepoDir: "cocoon",
+				Plugins: plugins, Warnings: &warns,
+			})
+			if err != nil {
+				t.Fatalf("generate: %v", err)
+			}
+			wantArgImage := "ARG IMAGE=" + wantRegistry
+			wantArgVersion := "ARG IMAGE_VERSION=" + version
+			wantFrom := "FROM ${IMAGE}:${IMAGE_VERSION}"
+			for _, want := range []string{wantArgImage, wantArgVersion, wantFrom} {
+				if !strings.Contains(got, want) {
+					t.Errorf("Dockerfile missing %q for image=%s\n--- got (head) ---\n%s",
+						want, image, headLines(got, 10))
+				}
+			}
+		})
+	}
+}
+
+// headLines returns the first n lines of s, suitable for compact error
+// output that does not dump 300 lines of generated Dockerfile.
+func headLines(s string, n int) string {
+	lines := strings.SplitN(s, "\n", n+1)
+	if len(lines) > n {
+		lines = lines[:n]
+	}
+	return strings.Join(lines, "\n")
+}
+
 // TestGenerate_AptMirrorHTTPS_BootstrapsCACerts verifies that an HTTPS
 // [apt.mirror].url injects a ca-certificates pre-install RUN block, placed
 // before the mirror rewrite, so the subsequent apt-get update against the
@@ -186,8 +252,8 @@ func generateDebianWithMirrorURL(t *testing.T, mirrorURL string) string {
 	if ws.Apt == nil || ws.Apt.Mirror == nil {
 		t.Fatalf("snapshot fixture missing [apt.mirror]; this test relies on the fixture's mirror block")
 	}
-	ws.Container.Os = "debian"
-	ws.Container.OsVersion = "12"
+	ws.Container.Image = "debian"
+	ws.Container.ImageVersion = "12"
 	ws.Apt.Mirror.URL = mirrorURL
 
 	var warns bytes.Buffer
