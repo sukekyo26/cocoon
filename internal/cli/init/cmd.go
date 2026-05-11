@@ -589,14 +589,36 @@ func filterPluginIDs(ids []string, excludeID string) []string {
 // runSingleFieldForm wraps a single huh.Field into a one-Group, one-
 // Field Form and runs it. Centralises the ErrUserAborted / generic-
 // failure error wrapping so the call sites stay readable.
+//
+// Every prompt is its own form (see initLong), so Shift+Tab has no
+// previous field to land on. The form keymap below blanks the Prev
+// binding's help text in every field profile so huh's help bar stops
+// advertising a "shift+tab back" affordance that does nothing.
 func runSingleFieldForm(field huh.Field) error {
-	if err := huh.NewForm(huh.NewGroup(field)).Run(); err != nil {
+	if err := huh.NewForm(huh.NewGroup(field)).WithKeyMap(keyMapWithoutPrevHelp()).Run(); err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
 			return fmt.Errorf("%w: aborted", ErrUsage)
 		}
 		return fmt.Errorf("%w: prompt: %w", ErrFailure, err)
 	}
 	return nil
+}
+
+// keyMapWithoutPrevHelp returns huh's default key bindings with the
+// Shift+Tab "back" help text stripped from every field profile. The
+// binding itself still routes through Update so the keystroke remains
+// a no-op rather than a hard error; only its appearance in the help
+// bar is suppressed.
+func keyMapWithoutPrevHelp() *huh.KeyMap {
+	km := huh.NewDefaultKeyMap()
+	km.Confirm.Prev.SetHelp("", "")
+	km.FilePicker.Prev.SetHelp("", "")
+	km.Input.Prev.SetHelp("", "")
+	km.MultiSelect.Prev.SetHelp("", "")
+	km.Note.Prev.SetHelp("", "")
+	km.Select.Prev.SetHelp("", "")
+	km.Text.Prev.SetHelp("", "")
+	return km
 }
 
 // runStrictIdentForm prompts for one required text identifier with a

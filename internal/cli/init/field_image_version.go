@@ -305,9 +305,14 @@ func (*imageVersionField) Skip() bool { return false }
 // height (always false).
 func (*imageVersionField) Zoom() bool { return false }
 
-// KeyBinds returns the bindings huh shows in the help bar.
+// KeyBinds returns the bindings huh shows in the help bar. Prev is
+// intentionally omitted: cocoon runs each prompt as its own
+// single-field huh.Form (see initLong), so Shift+Tab has no previous
+// field to land on and advertising "back" in the help row would be a
+// lie. The Prev keymap is still wired through Update so the binding
+// itself stays consistent with the rest of huh, just not listed.
 func (f *imageVersionField) KeyBinds() []key.Binding {
-	return []key.Binding{f.keymap.Up, f.keymap.Down, f.keymap.Submit, f.keymap.Prev}
+	return []key.Binding{f.keymap.Up, f.keymap.Down, f.keymap.Submit}
 }
 
 // WithTheme injects huh's theme so the field renders styles in sync
