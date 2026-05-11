@@ -17,8 +17,8 @@ const header = "// Auto-generated from workspace.toml — do not edit directly.\
 
 // Generate returns the devcontainer.json body for ctx. HTML escaping is
 // disabled so shell snippets in initializeCommand (e.g. `&&` chains)
-// survive as literals rather than `&&`, matching the
-// package-level "raw UTF-8" promise.
+// survive as the literal `&&` rather than json.Marshal's default
+// `&&`, matching the package-level "raw UTF-8" promise.
 func Generate(ctx *generate.WorkspaceContext) (string, error) {
 	cfg := buildConfig(ctx)
 	var raw bytes.Buffer
