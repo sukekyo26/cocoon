@@ -21,6 +21,7 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ### 変更
 
+- 生成 `devcontainer.json` の `initializeCommand` が `${HOME:?…}` 由来のパスを全て二重引用符で quote し、`dirname --` を使うようになった。これにより `$HOME` がスペースを含むホスト (macOS の `/Users/Jane Doe` 等) で word-split しない。既存の `[certificates]` mkdir ステップと、新規 `[home_files]` touch ステップの両方に適用される。既存の `.devcontainer/devcontainer.json` は `cocoon gen` で再生成してください。
 - 生成 `docker-compose.yml` の `[home_files]` bind ソースが、`cocoon gen` 実行時の絶対パス展開から `${HOME:?HOME must be set on the host}/<rel>` 形式に変わった。gen を実行した環境と `docker compose up` を実行するホストが異なっていても compose が機能する (両者の `$HOME` が一致している必要が無くなる)。`HOME` 未設定のホストで up したときの failure mode は、サイレントな `/<rel>` 折りたたみではなく明確な shell エラーになる。既存の `.devcontainer/docker-compose.yml` は `cocoon gen` で再生成して新形式に追従させてください。
 - `image_version` の whitelist 厳格チェックを撤廃。Docker タグ文字集合 (英数字・ドット・アンダースコア・ハイフン、スラッシュ / コロン禁止) の形式チェックだけに緩和し、上流レジストリが公開するパッチ・新マイナーをすぐに pin できるようにしました (例: `golang:1.26.4-bookworm`)。`SupportedImageVersions` は `cocoon init` の推奨候補と `docs/configuration.md` の推奨タグ表に位置づけが変わります。タグがレジストリに実在するかは `docker pull` (ビルド時) に委ねます。
 - **BREAKING**: `[container].os` / `os_version` を `[container].image` / `image_version` にリネームしました。サポート対象が 2 種の Linux ディストロから 7 種のイメージに広がったため「OS」という名前は実態と乖離しています。マイグレーション: `os = "ubuntu"` → `image = "ubuntu"`、`os_version = "26.04"` → `image_version = "26.04"`。旧キーを残した `workspace.toml` を読み込ませると validator がリライト例入りの fail-fast エラーを出すので、ファイル単位で 1 回の置換で済みます。

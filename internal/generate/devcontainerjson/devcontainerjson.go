@@ -18,7 +18,10 @@ const header = "// Auto-generated from workspace.toml — do not edit directly.\
 // Generate returns the devcontainer.json body for ctx. HTML escaping is
 // disabled so shell snippets in initializeCommand (e.g. `&&` chains)
 // survive as the literal `&&` rather than json.Marshal's default
-// `&&`, matching the package-level "raw UTF-8" promise.
+// `\u0026\u0026` (the encoder's escapeHTML pass rewrites `&`,
+// `<`, `>` to their `\u00XX` JSON escapes for HTML-embedding
+// safety, which we don't need here), matching the package-level
+// "raw UTF-8" promise.
 func Generate(ctx *generate.WorkspaceContext) (string, error) {
 	cfg := buildConfig(ctx)
 	var raw bytes.Buffer
@@ -81,19 +84,26 @@ func buildConfig(ctx *generate.WorkspaceContext) *orderedMap {
 // auto-create them as directories when the file is missing on the host).
 // Returns "" when neither feature is configured, in which case the caller
 // omits the initializeCommand key entirely.
+//
+// Every path that embeds ${HOME:?…} is wrapped in double quotes so a
+// host $HOME containing spaces (e.g. "/Users/Jane Doe" on macOS) does
+// not word-split into two arguments. `dirname --` defends against the
+// theoretical case of a home directory starting with `-`. The per-segment
+// whitelist on home_files entries already rejects shell metacharacters,
+// so quoting plus `--` is the remaining belt-and-suspenders.
 func initializeCommand(ctx *generate.WorkspaceContext) string {
 	var cmds []string
 	if ctx.CertificatesEnabled() {
-		cmds = append(cmds, "mkdir -p "+generate.CertsHostPath)
+		cmds = append(cmds, `mkdir -p "`+generate.CertsHostPath+`"`)
 	}
 	for _, rel := range ctx.HomeFilesEntries() {
-		p := generate.HomeFilesHostPathPrefix + "/" + rel
+		p := `"` + generate.HomeFilesHostPathPrefix + "/" + rel + `"`
 		// umask 077 must wrap both mkdir and touch so the parent dir
 		// (e.g. ~/.gemini for .gemini/oauth_creds.json) inherits 0700,
 		// matching ensureHomeFiles in cli/gen. Otherwise the parent
 		// would be 0755 (default umask) and a 0600 file would sit in
 		// a world-readable dir.
-		cmds = append(cmds, "(umask 077 && mkdir -p $(dirname "+p+") && touch "+p+")")
+		cmds = append(cmds, `(umask 077 && mkdir -p "$(dirname -- `+p+`)" && touch `+p+`)`)
 	}
 	return strings.Join(cmds, " && ")
 }

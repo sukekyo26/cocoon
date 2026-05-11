@@ -213,7 +213,7 @@ enable = true
 					"${HOME:?HOME must be set",
 				}},
 				{path: ".devcontainer/devcontainer.json", mustContain: []string{
-					`"initializeCommand": "mkdir -p ${HOME:?HOME must be set`,
+					`"initializeCommand": "mkdir -p \"${HOME:?HOME must be set`,
 				}},
 			},
 		},

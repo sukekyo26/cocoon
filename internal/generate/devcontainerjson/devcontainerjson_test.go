@@ -93,14 +93,14 @@ func TestGenerateHomeFilesAddsTouchToInitializeCommand(t *testing.T) {
 	}
 	for _, want := range []string{
 		`"initializeCommand"`,
-		`(umask 077 && mkdir -p $(dirname ${HOME:?HOME must be set on the host}/.claude.json) && touch ${HOME:?HOME must be set on the host}/.claude.json)`,
+		`(umask 077 && mkdir -p \"$(dirname -- \"${HOME:?HOME must be set on the host}/.claude.json\")\" && touch \"${HOME:?HOME must be set on the host}/.claude.json\")`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("expected %q in output:\n%s", want, got)
 		}
 	}
 	for _, mustNot := range []string{
-		"mkdir -p ${HOME:?HOME must be set on the host}/.cocoon/certs",
+		`mkdir -p \"${HOME:?HOME must be set on the host}/.cocoon/certs\"`,
 	} {
 		if strings.Contains(got, mustNot) {
 			t.Errorf("home_files-only run must not emit %q:\n%s", mustNot, got)
@@ -126,7 +126,7 @@ func TestGenerateHomeFilesAndCertsMergeInitializeCommand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate: %v", err)
 	}
-	wantLine := `"initializeCommand": "mkdir -p ${HOME:?HOME must be set on the host}/.cocoon/certs && (umask 077 && mkdir -p $(dirname ${HOME:?HOME must be set on the host}/.claude.json) && touch ${HOME:?HOME must be set on the host}/.claude.json) && (umask 077 && mkdir -p $(dirname ${HOME:?HOME must be set on the host}/.gemini/oauth_creds.json) && touch ${HOME:?HOME must be set on the host}/.gemini/oauth_creds.json)"`
+	wantLine := `"initializeCommand": "mkdir -p \"${HOME:?HOME must be set on the host}/.cocoon/certs\" && (umask 077 && mkdir -p \"$(dirname -- \"${HOME:?HOME must be set on the host}/.claude.json\")\" && touch \"${HOME:?HOME must be set on the host}/.claude.json\") && (umask 077 && mkdir -p \"$(dirname -- \"${HOME:?HOME must be set on the host}/.gemini/oauth_creds.json\")\" && touch \"${HOME:?HOME must be set on the host}/.gemini/oauth_creds.json\")"`
 	if !strings.Contains(got, wantLine) {
 		t.Errorf("merged initializeCommand mismatch.\nwant line: %s\n--- got ---\n%s", wantLine, got)
 	}
