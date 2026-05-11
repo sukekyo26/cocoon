@@ -459,23 +459,16 @@ func promptForMissing(ans initAnswers, cat *i18n.Catalog, plugins map[string]*pl
 		ans.ImageSet = true
 	}
 	if !ans.ImageVersionSet {
-		// Build the version Select's options from the now-known image so
-		// no OptionsFunc binding / async evaluation is needed. The Select
-		// appends an "Other (manual input)" sentinel so users can pin a
-		// patch / new-minor tag the cocoon whitelist has not caught up
-		// with yet (e.g. golang:1.26.4-bookworm the day it ships).
+		// Text input with the curated whitelist wired in as Tab-completion
+		// suggestions. Users can press Tab through the recommended tags
+		// or type any other well-formed Docker tag (e.g. the day a new
+		// patch / minor ships) — all on the same screen, no follow-up form.
 		versions := config.SupportedImageVersions[ans.Image]
 		if ans.ImageVersion == "" {
 			ans.ImageVersion = defaultImageVersion(ans.Image)
 		}
-		if err := runSingleFieldForm(imageVersionSelect(cat, versions, &ans.ImageVersion)); err != nil {
+		if err := runSingleFieldForm(imageVersionInput(cat, versions, &ans.ImageVersion)); err != nil {
 			return ans, err
-		}
-		if ans.ImageVersion == imageVersionOtherSentinel {
-			ans.ImageVersion = ""
-			if err := runSingleFieldForm(imageVersionInput(cat, &ans.ImageVersion)); err != nil {
-				return ans, err
-			}
 		}
 		ans.ImageVersionSet = true
 	}
@@ -632,46 +625,18 @@ func imageSelect(cat *i18n.Catalog, target *string) *huh.Select[string] {
 		Value(target)
 }
 
-// imageVersionOtherSentinel is the magic value the image-version Select
-// stores in the answer struct when the user picks "Other (manual input)".
-// promptForMissing checks for this exact string and routes the user into
-// a follow-up huh.Input so they can type any tag the upstream registry
-// publishes. The sentinel is namespaced (slash + colon) to make accidental
-// collision with a real tag impossible — rxImageVersion would reject it
-// even if a registry started shipping that name.
-const imageVersionOtherSentinel = "__cocoon:image_version:other__"
-
-func imageVersionSelect(cat *i18n.Catalog, versions []string, target *string) *huh.Select[string] {
-	// Static Title / Description / Options. The image is already known by
-	// the time this form is built (the image picker ran in a prior form),
-	// so we have the version list up front and never need OptionsFunc.
-	// Avoiding OptionsFunc avoids huh's WindowSize-vs-async-eval race
-	// that was shrinking the viewport below the option count and
-	// turning Down into "scroll the option list" rather than "advance
-	// the cursor". An "Other" sentinel is appended so users can pin tags
-	// outside the curated suggestions; promptForMissing handles the
-	// follow-up Input.
-	options := make([]huh.Option[string], 0, len(versions)+1)
-	for _, v := range versions {
-		options = append(options, huh.NewOption(v, v))
-	}
-	options = append(options, huh.NewOption(cat.Msg("init_option_image_version_other"), imageVersionOtherSentinel))
-	return huh.NewSelect[string]().
+// imageVersionInput is a single-screen text prompt with Tab-completion
+// suggestions sourced from SupportedImageVersions for the chosen image.
+// Users can Tab-cycle through the curated whitelist or type any other
+// well-formed Docker tag the upstream registry publishes (e.g.
+// golang:1.26.4-bookworm the day it ships). The validator mirrors
+// config.rxImageVersion server-side so users see the rejection inline
+// in the form rather than as a validateImage error later in `cocoon gen`.
+func imageVersionInput(cat *i18n.Catalog, suggestions []string, target *string) *huh.Input {
+	return huh.NewInput().
 		Title(cat.Msg("init_prompt_image_version_static")).
 		Description(cat.Msg("init_desc_image_version_static")).
-		Options(options...).
-		Value(target)
-}
-
-// imageVersionInput is the follow-up text prompt shown when the user
-// picks "Other (manual input)" in imageVersionSelect. The validator
-// mirrors rxImageVersion server-side so users see the rejection right
-// in the form instead of getting a validateImage error later in
-// `cocoon gen`.
-func imageVersionInput(cat *i18n.Catalog, target *string) *huh.Input {
-	return huh.NewInput().
-		Title(cat.Msg("init_prompt_image_version_other")).
-		Description(cat.Msg("init_desc_image_version_other")).
+		Suggestions(suggestions).
 		Validate(func(s string) error {
 			if s == "" {
 				return errors.New(cat.Msg("init_err_required")) //nolint:err113 // user-facing prompt

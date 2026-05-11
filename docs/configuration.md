@@ -94,7 +94,7 @@ Image identity. `service_name`, `username`, `image`, `image_version` are all req
 | `rust` | `1.95-bookworm`, `1.94-bookworm`, `1.93-bookworm` | `FROM rust:<v>` |
 | `deno` | `debian-2.7.14`, `debian-2.6.10`, `debian-2.5.7` | `FROM denoland/deno:<v>` |
 
-`cocoon init` shows these as quick picks; selecting **"Other (manual input)"** at the version prompt lets you type any tag, and `--image-version <tag>` accepts the same set on the non-interactive path. Validation only enforces the tag format (no slash, no colon); whether the tag actually exists in the upstream registry is left to `docker pull` at build time.
+`cocoon init` exposes these as **Tab-completion suggestions** on the version input — press Tab to cycle through them or type any other tag directly. `--image-version <tag>` accepts the same set on the non-interactive path. Validation only enforces the tag format (no slash, no colon); whether the tag actually exists in the upstream registry is left to `docker pull` at build time.
 
 Every supported image is Debian-based (bookworm or compatible), so the existing apt-based plugin catalog continues to work regardless of the chosen image.
 

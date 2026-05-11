@@ -10,7 +10,7 @@ cocoon の主要な変更を記録します。フォーマットは
 
 - `[container].image` の選択肢を従来の `ubuntu` / `debian` に加えて 5 種の言語ランタイム公式イメージに拡張: `node` (`26-bookworm-slim` / `24-bookworm-slim` / `22-bookworm-slim`)、`python` (`3.14-slim-bookworm` / `3.13-slim-bookworm` / `3.12-slim-bookworm`)、`go` (`1.26-bookworm` / `1.26.3-bookworm` / `1.25-bookworm` / `1.24-bookworm`)、`rust` (`1.95-bookworm` / `1.94-bookworm` / `1.93-bookworm`)、`deno` (`debian-2.7.14` / `debian-2.6.10` / `debian-2.5.7`)。すべて Debian (bookworm) ベースなので既存の apt ベースのプラグインカタログがそのまま機能します。deno は vendor 公式の `denoland/deno`、他の 4 つは Docker official `library/<image>` に展開されます。言語ランタイムイメージを選ぶと該当言語の apt インストール 1 ステップが省ける代わりに FROM レイヤーが少し大きくなります。
 - `cocoon init` のインタラクティブピッカーが 7 種のイメージを提示し、選んだイメージごとの推奨候補がバージョン選択肢として並びます。非対話パスは `--image <id>` / `--image-version <tag>`。
-- `cocoon init` のバージョン選択画面の末尾に **「その他 (手動入力)」** 項目を追加。選ぶとテキスト入力フォームに切り替わり、上流レジストリが公開している任意タグを入力できます。非対話パス (`--image-version <tag>`) も同様の集合を受理。Go / Node / Python / Rust / Deno の新パッチが出た日に、cocoon のリリースを待たずに pin できます。
+- `cocoon init` のバージョン選択を、推奨候補を Tab キーで循環できる **1 画面テキスト入力** に変更。候補を Tab で送るか、任意の正しい形式のタグを直接入力できます (例: `golang:1.26.4-bookworm` を新パッチ公開日にすぐ pin)。非対話パス (`--image-version <tag>`) も同様の集合を受理。
 
 ### 変更
 

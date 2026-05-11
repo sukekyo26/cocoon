@@ -94,7 +94,7 @@ devcontainer = true
 | `rust` | `1.95-bookworm`, `1.94-bookworm`, `1.93-bookworm` | `FROM rust:<v>` |
 | `deno` | `debian-2.7.14`, `debian-2.6.10`, `debian-2.5.7` | `FROM denoland/deno:<v>` |
 
-`cocoon init` ではこれらが候補として並びます。バージョン選択時の **「その他 (手動入力)」** を選ぶと任意タグを入力できます。`--image-version <tag>` も非対話パスで同様に任意タグを受理します。バリデーションはタグの形式 (スラッシュ・コロン禁止) のみチェックし、レジストリ上の実在性は `docker pull` (ビルド時) に委ねます。
+`cocoon init` ではこれらがバージョン入力欄の **Tab 補完候補** として並びます。Tab キーで循環するか、任意のタグを直接入力できます。`--image-version <tag>` も非対話パスで同様に任意タグを受理します。バリデーションはタグの形式 (スラッシュ・コロン禁止) のみチェックし、レジストリ上の実在性は `docker pull` (ビルド時) に委ねます。
 
 すべての候補イメージは Debian (bookworm 系) ベースなので、既存の apt ベースのプラグインカタログがそのまま機能します。
 
