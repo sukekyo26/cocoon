@@ -40,3 +40,17 @@ markdown / 設定ファイルにサブセクションを挿入する Edit 操作
 ## 4. 内部矛盾の事前チェック
 
 「無効時は X が出ない」と「X は常時設定される」のような相反する文を 1 ファイル内に並べていないか、commit 前に該当ファイルを通読する。`rg` だけでは検出できない、書き換えた段落と離れた段落の意味衝突は読み直しでしか拾えない。
+
+## 5. i18n キーは catalog 定義必須
+
+`cat.Msg("...")` で呼ぶキーが catalog に無いと、`Msg` の fallback でキー名がそのまま UI に出る。commit 前に「呼出キーの集合」と「catalog 定義キーの集合」を差分チェックし、未定義キーをゼロにする。
+
+## 6. ユーザー向け snippet で guessed default 禁止
+
+migration error / placeholder / コピー前提の案内テキストには、**実値か明示プレースホルダ**のみ書く。「もっともらしい default」を埋めると、片方しか設定していないユーザーに不整合な組合せを copy & paste させてしまう。
+
+## 7. 設計変更時は commit 前 rg sweep
+
+設計を変えたら commit 前に旧用語を `rg` 一巡。`just ci` グリーンは弱い信号、旧用語ゼロが強い信号。
+
+対象: docstring / inline コメント / error message / i18n string / test 関数名・失敗メッセージ / docs / CHANGELOG / fixture / workflow yml。
