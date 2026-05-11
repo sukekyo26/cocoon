@@ -96,7 +96,7 @@ devcontainer = true
 
 `cocoon init` ではこれらがバージョン入力欄の **Tab 補完候補** として並びます。Tab キーで循環するか、任意のタグを直接入力できます。`--image-version <tag>` も非対話パスで同様に任意タグを受理します。バリデーションはタグの形式 (スラッシュ・コロン禁止) のみチェックし、レジストリ上の実在性は `docker pull` (ビルド時) に委ねます。
 
-すべての候補イメージは Debian (bookworm 系) ベースなので、既存の apt ベースのプラグインカタログがそのまま機能します。
+すべての候補イメージは apt ベースなので、既存のプラグインカタログがどの image でもそのまま機能します。`ubuntu` は Ubuntu archives (archive.ubuntu.com) を引き、残り 6 つは Debian (bookworm) 系で deb.debian.org を引きます。apt mirror の書き換えはこの違いで分岐 (`internal/generate/dockerfile/dockerfile.go` の `aptMirrorOriginHosts` 参照)。
 
 **image とプラグインの mutually exclusive ルール:** ベースが言語ランタイムを既に提供している場合、同名の cocoon プラグインを併用すると、プラグインがベースを上書き (go) もしくは PATH で覆い隠す (rust) ため、validation で reject します。`[plugins].enable` から外すか、`image = "ubuntu" / "debian"` に切り替えて `[plugins.versions]` でバージョン固定してください。
 

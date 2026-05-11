@@ -257,8 +257,8 @@ func TestGenerate_AptMirrorDebian_LongerPatternFirst(t *testing.T) {
 }
 
 // generateDebianWithMirrorURL is generateWithMirrorURL but switches the
-// fixture to os = "debian" / os_version = "12" before generating, so the
-// rewrite block emits the Debian host set.
+// fixture to image = "debian" / image_version = "12" before generating,
+// so the rewrite block emits the Debian host set.
 func generateDebianWithMirrorURL(t *testing.T, mirrorURL string) string {
 	t.Helper()
 

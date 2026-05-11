@@ -162,13 +162,20 @@ func (c *ContainerSpec) validate(a *errAccumulator) {
 		// "image_version is required" pair on the same field — noise that
 		// buries the actionable snippet. Skip the image check until the legacy
 		// fields are gone; on the next run validateImage will fire normally.
+		//
+		// Echo only what was actually present in the legacy fields. Filling
+		// in a guessed default (e.g. "ubuntu" for missing `os`, "26.04" for
+		// missing `os_version`) would produce a copy/pasteable snippet
+		// that's wrong half the time — `image = "ubuntu"` paired with a
+		// Debian-shaped version, or vice versa. A placeholder makes the
+		// user fill in the missing half themselves.
 		legacyOs := c.DeprecatedOs
 		if legacyOs == "" {
-			legacyOs = "ubuntu"
+			legacyOs = "<fill in: ubuntu | debian | node | python | golang | rust | denoland/deno>"
 		}
 		legacyVersion := c.DeprecatedOsVersion
 		if legacyVersion == "" {
-			legacyVersion = "26.04"
+			legacyVersion = "<fill in: see docs/configuration.md for the suggestion list>"
 		}
 		a.add(
 			`os / os_version are no longer supported. Replace them with two fields under [container]:`+"\n"+

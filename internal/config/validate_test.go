@@ -132,7 +132,15 @@ func TestValidate_ImageWhitelist(t *testing.T) {
 	t.Parallel()
 	for _, image := range config.SupportedImages {
 		image := image
-		for _, version := range config.SupportedImageVersions[image] {
+		// Assert the SupportedImageVersions row exists and is non-empty
+		// *before* iterating it. A bare `for _, v := range nil` would
+		// silently iterate zero times and let the test pass even when
+		// SupportedImages and SupportedImageVersions go out of sync —
+		// exactly the desync this test exists to catch.
+		versions, hit := config.SupportedImageVersions[image]
+		require.Truef(t, hit, "SupportedImageVersions has no row for image %q", image)
+		require.NotEmptyf(t, versions, "SupportedImageVersions[%q] is empty", image)
+		for _, version := range versions {
 			version := version
 			t.Run(image+"/"+version, func(t *testing.T) {
 				t.Parallel()

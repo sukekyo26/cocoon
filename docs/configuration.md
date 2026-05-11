@@ -96,7 +96,7 @@ Image identity. `service_name`, `username`, `image`, `image_version` are all req
 
 `cocoon init` exposes these as **Tab-completion suggestions** on the version input — press Tab to cycle through them or type any other tag directly. `--image-version <tag>` accepts the same set on the non-interactive path. Validation only enforces the tag format (no slash, no colon); whether the tag actually exists in the upstream registry is left to `docker pull` at build time.
 
-Every supported image is Debian-based (bookworm or compatible), so the existing apt-based plugin catalog continues to work regardless of the chosen image.
+Every supported image is apt-based, so the existing plugin catalog works the same across all of them. `ubuntu` pulls from Ubuntu archives (archive.ubuntu.com); the other six are Debian (bookworm) variants and pull from deb.debian.org. apt-mirror rewriting branches on this in `aptMirrorOriginHosts` (see `internal/generate/dockerfile/dockerfile.go`).
 
 **Image vs plugin (mutually exclusive pairs):** picking a language-runtime image that overlaps with an existing cocoon plugin is rejected at validation time, because the plugin would either overwrite the base layer (go) or shadow it on `$PATH` (rust). Either drop the plugin from `[plugins].enable`, or switch back to `image = "ubuntu" / "debian"` and pin the version via `[plugins.versions]`.
 
