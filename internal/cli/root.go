@@ -3,7 +3,9 @@ package cli
 import (
 	"fmt"
 	"io"
+	"os"
 
+	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 
 	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
@@ -11,6 +13,9 @@ import (
 	initcli "github.com/sukekyo26/cocoon/internal/cli/init"
 	plugincli "github.com/sukekyo26/cocoon/internal/cli/plugin"
 	selfupdatecli "github.com/sukekyo26/cocoon/internal/cli/selfupdate"
+	"github.com/sukekyo26/cocoon/internal/logx"
+	"github.com/sukekyo26/cocoon/internal/updatecheck"
+	"github.com/sukekyo26/cocoon/internal/version"
 )
 
 const rootLong = `cocoon — project-aware container workspace generator
@@ -45,6 +50,9 @@ func newRootCommand(version string, stdout, stderr io.Writer) *cobra.Command {
 		Args:          cobra.ArbitraryArgs, // RunE handles unknown args explicitly.
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		PersistentPreRun: func(cmd *cobra.Command, _ []string) {
+			maybeNotifyUpdate(cmd, stderr)
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
 				return cmd.Help() //nolint:wrapcheck // top-level help write error is descriptive
@@ -87,6 +95,42 @@ func addLeafHelpAlias(c *cobra.Command) {
 		}
 		clihelpers.AttachHelpAlias(child)
 	}
+}
+
+// maybeNotifyUpdate runs the once-per-day update check unless an opt-out
+// applies. Failures (network down, malformed cache, missing $HOME) are
+// silent so the notifier never interferes with the user's invocation.
+func maybeNotifyUpdate(cmd *cobra.Command, stderr io.Writer) {
+	if shouldSkipUpdateCheck(cmd, stderr) {
+		return
+	}
+	notice := updatecheck.Check(cmd.Context(), version.Get(), updatecheck.Options{
+		Now:        nil,
+		CacheDir:   "",
+		HTTPClient: nil,
+	})
+	if notice == nil {
+		return
+	}
+	logx.New(io.Discard, stderr).Notice(notice.Format())
+}
+
+func shouldSkipUpdateCheck(cmd *cobra.Command, stderr io.Writer) bool {
+	if os.Getenv("COCOON_NO_UPDATE_CHECK") == "1" {
+		return true
+	}
+	switch cmd.Name() {
+	case "version", "self-update", "help":
+		return true
+	}
+	// stderr must be an *os.File pointing at a terminal; otherwise the
+	// caller is piping output to a file/pipe/CI log and a notice would be
+	// noise. Buffers and io.Discard are not *os.File so they always skip.
+	f, ok := stderr.(*os.File)
+	if !ok {
+		return true
+	}
+	return !isatty.IsTerminal(f.Fd())
 }
 
 // newVersionSubcommand mirrors the bare positional `cocoon version`

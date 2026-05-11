@@ -10,6 +10,22 @@
 # compatible with both pre-0.14 and 0.14+ asset naming.
 set -euo pipefail
 
+# Color output (yellow WARNING, red ERROR) when stderr is a TTY (and
+# NO_COLOR is unset) or FORCE_COLOR is set. NO_COLOR wins per no-color.org.
+if [ -n "${NO_COLOR:-}" ]; then
+  C_YEL=''
+  C_RED=''
+  C_RST=''
+elif [ -n "${FORCE_COLOR:-}" ] || [ -t 2 ]; then
+  C_YEL=$'\033[33m'
+  C_RED=$'\033[31m'
+  C_RST=$'\033[0m'
+else
+  C_YEL=''
+  C_RED=''
+  C_RST=''
+fi
+
 ARCH="$(dpkg --print-architecture)"
 case "$ARCH" in
   amd64)
@@ -34,7 +50,7 @@ ZIG_URL=$(curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retr
   jq -r --arg v "$VERSION_KEY" --arg a "$DOWNLOAD_ARCH" '.[$v][$a + "-linux"].tarball')
 
 if [ -z "$ZIG_URL" ] || [ "$ZIG_URL" = "null" ]; then
-  echo "ERROR: Could not resolve Zig tarball URL for version=$VERSION_KEY arch=$DOWNLOAD_ARCH" >&2
+  printf '%sERROR: Could not resolve Zig tarball URL for version=%s arch=%s%s\n' "$C_RED" "$VERSION_KEY" "$DOWNLOAD_ARCH" "$C_RST" >&2
   exit 1
 fi
 
@@ -44,7 +60,7 @@ curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-erro
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/zig.tar.xz" | sha256sum -c -
 else
-  echo "WARNING: SHA256 verification skipped for Zig (no checksum provided in [plugins.versions.zig])" >&2
+  printf '%sWARNING: SHA256 verification skipped for Zig (no checksum provided in [plugins.versions.zig])%s\n' "$C_YEL" "$C_RST" >&2
 fi
 
 mkdir -p /usr/local/zig

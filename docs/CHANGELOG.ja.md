@@ -12,6 +12,8 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ### 追加
 
+- CLI 出力をセマンティック色分け: エラーは赤、警告は黄、成功メッセージ (ファイル生成・更新完了など) は緑、お知らせ (アップデート通知など) はシアン、見出し・ラベルは太字、`cocoon self-update` の `downloading ...` 進捗行は dim 表示。対象は `cocoon` 自体のエラー出口・`cocoon gen` / `cocoon init` / `cocoon self-update` / `cocoon plugin show|pin`・ブートストラップ用 `install.sh`・プラグイン install スクリプト (`internal/plugin/catalog/*/install.sh`)。`NO_COLOR` (https://no-color.org) と `FORCE_COLOR` をサポートし、stderr が TTY でない場合は自動で色を抑制します。
+- アップデート通知: `cocoon <cmd>` 実行時に GitHub Releases を 1 日 1 回チェックし、新しいリリースがあればシアン色の 1 行通知を stderr に出力します (`A new version vX.Y.Z is available (current: vA.B.C). Run \`cocoon self-update\` to upgrade.`)。結果は `~/.cache/cocoon/update_check.json` にキャッシュ (`$XDG_CACHE_HOME` を尊重)。`cocoon version` / `cocoon self-update` / `cocoon help` / `--version` 実行時、stderr が TTY でない時、`COCOON_NO_UPDATE_CHECK=1` 設定時、およびネットワーク / キャッシュ I/O のエラー時はスキップ (silent fail) なので、通知のためにコマンド本体が止まることはありません。
 - `cocoon gen` が `[home_files].files` の各エントリをホスト側 (`~/<rel>`) で mode `0600` の空ファイルとして自動 touch するようになった (idempotent — 既存ファイルは触らず、シンボリックリンクは尊重、既存ディレクトリは `rm -rf <path>` を案内するエラーになる)。併せて生成された `devcontainer.json` の `initializeCommand` でも同等の touch が走るので、VS Code「Reopen in Container」ユーザーは `cocoon gen` を介さなくても準備される。これまでファイル不在のまま `docker compose up` すると Docker が bind source を空ディレクトリとして自動作成してしまい、ファイル前提のリーダーが silent failure を起こしていた問題を解消する。
 - `cocoon gen` の終了時に `[home_files]` の各ファイルを `~/<rel>` 形式で列挙する「Host files for [home_files]:」notice を表示。VS Code Dev Containers を経由しない (compose 直叩きの) 開発者が `docker compose up` 前にホスト側のファイル存在を確認できるようにする。
 - `cocoon gen` をコンテナ内 (`/.dockerenv` 存在) で実行し、かつ `[home_files]` が非空の場合に stderr に警告を出す。compose のソースは `${HOME:?…}` 補間なので後から `docker compose up` をホストで実行すれば bind 自体は解決されるが、touch はコンテナ内 HOME に対して走ってしまう点を明示する (gen 自体は続行)。

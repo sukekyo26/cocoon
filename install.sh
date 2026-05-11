@@ -20,6 +20,19 @@
 
 set -eu
 
+# Color output when stderr is a TTY (and NO_COLOR is unset) or when
+# FORCE_COLOR is set. NO_COLOR wins over FORCE_COLOR per no-color.org.
+if [ -n "${NO_COLOR:-}" ]; then
+  C_RED=''
+  C_RST=''
+elif [ -n "${FORCE_COLOR:-}" ] || [ -t 2 ]; then
+  C_RED=$(printf '\033[31m')
+  C_RST=$(printf '\033[0m')
+else
+  C_RED=''
+  C_RST=''
+fi
+
 REPO="${COCOON_REPO:-sukekyo26/cocoon}"
 INSTALL_DIR="${COCOON_INSTALL_DIR:-$HOME/.local/bin}"
 VERSION="${COCOON_VERSION:-latest}"
@@ -32,7 +45,7 @@ API_BASE="${API_BASE%/}"
 RELEASE_BASE="${RELEASE_BASE%/}"
 API_TOKEN="${COCOON_API_TOKEN:-}"
 
-err() { printf "cocoon-install: %s\n" "$*" >&2; }
+err() { printf "%scocoon-install: %s%s\n" "$C_RED" "$*" "$C_RST" >&2; }
 die() {
   err "$*"
   exit 1
