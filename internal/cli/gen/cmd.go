@@ -125,6 +125,11 @@ func runGen(stdout, stderr io.Writer, workspaceFlag, outputFlag string) error {
 			return fmt.Errorf("%w: %w", ErrFailure, err)
 		}
 	}
+	if ctx.HasHomeFiles() {
+		if err := ensureHomeFiles(ctx, stdout, stderr, cat); err != nil {
+			return fmt.Errorf("%w: %w", ErrFailure, err)
+		}
+	}
 
 	cwd, _ := os.Getwd() //nolint:errcheck // cwd is best-effort for pretty-printing only.
 	for _, a := range arts {
@@ -133,6 +138,9 @@ func runGen(stdout, stderr io.Writer, workspaceFlag, outputFlag string) error {
 	printNextSteps(stdout, cat, ctx.WS.Workspace.DevContainerOrDefault())
 	if ctx.CertificatesEnabled() {
 		printCertNotice(stdout, cat)
+	}
+	if ctx.HasHomeFiles() {
+		printHomeFilesNotice(stdout, cat, ctx.HomeFilesEntries())
 	}
 	return nil
 }
@@ -230,4 +238,72 @@ func printCertNotice(stdout io.Writer, cat *i18n.Catalog) {
 	fmt.Fprintln(stdout, cat.Msg("gen_certs_notice_header"))
 	fmt.Fprintln(stdout, cat.Msg("gen_certs_notice_path"))
 	fmt.Fprintln(stdout, cat.Msg("gen_certs_notice_team"))
+}
+
+// ensureHomeFiles touches each [home_files] entry on the host with mode
+// 0600 so Docker does not auto-create them as directories at the first
+// `docker compose up`. Existing files are left untouched (idempotent),
+// directories collide with ErrHomeFileIsDirectory (callers see actionable
+// recovery guidance in stderr), and symlinks are trusted as-is. When
+// cocoon gen is running inside a container, the host is unreachable from
+// here — emit a warning but still attempt the touch so contained dev
+// loops where HOME happens to match still work.
+func ensureHomeFiles(ctx *generate.WorkspaceContext, stdout, stderr io.Writer, cat *i18n.Catalog) error {
+	files := ctx.HomeFilesEntries()
+	if len(files) == 0 {
+		return nil
+	}
+	if generate.InContainer() {
+		fmt.Fprintln(stderr, cat.Msg("gen_home_files_in_container_warning"))
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("resolve home dir: %w", err)
+	}
+	for _, rel := range files {
+		path := filepath.Join(home, rel)
+		info, statErr := os.Lstat(path)
+		switch {
+		case statErr == nil && info.Mode()&os.ModeSymlink != 0:
+			continue
+		case statErr == nil && info.IsDir():
+			fmt.Fprintln(stderr, cat.Msg("gen_home_files_is_directory", path, path))
+			return fmt.Errorf("%s: %w", path, generate.ErrHomeFileIsDirectory)
+		case statErr == nil:
+			continue
+		case !errors.Is(statErr, os.ErrNotExist):
+			return fmt.Errorf("lstat %s: %w", path, statErr)
+		}
+		if mkErr := os.MkdirAll(filepath.Dir(path), 0o700); mkErr != nil {
+			return fmt.Errorf("mkdir parent of %s: %w", path, mkErr)
+		}
+		f, openErr := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+		if errors.Is(openErr, os.ErrExist) {
+			// Lost the TOCTOU race against another writer (VS Code's
+			// initializeCommand, a parallel `cocoon gen`, the user's
+			// own touch in another terminal). The desired state — file
+			// exists — is satisfied; skip the announcement and move on.
+			continue
+		}
+		if openErr != nil {
+			return fmt.Errorf("create %s: %w", path, openErr)
+		}
+		if closeErr := f.Close(); closeErr != nil {
+			return fmt.Errorf("close %s: %w", path, closeErr)
+		}
+		fmt.Fprintln(stdout, cat.Msg("gen_home_file_touched", path))
+	}
+	return nil
+}
+
+// printHomeFilesNotice surfaces the configured [home_files] entries so
+// users who skip VS Code Dev Containers (and therefore initializeCommand)
+// can verify the host files exist before `docker compose up`.
+func printHomeFilesNotice(stdout io.Writer, cat *i18n.Catalog, files []string) {
+	fmt.Fprintln(stdout)
+	fmt.Fprintln(stdout, cat.Msg("gen_home_files_notice_header"))
+	fmt.Fprintln(stdout, cat.Msg("gen_home_files_notice_check"))
+	for _, rel := range files {
+		fmt.Fprintln(stdout, cat.Msg("gen_home_files_notice_item", rel))
+	}
 }

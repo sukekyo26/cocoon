@@ -14,17 +14,27 @@ import (
 // ============================================================
 
 var (
-	rxServiceName  = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
-	rxUsername     = regexp.MustCompile(`^[a-z_][a-z0-9_-]*$`)
-	rxPluginID     = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
-	rxSha256       = regexp.MustCompile(`^[a-f0-9]{64}$`)
-	rxEnvKey       = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
-	rxShellEnvKey  = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`)
-	rxAliasKey     = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_-]*$`)
-	rxRepoPath     = regexp.MustCompile(`^[A-Za-z0-9_-][A-Za-z0-9_./-]*$`)
-	rxLang         = regexp.MustCompile(`^[a-z]{2,3}_[A-Z]{2}\.UTF-8$`)
-	rxEmail        = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
-	rxAbsolutePath = regexp.MustCompile(`^/`)
+	rxServiceName = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
+	rxUsername    = regexp.MustCompile(`^[a-z_][a-z0-9_-]*$`)
+	rxPluginID    = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
+	rxSha256      = regexp.MustCompile(`^[a-f0-9]{64}$`)
+	rxEnvKey      = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+	rxShellEnvKey = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`)
+	rxAliasKey    = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_-]*$`)
+	rxRepoPath    = regexp.MustCompile(`^[A-Za-z0-9_-][A-Za-z0-9_./-]*$`)
+	// rxHomeFilesSegment: each path segment of a [home_files].files entry
+	// must consist only of POSIX portable filename chars (letters,
+	// digits, dot, hyphen, underscore). home_files paths flow into the
+	// generated initializeCommand as raw shell snippets (cocoon gen / VS
+	// Code run them with /bin/sh), so anything with shell-special meaning
+	// — $, backticks, ; & | < > ( ) * ? ! [ ] { } ~, quotes, backslashes,
+	// whitespace, newlines — would let a repo-provided workspace.toml
+	// inject commands into the host shell. Strict whitelist > best-effort
+	// blacklist.
+	rxHomeFilesSegment = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
+	rxLang             = regexp.MustCompile(`^[a-z]{2,3}_[A-Z]{2}\.UTF-8$`)
+	rxEmail            = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
+	rxAbsolutePath     = regexp.MustCompile(`^/`)
 	// rxHostname matches an RFC 1123-style hostname: dot-joined labels,
 	// each label 1+ alnum chars (hyphen allowed inside but not at the
 	// start/end). Underscores and consecutive dots (a..b) are rejected.
@@ -588,6 +598,18 @@ func (m *Mount) validate(a *errAccumulator) {
 	}
 }
 
+// rxHomeFilesSegmentPath reports whether every `/`-separated segment of
+// p passes rxHomeFilesSegment. Empty / `..` segments are caught upstream
+// by the dedicated checks; this guards the shell-character whitelist.
+func rxHomeFilesSegmentPath(p string) bool {
+	for _, seg := range strings.Split(p, "/") {
+		if !rxHomeFilesSegment.MatchString(seg) {
+			return false
+		}
+	}
+	return true
+}
+
 func (h *HomeFilesSpec) validate(a *errAccumulator) {
 	if hasDuplicates(h.Files) {
 		a.add("files contains duplicate entries", "files")
@@ -608,15 +630,27 @@ func (h *HomeFilesSpec) validate(a *errAccumulator) {
 		case strings.HasSuffix(p, "/"):
 			a.add("entry must not end with / (files only, not directories)", "files", idx)
 		default:
+			rejected := false
 			for _, seg := range strings.Split(p, "/") {
 				if seg == ".." {
 					a.add("entry must not contain `..` segments", "files", idx)
+					rejected = true
 					break
 				}
 				if seg == "" {
 					a.add("entry must not contain empty segments (// or trailing /)", "files", idx)
+					rejected = true
 					break
 				}
+			}
+			if !rejected && !rxHomeFilesSegmentPath(p) {
+				a.add(
+					"entry must match [A-Za-z0-9._/-]+ "+
+						"(shell-special characters like $, `, ;, &, |, spaces, "+
+						"quotes are rejected because home_files paths flow into "+
+						"the generated initializeCommand shell snippet)",
+					"files", idx,
+				)
 			}
 		}
 	}

@@ -382,12 +382,19 @@ cocoon の生成物 `.devcontainer/*` は、ワークスペースが `[certifica
 
 ## `[home_files]`
 
-ファイル単位 bind mount による永続化。各パスは `~/` 相対 (先頭 `/` 不可、`~` 不可、`..` 不可)。ホスト側の `~/.gitconfig` 等をコンテナ内で共有する用途。
+ファイル単位 bind mount による永続化。各パスは `~/` 相対 (先頭 `/` 不可、`~` 不可、`..` 不可)。各セグメントの文字集合は `[A-Za-z0-9._-]` に限定されます — 生成される `initializeCommand` のシェルスニペットに verbatim 埋め込まれるため、シェル特殊文字 (`$`、バッククォート、`;`、`&`、`|`、`<`、`>`、`*`、`?`、`!`、引用符、バックスラッシュ、空白) は repo 提供の `workspace.toml` からホストシェルへコマンド注入される経路を塞ぐ目的で reject されます。ホスト側の `~/.gitconfig` 等をコンテナ内で共有する用途。
 
 ```toml
 [home_files]
 files = [".gitconfig", ".claude.json"]
 ```
+
+**ホスト側ファイルの準備**。生成される `docker-compose.yml` はソースパスを `${HOME:?HOME must be set on the host}/<rel>` の形で出力するため、bind パスは `docker compose up` を実行したホストの `$HOME` を基準に解決されます (gen を実行した環境と up を実行する環境が異なっていても整合します)。ホストにファイルが無い状態で `docker compose up` を走らせると Docker が bind source を空ディレクトリとして自動作成してしまうため、2 系統でファイル touch (mode `0600`) を行います:
+
+- `cocoon gen` 自体が `~/<rel>` を idempotent に touch する (既存ファイルは触らず、既存ディレクトリは `rm -rf <path>` を案内するエラーにする、シンボリックリンクは尊重)。
+- 生成された `devcontainer.json` の `initializeCommand` で同等の touch を実行するので、VS Code「Reopen in Container」利用時は `cocoon gen` を別途実行する必要はありません。
+
+**コンテナ内で `cocoon gen` を実行した場合**。`/.dockerenv` を検出した場合、`cocoon gen` は stderr に警告を出した上で処理を続行します。compose のソースは `${HOME:?…}` 形式なので後から `docker compose up` をホストで実行すれば bind 自体は正しく解決されますが、touch はコンテナ内の HOME に対して行われている点に注意してください。`docker compose up` を実行する前に必ずホスト側で `cocoon gen` を実行することを推奨します。
 
 ---
 

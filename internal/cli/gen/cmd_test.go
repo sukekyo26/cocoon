@@ -294,6 +294,211 @@ func TestGen_ExplicitWorkspaceAndOutput(t *testing.T) {
 	}
 }
 
+// homeFilesWorkspaceTOML is `minimalWorkspaceTOML` plus a [home_files]
+// section listing a top-level file and a nested file, so gen exercises
+// both the no-parent and parent-mkdir branches in ensureHomeFiles.
+const homeFilesWorkspaceTOML = minimalWorkspaceTOML + `
+[home_files]
+files = [".claude.json", ".gemini/oauth_creds.json"]
+`
+
+// TestGen_HomeFiles_TouchesAndPrintsNotice verifies that `cocoon gen`
+// touches each [home_files] entry on the host with mode 0o600 (creating
+// parent dirs as needed), surfaces the per-file "created" line on the
+// first run only, and prints the host-files notice both runs.
+func TestGen_HomeFiles_TouchesAndPrintsNotice(t *testing.T) {
+	// t.Parallel() is intentionally omitted because t.Setenv below is
+	// incompatible with parallel execution.
+	work := t.TempDir()
+	home := filepath.Join(work, "home")
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		t.Fatalf("mkdir home: %v", err)
+	}
+	t.Setenv("HOME", home)
+	pinEnglish(t)
+	t.Chdir(work)
+
+	if err := os.WriteFile(filepath.Join(work, "workspace.toml"), []byte(homeFilesWorkspaceTOML), 0o600); err != nil {
+		t.Fatalf("write workspace.toml: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	cmd := gencli.NewCommand(&stdout, &stderr)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("gen #1: %v\nstderr:\n%s", err, stderr.String())
+	}
+
+	for _, rel := range []string{".claude.json", ".gemini/oauth_creds.json"} {
+		path := filepath.Join(home, rel)
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatalf("expected %s after gen: %v", path, err)
+		}
+		if mode := info.Mode().Perm(); mode != 0o600 {
+			t.Errorf("%s mode = %o, want 0600", path, mode)
+		}
+		if info.IsDir() {
+			t.Errorf("%s should be a regular file, not a directory", path)
+		}
+	}
+
+	out := stdout.String()
+	for _, want := range []string{
+		"created " + filepath.Join(home, ".claude.json"),
+		"created " + filepath.Join(home, ".gemini/oauth_creds.json"),
+		"Host files for [home_files]:",
+		"Verify these files exist on the host",
+		"~/.claude.json",
+		"~/.gemini/oauth_creds.json",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("first-run stdout missing %q\n--- got ---\n%s", want, out)
+		}
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	cmd2 := gencli.NewCommand(&stdout, &stderr)
+	if err := cmd2.Execute(); err != nil {
+		t.Fatalf("gen #2: %v\nstderr:\n%s", err, stderr.String())
+	}
+	out = stdout.String()
+	if strings.Contains(out, "created "+filepath.Join(home, ".claude.json")) {
+		t.Errorf("re-run should not announce file creation:\n%s", out)
+	}
+	if !strings.Contains(out, "Host files for [home_files]:") {
+		t.Errorf("re-run should still emit the home_files notice header:\n%s", out)
+	}
+}
+
+// TestGen_HomeFiles_PreservesExistingFileMode verifies that an existing
+// home_files entry with mode 0644 (e.g. user wrote it themselves) is left
+// untouched on subsequent gen runs. ensureHomeFiles must be idempotent
+// against existing files.
+func TestGen_HomeFiles_PreservesExistingFileMode(t *testing.T) {
+	// t.Parallel() is intentionally omitted because t.Setenv below is
+	// incompatible with parallel execution.
+	work := t.TempDir()
+	home := filepath.Join(work, "home")
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		t.Fatalf("mkdir home: %v", err)
+	}
+	t.Setenv("HOME", home)
+	pinEnglish(t)
+	t.Chdir(work)
+
+	target := filepath.Join(home, ".claude.json")
+	// 0644 is deliberate: the test pins that ensureHomeFiles leaves the
+	// mode of an existing file untouched (i.e. does not narrow it to 0600).
+	if err := os.WriteFile(target, []byte(`{"keep":"me"}`), 0o644); err != nil { //nolint:gosec // see comment above
+		t.Fatalf("seed existing file: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(work, "workspace.toml"), []byte(homeFilesWorkspaceTOML), 0o600); err != nil {
+		t.Fatalf("write workspace.toml: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	cmd := gencli.NewCommand(&stdout, &stderr)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("gen: %v\nstderr:\n%s", err, stderr.String())
+	}
+
+	info, err := os.Stat(target)
+	if err != nil {
+		t.Fatalf("stat %s: %v", target, err)
+	}
+	if mode := info.Mode().Perm(); mode != 0o644 {
+		t.Errorf("existing file mode = %o, want 0644 (unchanged)", mode)
+	}
+	body, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("read %s: %v", target, err)
+	}
+	if string(body) != `{"keep":"me"}` {
+		t.Errorf("existing file body was modified: %q", body)
+	}
+	if strings.Contains(stdout.String(), "created "+target) {
+		t.Errorf("gen should not announce creation of an existing file:\n%s", stdout.String())
+	}
+}
+
+// TestGen_HomeFiles_RejectsExistingDirectory verifies that when a
+// home_files entry already exists as a directory on the host (typically
+// because a prior `docker compose up` ran while the file was missing and
+// Docker auto-created it), `cocoon gen` fails with ErrFailure and the
+// stderr message points the user at the `rm -rf` recovery path.
+func TestGen_HomeFiles_RejectsExistingDirectory(t *testing.T) {
+	// t.Parallel() is intentionally omitted because t.Setenv below is
+	// incompatible with parallel execution.
+	work := t.TempDir()
+	home := filepath.Join(work, "home")
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		t.Fatalf("mkdir home: %v", err)
+	}
+	t.Setenv("HOME", home)
+	pinEnglish(t)
+	t.Chdir(work)
+
+	target := filepath.Join(home, ".claude.json")
+	if err := os.MkdirAll(target, 0o755); err != nil {
+		t.Fatalf("seed directory: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(work, "workspace.toml"), []byte(homeFilesWorkspaceTOML), 0o600); err != nil {
+		t.Fatalf("write workspace.toml: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	cmd := gencli.NewCommand(&stdout, &stderr)
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatalf("expected gen to fail when home_files entry is a directory")
+	}
+	if !errors.Is(err, gencli.ErrFailure) {
+		t.Errorf("expected ErrFailure, got %v", err)
+	}
+	if !strings.Contains(stderr.String(), "rm -rf "+target) {
+		t.Errorf("stderr should suggest `rm -rf %s`:\n%s", target, stderr.String())
+	}
+}
+
+// TestGen_HomeFilesAbsent_NoNotice verifies the opt-out invariant: a
+// workspace without [home_files] gets no host-files notice and no
+// host-side file creation.
+func TestGen_HomeFilesAbsent_NoNotice(t *testing.T) {
+	// t.Parallel() is intentionally omitted because t.Setenv below is
+	// incompatible with parallel execution.
+	work := t.TempDir()
+	home := filepath.Join(work, "home")
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		t.Fatalf("mkdir home: %v", err)
+	}
+	t.Setenv("HOME", home)
+	pinEnglish(t)
+	t.Chdir(work)
+
+	if err := os.WriteFile(filepath.Join(work, "workspace.toml"), []byte(minimalWorkspaceTOML), 0o600); err != nil {
+		t.Fatalf("write workspace.toml: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	cmd := gencli.NewCommand(&stdout, &stderr)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("gen: %v\nstderr:\n%s", err, stderr.String())
+	}
+
+	out := stdout.String()
+	for _, mustNot := range []string{
+		"Host files for [home_files]:",
+		"Verify these files exist on the host",
+	} {
+		if strings.Contains(out, mustNot) {
+			t.Errorf("home_files-absent stdout should not contain %q\n--- got ---\n%s", mustNot, out)
+		}
+	}
+}
+
 // TestGen_MissingWorkspaceReturnsUsage covers the discovery-miss path
 // when workspace.toml is absent and no --workspace flag is given.
 func TestGen_MissingWorkspaceReturnsUsage(t *testing.T) {

@@ -282,15 +282,11 @@ func TestWorkspaceContext_HomeFileMounts(t *testing.T) {
 	t.Run("nil_when_unset", func(t *testing.T) {
 		t.Parallel()
 		c := &generate.WorkspaceContext{WS: &config.Workspace{}}
-		got, err := c.HomeFileMounts("/fake/home")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if got != nil {
+		if got := c.HomeFileMounts(); got != nil {
 			t.Errorf("expected nil, got %v", got)
 		}
 	})
-	t.Run("expands_to_absolute_paths", func(t *testing.T) {
+	t.Run("emits_home_interpolation", func(t *testing.T) {
 		t.Parallel()
 		ws := &config.Workspace{
 			HomeFiles: &config.HomeFilesSpec{
@@ -298,24 +294,43 @@ func TestWorkspaceContext_HomeFileMounts(t *testing.T) {
 			},
 		}
 		c := &generate.WorkspaceContext{WS: ws}
-		got, err := c.HomeFileMounts("/host/home/dev")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
+		got := c.HomeFileMounts()
 		if len(got) != 2 {
 			t.Fatalf("expected 2 mounts, got %d", len(got))
 		}
-		if got[0].Source != "/host/home/dev/.claude.json" {
-			t.Errorf("source[0] = %q", got[0].Source)
+		const prefix = "${HOME:?HOME must be set on the host}"
+		if got[0].Source != prefix+"/.claude.json" {
+			t.Errorf("source[0] = %q, want %q", got[0].Source, prefix+"/.claude.json")
 		}
 		if got[0].Target != "/home/${USERNAME}/.claude.json" {
 			t.Errorf("target[0] = %q", got[0].Target)
 		}
-		if got[1].Source != "/host/home/dev/.gemini/oauth_creds.json" {
+		if got[1].Source != prefix+"/.gemini/oauth_creds.json" {
 			t.Errorf("source[1] = %q", got[1].Source)
 		}
 		if got[1].Readonly {
 			t.Error("home_files mounts must be RW")
+		}
+	})
+	t.Run("preserves_order", func(t *testing.T) {
+		t.Parallel()
+		ws := &config.Workspace{
+			HomeFiles: &config.HomeFilesSpec{
+				Files: []string{".z", ".a", "deep/nested/file.json"},
+			},
+		}
+		c := &generate.WorkspaceContext{WS: ws}
+		got := c.HomeFileMounts()
+		if len(got) != 3 {
+			t.Fatalf("expected 3 mounts, got %d", len(got))
+		}
+		for i, want := range []string{".z", ".a", "deep/nested/file.json"} {
+			if !strings.HasSuffix(got[i].Source, "/"+want) {
+				t.Errorf("got[%d].Source = %q, want suffix /%s", i, got[i].Source, want)
+			}
+			if got[i].Target != "/home/${USERNAME}/"+want {
+				t.Errorf("got[%d].Target = %q", i, got[i].Target)
+			}
 		}
 	})
 }
