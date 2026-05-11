@@ -278,6 +278,13 @@ func ensureHomeFiles(ctx *generate.WorkspaceContext, stdout, stderr io.Writer, c
 			return fmt.Errorf("mkdir parent of %s: %w", path, mkErr)
 		}
 		f, openErr := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+		if errors.Is(openErr, os.ErrExist) {
+			// Lost the TOCTOU race against another writer (VS Code's
+			// initializeCommand, a parallel `cocoon gen`, the user's
+			// own touch in another terminal). The desired state — file
+			// exists — is satisfied; skip the announcement and move on.
+			continue
+		}
 		if openErr != nil {
 			return fmt.Errorf("create %s: %w", path, openErr)
 		}
