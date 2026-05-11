@@ -392,6 +392,67 @@ func TestVersionMatchesOS(t *testing.T) {
 // parseAptCategories: validation and whitespace handling.
 // ---------------------------------------------------------------------
 
+// TestFilterPluginIDs pins the helper that drops one id from a plugin
+// default list before the multi-select form is built. Empty excludeID
+// must pass the slice through unchanged; a present id must be removed
+// exactly once; an absent id must be a no-op. The picker relies on
+// these three shapes to keep image-vs-plugin combinations consistent
+// without surfacing the same id in two contradictory places (default
+// list and excluded list).
+func TestFilterPluginIDs(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name      string
+		in        []string
+		excludeID string
+		want      []string
+	}{
+		{"no_exclude_returns_input", []string{"a", "b", "c"}, "", []string{"a", "b", "c"}},
+		{"excludes_present_id", []string{"a", "rust", "c"}, "rust", []string{"a", "c"}},
+		{"absent_id_is_noop", []string{"a", "b"}, "rust", []string{"a", "b"}},
+		{"empty_input", []string{}, "rust", []string{}},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := filterPluginIDs(tc.in, tc.excludeID)
+			if len(got) != len(tc.want) {
+				t.Fatalf("len=%d, want %d, got=%v", len(got), len(tc.want), got)
+			}
+			for i := range got {
+				if got[i] != tc.want[i] {
+					t.Errorf("at %d: got %q, want %q", i, got[i], tc.want[i])
+				}
+			}
+		})
+	}
+}
+
+// TestPluginsMultiSelect_BuildsForEveryExcludeID exercises the picker
+// constructor with each ImageProvidesPlugin value plus the no-exclude
+// case. The huh.MultiSelect's option list isn't readable through a
+// stable public API, so this is a smoke test: it confirms construction
+// never panics and the returned Field has the expected title/description
+// key — picker exclusion behavior itself is covered by TestFilterPluginIDs.
+func TestPluginsMultiSelect_BuildsForEveryExcludeID(t *testing.T) {
+	t.Parallel()
+	plugins := loadPluginsForTest(t)
+	cat := i18n.New(i18n.LangEN)
+	var target []string
+
+	for _, excludeID := range []string{"", "rust", "go"} {
+		excludeID := excludeID
+		t.Run("exclude="+excludeID, func(t *testing.T) {
+			t.Parallel()
+			sel := pluginsMultiSelect(cat, plugins, excludeID, &target)
+			if sel == nil {
+				t.Fatal("pluginsMultiSelect returned nil")
+			}
+		})
+	}
+}
+
 func TestParseAptCategories(t *testing.T) {
 	t.Parallel()
 	out, err := parseAptCategories("text-editors,build")

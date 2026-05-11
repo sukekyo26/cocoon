@@ -510,8 +510,13 @@ func promptForMissing(ans initAnswers, cat *i18n.Catalog, plugins map[string]*pl
 		ans.AptSet = true
 	}
 	if !ans.PluginsSet {
-		ans.Plugins = defaultPluginIDs(plugins)
-		if err := promptPluginsWithRetry(cat, plugins, &ans.Plugins); err != nil {
+		// Plugins whose toolchain duplicates the chosen base image (e.g.
+		// rust plugin when image = "rust") are hidden from the picker and
+		// removed from the defaults so the user cannot accidentally pick
+		// a combination validateImagePluginConflict would later reject.
+		excludeID := config.ImageProvidesPlugin[ans.Image]
+		ans.Plugins = filterPluginIDs(defaultPluginIDs(plugins), excludeID)
+		if err := promptPluginsWithRetry(cat, plugins, excludeID, &ans.Plugins); err != nil {
 			return ans, err
 		}
 		ans.PluginsSet = true
@@ -527,10 +532,16 @@ func promptForMissing(ans initAnswers, cat *i18n.Catalog, plugins map[string]*pl
 // On conflict, the form is re-run up to two more times so the user can
 // reconcile without restarting the whole flow. Three failures in a row
 // return ErrUsage so CI / scripted invocations cannot loop forever.
-func promptPluginsWithRetry(cat *i18n.Catalog, plugins map[string]*plugin.Plugin, target *[]string) error {
+//
+// excludeID hides one plugin id from the picker (empty = hide none); the
+// caller uses it to drop the language-runtime plugin that duplicates the
+// chosen base image, so validateImagePluginConflict cannot fire later.
+func promptPluginsWithRetry(cat *i18n.Catalog, plugins map[string]*plugin.Plugin,
+	excludeID string, target *[]string,
+) error {
 	const maxAttempts = 3
 	for attempt := 0; attempt < maxAttempts; attempt++ {
-		if err := runSingleFieldForm(pluginsMultiSelect(cat, plugins, target)); err != nil {
+		if err := runSingleFieldForm(pluginsMultiSelect(cat, plugins, excludeID, target)); err != nil {
 			return err
 		}
 		err := validatePluginConflicts(plugins, *target)
@@ -543,6 +554,23 @@ func promptPluginsWithRetry(cat *i18n.Catalog, plugins map[string]*plugin.Plugin
 		fmt.Fprintln(os.Stderr, err)
 	}
 	return fmt.Errorf("%w: plugin conflict not resolved after %d attempts", ErrUsage, maxAttempts)
+}
+
+// filterPluginIDs returns ids with excludeID removed. Empty excludeID
+// returns ids verbatim; the caller does not need to special-case the
+// "no exclusion" path.
+func filterPluginIDs(ids []string, excludeID string) []string {
+	if excludeID == "" {
+		return ids
+	}
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if id == excludeID {
+			continue
+		}
+		out = append(out, id)
+	}
+	return out
 }
 
 // runSingleFieldForm wraps a single huh.Field into a one-Group, one-
@@ -699,13 +727,21 @@ func aliasBundlesMultiSelect(cat *i18n.Catalog, target *[]string) *huh.MultiSele
 // runs (LoadDir returns a map so iteration order is otherwise random).
 // The label format mirrors aptMultiSelect — "<Name> (<short description
 // or conflicts hint>)" — so both prompts feel like the same family.
+//
+// excludeID hides one plugin id (empty = no exclusion). Used to drop the
+// rust plugin from the picker when image = "rust" is already chosen
+// (likewise for go), so the user cannot accidentally tick a plugin
+// validateImagePluginConflict would later reject.
 func pluginsMultiSelect(cat *i18n.Catalog, plugins map[string]*plugin.Plugin,
-	target *[]string,
+	excludeID string, target *[]string,
 ) *huh.MultiSelect[string] {
 	ids := sortedPluginIDs(plugins)
-	options := make([]huh.Option[string], len(ids))
-	for i, id := range ids {
-		options[i] = huh.NewOption(formatPluginLabel(id, plugins[id]), id)
+	options := make([]huh.Option[string], 0, len(ids))
+	for _, id := range ids {
+		if id == excludeID {
+			continue
+		}
+		options = append(options, huh.NewOption(formatPluginLabel(id, plugins[id]), id))
 	}
 	return huh.NewMultiSelect[string]().
 		Title(cat.Msg("init_prompt_plugins")).
