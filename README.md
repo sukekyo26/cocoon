@@ -80,7 +80,7 @@ docker compose -f .devcontainer/docker-compose.yml up -d # or VS Code → "Reope
 8. **apt categories** — text-editors, vcs, utilities, build, network, … (multi-select)
 9. **Plugins** to enable from the embedded catalog (multi-select, 20 to choose from)
 
-Each answer becomes a self-documenting line in `workspace.toml`. Pass `--yes` together with the value flags (`--service-name`, `--username`, `--os`, `--plugins`, `--certificates`, …) to drive it from CI without a TTY.
+Each answer becomes a self-documenting line in `workspace.toml`. Pass `--yes` together with the value flags (`--service-name`, `--username`, `--image`, `--plugins`, `--certificates`, …) to drive it from CI without a TTY.
 
 ## Plugins
 

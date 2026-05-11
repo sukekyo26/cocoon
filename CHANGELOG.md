@@ -6,6 +6,19 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `[container].image` accepts five new language-runtime base images in addition to the existing `ubuntu` / `debian`: `node` (`26-bookworm-slim` / `24-bookworm-slim` / `22-bookworm-slim`), `python` (`3.14-slim-bookworm` / `3.13-slim-bookworm` / `3.12-slim-bookworm`), `go` (`1.26-bookworm` / `1.25-bookworm` / `1.24-bookworm`), `rust` (`1.95-bookworm` / `1.94-bookworm` / `1.93-bookworm`), and `deno` (`debian-2.7.14` / `debian-2.6.10` / `debian-2.5.7`). All five resolve to Debian (bookworm) variants so the existing apt-based plugin catalog continues to work; deno resolves to the vendor-published `denoland/deno` image, the other four are Docker official `library/<image>`. Picking a language-runtime image skips a manual apt install of that toolchain at the cost of a slightly larger FROM layer.
+- `cocoon init` interactive picker lists all seven images and only offers the per-image whitelisted versions. `--image <id>` / `--image-version <tag>` cover the non-interactive path.
+
+### Changed
+
+- **BREAKING**: `[container].os` / `os_version` renamed to `[container].image` / `image_version`. The supported value set widened from two Linux distributions to seven images, so a name keyed off "OS" no longer fits. Migration: replace `os = "ubuntu"` with `image = "ubuntu"` and `os_version = "26.04"` with `image_version = "26.04"`. The validator emits a fail-fast error containing the rewrite snippet for any workspace.toml still using the old keys, so the migration is one-shot per file.
+- **BREAKING**: `cocoon init --os` / `--os-version` flags renamed to `--image` / `--image-version`. CI invocations that pinned the old flags need a search-and-replace; cocoon does not accept the old names as aliases.
+- **BREAKING**: `[container].ubuntu_version` (deprecated since v0.2.0) is removed. The strict TOML parser now rejects it as an unknown key. Migration: rewrite to `image = "ubuntu"` / `image_version = "..."` directly (the v0.2 chained deprecation `ubuntu_version` → `os` / `os_version` is no longer needed).
+- **BREAKING**: Generated `Dockerfile` ARG names `OS_IMAGE` / `OS_VERSION` and the matching `.env` / docker-compose interpolation keys are renamed to `IMAGE` / `IMAGE_VERSION`. Anything outside cocoon that referenced these (e.g. a custom `docker build --build-arg OS_IMAGE=...` invocation) must be updated.
+- Combining `image = "go"` with `[plugins].enable = ["go"]`, or `image = "rust"` with `[plugins].enable = ["rust"]`, is now a validation error. The base image and the matching plugin both ship the same toolchain — go to `/usr/local/go` (plugin tar overwrites the base) and rust to `$HOME/.cargo` (plugin shadows the base on `$PATH`) — so enabling both wasted docker-build time without changing the runtime. Use the base image **or** the plugin, not both; the error message includes the actionable rewrite.
+
 ## [0.2.0] - 2026-05-11
 
 ### Added

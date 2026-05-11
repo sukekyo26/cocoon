@@ -80,7 +80,7 @@ docker compose -f .devcontainer/docker-compose.yml up -d # または VS Code で
 8. **apt カテゴリ** — text-editors / vcs / utilities / build / network / … (複数選択)
 9. **プラグイン** — 同梱カタログ 20 種から選択 (複数選択)
 
-各回答は自己説明的な 1 行として `workspace.toml` に書き込まれます。`--yes` と各値フラグ (`--service-name` / `--username` / `--os` / `--plugins` / `--certificates` …) を組み合わせれば TTY なしで CI から呼び出せます。
+各回答は自己説明的な 1 行として `workspace.toml` に書き込まれます。`--yes` と各値フラグ (`--service-name` / `--username` / `--image` / `--plugins` / `--certificates` …) を組み合わせれば TTY なしで CI から呼び出せます。
 
 ## プラグイン
 

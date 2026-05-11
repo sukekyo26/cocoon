@@ -72,29 +72,49 @@ devcontainer = true
 
 ## `[container]` (必須)
 
-イメージの素性。`service_name` / `username` / `os` / `os_version` は必須。
+イメージの素性。`service_name` / `username` / `image` / `image_version` は必須。
 
 | フィールド | 型 | バリデーション | 説明 |
 |---|---|---|---|
 | `service_name` | string | `^[a-z][a-z0-9_-]*$` | Compose の `services:` キー。`docker compose exec <service_name>` で参照される。 |
 | `username` | string | `^[a-z_][a-z0-9_-]*$` | コンテナ内に作成される Linux ユーザー。 |
-| `os` | string | `ubuntu` \| `debian` | ベースディストリビューション。 |
-| `os_version` | string | 選択した `os` に対応する版 (下記) | ディストロのバージョン (例: `26.04` / `13`)。 |
+| `image` | string | `ubuntu` \| `debian` \| `node` \| `python` \| `go` \| `rust` \| `deno` | ベースイメージ。前 2 つは Linux ディストロ、残り 5 つは DockerHub の言語ランタイム公式イメージ (deno は `denoland/deno`、それ以外は `library/<image>` に展開)。 |
+| `image_version` | string | 選択した `image` に対応する版 (下記) | イメージタグ (例: `26.04` / `24-bookworm-slim` / `1.95-bookworm` / `debian-2.7.14`)。 |
 | `docker_socket` | bool | — | `/var/run/docker.sock` をマウントして docker-in-docker を有効化。デフォルト `false`。 |
 
-**サポートされる OS / バージョンの組合せ:**
+**サポートされる image / version の組合せ:**
 
-| `os` | `os_version` |
-|---|---|
-| `ubuntu` | `26.04`, `24.04`, `22.04` |
-| `debian` | `13`, `12` |
+| `image` | `image_version` | 生成される FROM 行 |
+|---|---|---|
+| `ubuntu` | `26.04`, `24.04`, `22.04` | `FROM ubuntu:<v>` |
+| `debian` | `13`, `12` | `FROM debian:<v>` |
+| `node` | `26-bookworm-slim`, `24-bookworm-slim`, `22-bookworm-slim` | `FROM node:<v>` |
+| `python` | `3.14-slim-bookworm`, `3.13-slim-bookworm`, `3.12-slim-bookworm` | `FROM python:<v>` |
+| `go` | `1.26-bookworm`, `1.25-bookworm`, `1.24-bookworm` | `FROM golang:<v>` (Docker official `library/golang`) |
+| `rust` | `1.95-bookworm`, `1.94-bookworm`, `1.93-bookworm` | `FROM rust:<v>` |
+| `deno` | `debian-2.7.14`, `debian-2.6.10`, `debian-2.5.7` | `FROM denoland/deno:<v>` |
+
+すべての候補イメージは Debian (bookworm 系) ベースなので、既存の apt ベースのプラグインカタログがそのまま機能します。
+
+**image とプラグインの mutually exclusive ルール:** ベースが言語ランタイムを既に提供している場合、同名の cocoon プラグインを併用すると、プラグインがベースを上書き (go) もしくは PATH で覆い隠す (rust) ため、validation で reject します。`[plugins].enable` から外すか、`image = "ubuntu" / "debian"` に切り替えて `[plugins.versions]` でバージョン固定してください。
+
+| 選んだ `image` | プラグイン有効化 | 結果 |
+|---|---|---|
+| `go` | `go` | **reject** — ベースが Go を提供済み |
+| `rust` | `rust` | **reject** — ベースが Rust を提供済み |
+| `python` | `uv` | 受理 — uv はバイナリ追加のみで Python に触らない |
+| `node` / `deno` / `python` | (対応プラグインなし) | n/a |
 
 ```toml
 [container]
 service_name = "myapp"
 username = "dev"
-os = "ubuntu"
-os_version = "26.04"
+image = "ubuntu"
+image_version = "26.04"
+
+# 言語ランタイムイメージを選んでプラグインを省略する例:
+# image = "node"
+# image_version = "24-bookworm-slim"
 ```
 
 ### `[container.resources]`

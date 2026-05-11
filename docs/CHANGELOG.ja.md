@@ -6,6 +6,19 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+### 追加
+
+- `[container].image` の選択肢を従来の `ubuntu` / `debian` に加えて 5 種の言語ランタイム公式イメージに拡張: `node` (`26-bookworm-slim` / `24-bookworm-slim` / `22-bookworm-slim`)、`python` (`3.14-slim-bookworm` / `3.13-slim-bookworm` / `3.12-slim-bookworm`)、`go` (`1.26-bookworm` / `1.25-bookworm` / `1.24-bookworm`)、`rust` (`1.95-bookworm` / `1.94-bookworm` / `1.93-bookworm`)、`deno` (`debian-2.7.14` / `debian-2.6.10` / `debian-2.5.7`)。すべて Debian (bookworm) ベースなので既存の apt ベースのプラグインカタログがそのまま機能します。deno は vendor 公式の `denoland/deno`、他の 4 つは Docker official `library/<image>` に展開されます。言語ランタイムイメージを選ぶと該当言語の apt インストール 1 ステップが省ける代わりに FROM レイヤーが少し大きくなります。
+- `cocoon init` のインタラクティブピッカーが 7 種のイメージを提示し、選んだイメージごとの whitelist だけがバージョン候補として並びます。非対話パスは `--image <id>` / `--image-version <tag>`。
+
+### 変更
+
+- **BREAKING**: `[container].os` / `os_version` を `[container].image` / `image_version` にリネームしました。サポート対象が 2 種の Linux ディストロから 7 種のイメージに広がったため「OS」という名前は実態と乖離しています。マイグレーション: `os = "ubuntu"` → `image = "ubuntu"`、`os_version = "26.04"` → `image_version = "26.04"`。旧キーを残した `workspace.toml` を読み込ませると validator がリライト例入りの fail-fast エラーを出すので、ファイル単位で 1 回の置換で済みます。
+- **BREAKING**: `cocoon init` の `--os` / `--os-version` フラグを `--image` / `--image-version` にリネーム。旧フラグの alias は提供しないので、CI で旧フラグを固定指定している箇所は置換が必要です。
+- **BREAKING**: `[container].ubuntu_version` (v0.2.0 で deprecated 化していたもの) を撤去。strict TOML パーサが unknown key として reject します。マイグレーション: `image = "ubuntu"` / `image_version = "..."` に直接リライト (v0.2 の `ubuntu_version` → `os` / `os_version` の中間段階は経由しなくて構いません)。
+- **BREAKING**: 生成 `Dockerfile` の ARG 名 `OS_IMAGE` / `OS_VERSION` と、対応する `.env` / docker-compose の補間キーを `IMAGE` / `IMAGE_VERSION` にリネーム。cocoon の外側でこれらに依存していた箇所 (例: `docker build --build-arg OS_IMAGE=...` を自分で叩いていた等) は併せて更新してください。
+- `image = "go"` と `[plugins].enable = ["go"]` の併用、および `image = "rust"` と `[plugins].enable = ["rust"]` の併用を validation エラーで reject するようにしました。go プラグインは `/usr/local/go` をベースイメージごと上書き、rust プラグインは `$HOME/.cargo/bin` を PATH 先頭に挿入してベースを死蔵させるため、両方有効にすると docker-build 時間を浪費するだけで実行時の挙動は変わりません。ベースイメージかプラグインのどちらか一方を選んでください。エラーメッセージには具体的なリライト案が含まれます。
+
 ## [0.2.0] - 2026-05-11
 
 ### 追加
