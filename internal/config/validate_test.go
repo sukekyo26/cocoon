@@ -2,6 +2,7 @@ package config_test
 
 import (
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -9,6 +10,13 @@ import (
 
 	"github.com/sukekyo26/cocoon/internal/config"
 )
+
+// tomlQuote returns s as a TOML basic-string literal (`"..."` with the
+// same backslash escapes Go's strconv.Quote produces — TOML's basic
+// string accepts the same set: \n \t \r \b \" \\ \uXXXX). Used to embed
+// adversarial test inputs (containing whitespace, quotes, control
+// chars) into a workspace.toml body verbatim.
+func tomlQuote(s string) string { return strconv.Quote(s) }
 
 // minimalWorkspace returns a TOML string for a syntactically valid workspace
 // with the smallest possible content. Tests append extra sections to it.
@@ -563,6 +571,77 @@ func TestValidate_HomeFilesRejectsDuplicate(t *testing.T) {
 	err := loadWS(t, body)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "duplicate")
+}
+
+// TestValidate_HomeFilesRejectsShellMetacharacters table-drives the
+// shell-injection guard: each [home_files].files entry is interpolated
+// raw into the generated initializeCommand snippet, so the validator
+// must reject any path segment that carries shell-special meaning.
+// Covers the obvious vectors (command substitution, separators, pipes,
+// redirections, globs, history expansion, quoting, escapes, whitespace,
+// embedded newlines, tilde, brace and bracket expansion).
+func TestValidate_HomeFilesRejectsShellMetacharacters(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name  string
+		entry string
+	}{
+		{"dollar_command_subst", ".cfg/$(whoami).json"},
+		{"backtick_command_subst", ".cfg/`whoami`.json"},
+		{"semicolon", ".cfg/a;b.json"},
+		{"ampersand", ".cfg/a&b.json"},
+		{"pipe", ".cfg/a|b.json"},
+		{"redirect_lt", ".cfg/a<b.json"},
+		{"redirect_gt", ".cfg/a>b.json"},
+		{"glob_star", ".cfg/*.json"},
+		{"glob_question", ".cfg/a?.json"},
+		{"bang_history", ".cfg/a!b.json"},
+		{"bracket", ".cfg/[a].json"},
+		{"brace", ".cfg/{a,b}.json"},
+		{"double_quote", ".cfg/a\"b.json"},
+		{"single_quote", ".cfg/a'b.json"},
+		{"backslash", ".cfg/a\\b.json"},
+		{"space", ".cfg/a b.json"},
+		{"tab", ".cfg/a\tb.json"},
+		{"newline", ".cfg/a\nb.json"},
+		{"paren_open", ".cfg/(a).json"},
+		{"paren_close", ".cfg/a).json"},
+		{"tilde_mid", ".cfg/~user/foo.json"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			body := minimalWorkspace() + "\n[home_files]\nfiles = [" +
+				tomlQuote(tc.entry) + "]\n"
+			err := loadWS(t, body)
+			require.Error(t, err, "entry %q should be rejected", tc.entry)
+			require.Contains(t, err.Error(), "[A-Za-z0-9._/-]+")
+		})
+	}
+}
+
+// TestValidate_HomeFilesAcceptsBenignPaths pins the whitelist's positive
+// side: typical config-file paths that the docs encourage must continue
+// to validate, including nested dotdirs (.gemini/oauth_creds.json) and
+// hyphen-bearing names (.local/share/foo-bar.json).
+func TestValidate_HomeFilesAcceptsBenignPaths(t *testing.T) {
+	t.Parallel()
+	cases := []string{
+		".gitconfig",
+		".claude.json",
+		".gemini/oauth_creds.json",
+		".local/share/foo-bar.json",
+		".config/git/config",
+		"plain_file_no_dot",
+	}
+	for _, p := range cases {
+		t.Run(p, func(t *testing.T) {
+			t.Parallel()
+			body := minimalWorkspace() + "\n[home_files]\nfiles = [" +
+				tomlQuote(p) + "]\n"
+			require.NoError(t, loadWS(t, body), "entry %q should be accepted", p)
+		})
+	}
 }
 
 func TestValidate_ContainerHostsAcceptsValid(t *testing.T) {

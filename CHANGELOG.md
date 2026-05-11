@@ -6,6 +6,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Security
+
+- `[home_files].files` entries are now restricted to `[A-Za-z0-9._/-]+` per path segment. Shell-special characters (`$`, backticks, `;`, `&`, `|`, `<`, `>`, `*`, `?`, `!`, quotes, backslashes, whitespace) are rejected at validation time so a repo-provided `workspace.toml` cannot inject commands into the host shell through the generated `initializeCommand`. Existing workspaces that used only conventional dotfile names are unaffected; anything that previously passed validation by accident now fails with an actionable message.
+
 ### Added
 
 - `cocoon gen` now touches each `[home_files].files` entry on the host with mode `0600` when missing (idempotent — existing files are left as-is, symlinks are trusted, and existing directories surface an error pointing at `rm -rf <path>` for recovery). Pairs with a new `initializeCommand` step in the generated `devcontainer.json` so VS Code "Reopen in Container" users get the same preparation without invoking `cocoon gen`. Previously the bind source could be silently auto-created as an empty directory by Docker at `docker compose up` time when the file was missing, breaking file-shaped readers in the container.

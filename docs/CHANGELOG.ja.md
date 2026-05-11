@@ -6,6 +6,10 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+### セキュリティ
+
+- `[home_files].files` の各パスセグメントを `[A-Za-z0-9._/-]+` に制限するようにした。シェル特殊文字 (`$`、バッククォート、`;`、`&`、`|`、`<`、`>`、`*`、`?`、`!`、引用符、バックスラッシュ、空白) は validation 時に reject されるため、repo 提供の `workspace.toml` から生成された `initializeCommand` 経由でホストシェルへコマンド注入される経路を塞ぐ。従来から conventional な dotfile 名のみを使っていたワークスペースには影響しない。
+
 ### 追加
 
 - `cocoon gen` が `[home_files].files` の各エントリをホスト側 (`~/<rel>`) で mode `0600` の空ファイルとして自動 touch するようになった (idempotent — 既存ファイルは触らず、シンボリックリンクは尊重、既存ディレクトリは `rm -rf <path>` を案内するエラーになる)。併せて生成された `devcontainer.json` の `initializeCommand` でも同等の touch が走るので、VS Code「Reopen in Container」ユーザーは `cocoon gen` を介さなくても準備される。これまでファイル不在のまま `docker compose up` すると Docker が bind source を空ディレクトリとして自動作成してしまい、ファイル前提のリーダーが silent failure を起こしていた問題を解消する。

@@ -393,7 +393,7 @@ opted-out workspaces share cert-free artifacts.
 
 ## `[home_files]`
 
-Files persisted via per-file bind mounts. Each path is relative to `~/` (no leading `/`, no `~`, no `..`). Use this to share host-side configs like `~/.gitconfig` into the container.
+Files persisted via per-file bind mounts. Each path is relative to `~/` (no leading `/`, no `~`, no `..`). Per-segment characters are restricted to `[A-Za-z0-9._-]` because the path is interpolated verbatim into the generated `initializeCommand` shell snippet — anything with shell-special meaning (`$`, backticks, `;`, `&`, `|`, `<`, `>`, `*`, `?`, `!`, quotes, backslashes, whitespace) is rejected so a repo-provided `workspace.toml` cannot inject commands into the host shell. Use this to share host-side configs like `~/.gitconfig` into the container.
 
 ```toml
 [home_files]
