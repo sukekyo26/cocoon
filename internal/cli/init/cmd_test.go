@@ -196,7 +196,7 @@ func TestApplyFlags_InvalidUsername(t *testing.T) {
 	}
 }
 
-func TestApplyFlags_InvalidOS(t *testing.T) {
+func TestApplyFlags_InvalidImage(t *testing.T) {
 	t.Parallel()
 	plugins := loadPluginsForTest(t)
 	_, err := applyFlags(&initFlags{Image: "alpine"}, plugins)
@@ -205,7 +205,7 @@ func TestApplyFlags_InvalidOS(t *testing.T) {
 	}
 }
 
-func TestApplyFlags_OSVersionWithoutOS(t *testing.T) {
+func TestApplyFlags_ImageVersionWithoutImage(t *testing.T) {
 	t.Parallel()
 	plugins := loadPluginsForTest(t)
 	_, err := applyFlags(&initFlags{ImageVersion: "24.04"}, plugins)
@@ -382,10 +382,10 @@ func TestApplyDefaults_PreservesExplicitSettings(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------
-// defaultImageVersion: returns the first (newest) entry per OS.
+// defaultImageVersion: returns the first (newest) entry per image.
 // ---------------------------------------------------------------------
 
-func TestDefaultOSVersion(t *testing.T) {
+func TestDefaultImageVersion(t *testing.T) {
 	t.Parallel()
 	if got := defaultImageVersion("ubuntu"); got != "26.04" {
 		t.Errorf("ubuntu default = %q, want 26.04", got)
