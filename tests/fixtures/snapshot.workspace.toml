@@ -11,8 +11,8 @@ mount_root = ".."
 [container]
 service_name = "snapshot-test"
 username = "testuser"
-os = "ubuntu"
-os_version = "24.04"
+image = "ubuntu"
+image_version = "24.04"
 
 [container.hosts]
 "db.local" = "host-gateway"

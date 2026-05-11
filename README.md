@@ -15,14 +15,14 @@
 
 Standing up a Docker-based dev environment by hand means writing all of this for every project:
 
-- `Dockerfile` (60–120 lines) — base OS, apt, user creation, per-CLI install steps
+- `Dockerfile` (60–120 lines) — base image, apt, user creation, per-CLI install steps
 - `docker-compose.yml` (30–80 lines) — service / mounts / volumes / env / ports
 - `devcontainer.json` (20–40 lines) — VS Code Dev Containers wiring
 
 cocoon turns that into:
 
 ```bash
-cocoon init   # answer "Which OS? Which shell? Which CLIs?"
+cocoon init   # answer "Which base image? Which shell? Which CLIs?"
 cocoon gen    # .devcontainer/ is regenerated from scratch
 docker compose -f .devcontainer/docker-compose.yml up -d
 ```
@@ -39,7 +39,7 @@ The only file checked into your repository is a ~30-line `workspace.toml`. The `
 | `docker-compose.yml` | Service + named volumes + ports + optional sidecars |
 | `devcontainer.json` | VS Code Reopen-in-Container support (skippable) |
 | `docker-entrypoint.sh` | Restores image-baked binaries on each container start |
-| `.env` | `COMPOSE_PROJECT_NAME`, UID/GID, OS metadata |
+| `.env` | `COMPOSE_PROJECT_NAME`, UID/GID, IMAGE / IMAGE_VERSION |
 
 The same artifacts power both `docker compose up` from the CLI and VS Code's "Reopen in Container".
 
@@ -71,16 +71,17 @@ docker compose -f .devcontainer/docker-compose.yml up -d # or VS Code → "Reope
 ## What `cocoon init` asks you
 
 1. **Service name** and **username** for the container
-2. **Base OS** — `ubuntu` (26.04 / 24.04 / 22.04) or `debian` (13 / 12)
-3. **Login shell** — `bash`, `zsh`, or `fish`
-4. **Alias bundles** — `git`, `ls`, `docker` shortcut sets (multi-select)
-5. **Mount range** — cwd only, or its parent (for fat workspaces where sibling repos must be visible)
-6. **VS Code Dev Containers** support — emit `devcontainer.json` or skip
-7. **Corporate CA auto-bake** — opt in to picking up `.crt` files from `~/.cocoon/certs/` at build time (off by default; see below)
-8. **apt categories** — text-editors, vcs, utilities, build, network, … (multi-select)
-9. **Plugins** to enable from the embedded catalog (multi-select, 20 to choose from)
+2. **Base image** — `ubuntu` / `debian` / `node` / `python` / `golang` / `rust` / `denoland/deno` (DockerHub canonical names)
+3. **Image version** — pick a curated suggestion or type any Docker tag directly
+4. **Login shell** — `bash`, `zsh`, or `fish`
+5. **Alias bundles** — `git`, `ls`, `docker` shortcut sets (multi-select)
+6. **Mount range** — cwd only, or its parent (for fat workspaces where sibling repos must be visible)
+7. **VS Code Dev Containers** support — emit `devcontainer.json` or skip
+8. **Corporate CA auto-bake** — opt in to picking up `.crt` files from `~/.cocoon/certs/` at build time (off by default; see below)
+9. **apt categories** — text-editors, vcs, utilities, build, network, … (multi-select)
+10. **Plugins** to enable from the embedded catalog (multi-select, 20 to choose from)
 
-Each answer becomes a self-documenting line in `workspace.toml`. Pass `--yes` together with the value flags (`--service-name`, `--username`, `--os`, `--plugins`, `--certificates`, …) to drive it from CI without a TTY.
+Each answer becomes a self-documenting line in `workspace.toml`. Pass `--yes` together with the value flags (`--service-name`, `--username`, `--image`, `--plugins`, `--certificates`, …) to drive it from CI without a TTY.
 
 ## Plugins
 

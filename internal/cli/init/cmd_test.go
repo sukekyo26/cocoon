@@ -130,7 +130,7 @@ func TestApplyFlags_AllValid(t *testing.T) {
 	plugins := loadPluginsForTest(t)
 	flags := initFlags{
 		AutoYes: true, ServiceName: "myapp", Username: "dev",
-		OS: "ubuntu", OSVersion: "24.04", MountRoot: "..",
+		Image: "ubuntu", ImageVersion: "24.04", MountRoot: "..",
 		Devcontainer: false, NoDevcontainer: true,
 		AptCategories: "text-editors,build", Force: false,
 	}
@@ -144,11 +144,11 @@ func TestApplyFlags_AllValid(t *testing.T) {
 	if ans.Username != "dev" {
 		t.Errorf("Username = %q", ans.Username)
 	}
-	if ans.OS != "ubuntu" || !ans.OSSet {
-		t.Errorf("OS = %q OSSet=%v", ans.OS, ans.OSSet)
+	if ans.Image != "ubuntu" || !ans.ImageSet {
+		t.Errorf("Image = %q ImageSet=%v", ans.Image, ans.ImageSet)
 	}
-	if ans.OSVersion != "24.04" || !ans.OSVersionSet {
-		t.Errorf("OSVersion = %q OSVersionSet=%v", ans.OSVersion, ans.OSVersionSet)
+	if ans.ImageVersion != "24.04" || !ans.ImageVersionSet {
+		t.Errorf("ImageVersion = %q ImageVersionSet=%v", ans.ImageVersion, ans.ImageVersionSet)
 	}
 	if ans.MountRoot != ".." || !ans.MountRootSet {
 		t.Errorf("MountRoot = %q MountRootSet=%v", ans.MountRoot, ans.MountRootSet)
@@ -168,7 +168,7 @@ func TestApplyFlags_UnsetLeavesZero(t *testing.T) {
 	if err != nil {
 		t.Fatalf("applyFlags: %v", err)
 	}
-	if ans.ServiceName != "" || ans.Username != "" || ans.OSSet || ans.OSVersionSet ||
+	if ans.ServiceName != "" || ans.Username != "" || ans.ImageSet || ans.ImageVersionSet ||
 		ans.MountRootSet || ans.DevcontainerSet || ans.AptSet {
 		t.Errorf("expected fully zero answers, got %+v", ans)
 	}
@@ -196,41 +196,71 @@ func TestApplyFlags_InvalidUsername(t *testing.T) {
 	}
 }
 
-func TestApplyFlags_InvalidOS(t *testing.T) {
+func TestApplyFlags_InvalidImage(t *testing.T) {
 	t.Parallel()
 	plugins := loadPluginsForTest(t)
-	_, err := applyFlags(&initFlags{OS: "alpine"}, plugins)
+	_, err := applyFlags(&initFlags{Image: "alpine"}, plugins)
 	if !errors.Is(err, ErrUsage) {
-		t.Errorf("expected ErrUsage for unknown --os, got %v", err)
+		t.Errorf("expected ErrUsage for unknown --image, got %v", err)
 	}
 }
 
-func TestApplyFlags_OSVersionWithoutOS(t *testing.T) {
+func TestApplyFlags_ImageVersionWithoutImage(t *testing.T) {
 	t.Parallel()
 	plugins := loadPluginsForTest(t)
-	_, err := applyFlags(&initFlags{OSVersion: "24.04"}, plugins)
+	_, err := applyFlags(&initFlags{ImageVersion: "24.04"}, plugins)
 	if !errors.Is(err, ErrUsage) {
-		t.Errorf("--os-version without --os should be ErrUsage, got %v", err)
+		t.Errorf("--image-version without --image should be ErrUsage, got %v", err)
 	}
 }
 
-func TestApplyFlags_OSVersionMismatch(t *testing.T) {
+// TestApplyFlags_ImageVersionBadFormat covers the format-only check that
+// replaces the old whitelist match. Tags with spaces, slashes, or colons
+// must be rejected at the flag layer so the user sees a clear error
+// before `cocoon gen` runs.
+func TestApplyFlags_ImageVersionBadFormat(t *testing.T) {
 	t.Parallel()
 	plugins := loadPluginsForTest(t)
-	_, err := applyFlags(&initFlags{OS: "debian", OSVersion: "24.04"}, plugins)
-	if !errors.Is(err, ErrUsage) {
-		t.Errorf("ubuntu version on debian should be ErrUsage, got %v", err)
+	for _, bad := range []string{"with space", "ubuntu/22.04", "node:24", "tab\there", ""} {
+		if bad == "" {
+			continue // empty means "flag not set", which is allowed
+		}
+		_, err := applyFlags(&initFlags{Image: "ubuntu", ImageVersion: bad}, plugins)
+		if !errors.Is(err, ErrUsage) {
+			t.Errorf("bad image-version %q should be ErrUsage, got %v", bad, err)
+		}
 	}
 }
 
-func TestApplyFlags_OSVersionValidPair(t *testing.T) {
+// TestApplyFlags_ImageVersionAcceptsOffWhitelist verifies the new behavior:
+// any tag matching rxImageVersionInput is accepted, even when not in
+// SupportedImageVersions. This lets users pin patch tags or new minors
+// (e.g. golang:1.26.4-bookworm) without waiting for a cocoon release.
+func TestApplyFlags_ImageVersionAcceptsOffWhitelist(t *testing.T) {
 	t.Parallel()
 	plugins := loadPluginsForTest(t)
-	ans, err := applyFlags(&initFlags{OS: "debian", OSVersion: "13"}, plugins)
+	// Off-whitelist but well-formed: future Go patch and an oddly-cased
+	// suffix neither cocoon nor the registry necessarily ship today.
+	for _, tag := range []string{"1.26.4-bookworm", "26-bookworm-slim", "edge"} {
+		ans, err := applyFlags(&initFlags{Image: "golang", ImageVersion: tag}, plugins)
+		if err != nil {
+			t.Errorf("off-whitelist tag %q should be accepted, got %v", tag, err)
+			continue
+		}
+		if ans.ImageVersion != tag || !ans.ImageVersionSet {
+			t.Errorf("got %+v", ans)
+		}
+	}
+}
+
+func TestApplyFlags_ImageVersionWhitelistedPair(t *testing.T) {
+	t.Parallel()
+	plugins := loadPluginsForTest(t)
+	ans, err := applyFlags(&initFlags{Image: "debian", ImageVersion: "13"}, plugins)
 	if err != nil {
 		t.Fatalf("applyFlags: %v", err)
 	}
-	if ans.OSVersion != "13" || !ans.OSVersionSet {
+	if ans.ImageVersion != "13" || !ans.ImageVersionSet {
 		t.Errorf("got %+v", ans)
 	}
 }
@@ -309,11 +339,11 @@ func TestApplyDefaults_FillsMissingDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ans.OS != "ubuntu" || !ans.OSSet {
-		t.Errorf("OS default = %q OSSet=%v", ans.OS, ans.OSSet)
+	if ans.Image != "ubuntu" || !ans.ImageSet {
+		t.Errorf("Image default = %q ImageSet=%v", ans.Image, ans.ImageSet)
 	}
-	if ans.OSVersion != "26.04" || !ans.OSVersionSet {
-		t.Errorf("OSVersion default = %q", ans.OSVersion)
+	if ans.ImageVersion != "26.04" || !ans.ImageVersionSet {
+		t.Errorf("ImageVersion default = %q", ans.ImageVersion)
 	}
 	if ans.MountRoot != "." || !ans.MountRootSet {
 		t.Errorf("MountRoot default = %q", ans.MountRoot)
@@ -335,8 +365,8 @@ func TestApplyDefaults_PreservesExplicitSettings(t *testing.T) {
 	in := initAnswers{
 		ServiceName: "svc",
 		Username:    "dev",
-		OS:          "debian", OSSet: true,
-		OSVersion: "13", OSVersionSet: true,
+		Image:       "debian", ImageSet: true,
+		ImageVersion: "13", ImageVersionSet: true,
 		MountRoot: "..", MountRootSet: true,
 		Devcontainer: false, DevcontainerSet: true,
 		AptCategories: []string{"text-editors"}, AptSet: true,
@@ -345,52 +375,93 @@ func TestApplyDefaults_PreservesExplicitSettings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ans.OS != "debian" || ans.OSVersion != "13" || ans.MountRoot != ".." ||
+	if ans.Image != "debian" || ans.ImageVersion != "13" || ans.MountRoot != ".." ||
 		ans.Devcontainer || len(ans.AptCategories) != 1 {
 		t.Errorf("explicit values not preserved: %+v", ans)
 	}
 }
 
 // ---------------------------------------------------------------------
-// defaultOSVersion: returns the first (newest) entry per OS.
+// defaultImageVersion: returns the first (newest) entry per image.
 // ---------------------------------------------------------------------
 
-func TestDefaultOSVersion(t *testing.T) {
+func TestDefaultImageVersion(t *testing.T) {
 	t.Parallel()
-	if got := defaultOSVersion("ubuntu"); got != "26.04" {
+	if got := defaultImageVersion("ubuntu"); got != "26.04" {
 		t.Errorf("ubuntu default = %q, want 26.04", got)
 	}
-	if got := defaultOSVersion("debian"); got != "13" {
+	if got := defaultImageVersion("debian"); got != "13" {
 		t.Errorf("debian default = %q, want 13", got)
 	}
-	if got := defaultOSVersion("alpine"); got != "" {
+	if got := defaultImageVersion("alpine"); got != "" {
 		t.Errorf("unknown OS default should be \"\", got %q", got)
-	}
-}
-
-// ---------------------------------------------------------------------
-// versionMatchesOS: catches stale version after OS change in form.
-// ---------------------------------------------------------------------
-
-func TestVersionMatchesOS(t *testing.T) {
-	t.Parallel()
-	if !versionMatchesOS("ubuntu", "24.04") {
-		t.Error("ubuntu 24.04 should match")
-	}
-	if versionMatchesOS("ubuntu", "13") {
-		t.Error("ubuntu 13 should NOT match")
-	}
-	if versionMatchesOS("debian", "24.04") {
-		t.Error("debian 24.04 should NOT match")
-	}
-	if versionMatchesOS("alpine", "any") {
-		t.Error("alpine should not match anything")
 	}
 }
 
 // ---------------------------------------------------------------------
 // parseAptCategories: validation and whitespace handling.
 // ---------------------------------------------------------------------
+
+// TestFilterPluginIDs pins the helper that drops one id from a plugin
+// default list before the multi-select form is built. Empty excludeID
+// must pass the slice through unchanged; a present id must be removed
+// exactly once; an absent id must be a no-op. The picker relies on
+// these three shapes to keep image-vs-plugin combinations consistent
+// without surfacing the same id in two contradictory places (default
+// list and excluded list).
+func TestFilterPluginIDs(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name      string
+		in        []string
+		excludeID string
+		want      []string
+	}{
+		{"no_exclude_returns_input", []string{"a", "b", "c"}, "", []string{"a", "b", "c"}},
+		{"excludes_present_id", []string{"a", "rust", "c"}, "rust", []string{"a", "c"}},
+		{"absent_id_is_noop", []string{"a", "b"}, "rust", []string{"a", "b"}},
+		{"empty_input", []string{}, "rust", []string{}},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := filterPluginIDs(tc.in, tc.excludeID)
+			if len(got) != len(tc.want) {
+				t.Fatalf("len=%d, want %d, got=%v", len(got), len(tc.want), got)
+			}
+			for i := range got {
+				if got[i] != tc.want[i] {
+					t.Errorf("at %d: got %q, want %q", i, got[i], tc.want[i])
+				}
+			}
+		})
+	}
+}
+
+// TestPluginsMultiSelect_BuildsForEveryExcludeID exercises the picker
+// constructor with each ImageProvidesPlugin value plus the no-exclude
+// case. The huh.MultiSelect's option list isn't readable through a
+// stable public API, so this is a smoke test: it confirms construction
+// never panics and the returned Field has the expected title/description
+// key — picker exclusion behavior itself is covered by TestFilterPluginIDs.
+func TestPluginsMultiSelect_BuildsForEveryExcludeID(t *testing.T) {
+	t.Parallel()
+	plugins := loadPluginsForTest(t)
+	cat := i18n.New(i18n.LangEN)
+	var target []string
+
+	for _, excludeID := range []string{"", "rust", "go"} {
+		excludeID := excludeID
+		t.Run("exclude="+excludeID, func(t *testing.T) {
+			t.Parallel()
+			sel := pluginsMultiSelect(cat, plugins, excludeID, &target)
+			if sel == nil {
+				t.Fatal("pluginsMultiSelect returned nil")
+			}
+		})
+	}
+}
 
 func TestParseAptCategories(t *testing.T) {
 	t.Parallel()
@@ -419,7 +490,7 @@ func TestRenderWorkspaceToml_NoPackages(t *testing.T) {
 	t.Parallel()
 	cat := i18n.New(i18n.LangEN)
 	got := renderWorkspaceToml(containerSpec{
-		ServiceName: "svc", Username: "dev", OS: "ubuntu", OSVersion: "24.04",
+		ServiceName: "svc", Username: "dev", Image: "ubuntu", ImageVersion: "24.04",
 		Shell: "bash", MountRoot: ".", Devcontainer: true, Packages: nil,
 	}, cat)
 	for _, want := range []string{
@@ -427,8 +498,8 @@ func TestRenderWorkspaceToml_NoPackages(t *testing.T) {
 		`devcontainer = true`,
 		`service_name = "svc"`,
 		`username = "dev"`,
-		`os = "ubuntu"`,
-		`os_version = "24.04"`,
+		`image = "ubuntu"`,
+		`image_version = "24.04"`,
 		"[container.shell]\ndefault = \"bash\"",
 		`enable = []`,
 		`packages = []`,
@@ -443,15 +514,15 @@ func TestRenderWorkspaceToml_WithPackages(t *testing.T) {
 	t.Parallel()
 	cat := i18n.New(i18n.LangEN)
 	got := renderWorkspaceToml(containerSpec{
-		ServiceName: "svc", Username: "dev", OS: "debian", OSVersion: "13",
+		ServiceName: "svc", Username: "dev", Image: "debian", ImageVersion: "13",
 		Shell: "zsh", MountRoot: "..", Devcontainer: false,
 		Packages: []string{"vim", "tmux"},
 	}, cat)
 	for _, want := range []string{
 		`mount_root = ".."`,
 		`devcontainer = false`,
-		`os = "debian"`,
-		`os_version = "13"`,
+		`image = "debian"`,
+		`image_version = "13"`,
 		"[container.shell]\ndefault = \"zsh\"",
 		"packages = [\n    \"vim\",\n    \"tmux\",\n]",
 	} {
@@ -465,7 +536,7 @@ func TestRenderWorkspaceToml_WithPlugins(t *testing.T) {
 	t.Parallel()
 	cat := i18n.New(i18n.LangEN)
 	got := renderWorkspaceToml(containerSpec{
-		ServiceName: "svc", Username: "dev", OS: "ubuntu", OSVersion: "24.04",
+		ServiceName: "svc", Username: "dev", Image: "ubuntu", ImageVersion: "24.04",
 		Shell: "bash", MountRoot: ".", Devcontainer: true,
 		Plugins: []string{"go", "uv", "github-cli"},
 	}, cat)
@@ -479,7 +550,7 @@ func TestRenderWorkspaceToml_FishShell(t *testing.T) {
 	t.Parallel()
 	cat := i18n.New(i18n.LangEN)
 	got := renderWorkspaceToml(containerSpec{
-		ServiceName: "svc", Username: "dev", OS: "ubuntu", OSVersion: "24.04",
+		ServiceName: "svc", Username: "dev", Image: "ubuntu", ImageVersion: "24.04",
 		Shell: "fish", MountRoot: ".", Devcontainer: true,
 	}, cat)
 	want := "[container.shell]\ndefault = \"fish\""
@@ -492,7 +563,7 @@ func TestRenderWorkspaceToml_WithAliases(t *testing.T) {
 	t.Parallel()
 	cat := i18n.New(i18n.LangEN)
 	got := renderWorkspaceToml(containerSpec{
-		ServiceName: "svc", Username: "dev", OS: "ubuntu", OSVersion: "24.04",
+		ServiceName: "svc", Username: "dev", Image: "ubuntu", ImageVersion: "24.04",
 		Shell: "bash", MountRoot: ".", Devcontainer: true,
 		Aliases: map[string]string{"gs": "git status", "ll": "ls -lah"},
 	}, cat)
@@ -507,7 +578,7 @@ func TestRenderWorkspaceToml_NoAliases_OmitsLine(t *testing.T) {
 	t.Parallel()
 	cat := i18n.New(i18n.LangEN)
 	got := renderWorkspaceToml(containerSpec{
-		ServiceName: "svc", Username: "dev", OS: "ubuntu", OSVersion: "24.04",
+		ServiceName: "svc", Username: "dev", Image: "ubuntu", ImageVersion: "24.04",
 		Shell: "bash", MountRoot: ".", Devcontainer: true,
 		Aliases: nil,
 	}, cat)
@@ -523,7 +594,7 @@ func TestRenderWorkspaceToml_LocalizedComments_EN(t *testing.T) {
 	t.Parallel()
 	cat := i18n.New(i18n.LangEN)
 	got := renderWorkspaceToml(containerSpec{
-		ServiceName: "svc", Username: "dev", OS: "ubuntu", OSVersion: "24.04",
+		ServiceName: "svc", Username: "dev", Image: "ubuntu", ImageVersion: "24.04",
 		Shell: "bash", MountRoot: ".", Devcontainer: true,
 	}, cat)
 	for _, want := range []string{
@@ -544,7 +615,7 @@ func TestRenderWorkspaceToml_LocalizedComments_JA(t *testing.T) {
 	t.Parallel()
 	cat := i18n.New(i18n.LangJA)
 	got := renderWorkspaceToml(containerSpec{
-		ServiceName: "svc", Username: "dev", OS: "ubuntu", OSVersion: "24.04",
+		ServiceName: "svc", Username: "dev", Image: "ubuntu", ImageVersion: "24.04",
 		Shell: "bash", MountRoot: ".", Devcontainer: true,
 	}, cat)
 	for _, want := range []string{
@@ -571,7 +642,7 @@ func TestRenderWorkspaceToml_ContainerShellEnvCaveats(t *testing.T) {
 	for _, lang := range []i18n.Lang{i18n.LangEN, i18n.LangJA} {
 		cat := i18n.New(lang)
 		got := renderWorkspaceToml(containerSpec{
-			ServiceName: "svc", Username: "dev", OS: "ubuntu", OSVersion: "24.04",
+			ServiceName: "svc", Username: "dev", Image: "ubuntu", ImageVersion: "24.04",
 			Shell: "bash", MountRoot: ".", Devcontainer: true,
 		}, cat)
 		for _, want := range []string{"text-editors", "VS Code", "utilities"} {
@@ -598,7 +669,7 @@ func TestRunInit_YesWritesWorkspaceToml(t *testing.T) {
 	cmd := NewCommand(io.Discard, io.Discard)
 	cmd.SetArgs([]string{
 		"--yes", "--service-name", "myapp", "--username", "dev",
-		"--os", "ubuntu", "--os-version", "24.04",
+		"--image", "ubuntu", "--image-version", "24.04",
 		"--mount-root", "..", "--no-devcontainer",
 		"--apt-categories", "text-editors",
 	})
@@ -611,7 +682,7 @@ func TestRunInit_YesWritesWorkspaceToml(t *testing.T) {
 	}
 	for _, want := range []string{
 		`service_name = "myapp"`, `username = "dev"`,
-		`os = "ubuntu"`, `os_version = "24.04"`,
+		`image = "ubuntu"`, `image_version = "24.04"`,
 		`mount_root = ".."`, `devcontainer = false`,
 		`"vim"`, `"nano"`,
 	} {
@@ -780,7 +851,7 @@ func TestRunInit_CertificatesFlag(t *testing.T) {
 			t.Chdir(work)
 			args := append([]string{
 				"--yes", "--service-name", "dev", "--username", "dev",
-				"--os", "ubuntu", "--os-version", "22.04",
+				"--image", "ubuntu", "--image-version", "22.04",
 				"--mount-root", ".", "--no-devcontainer",
 			}, tc.extraArgs...)
 			cmd := NewCommand(io.Discard, io.Discard)
@@ -1314,7 +1385,7 @@ func TestRenderWorkspaceToml_AllTemplatesPresent_EN(t *testing.T) {
 	t.Parallel()
 	cat := i18n.New(i18n.LangEN)
 	got := renderWorkspaceToml(containerSpec{
-		ServiceName: "svc", Username: "dev", OS: "ubuntu", OSVersion: "26.04",
+		ServiceName: "svc", Username: "dev", Image: "ubuntu", ImageVersion: "26.04",
 		Shell: "bash", MountRoot: ".", Devcontainer: true,
 	}, cat)
 	for _, header := range allTemplateSectionHeaders {
@@ -1328,7 +1399,7 @@ func TestRenderWorkspaceToml_AllTemplatesPresent_JA(t *testing.T) {
 	t.Parallel()
 	cat := i18n.New(i18n.LangJA)
 	got := renderWorkspaceToml(containerSpec{
-		ServiceName: "svc", Username: "dev", OS: "ubuntu", OSVersion: "26.04",
+		ServiceName: "svc", Username: "dev", Image: "ubuntu", ImageVersion: "26.04",
 		Shell: "bash", MountRoot: ".", Devcontainer: true,
 	}, cat)
 	for _, header := range allTemplateSectionHeaders {
@@ -1352,7 +1423,7 @@ func TestRenderWorkspaceToml_NoDeprecatedSections(t *testing.T) {
 	for _, lang := range []i18n.Lang{i18n.LangEN, i18n.LangJA} {
 		cat := i18n.New(lang)
 		got := renderWorkspaceToml(containerSpec{
-			ServiceName: "svc", Username: "dev", OS: "ubuntu", OSVersion: "26.04",
+			ServiceName: "svc", Username: "dev", Image: "ubuntu", ImageVersion: "26.04",
 			Shell: "bash", MountRoot: ".", Devcontainer: true,
 		}, cat)
 		for _, banned := range []string{"[git]", "[repositories]"} {
@@ -1376,7 +1447,7 @@ func TestRenderWorkspaceToml_TemplateOrdering(t *testing.T) {
 	t.Parallel()
 	cat := i18n.New(i18n.LangEN)
 	got := renderWorkspaceToml(containerSpec{
-		ServiceName: "svc", Username: "dev", OS: "ubuntu", OSVersion: "26.04",
+		ServiceName: "svc", Username: "dev", Image: "ubuntu", ImageVersion: "26.04",
 		Shell: "bash", MountRoot: ".", Devcontainer: true,
 	}, cat)
 

@@ -33,8 +33,8 @@
 | `--yes` | bool | プロンプトをスキップ。`--service-name` と `--username` が必須になる。 |
 | `--service-name <name>` | string | Compose サービス名 (`--yes` 指定時必須)。 |
 | `--username <name>` | string | コンテナ内ユーザー名 (`--yes` 指定時必須)。 |
-| `--os <id>` | string | ベース OS: `ubuntu` \| `debian`。 |
-| `--os-version <ver>` | string | ベース OS バージョン (`--os` と整合する必要あり)。 |
+| `--image <id>` | string | ベースイメージ (DockerHub の正式名称): `ubuntu` \| `debian` \| `node` \| `python` \| `golang` \| `rust` \| `denoland/deno`。 |
+| `--image-version <ver>` | string | ベースイメージのタグ。正しい形式 (先頭は英数字または `_`、2 文字目以降は `.` / `-` も可、スラッシュ・コロン禁止) なら任意の Docker タグを受理 (レジストリ実在性は `docker pull` に委ねる)。`--image` が設定されている必要あり。 |
 | `--shell <id>` | string | コンテナログインシェル: `bash` \| `zsh` \| `fish`。 |
 | `--mount-root <path>` | string | マウント範囲: `"."` (cwd) または `".."` (親)。 |
 | `--devcontainer` | bool | `.devcontainer/devcontainer.json` 出力を強制有効化。 |
@@ -53,8 +53,8 @@
 
 1. service name
 2. username
-3. OS
-4. OS バージョン (選択した OS で絞り込み)
+3. ベースイメージ
+4. イメージバージョン (選択した image で絞り込み)
 5. login shell
 6. alias bundles (multi-select)
 7. mount range
@@ -72,7 +72,7 @@ cocoon init
 # 非対話
 cocoon init --yes \
     --service-name myapp --username dev \
-    --os ubuntu --os-version 26.04 \
+    --image ubuntu --image-version 26.04 \
     --shell bash --mount-root . --devcontainer \
     --apt-categories text-editors,vcs,utilities,compression,build \
     --plugins go,uv,github-cli \

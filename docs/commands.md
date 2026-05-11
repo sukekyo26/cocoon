@@ -33,8 +33,8 @@ Generate `workspace.toml` in the current directory.
 | `--yes` | bool | Skip prompts. `--service-name` and `--username` become required. |
 | `--service-name <name>` | string | Compose service name (required with `--yes`). |
 | `--username <name>` | string | In-container user (required with `--yes`). |
-| `--os <id>` | string | Base OS: `ubuntu` \| `debian`. |
-| `--os-version <ver>` | string | Base OS version (must match `--os`). |
+| `--image <id>` | string | Base image (DockerHub canonical name): `ubuntu` \| `debian` \| `node` \| `python` \| `golang` \| `rust` \| `denoland/deno`. |
+| `--image-version <ver>` | string | Base image tag. Any well-formed Docker tag is accepted (first character alnum or `_`; `.` / `-` allowed in trailing positions; no slash, no colon); existence in the upstream registry is left to `docker pull`. Requires `--image` to be set. |
 | `--shell <id>` | string | Container login shell: `bash` \| `zsh` \| `fish`. |
 | `--mount-root <path>` | string | Mount range: `"."` (cwd) or `".."` (parent). |
 | `--devcontainer` | bool | Force-enable `.devcontainer/devcontainer.json` output. |
@@ -53,8 +53,8 @@ When run without `--yes`, prompts are shown one screen at a time:
 
 1. service name
 2. username
-3. OS
-4. OS version (filtered by the chosen OS)
+3. base image
+4. image version (filtered by the chosen image)
 5. login shell
 6. alias bundles (multi-select)
 7. mount range
@@ -72,7 +72,7 @@ cocoon init
 # Non-interactive
 cocoon init --yes \
     --service-name myapp --username dev \
-    --os ubuntu --os-version 26.04 \
+    --image ubuntu --image-version 26.04 \
     --shell bash --mount-root . --devcontainer \
     --apt-categories text-editors,vcs,utilities,compression,build \
     --plugins go,uv,github-cli \

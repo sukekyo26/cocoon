@@ -20,12 +20,14 @@ var messagesEN_init = map[string]string{
 	"init_desc_username":                "In-container user account (e.g. \"dev\").",
 	"init_err_username_fmt":             "must start with a lowercase letter or _; only lowercase letters, digits, _ and - allowed",
 	"init_err_required":                 "required — please enter a value",
-	"init_prompt_os":                    "Base OS",
-	"init_desc_os":                      "Linux distribution that backs the container image (FROM <os>:<os_version>).",
-	"init_prompt_os_version":            "%s version",
-	"init_desc_os_version":              "Pulled as FROM %s:<version> in the generated Dockerfile.",
-	"init_prompt_os_version_static":     "OS version",
-	"init_desc_os_version_static":       "Pulled as FROM <os>:<version> in the generated Dockerfile.",
+	"init_prompt_image":                 "Base image",
+	"init_desc_image":                   "Container base image (DockerHub canonical name). Pick ubuntu/debian for plain Linux, or a language-runtime image (node, python, golang, rust, denoland/deno) to skip an apt install step. Picking golang or rust disables the matching cocoon plugin to prevent double-install.",
+	"init_prompt_image_version":         "%s version",
+	"init_desc_image_version":           "Pulled as FROM %s:<version> in the generated Dockerfile.",
+	"init_prompt_image_version_static":  "Image version",
+	"init_desc_image_version_static":    "Type a tag, or press Tab to cycle through curated suggestions (e.g. 1.26.3-bookworm). Any well-formed tag the upstream registry publishes is accepted. Rules: first character is a letter, digit, or underscore; trailing characters add `.` and `-`; no slash, no colon.",
+	"init_option_image_version_other":   "Other (manual input)",
+	"init_err_image_version_fmt":        "must be a plain Docker tag — first character alnum or underscore; trailing characters may add `.` and `-`; no slash or colon",
 	"init_prompt_shell":                 "Login shell",
 	"init_desc_shell":                   "Container login shell. bash is the cocoon default; zsh / fish drive shellrc generation differently.",
 	"init_prompt_mount_root":            "Mount range",
@@ -55,7 +57,8 @@ var messagesEN_init = map[string]string{
 		"#   devcontainer: emit .devcontainer/devcontainer.json for VS Code Reopen-in-Container.",
 	"init_toml_section_container": "# [container] — image identity.\n" +
 		"#   service_name: docker-compose `services:` <key>. Used by `docker compose exec <name>`.\n" +
-		"#   username / os / os_version: in-container account and FROM <os>:<os_version>.",
+		"#   username / image / image_version: in-container account and FROM <image>:<image_version>.\n" +
+		"#   image candidates (DockerHub canonical names): ubuntu, debian, node, python, golang, rust, denoland/deno.",
 	"init_toml_section_container_shell": "# [container.shell] — login shell + per-shell rc injection.\n" +
 		"#   default: bash | zsh | fish. The generator picks ~/.bashrc / ~/.zshrc / ~/.config/fish/config.fish.\n" +
 		"#   aliases / env: appended to the rc file inside the image at build time.\n" +
@@ -109,12 +112,14 @@ var messagesJA_init = map[string]string{
 	"init_desc_username":                "コンテナ内ユーザーのアカウント名 (例: \"dev\")。",
 	"init_err_username_fmt":             "英小文字または _ で始め、英小文字・数字・_・- のみ使用可です",
 	"init_err_required":                 "必須項目です。値を入力してください",
-	"init_prompt_os":                    "ベース OS",
-	"init_desc_os":                      "コンテナイメージのベース Linux ディストリビューション (FROM <os>:<os_version>)。",
-	"init_prompt_os_version":            "%s のバージョン",
-	"init_desc_os_version":              "生成される Dockerfile の FROM %s:<version> に展開されます。",
-	"init_prompt_os_version_static":     "OS バージョン",
-	"init_desc_os_version_static":       "生成される Dockerfile の FROM <os>:<version> に展開されます。",
+	"init_prompt_image":                 "ベースイメージ",
+	"init_desc_image":                   "コンテナのベースイメージ (DockerHub の正式名称)。Linux のみなら ubuntu/debian を、言語ランタイム入りなら node / python / golang / rust / denoland/deno を選ぶと apt 1 ステップ省ける。golang / rust を選んだ場合は同名の cocoon プラグインが無効化される（二重インストール回避）。",
+	"init_prompt_image_version":         "%s のバージョン",
+	"init_desc_image_version":           "生成される Dockerfile の FROM %s:<version> に展開されます。",
+	"init_prompt_image_version_static":  "イメージのバージョン",
+	"init_option_image_version_other":   "その他 (手動入力)",
+	"init_err_image_version_fmt":        "Docker タグの形式である必要があります (先頭は英数字または `_`、2 文字目以降は `.` / `-` も可、スラッシュ・コロン禁止)",
+	"init_desc_image_version_static":    "タグを入力するか、Tab キーで推奨候補を循環できます (例: 1.26.3-bookworm)。上流レジストリが公開している正しい形式のタグなら自由に入力可。形式: 先頭は英数字または `_`、2 文字目以降は `.` / `-` も可、スラッシュ・コロン禁止。",
 	"init_prompt_shell":                 "ログインシェル",
 	"init_desc_shell":                   "コンテナ内のログインシェル。bash が cocoon のデフォルト。zsh / fish は shellrc 生成が分岐します。",
 	"init_prompt_mount_root":            "マウント範囲",
@@ -144,7 +149,8 @@ var messagesJA_init = map[string]string{
 		"#   devcontainer: VS Code Reopen-in-Container 用の devcontainer.json を生成するか。",
 	"init_toml_section_container": "# [container] — イメージの素性。\n" +
 		"#   service_name: docker-compose の `services:` <キー>。`docker compose exec <名前>` で使う。\n" +
-		"#   username / os / os_version: コンテナ内ユーザー名と FROM <os>:<os_version>。",
+		"#   username / image / image_version: コンテナ内ユーザー名と FROM <image>:<image_version>。\n" +
+		"#   image 候補 (DockerHub 正式名称): ubuntu, debian, node, python, golang, rust, denoland/deno。",
 	"init_toml_section_container_shell": "# [container.shell] — ログインシェル + シェル別 rc 注入。\n" +
 		"#   default: bash | zsh | fish。生成系が ~/.bashrc / ~/.zshrc / ~/.config/fish/config.fish を選ぶ。\n" +
 		"#   aliases / env: イメージビルド時に rc ファイルへ追記される。\n" +

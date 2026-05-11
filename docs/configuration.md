@@ -72,29 +72,51 @@ devcontainer = true
 
 ## `[container]` (required)
 
-Image identity. `service_name`, `username`, `os`, `os_version` are all required.
+Image identity. `service_name`, `username`, `image`, `image_version` are all required.
 
 | Field | Type | Validation | Description |
 |---|---|---|---|
 | `service_name` | string | `^[a-z][a-z0-9_-]*$` | Compose `services:` key. Used as `docker compose exec <service_name>`. |
 | `username` | string | `^[a-z_][a-z0-9_-]*$` | Linux user created inside the container. |
-| `os` | string | `ubuntu` \| `debian` | Base distribution for `FROM`. |
-| `os_version` | string | matches the chosen `os` (see below) | Distribution version (e.g. `26.04`, `13`). |
+| `image` | string | `ubuntu` \| `debian` \| `node` \| `python` \| `golang` \| `rust` \| `denoland/deno` | Base image for `FROM`, written **verbatim** as DockerHub's canonical image name — `golang` (not `go`) and `denoland/deno` (vendor namespace) — so a reader can recreate the FROM line from workspace.toml alone, with no cocoon-side alias resolution. |
+| `image_version` | string | plain Docker tag: first character must be alnum or `_`; trailing characters add `.` / `-`; no slash, no colon | Image tag (e.g. `26.04`, `24-bookworm-slim`, `1.26.3-bookworm`, `debian-2.7.14`). The table below is the curated suggestion list cocoon offers in `cocoon init`; **any well-formed tag the upstream registry publishes is accepted**, so you can pin a patch or new minor (e.g. `1.26.4-bookworm` the day it ships) without waiting for a cocoon release. |
 | `docker_socket` | bool | — | Mount `/var/run/docker.sock` for docker-in-docker. Default `false`. |
 
-**Supported OS / version pairs:**
+**Suggested image / version pairs** (not exhaustive — any well-formed tag is accepted):
 
-| `os` | `os_version` |
-|---|---|
-| `ubuntu` | `26.04`, `24.04`, `22.04` |
-| `debian` | `13`, `12` |
+| `image` | `image_version` (suggestions) | FROM line emitted |
+|---|---|---|
+| `ubuntu` | `26.04`, `24.04`, `22.04` | `FROM ubuntu:<v>` |
+| `debian` | `13`, `12` | `FROM debian:<v>` |
+| `node` | `26-bookworm-slim`, `24-bookworm-slim`, `22-bookworm-slim` | `FROM node:<v>` |
+| `python` | `3.14-slim-bookworm`, `3.13-slim-bookworm`, `3.12-slim-bookworm` | `FROM python:<v>` |
+| `golang` | `1.26.3-bookworm`, `1.26-bookworm`, `1.25-bookworm`, `1.24-bookworm` | `FROM golang:<v>` |
+| `rust` | `1.95-bookworm`, `1.94-bookworm`, `1.93-bookworm` | `FROM rust:<v>` |
+| `denoland/deno` | `debian-2.7.14`, `debian-2.6.10`, `debian-2.5.7` | `FROM denoland/deno:<v>` |
+
+`cocoon init` exposes these as **Tab-completion suggestions** on the version input — press Tab to cycle through them or type any other tag directly. `--image-version <tag>` accepts the same set on the non-interactive path. Validation only enforces the tag format (no slash, no colon); whether the tag actually exists in the upstream registry is left to `docker pull` at build time.
+
+Every supported image is apt-based, so the existing plugin catalog works the same across all of them. `ubuntu` pulls from Ubuntu archives (archive.ubuntu.com); the other six are Debian (bookworm) variants and pull from deb.debian.org. apt-mirror rewriting branches on this in `aptMirrorOriginHosts` (see `internal/generate/dockerfile/dockerfile.go`).
+
+**Image vs plugin (mutually exclusive pairs):** picking a language-runtime image that overlaps with an existing cocoon plugin is rejected at validation time, because the plugin would either overwrite the base layer (go) or shadow it on `$PATH` (rust). Either drop the plugin from `[plugins].enable`, or switch back to `image = "ubuntu" / "debian"` and pin the version via `[plugins.versions]`.
+
+| Picking `image = …` | …and enabling plugin | Outcome |
+|---|---|---|
+| `golang` | `go` | **rejected** — base already provides Go |
+| `rust` | `rust` | **rejected** — base already provides Rust |
+| `python` | `uv` | accepted — uv adds a binary, leaves Python alone |
+| `node`, `denoland/deno`, `python` | (no matching plugin) | n/a |
 
 ```toml
 [container]
 service_name = "myapp"
 username = "dev"
-os = "ubuntu"
-os_version = "26.04"
+image = "ubuntu"
+image_version = "26.04"
+
+# Or pick a language-runtime image and skip the plugin entirely:
+# image = "node"
+# image_version = "24-bookworm-slim"
 ```
 
 ### `[container.resources]`

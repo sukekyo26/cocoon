@@ -5,6 +5,7 @@ import (
 	"net"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -36,6 +37,17 @@ var (
 	rxAptSuite     = regexp.MustCompile(`^[a-z][a-z0-9._-]*$`)
 	rxAptComponent = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
 	rxAptArch      = regexp.MustCompile(`^(amd64|arm64|i386|armhf|ppc64el|s390x)$`)
+	// rxImageVersion bounds image_version to the Docker tag character set
+	// minus the colon and the registry-path slash, both of which would let
+	// a user smuggle a second `<image>:<tag>` segment past the FROM
+	// template and break the generated Dockerfile. Per the Docker
+	// reference spec a tag is alnum / underscore / period / hyphen with
+	// the first character restricted to alnum or underscore (a leading
+	// period or hyphen is forbidden because it collides with the digest
+	// separator and POSIX option syntax respectively). The regex mirrors
+	// that contract so tags like `_internal` or `2.7.14` are accepted and
+	// `.hidden` / `-foo` / `library/node` / `node:24` are rejected.
+	rxImageVersion = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._-]*$`)
 )
 
 // portMin and portMax bound ports forwarded into the dev container.
@@ -106,6 +118,7 @@ func (w *Workspace) runValidate(a *errAccumulator) {
 	}
 	w.Container.validate(a.at("container"))
 	w.Plugins.validate(a.at("plugins"))
+	w.validateImagePluginConflict(a.at("container"))
 	if w.Ports != nil {
 		w.Ports.validate(a.at("ports"))
 	}
@@ -145,22 +158,36 @@ func (c *ContainerSpec) validate(a *errAccumulator) {
 	if !rxUsername.MatchString(c.Username) {
 		a.add("username does not match "+rxUsername.String(), "username")
 	}
-	if c.DeprecatedUbuntuVersion != "" {
+	if c.DeprecatedOs != "" || c.DeprecatedOsVersion != "" {
 		// The migration error already tells the user the exact rewrite, and
-		// running validateOs on top would stack a "os is required" /
-		// "os_version is required" pair on the same field — noise that buries
-		// the actionable snippet. Skip the OS check until the legacy field is
-		// gone; on the next run validateOs will fire normally.
+		// running validateImage on top would stack an "image is required" /
+		// "image_version is required" pair on the same field — noise that
+		// buries the actionable snippet. Skip the image check until the legacy
+		// fields are gone; on the next run validateImage will fire normally.
+		//
+		// Echo only what was actually present in the legacy fields. Filling
+		// in a guessed default (e.g. "ubuntu" for missing `os`, "26.04" for
+		// missing `os_version`) would produce a copy/pasteable snippet
+		// that's wrong half the time — `image = "ubuntu"` paired with a
+		// Debian-shaped version, or vice versa. A placeholder makes the
+		// user fill in the missing half themselves.
+		legacyOs := c.DeprecatedOs
+		if legacyOs == "" {
+			legacyOs = "<fill in: ubuntu | debian | node | python | golang | rust | denoland/deno>"
+		}
+		legacyVersion := c.DeprecatedOsVersion
+		if legacyVersion == "" {
+			legacyVersion = "<fill in: see docs/configuration.md for the suggestion list>"
+		}
 		a.add(
-			`ubuntu_version is no longer supported. Replace it with two fields under [container]:`+"\n"+
-				`        os = "ubuntu"`+"\n"+
-				`        os_version = "`+c.DeprecatedUbuntuVersion+`"`+"\n"+
-				`    Debian is also supported (os = "debian", os_version = "12" or "13"). `+
-				`See CHANGELOG.md for the migration notes.`,
-			"ubuntu_version",
+			`os / os_version are no longer supported. Replace them with two fields under [container]:`+"\n"+
+				`        image = "`+legacyOs+`"`+"\n"+
+				`        image_version = "`+legacyVersion+`"`+"\n"+
+				`    See docs/configuration.md for the full image/version suggestion list and CHANGELOG.md for migration notes.`,
+			"os",
 		)
 	} else {
-		validateOs(a, c.Os, c.OsVersion)
+		validateImage(a, c.Image, c.ImageVersion)
 	}
 	if c.Shell != nil {
 		c.Shell.validate(a.at("shell"))
@@ -206,34 +233,67 @@ func validateSkel(a *errAccumulator, entries []SkelEntry) {
 	}
 }
 
-// validateOs checks [container].os against SupportedOSes and
-// [container].os_version against the per-OS SupportedOsVersions list. Both
-// fields are required: an empty os trips the first branch with an explicit
-// list of allowed values, and an os_version that does not match the picked
-// OS's version table emits the allowed-values list inline. Together with the
-// ubuntu_version legacy check in (*ContainerSpec).validate, this is the only
-// gate that determines which base image the generator may emit.
-func validateOs(a *errAccumulator, osID, osVersion string) {
-	if osID == "" {
-		a.add("os is required and must be one of "+strings.Join(SupportedOSes, ", "), "os")
+// validateImage checks [container].image against the closed SupportedImages
+// set and [container].image_version against rxImageVersion. Both fields are
+// required.
+//
+// image_version is intentionally NOT restricted to SupportedImageVersions —
+// that map is a curated suggestion list (cocoon's picker defaults) but
+// users may pin any patch / new-minor tag the upstream registry publishes
+// (e.g. golang:1.26.4-bookworm) without waiting for a cocoon release. The
+// only constraint is the regex: alnum + dot + underscore + hyphen, which
+// excludes the colon and slash that would let a malformed tag smuggle a
+// second `<image>:<tag>` segment past the FROM template.
+func validateImage(a *errAccumulator, image, imageVersion string) {
+	if image == "" {
+		a.add("image is required and must be one of "+strings.Join(SupportedImages, ", "), "image")
 		return
 	}
-	versions, known := SupportedOsVersions[osID]
+	suggestions, known := SupportedImageVersions[image]
 	if !known {
-		a.add("os must be one of "+strings.Join(SupportedOSes, ", ")+" (got "+osID+")", "os")
+		a.add("image must be one of "+strings.Join(SupportedImages, ", ")+" (got "+image+")", "image")
 		return
 	}
-	if osVersion == "" {
-		a.add("os_version is required for os="+osID+" (one of "+strings.Join(versions, ", ")+")", "os_version")
-		return
-	}
-	if !slices.Contains(versions, osVersion) {
+	if imageVersion == "" {
 		a.add(
-			"os_version "+osVersion+" is not supported for os="+osID+
-				" (allowed: "+strings.Join(versions, ", ")+")",
-			"os_version",
+			"image_version is required for image="+image+
+				" (suggestions: "+strings.Join(suggestions, ", ")+
+				"; any tag matching "+rxImageVersion.String()+" is accepted)",
+			"image_version",
+		)
+		return
+	}
+	if !rxImageVersion.MatchString(imageVersion) {
+		a.add(
+			"image_version "+strconv.Quote(imageVersion)+" does not match "+rxImageVersion.String()+
+				" (use a plain Docker tag, e.g. "+suggestions[0]+")",
+			"image_version",
 		)
 	}
+}
+
+// validateImagePluginConflict rejects workspace.toml files that combine a
+// language-runtime base image with the matching cocoon plugin. The two
+// pairs declared in ImageProvidesPlugin (go ↔ go plugin, rust ↔ rust
+// plugin) both result in the base toolchain being overwritten or shadowed
+// by the plugin, so enabling both wastes docker-build time for no benefit.
+// Other combinations (e.g. image=python + uv plugin) coexist cleanly and
+// are not checked here.
+func (w *Workspace) validateImagePluginConflict(a *errAccumulator) {
+	pluginID, conflicts := ImageProvidesPlugin[w.Container.Image]
+	if !conflicts {
+		return
+	}
+	if !slices.Contains(w.Plugins.Enable, pluginID) {
+		return
+	}
+	a.add(
+		`image = "`+w.Container.Image+`" already provides `+pluginID+
+			`. Remove "`+pluginID+`" from [plugins].enable, or switch to `+
+			`image = "ubuntu" / "debian" to pin a custom `+pluginID+
+			` version via the plugin.`,
+		"image",
+	)
 }
 
 func checkSkelPath(a *errAccumulator, p, label string) {

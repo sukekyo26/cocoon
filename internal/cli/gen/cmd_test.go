@@ -29,8 +29,8 @@ devcontainer = true
 [container]
 service_name = "demo"
 username = "alice"
-os = "ubuntu"
-os_version = "24.04"
+image = "ubuntu"
+image_version = "24.04"
 
 [plugins]
 enable = []

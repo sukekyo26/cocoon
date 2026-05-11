@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1.7
 # Auto-generated from workspace.toml — do not edit directly.
-ARG OS_IMAGE=ubuntu
-ARG OS_VERSION=24.04
-FROM ${OS_IMAGE}:${OS_VERSION}
+ARG IMAGE=ubuntu
+ARG IMAGE_VERSION=24.04
+FROM ${IMAGE}:${IMAGE_VERSION}
 
 ARG USERNAME
 ARG UID

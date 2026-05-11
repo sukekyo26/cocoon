@@ -92,9 +92,13 @@ var AptCategories = []AptCategory{
 		Default:     false,
 	},
 	{
-		ID:          "python3",
-		Label:       "Python 3",
-		Description: "python3, python3-pip, python3-venv",
+		ID:    "python3",
+		Label: "Python 3",
+		// system Python from Debian apt — separate from the python image
+		// base and the uv plugin. The point is to keep a plain `python3`
+		// reachable on $PATH for AI agents and shell one-liners (no
+		// `uv run python` wrapping, no specific image required).
+		Description: "python3 + pip + venv (system Python for AI / scripts)",
 		Packages:    []string{"python3", "python3-pip", "python3-venv"},
 		Default:     false,
 	},

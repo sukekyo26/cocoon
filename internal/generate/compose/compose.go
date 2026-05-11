@@ -305,8 +305,8 @@ func buildService(ctx *generate.WorkspaceContext, mounts []*yaml.Node) *yaml.Nod
 		})
 	}
 	buildPairs = append(buildPairs, yamlx.Pair{Key: "args", Value: yamlx.Seq(
-		yamlx.QuotedIfSpecial("OS_IMAGE=${OS_IMAGE}"),
-		yamlx.QuotedIfSpecial("OS_VERSION=${OS_VERSION}"),
+		yamlx.QuotedIfSpecial("IMAGE=${IMAGE}"),
+		yamlx.QuotedIfSpecial("IMAGE_VERSION=${IMAGE_VERSION}"),
 		yamlx.QuotedIfSpecial("USERNAME=${USERNAME}"),
 		yamlx.QuotedIfSpecial("UID=${UID}"),
 		yamlx.QuotedIfSpecial("GID=${GID}"),

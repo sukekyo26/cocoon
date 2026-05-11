@@ -72,22 +72,33 @@ func (w *WorkspaceSpec) DevContainerOrDefault() bool {
 	return *w.DevContainer
 }
 
-// ContainerSpec mirrors src/wsd/config.ContainerSpec. Os selects the base
-// distribution ("ubuntu" or "debian"); OsVersion is the distribution-specific
-// version string ("24.04" / "26.04" for Ubuntu; "12" / "13" for Debian).
+// ContainerSpec mirrors src/wsd/config.ContainerSpec. Image is the
+// canonical DockerHub image name pulled verbatim into the FROM line:
+// "ubuntu" / "debian" / "node" / "python" / "golang" / "rust" /
+// "denoland/deno". ImageVersion is the image-specific tag ("26.04" for
+// Ubuntu, "13" for Debian, "26-bookworm-slim" for Node,
+// "3.14-slim-bookworm" for Python, "1.26.3-bookworm" for Golang,
+// "1.95-bookworm" for Rust, "debian-2.7.14" for denoland/deno). The
+// closed image set lives in SupportedImages; per-image suggestions in
+// SupportedImageVersions. Using canonical names means a reader can
+// recreate the FROM line from workspace.toml alone — no alias
+// resolution required.
 type ContainerSpec struct {
-	ServiceName string `toml:"service_name"`
-	Username    string `toml:"username"`
-	Os          string `toml:"os"`
-	OsVersion   string `toml:"os_version"`
+	ServiceName  string `toml:"service_name"`
+	Username     string `toml:"username"`
+	Image        string `toml:"image"`
+	ImageVersion string `toml:"image_version"`
 
-	// DeprecatedUbuntuVersion exists solely so a legacy workspace.toml that
-	// still uses `ubuntu_version = "..."` can be detected and rejected with a
-	// migration message. It must not be read or written outside of
-	// validation. Do not feed this value into generators. The `jsonschema:"-"`
-	// tag keeps the legacy field out of schemas/workspace.schema.json so editor
-	// autocomplete does not advertise a key that the validator rejects.
-	DeprecatedUbuntuVersion string `toml:"ubuntu_version,omitempty" jsonschema:"-"`
+	// DeprecatedOs / DeprecatedOsVersion exist solely so a legacy
+	// workspace.toml that still uses `os = "..."` / `os_version = "..."` (the
+	// v0.2.x shape) can be detected and rejected with a migration message
+	// pointing at the new `image` / `image_version` keys. They must not be
+	// read or written outside of validation; do not feed these values into
+	// generators. The `jsonschema:"-"` tag keeps the legacy fields out of
+	// schemas/workspace.schema.json so editor autocomplete does not advertise
+	// keys that the validator rejects.
+	DeprecatedOs        string `toml:"os,omitempty" jsonschema:"-"`
+	DeprecatedOsVersion string `toml:"os_version,omitempty" jsonschema:"-"`
 
 	Resources    *Resources          `toml:"resources,omitempty"`
 	Shell        *ContainerShellSpec `toml:"shell,omitempty"`
@@ -114,12 +125,29 @@ func (c *ContainerSpec) DockerSocketEnabled() bool {
 	return c.DockerSocket != nil && *c.DockerSocket
 }
 
-// SupportedOSes is the closed set of base distributions the generator can
-// build a Dockerfile for. Validation, the interactive picker and the
+// SupportedImages is the closed set of base container images the generator
+// can build a Dockerfile for. Validation, the interactive picker and the
 // Dockerfile template all key off this list.
 //
+// Each id is the **canonical DockerHub image name** — exactly what appears
+// in the FROM line — so users can read a workspace.toml and know which
+// image is pulled without any cocoon-side aliasing:
+//
+//   - Linux distributions: "ubuntu" / "debian" — library/ namespace.
+//   - Language-runtime official images: "node" / "python" / "golang" / "rust"
+//     — library/ namespace. The runtime is pre-installed; cocoon plugins
+//     add tools around it.
+//   - Vendor-published runtime: "denoland/deno" — vendor namespace,
+//     spelled out so the FROM line is unambiguous.
+//
+// Every image is apt-based so the cocoon plugin catalog works the same
+// way across all of them. ubuntu pulls its own archive (archive.ubuntu.com);
+// the other six are Debian (bookworm) variants and pull from
+// deb.debian.org. apt-mirror rewriting keys off this distinction —
+// see aptMirrorOriginHosts in internal/generate/dockerfile/dockerfile.go.
+//
 //nolint:gochecknoglobals // tabular configuration data, file-scoped by design.
-var SupportedOSes = []string{"ubuntu", "debian"}
+var SupportedImages = []string{"ubuntu", "debian", "node", "python", "golang", "rust", "denoland/deno"}
 
 // SupportedShells is the closed set of login shells `cocoon init` can pick
 // and that [container.shell].default validates against. The Dockerfile and
@@ -128,15 +156,53 @@ var SupportedOSes = []string{"ubuntu", "debian"}
 //nolint:gochecknoglobals // tabular configuration data, file-scoped by design.
 var SupportedShells = []string{"bash", "zsh", "fish"}
 
-// SupportedOsVersions maps an OS id to the closed set of version values that
-// validation accepts. Keys must match SupportedOSes; the version strings are
-// what users put in `os_version = "..."` and what gets baked into the
-// Dockerfile FROM line (e.g. `FROM debian:12`, `FROM ubuntu:24.04`).
+// SupportedImageVersions maps an image id to the curated tag list cocoon
+// suggests in `cocoon init`'s picker and validates auto-completion against.
+// Unlike SupportedImages, this is **not a closed set** for validation —
+// validateImage accepts any tag that matches rxImageVersion (alnum + dot +
+// underscore + hyphen) so users can pin patch versions or new minors that
+// cocoon has not yet baked into its whitelist (e.g. golang:1.26.4-bookworm
+// the day it ships). Tags in this map appear as quick picks in the
+// interactive flow; an "Other (manual input)" option lets users type any
+// other tag at the prompt. The first entry per key is the default
+// `cocoon init` picks when `--image-version` is omitted.
 //
 //nolint:gochecknoglobals // tabular configuration data, file-scoped by design.
-var SupportedOsVersions = map[string][]string{
-	"ubuntu": {"26.04", "24.04", "22.04"},
-	"debian": {"13", "12"},
+var SupportedImageVersions = map[string][]string{
+	"ubuntu":        {"26.04", "24.04", "22.04"},
+	"debian":        {"13", "12"},
+	"node":          {"26-bookworm-slim", "24-bookworm-slim", "22-bookworm-slim"},
+	"python":        {"3.14-slim-bookworm", "3.13-slim-bookworm", "3.12-slim-bookworm"},
+	"golang":        {"1.26.3-bookworm", "1.26-bookworm", "1.25-bookworm", "1.24-bookworm"},
+	"rust":          {"1.95-bookworm", "1.94-bookworm", "1.93-bookworm"},
+	"denoland/deno": {"debian-2.7.14", "debian-2.6.10", "debian-2.5.7"},
+}
+
+// ImageProvidesPlugin marks images that already pre-install a language
+// and must not be combined with the cocoon plugin of the same name. The
+// mapping is image id (= canonical DockerHub name) → conflicting plugin
+// id (= cocoon catalog id); validation rejects workspace.toml files that
+// set `image = <key>` AND enable the named plugin so users get a
+// fail-fast error instead of silently wasting docker-build time.
+//
+// Why the listed pairs conflict:
+//
+//   - "golang" → "go": the go plugin runs `tar -C /usr/local -xzf go.tar.gz`
+//     which directly overwrites the /usr/local/go directory the golang
+//     base image ships, making the base layer dead weight.
+//   - "rust" → "rust": the rust plugin's PATH = "$HOME/.cargo/bin:$PATH"
+//     prepends the user-local cargo dir ahead of the base image's
+//     /usr/local/cargo/bin, so the base toolchain is shadowed and never
+//     used.
+//
+// Other supported images (ubuntu, debian, node, python, denoland/deno)
+// have no matching plugin in the catalog and therefore no conflict to
+// declare here.
+//
+//nolint:gochecknoglobals // tabular configuration data, file-scoped by design.
+var ImageProvidesPlugin = map[string]string{
+	"golang": "go",
+	"rust":   "rust",
 }
 
 // SkelEntry mirrors one [[container.skel]] entry. Source is a path relative

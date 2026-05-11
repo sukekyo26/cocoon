@@ -80,7 +80,7 @@ func TestWorkspaceContext_PopulatedAccessors(t *testing.T) {
 	t.Parallel()
 	ws := &config.Workspace{
 		Container: config.ContainerSpec{
-			ServiceName: "myapp", Username: "alice", Os: "ubuntu", OsVersion: "24.04",
+			ServiceName: "myapp", Username: "alice", Image: "ubuntu", ImageVersion: "24.04",
 			Resources: &config.Resources{Memory: ptr("8g")},
 		},
 		Plugins: config.PluginsSpec{

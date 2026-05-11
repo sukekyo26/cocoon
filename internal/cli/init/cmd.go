@@ -25,7 +25,7 @@ import (
 const initLong = `cocoon init — generate workspace.toml in the current directory
 
 Asks (when running interactively) for the container service name, the
-inside-the-container username, the base OS / version, the mount range,
+inside-the-container username, the base image / version, the mount range,
 whether to emit .devcontainer/devcontainer.json, and which categories
 of common apt packages to install. service_name and username have no
 default — you must type them — because cocoon refuses to bake either
@@ -40,13 +40,20 @@ that caused the cursor indicator to stay pinned while options
 scrolled under it.)
 
 Use --yes plus --service-name / --username (both required when --yes
-is set) and any of --os / --os-version / --shell / --mount-root /
+is set) and any of --image / --image-version / --shell / --mount-root /
 --devcontainer / --apt-categories / --plugins / --alias-bundles to drive
 non-interactively from CI.`
 
 var (
 	rxServiceName = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
 	rxUsername    = regexp.MustCompile(`^[a-z_][a-z0-9_-]*$`)
+	// rxImageVersionInput mirrors config.validate's rxImageVersion so the
+	// "Other (manual input)" prompt rejects bad input in the form rather
+	// than letting it slip through to `cocoon gen` and surface as a
+	// container.image_version validation error. Keep this pattern in
+	// lockstep with rxImageVersion (Docker tag spec: alnum / underscore
+	// can lead, period / hyphen cannot).
+	rxImageVersionInput = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._-]*$`)
 )
 
 // NewCommand returns the cobra command for ` + "`cocoon init`" + `.
@@ -66,8 +73,10 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 	cmd.Flags().BoolVar(&flags.AutoYes, "yes", false, "skip optional prompts; --service-name and --username then required")
 	cmd.Flags().StringVar(&flags.ServiceName, "service-name", "", "compose service name (required with --yes)")
 	cmd.Flags().StringVar(&flags.Username, "username", "", "in-container user (required with --yes)")
-	cmd.Flags().StringVar(&flags.OS, "os", "", fmt.Sprintf("base OS: %s", strings.Join(config.SupportedOSes, ", ")))
-	cmd.Flags().StringVar(&flags.OSVersion, "os-version", "", "base OS version (must match --os)")
+	cmd.Flags().StringVar(&flags.Image, "image", "",
+		fmt.Sprintf("base image: %s", strings.Join(config.SupportedImages, ", ")))
+	cmd.Flags().StringVar(&flags.ImageVersion, "image-version", "",
+		"base image tag — any well-formed Docker tag is accepted; --image must also be set")
 	cmd.Flags().StringVar(&flags.Shell, "shell", "",
 		fmt.Sprintf("container login shell: %s (default: bash)", strings.Join(config.SupportedShells, ", ")))
 	cmd.Flags().StringVar(&flags.MountRoot, "mount-root", "", `mount range: "." (cwd, default) or ".." (parent)`)
@@ -109,8 +118,8 @@ type initFlags struct {
 	AutoYes        bool
 	ServiceName    string
 	Username       string
-	OS             string
-	OSVersion      string
+	Image          string
+	ImageVersion   string
 	Shell          string
 	MountRoot      string
 	Devcontainer   bool
@@ -129,8 +138,8 @@ func zeroFlags() initFlags {
 		AutoYes:        false,
 		ServiceName:    "",
 		Username:       "",
-		OS:             "",
-		OSVersion:      "",
+		Image:          "",
+		ImageVersion:   "",
 		Shell:          "",
 		MountRoot:      "",
 		Devcontainer:   false,
@@ -153,10 +162,10 @@ func zeroFlags() initFlags {
 type initAnswers struct {
 	ServiceName       string
 	Username          string
-	OS                string
-	OSSet             bool
-	OSVersion         string
-	OSVersionSet      bool
+	Image             string
+	ImageSet          bool
+	ImageVersion      string
+	ImageVersionSet   bool
 	Shell             string
 	ShellSet          bool
 	MountRoot         string
@@ -179,10 +188,10 @@ func zeroAnswers() initAnswers {
 	return initAnswers{
 		ServiceName:       "",
 		Username:          "",
-		OS:                "",
-		OSSet:             false,
-		OSVersion:         "",
-		OSVersionSet:      false,
+		Image:             "",
+		ImageSet:          false,
+		ImageVersion:      "",
+		ImageVersionSet:   false,
 		Shell:             "",
 		ShellSet:          false,
 		MountRoot:         "",
@@ -235,8 +244,8 @@ func runInit(cmd *cobra.Command, stdout, _ io.Writer, flags *initFlags) error {
 	content := renderWorkspaceToml(containerSpec{
 		ServiceName:    ans.ServiceName,
 		Username:       ans.Username,
-		OS:             ans.OS,
-		OSVersion:      ans.OSVersion,
+		Image:          ans.Image,
+		ImageVersion:   ans.ImageVersion,
 		Shell:          ans.Shell,
 		Aliases:        aliases,
 		MountRoot:      ans.MountRoot,
@@ -269,15 +278,49 @@ func printNextSteps(stdout io.Writer, cat *i18n.Catalog, devcontainer bool) {
 // collectAnswers folds CLI flags into initAnswers, then either applies
 // safe defaults (when --yes is set) or runs an interactive form for
 // whatever is still missing.
+//
+// A final image/plugin cross-check runs in both paths so the
+// non-interactive route (`--plugins go --image golang`) fails fast
+// here instead of writing a workspace.toml that `cocoon gen` would
+// later reject via validateImagePluginConflict. The interactive
+// picker already filters the conflict out of the multi-select, so
+// the check is a no-op there — it's the guard for scripted runs.
 func collectAnswers(flags *initFlags, cat *i18n.Catalog, plugins map[string]*plugin.Plugin) (initAnswers, error) {
 	ans, err := applyFlags(flags, plugins)
 	if err != nil {
 		return ans, err
 	}
 	if flags.AutoYes {
-		return applyDefaults(ans, plugins)
+		ans, err = applyDefaults(ans, plugins)
+	} else {
+		ans, err = promptForMissing(ans, cat, plugins)
 	}
-	return promptForMissing(ans, cat, plugins)
+	if err != nil {
+		return ans, err
+	}
+	if err := assertNoImagePluginConflict(ans); err != nil {
+		return ans, err
+	}
+	return ans, nil
+}
+
+// assertNoImagePluginConflict fails fast when the chosen image
+// duplicates a language-runtime plugin (image=golang + go plugin,
+// image=rust + rust plugin). The user-facing message names the
+// matching --plugins / --image rewrite so the fix is one edit.
+func assertNoImagePluginConflict(ans initAnswers) error {
+	conflict, hit := config.ImageProvidesPlugin[ans.Image]
+	if !hit {
+		return nil
+	}
+	if !slices.Contains(ans.Plugins, conflict) {
+		return nil
+	}
+	return fmt.Errorf(
+		"%w: image=%q already provides %s; drop %q from --plugins, "+
+			"or pick --image=ubuntu/debian to pin a custom %s via the plugin",
+		ErrUsage, ans.Image, conflict, conflict, conflict,
+	)
 }
 
 // applyFlags copies validated CLI-flag values into initAnswers and marks
@@ -301,27 +344,25 @@ func applyFlags(flags *initFlags, plugins map[string]*plugin.Plugin) (initAnswer
 		}
 		ans.Username = flags.Username
 	}
-	if flags.OS != "" {
-		if _, ok := config.SupportedOsVersions[flags.OS]; !ok {
-			return ans, fmt.Errorf("%w: --os %q not in %s",
-				ErrUsage, flags.OS, strings.Join(config.SupportedOSes, ", "))
+	if flags.Image != "" {
+		if _, ok := config.SupportedImageVersions[flags.Image]; !ok {
+			return ans, fmt.Errorf("%w: --image %q not in %s",
+				ErrUsage, flags.Image, strings.Join(config.SupportedImages, ", "))
 		}
-		ans.OS, ans.OSSet = flags.OS, true
+		ans.Image, ans.ImageSet = flags.Image, true
 	}
-	if flags.OSVersion != "" {
-		if !versionMatchesOS(flags.OS, flags.OSVersion) {
-			osID := flags.OS
-			if osID == "" {
-				osID = "(unset; pass --os too)"
-			}
-			supported := strings.Join(config.SupportedOsVersions[flags.OS], ", ")
-			if supported == "" {
-				supported = "(none — set --os first)"
-			}
-			return ans, fmt.Errorf("%w: --os-version %q not in %s for %s",
-				ErrUsage, flags.OSVersion, supported, osID)
+	if flags.ImageVersion != "" {
+		if flags.Image == "" {
+			return ans, fmt.Errorf(
+				"%w: --image-version %q requires --image (so the registry path is known)",
+				ErrUsage, flags.ImageVersion)
 		}
-		ans.OSVersion, ans.OSVersionSet = flags.OSVersion, true
+		if !rxImageVersionInput.MatchString(flags.ImageVersion) {
+			return ans, fmt.Errorf(
+				"%w: --image-version %q must match %s",
+				ErrUsage, flags.ImageVersion, rxImageVersionInput.String())
+		}
+		ans.ImageVersion, ans.ImageVersionSet = flags.ImageVersion, true
 	}
 	if flags.Shell != "" {
 		if !slices.Contains(config.SupportedShells, flags.Shell) {
@@ -393,11 +434,11 @@ func applyDefaults(ans initAnswers, plugins map[string]*plugin.Plugin) (initAnsw
 	if ans.Username == "" {
 		return ans, fmt.Errorf("%w: --yes requires --username", ErrUsage)
 	}
-	if !ans.OSSet {
-		ans.OS, ans.OSSet = "ubuntu", true
+	if !ans.ImageSet {
+		ans.Image, ans.ImageSet = "ubuntu", true
 	}
-	if !ans.OSVersionSet {
-		ans.OSVersion, ans.OSVersionSet = defaultOSVersion(ans.OS), true
+	if !ans.ImageVersionSet {
+		ans.ImageVersion, ans.ImageVersionSet = defaultImageVersion(ans.Image), true
 	}
 	if !ans.ShellSet {
 		ans.Shell, ans.ShellSet = "bash", true
@@ -445,26 +486,39 @@ func promptForMissing(ans initAnswers, cat *i18n.Catalog, plugins map[string]*pl
 			return ans, err
 		}
 	}
-	if !ans.OSSet {
-		if ans.OS == "" {
-			ans.OS = "ubuntu"
+	if !ans.ImageSet {
+		if ans.Image == "" {
+			ans.Image = "ubuntu"
 		}
-		if err := runSingleFieldForm(osSelect(cat, &ans.OS)); err != nil {
+		if err := runSingleFieldForm(imageSelect(cat, &ans.Image)); err != nil {
 			return ans, err
 		}
-		ans.OSSet = true
+		ans.ImageSet = true
 	}
-	if !ans.OSVersionSet {
-		// Build the version Select's options from the now-known OS so
-		// no OptionsFunc binding / async evaluation is needed.
-		versions := config.SupportedOsVersions[ans.OS]
-		if ans.OSVersion == "" {
-			ans.OSVersion = defaultOSVersion(ans.OS)
+	if !ans.ImageVersionSet {
+		// Custom huh.Field: curated suggestions stacked above an inline
+		// free-text input row. Cursor on a suggestion = select; cursor
+		// on the input row = type. See internal/cli/init/field_image_version.go.
+		versions := config.SupportedImageVersions[ans.Image]
+		if ans.ImageVersion == "" {
+			ans.ImageVersion = defaultImageVersion(ans.Image)
 		}
-		if err := runSingleFieldForm(osVersionSelect(cat, versions, &ans.OSVersion)); err != nil {
+		field := newImageVersionField(&ans.ImageVersion, versions, cat.Msg("init_option_image_version_other")).
+			Title(cat.Msg("init_prompt_image_version_static")).
+			Description(cat.Msg("init_desc_image_version_static")).
+			Validate(func(s string) error {
+				if s == "" {
+					return errors.New(cat.Msg("init_err_required")) //nolint:err113 // user-facing prompt
+				}
+				if !rxImageVersionInput.MatchString(s) {
+					return errors.New(cat.Msg("init_err_image_version_fmt")) //nolint:err113 // user-facing prompt
+				}
+				return nil
+			})
+		if err := runSingleFieldForm(field); err != nil {
 			return ans, err
 		}
-		ans.OSVersionSet = true
+		ans.ImageVersionSet = true
 	}
 	if !ans.ShellSet {
 		ans.Shell = "bash"
@@ -509,14 +563,16 @@ func promptForMissing(ans initAnswers, cat *i18n.Catalog, plugins map[string]*pl
 		ans.AptSet = true
 	}
 	if !ans.PluginsSet {
-		ans.Plugins = defaultPluginIDs(plugins)
-		if err := promptPluginsWithRetry(cat, plugins, &ans.Plugins); err != nil {
+		// Plugins whose toolchain duplicates the chosen base image (e.g.
+		// rust plugin when image = "rust") are hidden from the picker and
+		// removed from the defaults so the user cannot accidentally pick
+		// a combination validateImagePluginConflict would later reject.
+		excludeID := config.ImageProvidesPlugin[ans.Image]
+		ans.Plugins = filterPluginIDs(defaultPluginIDs(plugins), excludeID)
+		if err := promptPluginsWithRetry(cat, plugins, excludeID, &ans.Plugins); err != nil {
 			return ans, err
 		}
 		ans.PluginsSet = true
-	}
-	if !versionMatchesOS(ans.OS, ans.OSVersion) {
-		ans.OSVersion = defaultOSVersion(ans.OS)
 	}
 	return ans, nil
 }
@@ -526,10 +582,16 @@ func promptForMissing(ans initAnswers, cat *i18n.Catalog, plugins map[string]*pl
 // On conflict, the form is re-run up to two more times so the user can
 // reconcile without restarting the whole flow. Three failures in a row
 // return ErrUsage so CI / scripted invocations cannot loop forever.
-func promptPluginsWithRetry(cat *i18n.Catalog, plugins map[string]*plugin.Plugin, target *[]string) error {
+//
+// excludeID hides one plugin id from the picker (empty = hide none); the
+// caller uses it to drop the language-runtime plugin that duplicates the
+// chosen base image, so validateImagePluginConflict cannot fire later.
+func promptPluginsWithRetry(cat *i18n.Catalog, plugins map[string]*plugin.Plugin,
+	excludeID string, target *[]string,
+) error {
 	const maxAttempts = 3
 	for attempt := 0; attempt < maxAttempts; attempt++ {
-		if err := runSingleFieldForm(pluginsMultiSelect(cat, plugins, target)); err != nil {
+		if err := runSingleFieldForm(pluginsMultiSelect(cat, plugins, excludeID, target)); err != nil {
 			return err
 		}
 		err := validatePluginConflicts(plugins, *target)
@@ -544,17 +606,56 @@ func promptPluginsWithRetry(cat *i18n.Catalog, plugins map[string]*plugin.Plugin
 	return fmt.Errorf("%w: plugin conflict not resolved after %d attempts", ErrUsage, maxAttempts)
 }
 
+// filterPluginIDs returns ids with excludeID removed. Empty excludeID
+// returns ids verbatim; the caller does not need to special-case the
+// "no exclusion" path.
+func filterPluginIDs(ids []string, excludeID string) []string {
+	if excludeID == "" {
+		return ids
+	}
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if id == excludeID {
+			continue
+		}
+		out = append(out, id)
+	}
+	return out
+}
+
 // runSingleFieldForm wraps a single huh.Field into a one-Group, one-
 // Field Form and runs it. Centralises the ErrUserAborted / generic-
 // failure error wrapping so the call sites stay readable.
+//
+// Every prompt is its own form (see initLong), so Shift+Tab has no
+// previous field to land on. The form keymap below blanks the Prev
+// binding's help text in every field profile so huh's help bar stops
+// advertising a "shift+tab back" affordance that does nothing.
 func runSingleFieldForm(field huh.Field) error {
-	if err := huh.NewForm(huh.NewGroup(field)).Run(); err != nil {
+	if err := huh.NewForm(huh.NewGroup(field)).WithKeyMap(keyMapWithoutPrevHelp()).Run(); err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
 			return fmt.Errorf("%w: aborted", ErrUsage)
 		}
 		return fmt.Errorf("%w: prompt: %w", ErrFailure, err)
 	}
 	return nil
+}
+
+// keyMapWithoutPrevHelp returns huh's default key bindings with the
+// Shift+Tab "back" help text stripped from every field profile. The
+// binding itself still routes through Update so the keystroke remains
+// a no-op rather than a hard error; only its appearance in the help
+// bar is suppressed.
+func keyMapWithoutPrevHelp() *huh.KeyMap {
+	km := huh.NewDefaultKeyMap()
+	km.Confirm.Prev.SetHelp("", "")
+	km.FilePicker.Prev.SetHelp("", "")
+	km.Input.Prev.SetHelp("", "")
+	km.MultiSelect.Prev.SetHelp("", "")
+	km.Note.Prev.SetHelp("", "")
+	km.Select.Prev.SetHelp("", "")
+	km.Text.Prev.SetHelp("", "")
+	return km
 }
 
 // runStrictIdentForm prompts for one required text identifier with a
@@ -565,19 +666,6 @@ func runStrictIdentForm(cat *i18n.Catalog, titleKey, descKey, charsKey string,
 	pattern *regexp.Regexp, target *string,
 ) error {
 	return runSingleFieldForm(identInput(cat, titleKey, descKey, charsKey, pattern, target))
-}
-
-// versionMatchesOS reports whether the given version is in the
-// supported set for the given OS. Used by applyFlags to validate the
-// --os-version + --os pair, and by promptForMissing as a final
-// sanity check against stale combinations.
-func versionMatchesOS(osID, version string) bool {
-	for _, v := range config.SupportedOsVersions[osID] {
-		if v == version {
-			return true
-		}
-	}
-	return false
 }
 
 func identInput(cat *i18n.Catalog, titleKey, descKey, charsKey string,
@@ -595,33 +683,14 @@ func identInput(cat *i18n.Catalog, titleKey, descKey, charsKey string,
 // breaks when the title+description wraps to two lines (cursor stuck
 // under a scrolling viewport).
 
-func osSelect(cat *i18n.Catalog, target *string) *huh.Select[string] {
-	options := make([]huh.Option[string], len(config.SupportedOSes))
-	for i, id := range config.SupportedOSes {
+func imageSelect(cat *i18n.Catalog, target *string) *huh.Select[string] {
+	options := make([]huh.Option[string], len(config.SupportedImages))
+	for i, id := range config.SupportedImages {
 		options[i] = huh.NewOption(id, id)
 	}
 	return huh.NewSelect[string]().
-		Title(cat.Msg("init_prompt_os")).
-		Description(cat.Msg("init_desc_os")).
-		Options(options...).
-		Value(target)
-}
-
-func osVersionSelect(cat *i18n.Catalog, versions []string, target *string) *huh.Select[string] {
-	// Static Title / Description / Options. The OS is already known by
-	// the time this form is built (the OS picker ran in a prior form),
-	// so we have the version list up front and never need OptionsFunc.
-	// Avoiding OptionsFunc avoids huh's WindowSize-vs-async-eval race
-	// that was shrinking the viewport below the option count and
-	// turning Down into "scroll the option list" rather than "advance
-	// the cursor".
-	options := make([]huh.Option[string], len(versions))
-	for i, v := range versions {
-		options[i] = huh.NewOption(v, v)
-	}
-	return huh.NewSelect[string]().
-		Title(cat.Msg("init_prompt_os_version_static")).
-		Description(cat.Msg("init_desc_os_version_static")).
+		Title(cat.Msg("init_prompt_image")).
+		Description(cat.Msg("init_desc_image")).
 		Options(options...).
 		Value(target)
 }
@@ -696,13 +765,21 @@ func aliasBundlesMultiSelect(cat *i18n.Catalog, target *[]string) *huh.MultiSele
 // runs (LoadDir returns a map so iteration order is otherwise random).
 // The label format mirrors aptMultiSelect — "<Name> (<short description
 // or conflicts hint>)" — so both prompts feel like the same family.
+//
+// excludeID hides one plugin id (empty = no exclusion). Used to drop the
+// rust plugin from the picker when image = "rust" is already chosen
+// (likewise for go), so the user cannot accidentally tick a plugin
+// validateImagePluginConflict would later reject.
 func pluginsMultiSelect(cat *i18n.Catalog, plugins map[string]*plugin.Plugin,
-	target *[]string,
+	excludeID string, target *[]string,
 ) *huh.MultiSelect[string] {
 	ids := sortedPluginIDs(plugins)
-	options := make([]huh.Option[string], len(ids))
-	for i, id := range ids {
-		options[i] = huh.NewOption(formatPluginLabel(id, plugins[id]), id)
+	options := make([]huh.Option[string], 0, len(ids))
+	for _, id := range ids {
+		if id == excludeID {
+			continue
+		}
+		options = append(options, huh.NewOption(formatPluginLabel(id, plugins[id]), id))
 	}
 	return huh.NewMultiSelect[string]().
 		Title(cat.Msg("init_prompt_plugins")).
@@ -952,11 +1029,13 @@ func loadEmbeddedPlugins() (map[string]*plugin.Plugin, error) {
 	return out, nil
 }
 
-// defaultOSVersion returns the first listed version for the OS, which
-// SupportedOsVersions orders newest-first. ubuntu therefore defaults to
-// 26.04, debian to 13.
-func defaultOSVersion(osID string) string {
-	versions := config.SupportedOsVersions[osID]
+// defaultImageVersion returns the first listed version for the image,
+// which SupportedImageVersions orders newest-first. ubuntu therefore
+// defaults to 26.04, debian to 13, node to 26-bookworm-slim, python to
+// 3.14-slim-bookworm, golang to 1.26.3-bookworm, rust to
+// 1.95-bookworm, and denoland/deno to debian-2.7.14.
+func defaultImageVersion(image string) string {
+	versions := config.SupportedImageVersions[image]
 	if len(versions) == 0 {
 		return ""
 	}
@@ -966,8 +1045,8 @@ func defaultOSVersion(osID string) string {
 type containerSpec struct {
 	ServiceName    string
 	Username       string
-	OS             string
-	OSVersion      string
+	Image          string
+	ImageVersion   string
 	Shell          string
 	Aliases        map[string]string
 	MountRoot      string
@@ -999,8 +1078,8 @@ func renderWorkspaceToml(s containerSpec, cat *i18n.Catalog) string {
 	sb.WriteString("[container]\n")
 	fmt.Fprintf(&sb, "service_name = %q\n", s.ServiceName)
 	fmt.Fprintf(&sb, "username = %q\n", s.Username)
-	fmt.Fprintf(&sb, "os = %q\n", s.OS)
-	fmt.Fprintf(&sb, "os_version = %q\n\n", s.OSVersion)
+	fmt.Fprintf(&sb, "image = %q\n", s.Image)
+	fmt.Fprintf(&sb, "image_version = %q\n\n", s.ImageVersion)
 
 	// Commented-out templates for [container.*] opt-in extras. Grouped
 	// under [container] so a reader scanning the file finds related
