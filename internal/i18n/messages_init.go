@@ -96,6 +96,13 @@ var messagesEN_init = map[string]string{
 	"gen_certs_notice_header": "Host TLS certificates:",
 	"gen_certs_notice_path":   "  Drop *.crt files into ~/.cocoon/certs/ to bake corporate / private CAs into the container at build time.",
 	"gen_certs_notice_team":   "  Team members who skip VS Code Dev Containers must run `mkdir -p ~/.cocoon/certs` once on their host (VS Code users get this auto-created via initializeCommand).",
+	// gen home_files: host-side touch + notices
+	"gen_home_file_touched":               "created %s (empty, 0600) for [home_files] bind",
+	"gen_home_files_notice_header":        "Host files for [home_files]:",
+	"gen_home_files_notice_check":         "  Verify these files exist on the host before running `docker compose up`:",
+	"gen_home_files_notice_item":          "    ~/%s",
+	"gen_home_files_in_container_warning": "WARNING: cocoon gen is running inside a container (/.dockerenv detected); [home_files] entries will be touched in this container's HOME, not the Docker host's. Run `cocoon gen` on the host before `docker compose up`.",
+	"gen_home_files_is_directory":         "%s exists as a directory (likely auto-created by a previous `docker compose up` when the file was missing); remove it with `rm -rf %s` and re-run `cocoon gen`",
 }
 
 // messagesJA_init mirrors messagesEN_init in Japanese. Untranslated keys
@@ -188,4 +195,11 @@ var messagesJA_init = map[string]string{
 	"gen_certs_notice_header": "ホスト TLS 証明書:",
 	"gen_certs_notice_path":   "  社内 / プライベート CA を取り込む場合は `.crt` を `~/.cocoon/certs/` に置いてください。build 時に自動取り込みされます。",
 	"gen_certs_notice_team":   "  VS Code Dev Containers を使わないチームメンバーは初回のみホストで `mkdir -p ~/.cocoon/certs` の実行が必要です (VS Code 経由は initializeCommand で自動)。",
+	// gen home_files: host-side touch + notices
+	"gen_home_file_touched":               "[home_files] バインド用に %s を作成しました (空ファイル, 0600)",
+	"gen_home_files_notice_header":        "[home_files] のホスト側ファイル:",
+	"gen_home_files_notice_check":         "  `docker compose up` を実行する前に、ホストで次のファイルが存在することを確認してください:",
+	"gen_home_files_notice_item":          "    ~/%s",
+	"gen_home_files_in_container_warning": "警告: cocoon gen がコンテナ内 (/.dockerenv を検出) で実行されています。[home_files] エントリは Docker ホストではなくこのコンテナの HOME に対して touch されます。`docker compose up` の前にホスト側で `cocoon gen` を実行してください。",
+	"gen_home_files_is_directory":         "%s がディレクトリとして存在します (以前の `docker compose up` がファイル不在時に自動作成した可能性)。`rm -rf %s` で削除してから `cocoon gen` を再実行してください",
 }

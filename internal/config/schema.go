@@ -367,11 +367,15 @@ type Mount struct {
 
 // HomeFilesSpec declares single files under the host user's home directory
 // to persist across container rebuilds. Each entry is a path relative to ~/
-// on both host and container. wsd setup touches missing host files (0o600,
-// idempotent) before they are bind-mounted, so Docker does not auto-create
-// them as directories. Use [volumes] for whole directories and [[mounts]]
-// for arbitrary host paths; [home_files] is the narrow case of single files
-// in $HOME that must outlive the container's writable layer.
+// on both host and container. `cocoon gen` touches missing host files
+// (0o600, idempotent) on first run, and the generated devcontainer.json's
+// initializeCommand performs the same touch so VS Code Reopen-in-Container
+// users do not need to invoke `cocoon gen`. Both safeguards prevent Docker
+// from auto-creating the bind source as a directory when the file is
+// absent at `docker compose up` time. Use [volumes] for whole directories
+// and [[mounts]] for arbitrary host paths; [home_files] is the narrow case
+// of single files in $HOME that must outlive the container's writable
+// layer.
 type HomeFilesSpec struct {
 	Files []string `toml:"files"`
 }

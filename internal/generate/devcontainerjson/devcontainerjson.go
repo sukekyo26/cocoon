@@ -8,21 +8,27 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/sukekyo26/cocoon/internal/generate"
 )
 
 const header = "// Auto-generated from workspace.toml — do not edit directly.\n"
 
-// Generate returns the devcontainer.json body for ctx.
+// Generate returns the devcontainer.json body for ctx. HTML escaping is
+// disabled so shell snippets in initializeCommand (e.g. `&&` chains)
+// survive as literals rather than `&&`, matching the
+// package-level "raw UTF-8" promise.
 func Generate(ctx *generate.WorkspaceContext) (string, error) {
 	cfg := buildConfig(ctx)
-	raw, err := json.Marshal(cfg)
-	if err != nil {
+	var raw bytes.Buffer
+	enc := json.NewEncoder(&raw)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(cfg); err != nil {
 		return "", fmt.Errorf("devcontainerjson: marshal: %w", err)
 	}
 	var indented bytes.Buffer
-	if err := json.Indent(&indented, raw, "", "\t"); err != nil {
+	if err := json.Indent(&indented, bytes.TrimRight(raw.Bytes(), "\n"), "", "\t"); err != nil {
 		return "", fmt.Errorf("devcontainerjson: indent: %w", err)
 	}
 	return header + indented.String() + "\n", nil
@@ -35,11 +41,8 @@ func buildConfig(ctx *generate.WorkspaceContext) *orderedMap {
 	base.set("name", ctx.ServiceName())
 	base.set("dockerComposeFile", []string{"docker-compose.yml"})
 	base.set("service", ctx.ServiceName())
-	if ctx.CertificatesEnabled() {
-		// initializeCommand runs on the host before container create
-		// to mkdir the additional_contexts source path; without it
-		// VS Code Dev Containers users would hit a BuildKit error.
-		base.set("initializeCommand", "mkdir -p "+generate.CertsHostPath)
+	if cmd := initializeCommand(ctx); cmd != "" {
+		base.set("initializeCommand", cmd)
 	}
 	workspaceFolder := "/home/" + ctx.Username() + "/workspace"
 	if ctx.WS.Workspace.MountRootOrDefault() == "." {
@@ -69,6 +72,25 @@ func buildConfig(ctx *generate.WorkspaceContext) *orderedMap {
 	}
 	deepMerge(base, overrides)
 	return base
+}
+
+// initializeCommand assembles the host-side preparation that VS Code's
+// Dev Containers extension runs before `docker compose up`. It mkdirs the
+// certs build context (so BuildKit can resolve additional_contexts) and
+// touches each [home_files] entry with mode 0o600 (so Docker does not
+// auto-create them as directories when the file is missing on the host).
+// Returns "" when neither feature is configured, in which case the caller
+// omits the initializeCommand key entirely.
+func initializeCommand(ctx *generate.WorkspaceContext) string {
+	var cmds []string
+	if ctx.CertificatesEnabled() {
+		cmds = append(cmds, "mkdir -p "+generate.CertsHostPath)
+	}
+	for _, rel := range ctx.HomeFilesEntries() {
+		p := generate.HomeFilesHostPathPrefix + "/" + rel
+		cmds = append(cmds, "mkdir -p $(dirname "+p+") && (umask 077 && touch "+p+")")
+	}
+	return strings.Join(cmds, " && ")
 }
 
 // mergeForwardPorts unions the base list with override entries, preserving

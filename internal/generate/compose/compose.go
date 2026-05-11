@@ -75,11 +75,7 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 		return "", err
 	}
 
-	homeMounts, err := ctx.HomeFileMounts("")
-	if err != nil {
-		return "", fmt.Errorf("compose: %w", err)
-	}
-	mounts := buildVolumeMounts(ctx, mergedPlugin, mergedCustom, homeMounts)
+	mounts := buildVolumeMounts(ctx, mergedPlugin, mergedCustom, ctx.HomeFileMounts())
 	service := buildService(ctx, mounts)
 	volDefs := buildVolDefs(mergedPlugin, mergedCustom)
 
