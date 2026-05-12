@@ -75,6 +75,83 @@ func TestGenerateCertificatesDisabledNoInitializeCommand(t *testing.T) {
 	}
 }
 
+// TestGenerateHomeFilesAddsTouchToInitializeCommand verifies that a
+// workspace with [home_files] but no [certificates] emits an
+// initializeCommand made only of the per-file touch commands
+// (umask 077 + touch). No certs mkdir, no leftover `&&` from a missing
+// certs prefix.
+func TestGenerateHomeFilesAddsTouchToInitializeCommand(t *testing.T) {
+	t.Parallel()
+	ctx := &generate.WorkspaceContext{
+		WS: &config.Workspace{
+			HomeFiles: &config.HomeFilesSpec{Files: []string{".claude.json"}},
+		},
+	}
+	got, err := devcontainerjson.Generate(ctx)
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	for _, want := range []string{
+		`"initializeCommand"`,
+		`(umask 077 && mkdir -p \"$(dirname -- \"${HOME:?HOME must be set on the host}/.claude.json\")\" && touch \"${HOME:?HOME must be set on the host}/.claude.json\")`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("expected %q in output:\n%s", want, got)
+		}
+	}
+	for _, mustNot := range []string{
+		`mkdir -p \"${HOME:?HOME must be set on the host}/.cocoon/certs\"`,
+	} {
+		if strings.Contains(got, mustNot) {
+			t.Errorf("home_files-only run must not emit %q:\n%s", mustNot, got)
+		}
+	}
+}
+
+// TestGenerateHomeFilesAndCertsMergeInitializeCommand verifies that when
+// both [certificates] and [home_files] are configured, the generator
+// emits a single initializeCommand key with `&&`-joined steps (certs
+// mkdir first, then each home_files touch in declaration order). The
+// orderedMap must not contain duplicate keys.
+func TestGenerateHomeFilesAndCertsMergeInitializeCommand(t *testing.T) {
+	t.Parallel()
+	certsOn := true
+	ctx := &generate.WorkspaceContext{
+		WS: &config.Workspace{
+			Certificates: &config.CertificatesSpec{Enable: &certsOn},
+			HomeFiles:    &config.HomeFilesSpec{Files: []string{".claude.json", ".gemini/oauth_creds.json"}},
+		},
+	}
+	got, err := devcontainerjson.Generate(ctx)
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	wantLine := `"initializeCommand": "mkdir -p \"${HOME:?HOME must be set on the host}/.cocoon/certs\" && (umask 077 && mkdir -p \"$(dirname -- \"${HOME:?HOME must be set on the host}/.claude.json\")\" && touch \"${HOME:?HOME must be set on the host}/.claude.json\") && (umask 077 && mkdir -p \"$(dirname -- \"${HOME:?HOME must be set on the host}/.gemini/oauth_creds.json\")\" && touch \"${HOME:?HOME must be set on the host}/.gemini/oauth_creds.json\")"`
+	if !strings.Contains(got, wantLine) {
+		t.Errorf("merged initializeCommand mismatch.\nwant line: %s\n--- got ---\n%s", wantLine, got)
+	}
+	if n := strings.Count(got, `"initializeCommand"`); n != 1 {
+		t.Errorf("initializeCommand should appear exactly once, got %d:\n%s", n, got)
+	}
+}
+
+// TestGenerateBothCertsAndHomeFilesDisabledOmitsInitializeCommand pins
+// that the initializeCommand key is omitted entirely when neither
+// [certificates] nor [home_files] is configured. Pairs with the existing
+// TestGenerateCertificatesDisabledNoInitializeCommand which exercises
+// the same omission for the certs-only branch.
+func TestGenerateBothCertsAndHomeFilesDisabledOmitsInitializeCommand(t *testing.T) {
+	t.Parallel()
+	ctx := &generate.WorkspaceContext{WS: &config.Workspace{}}
+	got, err := devcontainerjson.Generate(ctx)
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	if strings.Contains(got, "initializeCommand") {
+		t.Errorf("initializeCommand must not appear when no host hooks are configured:\n%s", got)
+	}
+}
+
 func TestGenerateMinimalDefaults(t *testing.T) {
 	t.Parallel()
 	ctx := &generate.WorkspaceContext{WS: &config.Workspace{}}
@@ -85,13 +162,40 @@ func TestGenerateMinimalDefaults(t *testing.T) {
 	for _, want := range []string{
 		`"service": "dev"`,
 		`"workspaceFolder": "/home/developer/workspace/dev"`,
-		`"forwardPorts": [`,
 		`"shutdownAction": "stopCompose"`,
 		`"extensions": []`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("expected %q in output:\n%s", want, got)
 		}
+	}
+	// With no [ports] section and no devcontainer.forward_ports override,
+	// the forwardPorts key must be omitted entirely — emitting [3000]
+	// (the historic default) silently forwarded a port the user never
+	// declared, polluting `docker compose ps` and VS Code's "Ports" panel.
+	if strings.Contains(got, `"forwardPorts"`) {
+		t.Errorf("forwardPorts should be omitted when no ports are declared, got:\n%s", got)
+	}
+}
+
+// TestGenerateForwardPortsFromOverrideOnly verifies the key is emitted
+// when devcontainer.forward_ports supplies values but [ports] is absent —
+// the override path is the sole source.
+func TestGenerateForwardPortsFromOverrideOnly(t *testing.T) {
+	t.Parallel()
+	ctx := &generate.WorkspaceContext{
+		WS: &config.Workspace{
+			Devcontainer: config.Devcontainer{
+				"forwardPorts": []any{int64(9000)},
+			},
+		},
+	}
+	got, err := devcontainerjson.Generate(ctx)
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	if !strings.Contains(got, "\"forwardPorts\": [\n\t\t9000\n\t]") {
+		t.Errorf("expected forwardPorts=[9000] from override, got:\n%s", got)
 	}
 }
 

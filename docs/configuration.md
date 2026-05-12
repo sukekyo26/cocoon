@@ -72,29 +72,51 @@ devcontainer = true
 
 ## `[container]` (required)
 
-Image identity. `service_name`, `username`, `os`, `os_version` are all required.
+Image identity. `service_name`, `username`, `image`, `image_version` are all required.
 
 | Field | Type | Validation | Description |
 |---|---|---|---|
 | `service_name` | string | `^[a-z][a-z0-9_-]*$` | Compose `services:` key. Used as `docker compose exec <service_name>`. |
 | `username` | string | `^[a-z_][a-z0-9_-]*$` | Linux user created inside the container. |
-| `os` | string | `ubuntu` \| `debian` | Base distribution for `FROM`. |
-| `os_version` | string | matches the chosen `os` (see below) | Distribution version (e.g. `26.04`, `13`). |
+| `image` | string | `ubuntu` \| `debian` \| `node` \| `python` \| `golang` \| `rust` \| `denoland/deno` | Base image for `FROM`, written **verbatim** as DockerHub's canonical image name — `golang` (not `go`) and `denoland/deno` (vendor namespace) — so a reader can recreate the FROM line from workspace.toml alone, with no cocoon-side alias resolution. |
+| `image_version` | string | plain Docker tag: first character must be alnum or `_`; trailing characters add `.` / `-`; no slash, no colon | Image tag (e.g. `26.04`, `24-bookworm-slim`, `1.26.3-bookworm`, `debian-2.7.14`). The table below is the curated suggestion list cocoon offers in `cocoon init`; **any well-formed tag the upstream registry publishes is accepted**, so you can pin a patch or new minor (e.g. `1.26.4-bookworm` the day it ships) without waiting for a cocoon release. |
 | `docker_socket` | bool | — | Mount `/var/run/docker.sock` for docker-in-docker. Default `false`. |
 
-**Supported OS / version pairs:**
+**Suggested image / version pairs** (not exhaustive — any well-formed tag is accepted):
 
-| `os` | `os_version` |
-|---|---|
-| `ubuntu` | `26.04`, `24.04`, `22.04` |
-| `debian` | `13`, `12` |
+| `image` | `image_version` (suggestions) | FROM line emitted |
+|---|---|---|
+| `ubuntu` | `26.04`, `24.04`, `22.04` | `FROM ubuntu:<v>` |
+| `debian` | `13`, `12` | `FROM debian:<v>` |
+| `node` | `26-bookworm-slim`, `24-bookworm-slim`, `22-bookworm-slim` | `FROM node:<v>` |
+| `python` | `3.14-slim-bookworm`, `3.13-slim-bookworm`, `3.12-slim-bookworm` | `FROM python:<v>` |
+| `golang` | `1.26.3-bookworm`, `1.26-bookworm`, `1.25-bookworm`, `1.24-bookworm` | `FROM golang:<v>` |
+| `rust` | `1.95-bookworm`, `1.94-bookworm`, `1.93-bookworm` | `FROM rust:<v>` |
+| `denoland/deno` | `debian-2.7.14`, `debian-2.6.10`, `debian-2.5.7` | `FROM denoland/deno:<v>` |
+
+`cocoon init` exposes these as **Tab-completion suggestions** on the version input — press Tab to cycle through them or type any other tag directly. `--image-version <tag>` accepts the same set on the non-interactive path. Validation only enforces the tag format (no slash, no colon); whether the tag actually exists in the upstream registry is left to `docker pull` at build time.
+
+Every supported image is apt-based, so the existing plugin catalog works the same across all of them. `ubuntu` pulls from Ubuntu archives (archive.ubuntu.com); the other six are Debian (bookworm) variants and pull from deb.debian.org. apt-mirror rewriting branches on this in `aptMirrorOriginHosts` (see `internal/generate/dockerfile/dockerfile.go`).
+
+**Image vs plugin (mutually exclusive pairs):** picking a language-runtime image that overlaps with an existing cocoon plugin is rejected at validation time, because the plugin would either overwrite the base layer (go) or shadow it on `$PATH` (rust). Either drop the plugin from `[plugins].enable`, or switch back to `image = "ubuntu" / "debian"` and pin the version via `[plugins.versions]`.
+
+| Picking `image = …` | …and enabling plugin | Outcome |
+|---|---|---|
+| `golang` | `go` | **rejected** — base already provides Go |
+| `rust` | `rust` | **rejected** — base already provides Rust |
+| `python` | `uv` | accepted — uv adds a binary, leaves Python alone |
+| `node`, `denoland/deno`, `python` | (no matching plugin) | n/a |
 
 ```toml
 [container]
 service_name = "myapp"
 username = "dev"
-os = "ubuntu"
-os_version = "26.04"
+image = "ubuntu"
+image_version = "26.04"
+
+# Or pick a language-runtime image and skip the plugin entirely:
+# image = "node"
+# image_version = "24-bookworm-slim"
 ```
 
 ### `[container.resources]`
@@ -255,12 +277,25 @@ Third-party apt repositories with signed-by GPG keys. The key is fetched from `k
 
 | Field | Type | Description |
 |---|---|---|
-| `forward` | array | Either Compose short-form strings (`"3000:3000"`, `"127.0.0.1:5432:5432/tcp"`, ranges `"3000-3005:3000-3005"`) or long-form tables with `target`, `published`, `host_ip`, `protocol`, `mode`. |
+| `forward` | array | Either Compose short-form strings or long-form tables. Short form covers `[HOST_IP:][HOST:]CONTAINER[/PROTOCOL]` with numeric ranges (`N-M`) and `tcp`/`udp` protocols. Long form uses the keys `target`, `published`, `host_ip`, `protocol`, `mode`. |
+
+Short-form accepted patterns (all eight are validated by both `cocoon init --ports` and `cocoon gen`):
 
 ```toml
 [ports]
-forward = ["3000:3000", "5432:5432"]
+forward = [
+    "3000",                            # container port only
+    "3000-3005",                       # container range
+    "8000:8000",                       # host:container
+    "9090-9091:8080-8081",             # host range:container range
+    "49100:22",                        # host:container
+    "127.0.0.1:8001:8001",             # IPv4 bind:host:container
+    "127.0.0.1:5000-5010:5000-5010",   # IPv4 bind:host range:container range
+    "6060:6060/udp",                   # host:container/protocol
+]
 ```
+
+IPv6 binds are also accepted as `[::1]:80:80`. Each numeric component must be in `[1, 65535]`.
 
 ---
 
@@ -371,12 +406,19 @@ opted-out workspaces share cert-free artifacts.
 
 ## `[home_files]`
 
-Files persisted via per-file bind mounts. Each path is relative to `~/` (no leading `/`, no `~`, no `..`). Use this to share host-side configs like `~/.gitconfig` into the container.
+Files persisted via per-file bind mounts. Each path is relative to `~/` (no leading `/`, no `~`, no `..`). Per-segment characters are restricted to `[A-Za-z0-9._-]` because the path is interpolated verbatim into the generated `initializeCommand` shell snippet — anything with shell-special meaning (`$`, backticks, `;`, `&`, `|`, `<`, `>`, `*`, `?`, `!`, quotes, backslashes, whitespace) is rejected so a repo-provided `workspace.toml` cannot inject commands into the host shell. Use this to share host-side configs like `~/.gitconfig` into the container.
 
 ```toml
 [home_files]
 files = [".gitconfig", ".claude.json"]
 ```
+
+**How the host file is prepared.** The generated `docker-compose.yml` references the host source as `${HOME:?HOME must be set on the host}/<rel>`, so the bind path is resolved at `docker compose up` time on whichever host the user actually runs it from (the gen environment and the up environment can differ). To avoid Docker auto-creating the bind source as an empty directory when the file is missing, two safeguards `touch` the file on the host with mode `0600`:
+
+- `cocoon gen` itself touches each entry under `~/` (idempotent — existing files are left untouched, existing directories are surfaced as an error pointing at `rm -rf <path>` for recovery, symlinks are trusted as-is).
+- The generated `devcontainer.json` runs the same `touch` via its `initializeCommand`, so VS Code "Reopen in Container" users do not need to invoke `cocoon gen` separately.
+
+**Running `cocoon gen` inside a container.** If `/.dockerenv` is detected, `cocoon gen` emits a warning to stderr and still proceeds — the compose source is `${HOME:?…}` so the file does resolve correctly when `docker compose up` is later invoked from the host, but the host-side `touch` will have run inside the inner container, not on the Docker host. Run `cocoon gen` on the host before `docker compose up` to actually create the host files.
 
 ---
 

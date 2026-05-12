@@ -46,7 +46,7 @@ func TestRunInit_Snapshot(t *testing.T) {
 			golden: "default.workspace.toml",
 			args: []string{
 				"--yes", "--service-name", "dev", "--username", "dev",
-				"--os", "ubuntu", "--os-version", "22.04",
+				"--image", "ubuntu", "--image-version", "22.04",
 				"--mount-root", ".", "--no-devcontainer",
 				"--apt-categories", "text-editors,vcs,utilities,compression,build",
 			},
@@ -59,7 +59,7 @@ func TestRunInit_Snapshot(t *testing.T) {
 			golden: "default-with-certificates.workspace.toml",
 			args: []string{
 				"--yes", "--service-name", "dev", "--username", "dev",
-				"--os", "ubuntu", "--os-version", "22.04",
+				"--image", "ubuntu", "--image-version", "22.04",
 				"--mount-root", ".", "--no-devcontainer", "--certificates",
 				"--apt-categories", "text-editors,vcs,utilities,compression,build",
 			},
@@ -69,7 +69,7 @@ func TestRunInit_Snapshot(t *testing.T) {
 			golden: "plugins-amd64-full.workspace.toml",
 			args: []string{
 				"--yes", "--service-name", "dev", "--username", "dev",
-				"--os", "ubuntu", "--os-version", "22.04",
+				"--image", "ubuntu", "--image-version", "22.04",
 				"--mount-root", ".", "--no-devcontainer",
 				"--apt-categories", "text-editors,vcs,utilities,compression,build",
 				"--plugins",
@@ -87,7 +87,7 @@ func TestRunInit_Snapshot(t *testing.T) {
 			golden: "plugins-arm64-full.workspace.toml",
 			args: []string{
 				"--yes", "--service-name", "dev", "--username", "dev",
-				"--os", "ubuntu", "--os-version", "22.04",
+				"--image", "ubuntu", "--image-version", "22.04",
 				"--mount-root", ".", "--no-devcontainer",
 				"--apt-categories", "text-editors,vcs,utilities,compression,build",
 				"--plugins",
@@ -103,11 +103,28 @@ func TestRunInit_Snapshot(t *testing.T) {
 			golden: "plugins-versions-minimal.workspace.toml",
 			args: []string{
 				"--yes", "--service-name", "dev", "--username", "dev",
-				"--os", "ubuntu", "--os-version", "22.04",
+				"--image", "ubuntu", "--image-version", "22.04",
 				"--mount-root", ".", "--no-devcontainer",
 				"--apt-categories", "text-editors,vcs,utilities,compression,build",
 				"--plugins", "go,uv",
 				"--plugin-versions", "go=1.23.4,uv=0.5.7",
+			},
+		},
+		{
+			// Pins the active [ports] block path: --ports promotes the
+			// commented-out template to a live `forward = [...]` array.
+			// Exercises every accepted short-form variant so a regex /
+			// validator drift will surface here as a deliberate diff.
+			name:   "ports-set",
+			golden: "ports-set.workspace.toml",
+			args: []string{
+				"--yes", "--service-name", "dev", "--username", "dev",
+				"--image", "ubuntu", "--image-version", "22.04",
+				"--mount-root", ".", "--no-devcontainer",
+				"--apt-categories", "text-editors,vcs,utilities,compression,build",
+				"--ports",
+				"3000,3000-3005,8000:8000,9090-9091:8080-8081,49100:22," +
+					"127.0.0.1:8001:8001,127.0.0.1:5000-5010:5000-5010,6060:6060/udp",
 			},
 		},
 	}

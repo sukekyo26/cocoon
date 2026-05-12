@@ -33,8 +33,8 @@ Generate `workspace.toml` in the current directory.
 | `--yes` | bool | Skip prompts. `--service-name` and `--username` become required. |
 | `--service-name <name>` | string | Compose service name (required with `--yes`). |
 | `--username <name>` | string | In-container user (required with `--yes`). |
-| `--os <id>` | string | Base OS: `ubuntu` \| `debian`. |
-| `--os-version <ver>` | string | Base OS version (must match `--os`). |
+| `--image <id>` | string | Base image (DockerHub canonical name): `ubuntu` \| `debian` \| `node` \| `python` \| `golang` \| `rust` \| `denoland/deno`. |
+| `--image-version <ver>` | string | Base image tag. Any well-formed Docker tag is accepted (first character alnum or `_`; `.` / `-` allowed in trailing positions; no slash, no colon); existence in the upstream registry is left to `docker pull`. Requires `--image` to be set. |
 | `--shell <id>` | string | Container login shell: `bash` \| `zsh` \| `fish`. |
 | `--mount-root <path>` | string | Mount range: `"."` (cwd) or `".."` (parent). |
 | `--devcontainer` | bool | Force-enable `.devcontainer/devcontainer.json` output. |
@@ -45,6 +45,7 @@ Generate `workspace.toml` in the current directory.
 | `--plugins <ids>` | string | Comma-separated plugin IDs to enable. |
 | `--plugin-versions <id>=<ref>,...` | string | Comma-separated `<id>=<ref>` pins for `version_capable` plugins. Each `<id>` must also appear in `--plugins`, must be `version_capable`, and may not repeat. Emits a `[plugins.versions]` block directly in the generated `workspace.toml`. |
 | `--alias-bundles <ids>` | string | Comma-separated shell-alias bundle IDs (e.g. `git,ls`). |
+| `--ports <values>` | string | Comma-separated docker-compose short-form port mappings (e.g. `3000:3000,5432:5432`). Accepts every form documented for `[ports].forward`: container-only `3000`, ranges `3000-3005:3000-3005`, IPv4/IPv6 binds `127.0.0.1:8001:8001` / `[::1]:80:80`, and protocols `6060:6060/udp`. Skips the prompt. Empty / omitted = no active `[ports]` block (the commented-out template stays so the section is discoverable). |
 | `--force` | bool | Overwrite an existing `workspace.toml`. |
 
 ### Interactive flow
@@ -53,15 +54,16 @@ When run without `--yes`, prompts are shown one screen at a time:
 
 1. service name
 2. username
-3. OS
-4. OS version (filtered by the chosen OS)
+3. base image
+4. image version (filtered by the chosen image)
 5. login shell
 6. alias bundles (multi-select)
 7. mount range
 8. devcontainer y/n
 9. certificates y/n (opt in to host TLS auto-bake from `~/.cocoon/certs/`; default no)
-10. apt categories (multi-select)
-11. plugins (multi-select)
+10. port forwards (comma-separated docker-compose short forms; blank to skip — the commented-out `[ports]` template stays for later opt-in)
+11. apt categories (multi-select)
+12. plugins (multi-select)
 
 ### Examples
 
@@ -72,11 +74,12 @@ cocoon init
 # Non-interactive
 cocoon init --yes \
     --service-name myapp --username dev \
-    --os ubuntu --os-version 26.04 \
+    --image ubuntu --image-version 26.04 \
     --shell bash --mount-root . --devcontainer \
     --apt-categories text-editors,vcs,utilities,compression,build \
     --plugins go,uv,github-cli \
-    --alias-bundles git,ls
+    --alias-bundles git,ls \
+    --ports 3000:3000,5432:5432
 ```
 
 ---

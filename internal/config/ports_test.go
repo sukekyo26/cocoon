@@ -2,6 +2,7 @@ package config_test
 
 import (
 	"bytes"
+	"errors"
 	"regexp"
 	"strings"
 	"testing"
@@ -43,6 +44,68 @@ func TestPortShortFormPattern(t *testing.T) {
 		if rx.MatchString(s) {
 			t.Errorf("PortShortFormPattern should reject %q", s)
 		}
+	}
+}
+
+// TestValidateShortForm covers the public validator that both
+// `[ports].forward` schema validation and the `cocoon init` prompt depend on.
+// The accept set mirrors the docker-compose short-form patterns documented
+// for `[ports]`; the reject set guards every rule the validator enforces
+// (regex shape, [portMin, portMax] bounds, IP literal syntax).
+func TestValidateShortForm(t *testing.T) {
+	t.Parallel()
+	accept := []string{
+		"3000",
+		"3000-3005",
+		"8000:8000",
+		"9090-9091:8080-8081",
+		"49100:22",
+		"127.0.0.1:8001:8001",
+		"127.0.0.1:5000-5010:5000-5010",
+		"6060:6060/udp",
+		"[::1]:80:80",
+		"3000:3000/tcp",
+	}
+	for _, s := range accept {
+		s := s
+		t.Run("accept/"+s, func(t *testing.T) {
+			t.Parallel()
+			if err := config.ValidateShortForm(s); err != nil {
+				t.Errorf("ValidateShortForm(%q) = %v, want nil", s, err)
+			}
+		})
+	}
+
+	reject := []struct {
+		in     string
+		reason string // substring asserted in err.Error()
+	}{
+		{"", "does not match docker-compose short form"},
+		{"abc", "does not match docker-compose short form"},
+		{"3000:", "does not match docker-compose short form"},
+		{"3000:3000/sctp", "does not match docker-compose short form"},
+		{"3000:abc", "does not match docker-compose short form"},
+		{"99999", "port must be in [1,65535]"},
+		{"99999:80", "port must be in [1,65535]"},
+		{"0:80", "port must be in [1,65535]"},
+		{"3000-99999:3000", "port must be in [1,65535]"},
+		{"999.999.999.999:80:80", "is not a valid IPv4/IPv6 address"},
+	}
+	for _, tc := range reject {
+		tc := tc
+		t.Run("reject/"+tc.in, func(t *testing.T) {
+			t.Parallel()
+			err := config.ValidateShortForm(tc.in)
+			if err == nil {
+				t.Fatalf("ValidateShortForm(%q) = nil, want error", tc.in)
+			}
+			if !errors.Is(err, config.ErrPortShortForm) {
+				t.Errorf("ValidateShortForm(%q) err = %v, want errors.Is ErrPortShortForm", tc.in, err)
+			}
+			if !strings.Contains(err.Error(), tc.reason) {
+				t.Errorf("ValidateShortForm(%q) err = %q, want substring %q", tc.in, err.Error(), tc.reason)
+			}
+		})
 	}
 }
 
@@ -169,6 +232,11 @@ func TestDevcontainerPortEntries(t *testing.T) {
 			wantWarn: "uses a published range",
 		},
 		{
+			// UDP entries are TCP-incompatible for the devcontainer
+			// port tunnel; they're skipped with a "protocol = \"udp\""
+			// warning. Sibling TCP / unspecified-proto entries flow
+			// through. The range entry triggers its own skip warning,
+			// covering both reasons in one fixture.
 			name: "mixed",
 			in: []any{
 				"3000",
@@ -176,8 +244,26 @@ func TestDevcontainerPortEntries(t *testing.T) {
 				"3000-3005:3000-3005",
 				"127.0.0.1:8080:8080/udp",
 			},
-			want:     []int{3000, 5432, 8080},
+			want:     []int{3000, 5432},
 			wantWarn: "uses a port range",
+		},
+		{
+			name:     "short_form_udp_skipped",
+			in:       []any{"6060:6060/udp"},
+			want:     []int{},
+			wantWarn: "uses protocol = \"udp\"",
+		},
+		{
+			name: "long_form_udp_skipped",
+			in: []any{
+				map[string]any{
+					"target":    int64(53),
+					"published": int64(53),
+					"protocol":  "udp",
+				},
+			},
+			want:     []int{},
+			wantWarn: "uses protocol = \"udp\"",
 		},
 	}
 	for _, tc := range cases {
@@ -259,10 +345,10 @@ func TestPortsSpec_Validate_TypeMismatches(t *testing.T) {
 			t.Parallel()
 			ws := &config.Workspace{
 				Container: config.ContainerSpec{
-					ServiceName: "dev",
-					Username:    "developer",
-					Os:          "ubuntu",
-					OsVersion:   "24.04",
+					ServiceName:  "dev",
+					Username:     "developer",
+					Image:        "ubuntu",
+					ImageVersion: "24.04",
 				},
 				Ports: &config.PortsSpec{Forward: tc.forward},
 			}
@@ -441,10 +527,10 @@ func TestPortsSpec_Validate(t *testing.T) {
 			t.Parallel()
 			ws := &config.Workspace{
 				Container: config.ContainerSpec{
-					ServiceName: "dev",
-					Username:    "developer",
-					Os:          "ubuntu",
-					OsVersion:   "24.04",
+					ServiceName:  "dev",
+					Username:     "developer",
+					Image:        "ubuntu",
+					ImageVersion: "24.04",
 				},
 				Ports: &config.PortsSpec{Forward: tc.forward},
 			}

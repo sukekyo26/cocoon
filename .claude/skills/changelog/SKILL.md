@@ -19,10 +19,14 @@ description: 'CHANGELOG 記載ルールと更新手順。changelog, 変更履歴
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) に準拠。
 
 - `## [Unreleased]` セクションへ追記する
-- カテゴリ見出しは以下を使用する（この順序で並べる）
-  - `CHANGELOG.md`（英語）: `Added` / `Changed` / `Deprecated` / `Removed` / `Fixed` / `Security`
-  - `docs/CHANGELOG.ja.md`（日本語）: `追加` / `変更` / `非推奨` / `削除` / `修正` / `セキュリティ`
-- 各エントリは動詞で始める（英語: Add / Change / Fix …、日本語: 追加 / 変更 / 修正 …）
+- **カテゴリ見出しは以下の 4 種類のみ使用する。この順序で並べる。他のカテゴリ（`Security` / `Deprecated` / `Docs` 等）を勝手に追加しない**
+  - `CHANGELOG.md`（英語）: `Added` → `Changed` → `Fixed` → `Removed`
+  - `docs/CHANGELOG.ja.md`（日本語）: `追加` → `変更` → `修正` → `削除`
+- セキュリティ修正は独立節を作らず `Fixed` / `修正` に入れ、本文先頭に `**Security**:` / `**セキュリティ**:` の太字 prefix で severity を示す（BREAKING と同じ形式）
+- 非推奨化は独立節を作らず `Changed` / `変更` に入れ、本文先頭に `**Deprecated**:` / `**非推奨**:` の太字 prefix を付ける
+- ドキュメントのみの変更（README 書き直し、docs/ 配下の追加・修正等）はそもそも記載対象外（記載対象セクション参照）。`Docs` / `ドキュメント` のような独自カテゴリは作らない
+- 破壊的変更は独立節を作らず該当カテゴリ（多くは `Changed` / `Removed`）に入れ、本文先頭に `**BREAKING**:` 太字 prefix を付ける
+- 各エントリは動詞で始める（英語: Add / Change / Fix / Remove、日本語: 追加 / 変更 / 修正 / 削除）
 
 ## 記載対象
 
@@ -61,6 +65,6 @@ description: 'CHANGELOG 記載ルールと更新手順。changelog, 変更履歴
 1. 変更が記載対象かどうかを判断する（対象外なら更新しない）
 2. `CHANGELOG.md` の `## [Unreleased]` セクション全体を読み、既存のカテゴリ見出し（`### Added` 等）を把握する
 3. 追記先のカテゴリ見出しが既に存在する場合は**そのセクションの先頭（見出し直後）に追記する**。新しい見出しを重複して作成しない
-4. カテゴリ見出しが存在しない場合のみ、新しい `### <Category>` 見出しを追加する。追加位置は `Added → Changed → Deprecated → Removed → Fixed → Security` の順序を維持する場所に挿入する
+4. カテゴリ見出しが存在しない場合のみ、新しい `### <Category>` 見出しを追加する。追加位置は `Added → Changed → Fixed → Removed` の順序を維持する場所に挿入する
 5. 既存エントリとの重複・矛盾を整理する
 6. `docs/CHANGELOG.ja.md` の `## [Unreleased]` セクションも同様に整理・追記する

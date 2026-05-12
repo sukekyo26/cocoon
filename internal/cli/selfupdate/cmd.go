@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,11 +15,12 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/sukekyo26/cocoon/internal/logx"
+	"github.com/sukekyo26/cocoon/internal/release"
 	"github.com/sukekyo26/cocoon/internal/version"
 )
 
 const (
-	repoSlug   = "sukekyo26/cocoon"
 	apiTimeout = 30 * time.Second
 	// ExitNewerAvailable is the exit code `--check-only` uses to signal a
 	// newer release is available without downloading it.
@@ -39,17 +39,7 @@ Exit codes:
   100 (only with --check-only) a newer version exists
   1   any other failure`
 
-type releaseAsset struct {
-	Name string `json:"name"`
-	URL  string `json:"browser_download_url"`
-}
-
-type release struct {
-	TagName string         `json:"tag_name"`
-	Assets  []releaseAsset `json:"assets"`
-}
-
-// NewCommand returns the cobra command for ` + "`cocoon self-update`" + `.
+// NewCommand returns the cobra command for `cocoon self-update`.
 func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 	var checkOnly, force bool
 	cmd := &cobra.Command{
@@ -72,33 +62,46 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 
 //nolint:gocyclo // self-update has many sequential phases; splitting hurts readability.
 func runSelfUpdate(ctx context.Context, stdout, stderr io.Writer, checkOnly, force bool) error {
+	log := logx.New(stdout, stderr)
+
 	current := strings.TrimSpace(version.Get())
 	if current == "" || current == "dev" {
-		fmt.Fprintln(stderr, "self-update: cannot self-update a dev build (no version baked in)")
+		log.Error("self-update: cannot self-update a dev build (no version baked in)")
 		return ErrFailure
 	}
 	current = strings.TrimPrefix(current, "v")
 
-	rel, err := fetchLatestRelease(ctx)
+	tctx, cancel := context.WithTimeout(ctx, apiTimeout)
+	defer cancel()
+	rel, err := release.FetchLatest(tctx)
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrFailure, err)
 	}
 	latest := strings.TrimPrefix(rel.TagName, "v")
 
-	fmt.Fprintf(stdout, "current version : %s\nlatest release  : %s\n", current, latest)
+	log.Infof("%s %s", log.Bold("current version :"), current)
+	log.Infof("%s %s", log.Bold("latest release  :"), latest)
 
 	if !force && latest == current {
-		fmt.Fprintln(stdout, "already up to date")
+		log.Success("already up to date")
 		return nil
 	}
 	if checkOnly {
-		fmt.Fprintf(stdout, "newer release %s available; rerun without --check-only to install\n", latest)
-		os.Exit(ExitNewerAvailable)
+		// stdout (not stderr) so the line stays on the same stream as
+		// the surrounding "current version" / "latest release" labels
+		// and matches the pre-color behavior — scripts that grep this
+		// text on stdout keep working; the exit code (100) is still
+		// the canonical signal for "newer available".
+		log.Infof("newer release %s available; rerun without --check-only to install", latest)
+		// cancel the api timeout context before exit so the deferred
+		// cleanup is not skipped by os.Exit (gocritic exitAfterDefer).
+		cancel()
+		os.Exit(ExitNewerAvailable) //nolint:gocritic // cancel() above runs the only pending defer.
 	}
 
 	assetName := fmt.Sprintf("cocoon-%s-%s", runtime.GOOS, runtime.GOARCH)
-	assetURL := assetURLByName(rel.Assets, assetName)
-	sumsURL := assetURLByName(rel.Assets, "SHA256SUMS")
+	assetURL := rel.AssetURL(assetName)
+	sumsURL := rel.AssetURL("SHA256SUMS")
 	if assetURL == "" {
 		return fmt.Errorf("%w: release asset %q not found in %s", ErrFailure, assetName, rel.TagName)
 	}
@@ -114,7 +117,11 @@ func runSelfUpdate(ctx context.Context, stdout, stderr io.Writer, checkOnly, for
 
 	binPath := filepath.Join(tmp, assetName)
 	sumsPath := filepath.Join(tmp, "SHA256SUMS")
-	fmt.Fprintf(stderr, "downloading %s...\n", assetName)
+	// Progress lines belong on stderr (transient, not data) so scripts
+	// parsing stdout see only the stable version / success output. The
+	// pre-colorize implementation wrote this to stderr too; Progressf
+	// preserves that contract and dims the line under a TTY.
+	log.Progressf("downloading %s...", assetName)
 	if err = downloadFile(ctx, assetURL, binPath); err != nil {
 		return fmt.Errorf("%w: download %s: %w", ErrFailure, assetName, err)
 	}
@@ -146,41 +153,8 @@ func runSelfUpdate(ctx context.Context, stdout, stderr io.Writer, checkOnly, for
 		return fmt.Errorf("%w: replace %s: %w", ErrFailure, selfPath, err)
 	}
 
-	fmt.Fprintf(stdout, "updated cocoon to %s at %s\n", latest, selfPath)
+	log.Successf("updated cocoon to %s at %s", latest, selfPath)
 	return nil
-}
-
-func fetchLatestRelease(ctx context.Context) (*release, error) {
-	url := fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", repoSlug)
-	tctx, cancel := context.WithTimeout(ctx, apiTimeout)
-	defer cancel()
-	req, err := http.NewRequestWithContext(tctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("build request: %w", err)
-	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("get %s: %w", url, err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode/100 != 2 {
-		return nil, fmt.Errorf("%w: github releases api: %s", errHTTPStatus, resp.Status)
-	}
-	var rel release
-	if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil {
-		return nil, fmt.Errorf("decode release: %w", err)
-	}
-	return &rel, nil
-}
-
-func assetURLByName(assets []releaseAsset, name string) string {
-	for _, a := range assets {
-		if a.Name == name {
-			return a.URL
-		}
-	}
-	return ""
 }
 
 func downloadFile(ctx context.Context, url, dst string) error {
@@ -196,7 +170,7 @@ func downloadFile(ctx context.Context, url, dst string) error {
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode/100 != 2 {
-		return fmt.Errorf("%w: download %s: %s", errHTTPStatus, url, resp.Status)
+		return fmt.Errorf("%w: download %s: %s", release.ErrHTTPStatus, url, resp.Status)
 	}
 	f, err := os.Create(dst) //nolint:gosec // dst is mktemp-d temporary path.
 	if err != nil {

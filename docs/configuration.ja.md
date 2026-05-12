@@ -72,29 +72,51 @@ devcontainer = true
 
 ## `[container]` (必須)
 
-イメージの素性。`service_name` / `username` / `os` / `os_version` は必須。
+イメージの素性。`service_name` / `username` / `image` / `image_version` は必須。
 
 | フィールド | 型 | バリデーション | 説明 |
 |---|---|---|---|
 | `service_name` | string | `^[a-z][a-z0-9_-]*$` | Compose の `services:` キー。`docker compose exec <service_name>` で参照される。 |
 | `username` | string | `^[a-z_][a-z0-9_-]*$` | コンテナ内に作成される Linux ユーザー。 |
-| `os` | string | `ubuntu` \| `debian` | ベースディストリビューション。 |
-| `os_version` | string | 選択した `os` に対応する版 (下記) | ディストロのバージョン (例: `26.04` / `13`)。 |
+| `image` | string | `ubuntu` \| `debian` \| `node` \| `python` \| `golang` \| `rust` \| `denoland/deno` | ベースイメージ。DockerHub の **正式名称** をそのまま記述します (`go` ではなく `golang`、deno は vendor namespace 込みで `denoland/deno`)。workspace.toml だけ見れば FROM 行が一意に決まり、cocoon 側のエイリアス解決は不要。 |
+| `image_version` | string | プレーンな Docker タグ: 先頭は英数字または `_`、2 文字目以降は `.` / `-` も可、スラッシュ・コロン禁止 | イメージタグ (例: `26.04` / `24-bookworm-slim` / `1.26.3-bookworm` / `debian-2.7.14`)。下表は `cocoon init` で提示される推奨候補で、**正しい形式であれば上流レジストリが公開している任意のタグを受理**します。パッチや新マイナーが出た日にすぐ pin できます (例: `1.26.4-bookworm` を cocoon リリースを待たずに使う)。 |
 | `docker_socket` | bool | — | `/var/run/docker.sock` をマウントして docker-in-docker を有効化。デフォルト `false`。 |
 
-**サポートされる OS / バージョンの組合せ:**
+**推奨される image / version の組合せ** (固定リストではありません — 正しい形式の任意タグを受理):
 
-| `os` | `os_version` |
-|---|---|
-| `ubuntu` | `26.04`, `24.04`, `22.04` |
-| `debian` | `13`, `12` |
+| `image` | `image_version` (推奨候補) | 生成される FROM 行 |
+|---|---|---|
+| `ubuntu` | `26.04`, `24.04`, `22.04` | `FROM ubuntu:<v>` |
+| `debian` | `13`, `12` | `FROM debian:<v>` |
+| `node` | `26-bookworm-slim`, `24-bookworm-slim`, `22-bookworm-slim` | `FROM node:<v>` |
+| `python` | `3.14-slim-bookworm`, `3.13-slim-bookworm`, `3.12-slim-bookworm` | `FROM python:<v>` |
+| `golang` | `1.26.3-bookworm`, `1.26-bookworm`, `1.25-bookworm`, `1.24-bookworm` | `FROM golang:<v>` |
+| `rust` | `1.95-bookworm`, `1.94-bookworm`, `1.93-bookworm` | `FROM rust:<v>` |
+| `denoland/deno` | `debian-2.7.14`, `debian-2.6.10`, `debian-2.5.7` | `FROM denoland/deno:<v>` |
+
+`cocoon init` ではこれらがバージョン入力欄の **Tab 補完候補** として並びます。Tab キーで循環するか、任意のタグを直接入力できます。`--image-version <tag>` も非対話パスで同様に任意タグを受理します。バリデーションはタグの形式 (スラッシュ・コロン禁止) のみチェックし、レジストリ上の実在性は `docker pull` (ビルド時) に委ねます。
+
+すべての候補イメージは apt ベースなので、既存のプラグインカタログがどの image でもそのまま機能します。`ubuntu` は Ubuntu archives (archive.ubuntu.com) を引き、残り 6 つは Debian (bookworm) 系で deb.debian.org を引きます。apt mirror の書き換えはこの違いで分岐 (`internal/generate/dockerfile/dockerfile.go` の `aptMirrorOriginHosts` 参照)。
+
+**image とプラグインの mutually exclusive ルール:** ベースが言語ランタイムを既に提供している場合、同名の cocoon プラグインを併用すると、プラグインがベースを上書き (go) もしくは PATH で覆い隠す (rust) ため、validation で reject します。`[plugins].enable` から外すか、`image = "ubuntu" / "debian"` に切り替えて `[plugins.versions]` でバージョン固定してください。
+
+| 選んだ `image` | プラグイン有効化 | 結果 |
+|---|---|---|
+| `golang` | `go` | **reject** — ベースが Go を提供済み |
+| `rust` | `rust` | **reject** — ベースが Rust を提供済み |
+| `python` | `uv` | 受理 — uv はバイナリ追加のみで Python に触らない |
+| `node` / `denoland/deno` / `python` | (対応プラグインなし) | n/a |
 
 ```toml
 [container]
 service_name = "myapp"
 username = "dev"
-os = "ubuntu"
-os_version = "26.04"
+image = "ubuntu"
+image_version = "26.04"
+
+# 言語ランタイムイメージを選んでプラグインを省略する例:
+# image = "node"
+# image_version = "24-bookworm-slim"
 ```
 
 ### `[container.resources]`
@@ -255,12 +277,25 @@ signed-by GPG キー方式のサードパーティ apt リポジトリ。`key_ur
 
 | フィールド | 型 | 説明 |
 |---|---|---|
-| `forward` | array | Compose short-form 文字列 (`"3000:3000"`、`"127.0.0.1:5432:5432/tcp"`、レンジ `"3000-3005:3000-3005"`) または `target` / `published` / `host_ip` / `protocol` / `mode` を持つ long-form テーブル。 |
+| `forward` | array | Compose short-form 文字列、または long-form テーブル。short form は `[HOST_IP:][HOST:]CONTAINER[/PROTOCOL]` を網羅し、数値範囲 (`N-M`) と `tcp`/`udp` プロトコルを受理。long form は `target` / `published` / `host_ip` / `protocol` / `mode` キーを持つ。 |
+
+short-form の受理パターン (`cocoon init --ports` と `cocoon gen` の両方で同じ規則で検証):
 
 ```toml
 [ports]
-forward = ["3000:3000", "5432:5432"]
+forward = [
+    "3000",                            # コンテナポートのみ
+    "3000-3005",                       # コンテナ範囲
+    "8000:8000",                       # host:container
+    "9090-9091:8080-8081",             # host 範囲:container 範囲
+    "49100:22",                        # host:container
+    "127.0.0.1:8001:8001",             # IPv4 バインド:host:container
+    "127.0.0.1:5000-5010:5000-5010",   # IPv4 バインド:host 範囲:container 範囲
+    "6060:6060/udp",                   # host:container/protocol
+]
 ```
+
+IPv6 バインドは `[::1]:80:80` のように指定可能。各数値要素は `[1, 65535]` の範囲内であること。
 
 ---
 
@@ -360,12 +395,19 @@ cocoon の生成物 `.devcontainer/*` は、ワークスペースが `[certifica
 
 ## `[home_files]`
 
-ファイル単位 bind mount による永続化。各パスは `~/` 相対 (先頭 `/` 不可、`~` 不可、`..` 不可)。ホスト側の `~/.gitconfig` 等をコンテナ内で共有する用途。
+ファイル単位 bind mount による永続化。各パスは `~/` 相対 (先頭 `/` 不可、`~` 不可、`..` 不可)。各セグメントの文字集合は `[A-Za-z0-9._-]` に限定されます — 生成される `initializeCommand` のシェルスニペットに verbatim 埋め込まれるため、シェル特殊文字 (`$`、バッククォート、`;`、`&`、`|`、`<`、`>`、`*`、`?`、`!`、引用符、バックスラッシュ、空白) は repo 提供の `workspace.toml` からホストシェルへコマンド注入される経路を塞ぐ目的で reject されます。ホスト側の `~/.gitconfig` 等をコンテナ内で共有する用途。
 
 ```toml
 [home_files]
 files = [".gitconfig", ".claude.json"]
 ```
+
+**ホスト側ファイルの準備**。生成される `docker-compose.yml` はソースパスを `${HOME:?HOME must be set on the host}/<rel>` の形で出力するため、bind パスは `docker compose up` を実行したホストの `$HOME` を基準に解決されます (gen を実行した環境と up を実行する環境が異なっていても整合します)。ホストにファイルが無い状態で `docker compose up` を走らせると Docker が bind source を空ディレクトリとして自動作成してしまうため、2 系統でファイル touch (mode `0600`) を行います:
+
+- `cocoon gen` 自体が `~/<rel>` を idempotent に touch する (既存ファイルは触らず、既存ディレクトリは `rm -rf <path>` を案内するエラーにする、シンボリックリンクは尊重)。
+- 生成された `devcontainer.json` の `initializeCommand` で同等の touch を実行するので、VS Code「Reopen in Container」利用時は `cocoon gen` を別途実行する必要はありません。
+
+**コンテナ内で `cocoon gen` を実行した場合**。`/.dockerenv` を検出した場合、`cocoon gen` は stderr に警告を出した上で処理を続行します。compose のソースは `${HOME:?…}` 形式なので後から `docker compose up` をホストで実行すれば bind 自体は正しく解決されますが、touch はコンテナ内の HOME に対して行われている点に注意してください。`docker compose up` を実行する前に必ずホスト側で `cocoon gen` を実行することを推奨します。
 
 ---
 

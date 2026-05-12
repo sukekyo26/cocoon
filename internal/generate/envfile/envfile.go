@@ -1,7 +1,7 @@
 // Package envfile renders the .env file that docker compose loads alongside
 // .devcontainer/docker-compose.yml. The compose template uses ${VAR}
 // interpolation so that host-specific values (UID/GID/DOCKER_GID) and
-// workspace-specific values (CONTAINER_SERVICE_NAME, OS_IMAGE/OS_VERSION,
+// workspace-specific values (CONTAINER_SERVICE_NAME, IMAGE/IMAGE_VERSION,
 // USERNAME) can be filled in at build/run time.
 package envfile
 
@@ -60,8 +60,8 @@ func Generate(ctx *generate.WorkspaceContext) (string, error) {
 	fmt.Fprintf(&b, "UID=%d\n", uid)
 	fmt.Fprintf(&b, "GID=%d\n", gid)
 	fmt.Fprintf(&b, "DOCKER_GID=%d\n", dockerGID)
-	fmt.Fprintf(&b, "OS_IMAGE=%s\n", ctx.WS.Container.Os)
-	fmt.Fprintf(&b, "OS_VERSION=%s\n", ctx.WS.Container.OsVersion)
+	fmt.Fprintf(&b, "IMAGE=%s\n", ctx.WS.Container.Image)
+	fmt.Fprintf(&b, "IMAGE_VERSION=%s\n", ctx.WS.Container.ImageVersion)
 	return b.String(), nil
 }
 

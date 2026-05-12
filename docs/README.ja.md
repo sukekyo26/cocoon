@@ -15,14 +15,14 @@
 
 Docker ベースの開発環境を自前で組むと、毎プロジェクトでこれを書くことになります:
 
-- `Dockerfile` (60〜120 行) — ベース OS、apt、ユーザー作成、各 CLI のインストール手順
+- `Dockerfile` (60〜120 行) — ベースイメージ、apt、ユーザー作成、各 CLI のインストール手順
 - `docker-compose.yml` (30〜80 行) — service / mounts / volumes / env / ports
 - `devcontainer.json` (20〜40 行) — VS Code Dev Containers 連携
 
 cocoon ならこうなります:
 
 ```bash
-cocoon init   # 「OS は？シェルは？欲しい CLI は？」に答える
+cocoon init   # 「ベースイメージは？シェルは？欲しい CLI は？」に答える
 cocoon gen    # .devcontainer/ をフルで再生成
 docker compose -f .devcontainer/docker-compose.yml up -d
 ```
@@ -39,7 +39,7 @@ docker compose -f .devcontainer/docker-compose.yml up -d
 | `docker-compose.yml` | サービス + named volumes + ports + 任意のサイドカー |
 | `devcontainer.json` | VS Code Reopen-in-Container 用 (出力しない選択も可) |
 | `docker-entrypoint.sh` | コンテナ起動毎にイメージ焼き込みバイナリを named volume へ復元 |
-| `.env` | `COMPOSE_PROJECT_NAME`、UID/GID、OS 情報 |
+| `.env` | `COMPOSE_PROJECT_NAME`、UID/GID、IMAGE / IMAGE_VERSION |
 
 同じ生成物で `docker compose up`（CLI 経由）と VS Code の "Reopen in Container" の両方が動きます。
 
@@ -71,16 +71,18 @@ docker compose -f .devcontainer/docker-compose.yml up -d # または VS Code で
 ## `cocoon init` で聞かれること
 
 1. コンテナの **サービス名** と **ユーザー名**
-2. **ベース OS** — `ubuntu` (26.04 / 24.04 / 22.04) または `debian` (13 / 12)
-3. **ログインシェル** — `bash` / `zsh` / `fish`
-4. **エイリアスバンドル** — `git` / `ls` / `docker` のショートカット集 (複数選択)
-5. **マウント範囲** — cwd のみ、または親ディレクトリ (兄弟リポジトリも見える fat ワークスペース向け)
-6. **VS Code Dev Containers** 対応 — `devcontainer.json` を出力するかどうか
-7. **社内 CA 自動取り込み** — `~/.cocoon/certs/` 配下の `.crt` をビルド時に取り込むか opt-in (デフォルト off。下記参照)
-8. **apt カテゴリ** — text-editors / vcs / utilities / build / network / … (複数選択)
-9. **プラグイン** — 同梱カタログ 20 種から選択 (複数選択)
+2. **ベースイメージ** — `ubuntu` / `debian` / `node` / `python` / `golang` / `rust` / `denoland/deno` (DockerHub 正式名称)
+3. **イメージバージョン** — 推奨候補からの選択、または任意の Docker タグを直接入力
+4. **ログインシェル** — `bash` / `zsh` / `fish`
+5. **エイリアスバンドル** — `git` / `ls` / `docker` のショートカット集 (複数選択)
+6. **マウント範囲** — cwd のみ、または親ディレクトリ (兄弟リポジトリも見える fat ワークスペース向け)
+7. **VS Code Dev Containers** 対応 — `devcontainer.json` を出力するかどうか
+8. **社内 CA 自動取り込み** — `~/.cocoon/certs/` 配下の `.crt` をビルド時に取り込むか opt-in (デフォルト off。下記参照)
+9. **ポートフォワード** — カンマ区切りの docker-compose short form (例: `3000:3000,5432:5432`)。空 Enter で見送ると `[ports]` 雛形はコメント行のまま残る (後で有効化可能)
+10. **apt カテゴリ** — text-editors / vcs / utilities / build / network / … (複数選択)
+11. **プラグイン** — 同梱カタログ 20 種から選択 (複数選択)
 
-各回答は自己説明的な 1 行として `workspace.toml` に書き込まれます。`--yes` と各値フラグ (`--service-name` / `--username` / `--os` / `--plugins` / `--certificates` …) を組み合わせれば TTY なしで CI から呼び出せます。
+各回答は自己説明的な 1 行として `workspace.toml` に書き込まれます。`--yes` と各値フラグ (`--service-name` / `--username` / `--image` / `--plugins` / `--certificates` / `--ports` …) を組み合わせれば TTY なしで CI から呼び出せます。
 
 ## プラグイン
 

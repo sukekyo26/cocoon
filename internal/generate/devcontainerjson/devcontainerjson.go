@@ -8,38 +8,64 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/sukekyo26/cocoon/internal/generate"
 )
 
 const header = "// Auto-generated from workspace.toml — do not edit directly.\n"
 
-// Generate returns the devcontainer.json body for ctx.
+// Generate returns the devcontainer.json body for ctx. HTML escaping is
+// disabled so shell snippets in initializeCommand (e.g. `&&` chains)
+// survive as the literal `&&` rather than json.Marshal's default
+// `\u0026\u0026` (the encoder's escapeHTML pass rewrites `&`,
+// `<`, `>` to their `\u00XX` JSON escapes for HTML-embedding
+// safety, which we don't need here), matching the package-level
+// "raw UTF-8" promise.
 func Generate(ctx *generate.WorkspaceContext) (string, error) {
 	cfg := buildConfig(ctx)
-	raw, err := json.Marshal(cfg)
-	if err != nil {
+	var raw bytes.Buffer
+	enc := json.NewEncoder(&raw)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(cfg); err != nil {
 		return "", fmt.Errorf("devcontainerjson: marshal: %w", err)
 	}
 	var indented bytes.Buffer
-	if err := json.Indent(&indented, raw, "", "\t"); err != nil {
+	if err := json.Indent(&indented, bytes.TrimRight(raw.Bytes(), "\n"), "", "\t"); err != nil {
 		return "", fmt.Errorf("devcontainerjson: indent: %w", err)
 	}
 	return header + indented.String() + "\n", nil
 }
 
 func buildConfig(ctx *generate.WorkspaceContext) *orderedMap {
-	forwardPorts := append([]int{}, ctx.DevcontainerForwardPorts()...)
+	// Resolve forwardPorts up-front so the key is emitted exactly once
+	// when it has a value, and elided when both [ports] and the
+	// devcontainer.forward_ports override are empty. Pre-resolving also
+	// keeps insertion order stable: whether the value comes from base
+	// alone, from the override alone, or from a merge of both, the key
+	// always lands between workspaceFolder and shutdownAction.
+	//
+	// forwardPorts is left as nil (typed any) when neither source yields
+	// a port — the emit check below uses `!= nil` so we never write an
+	// empty `"forwardPorts": []` array.
+	basePorts := append([]int{}, ctx.DevcontainerForwardPorts()...)
+	overrides := ctx.DevcontainerOverrides()
+	var forwardPorts any
+	if extra, ok := overrides["forwardPorts"]; ok {
+		delete(overrides, "forwardPorts")
+		if merged := mergeForwardPorts(basePorts, extra); len(merged) > 0 {
+			forwardPorts = merged
+		}
+	} else if len(basePorts) > 0 {
+		forwardPorts = basePorts
+	}
 
 	base := newOrderedMap()
 	base.set("name", ctx.ServiceName())
 	base.set("dockerComposeFile", []string{"docker-compose.yml"})
 	base.set("service", ctx.ServiceName())
-	if ctx.CertificatesEnabled() {
-		// initializeCommand runs on the host before container create
-		// to mkdir the additional_contexts source path; without it
-		// VS Code Dev Containers users would hit a BuildKit error.
-		base.set("initializeCommand", "mkdir -p "+generate.CertsHostPath)
+	if cmd := initializeCommand(ctx); cmd != "" {
+		base.set("initializeCommand", cmd)
 	}
 	workspaceFolder := "/home/" + ctx.Username() + "/workspace"
 	if ctx.WS.Workspace.MountRootOrDefault() == "." {
@@ -48,7 +74,9 @@ func buildConfig(ctx *generate.WorkspaceContext) *orderedMap {
 		workspaceFolder += "/" + ctx.ServiceName()
 	}
 	base.set("workspaceFolder", workspaceFolder)
-	base.set("forwardPorts", forwardPorts)
+	if forwardPorts != nil {
+		base.set("forwardPorts", forwardPorts)
+	}
 	base.set("shutdownAction", "stopCompose")
 
 	customizations := newOrderedMap()
@@ -57,18 +85,42 @@ func buildConfig(ctx *generate.WorkspaceContext) *orderedMap {
 	customizations.set("vscode", vscode)
 	base.set("customizations", customizations)
 
-	overrides := ctx.DevcontainerOverrides()
 	if len(overrides) == 0 {
 		return base
 	}
-
-	if extra, ok := overrides["forwardPorts"]; ok {
-		delete(overrides, "forwardPorts")
-		merged := mergeForwardPorts(forwardPorts, extra)
-		base.set("forwardPorts", merged)
-	}
 	deepMerge(base, overrides)
 	return base
+}
+
+// initializeCommand assembles the host-side preparation that VS Code's
+// Dev Containers extension runs before `docker compose up`. It mkdirs the
+// certs build context (so BuildKit can resolve additional_contexts) and
+// touches each [home_files] entry with mode 0o600 (so Docker does not
+// auto-create them as directories when the file is missing on the host).
+// Returns "" when neither feature is configured, in which case the caller
+// omits the initializeCommand key entirely.
+//
+// Every path that embeds ${HOME:?…} is wrapped in double quotes so a
+// host $HOME containing spaces (e.g. "/Users/Jane Doe" on macOS) does
+// not word-split into two arguments. `dirname --` defends against the
+// theoretical case of a home directory starting with `-`. The per-segment
+// whitelist on home_files entries already rejects shell metacharacters,
+// so quoting plus `--` is the remaining belt-and-suspenders.
+func initializeCommand(ctx *generate.WorkspaceContext) string {
+	var cmds []string
+	if ctx.CertificatesEnabled() {
+		cmds = append(cmds, `mkdir -p "`+generate.CertsHostPath+`"`)
+	}
+	for _, rel := range ctx.HomeFilesEntries() {
+		p := `"` + generate.HomeFilesHostPathPrefix + "/" + rel + `"`
+		// umask 077 must wrap both mkdir and touch so the parent dir
+		// (e.g. ~/.gemini for .gemini/oauth_creds.json) inherits 0700,
+		// matching ensureHomeFiles in cli/gen. Otherwise the parent
+		// would be 0755 (default umask) and a 0600 file would sit in
+		// a world-readable dir.
+		cmds = append(cmds, `(umask 077 && mkdir -p "$(dirname -- `+p+`)" && touch `+p+`)`)
+	}
+	return strings.Join(cmds, " && ")
 }
 
 // mergeForwardPorts unions the base list with override entries, preserving

@@ -68,6 +68,7 @@ golden が全て同じ shape（末尾改行あり・middle に空行 1 個など
 - unit が通れば CLI も OK と判断する
 - docstring の "verbatim" / "absolute" / "preserves" に直接 assert が無い
 - regex を `\{` 等に限定して近隣 category を試さない
+- `for _, v := range m[key]` で key 存在を assert せず loop — key 不在で zero-iter になり、whitelist の lockstep desync を素通しする。range 前に `require.Truef(t, hit, ...)` / `require.NotEmptyf(t, slice, ...)` を入れる
 
 ## PR 前セルフ監査
 

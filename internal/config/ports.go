@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -9,6 +10,12 @@ import (
 	"strconv"
 	"strings"
 )
+
+// ErrPortShortForm marks every rejection emitted by ValidateShortForm so
+// callers (e.g. the init prompt and the `--ports` flag parser) can identify
+// the failure class via errors.Is and surface their own usage prefix without
+// double-wrapping the package's sentinel chain.
+var ErrPortShortForm = errors.New("invalid port short form")
 
 // PortShortFormPattern is the ECMA-262 regex used in workspace.schema.json
 // for `[ports].forward` short-form strings:
@@ -97,9 +104,10 @@ func ComposePortEntries(forward []any) []ComposePort {
 
 // DevcontainerPortEntries returns the published-port integers that
 // devcontainer.json `forwardPorts` can express. Entries that cannot be
-// reduced to a single integer (port ranges, mode=host) are skipped; if warn
-// is non-nil each skip is announced as a single line so the user can
-// reconcile their docker-compose-only ports with the devcontainer output.
+// reduced to a single TCP integer (port ranges, mode=host, protocol=udp)
+// are skipped; if warn is non-nil each skip is announced as a single line
+// so the user can reconcile their docker-compose-only ports with the
+// devcontainer output.
 func DevcontainerPortEntries(forward []any, warn io.Writer) []int {
 	if len(forward) == 0 {
 		return nil
@@ -139,6 +147,12 @@ func shortFormHostPort(s string) (int, bool, string) {
 	if m == nil {
 		return 0, false, fmt.Sprintf("= %q is not a valid short-form port", s)
 	}
+	// devcontainer.json's forwardPorts is TCP-only — VS Code's port
+	// tunnel does not carry UDP, so a UDP entry registered here would
+	// show up in the Ports panel but silently fail to forward.
+	if proto := m[rxPortShortForm.SubexpIndex("proto")]; proto == "udp" {
+		return 0, false, fmt.Sprintf("= %q uses protocol = \"udp\"", s)
+	}
 	host := m[rxPortShortForm.SubexpIndex("host")]
 	container := m[rxPortShortForm.SubexpIndex("container")]
 	pick := host
@@ -158,6 +172,12 @@ func shortFormHostPort(s string) (int, bool, string) {
 func longFormHostPort(m map[string]any) (int, bool, string) {
 	if mode, ok := stringField(m, "mode"); ok && mode == "host" {
 		return 0, false, "uses mode = \"host\""
+	}
+	// Symmetric with the short-form check above: devcontainer.json's
+	// forwardPorts cannot carry UDP, so a long-form entry with
+	// protocol = "udp" is skipped with the same warning class.
+	if proto, ok := stringField(m, "protocol"); ok && proto == "udp" {
+		return 0, false, "uses protocol = \"udp\""
 	}
 	if v, ok := m["published"]; ok {
 		if n, parsed := publishedHostPort(v); parsed {
@@ -240,7 +260,9 @@ func validatePortsForward(a *errAccumulator, forward []any) {
 		idx := strconv.Itoa(i)
 		switch v := raw.(type) {
 		case string:
-			validateShortForm(a, v, idx)
+			if msg, ok := shortFormReason(v); !ok {
+				a.add(msg, "forward", idx)
+			}
 		case map[string]any:
 			validateLongForm(a, v, idx)
 		case int, int64, float64:
@@ -256,14 +278,31 @@ func validatePortsForward(a *errAccumulator, forward []any) {
 	}
 }
 
-func validateShortForm(a *errAccumulator, s, idx string) {
+// ValidateShortForm reports whether s is a valid docker-compose short-form
+// port mapping (regex shape + host/container in [portMin, portMax] +
+// IPv4/IPv6 literal). Returns nil on accept; on reject returns an error that
+// wraps ErrPortShortForm with a message naming the rule that failed. The
+// `[ports].forward` schema validator and the `cocoon init` prompt share this
+// single rule so a string that init accepts cannot be rejected later by gen.
+func ValidateShortForm(s string) error {
+	msg, ok := shortFormReason(s)
+	if ok {
+		return nil
+	}
+	return fmt.Errorf("%w: %s", ErrPortShortForm, msg)
+}
+
+// shortFormReason returns ("", true) on accept and (humanReadableReason,
+// false) on reject. Used by both ValidateShortForm (which wraps the reason
+// in ErrPortShortForm for external callers — `cocoon init` and `--ports`)
+// and validatePortsForward (which feeds the reason into errAccumulator with
+// the field/idx context the `[ports].forward` schema validation carries).
+func shortFormReason(s string) (string, bool) {
 	m := rxPortShortForm.FindStringSubmatch(s)
 	if m == nil {
-		a.add(fmt.Sprintf(
+		return fmt.Sprintf(
 			"%q does not match docker-compose short form "+
-				"[HOST_IP:][HOST:]CONTAINER[/PROTOCOL]", s),
-			"forward", idx)
-		return
+				"[HOST_IP:][HOST:]CONTAINER[/PROTOCOL]", s), false
 	}
 	for _, name := range []string{"host", "container"} {
 		raw := m[rxPortShortForm.SubexpIndex(name)]
@@ -273,20 +312,18 @@ func validateShortForm(a *errAccumulator, s, idx string) {
 		for _, part := range strings.Split(raw, "-") {
 			n, err := strconv.Atoi(part)
 			if err != nil || n < portMin || n > portMax {
-				a.add(fmt.Sprintf("port must be in [%d,%d] (got %q)",
-					portMin, portMax, part),
-					"forward", idx)
-				return
+				return fmt.Sprintf("port must be in [%d,%d] (got %q)",
+					portMin, portMax, part), false
 			}
 		}
 	}
 	if ip := m[rxPortShortForm.SubexpIndex("ip")]; ip != "" {
 		bare := strings.TrimSuffix(strings.TrimPrefix(ip, "["), "]")
 		if net.ParseIP(bare) == nil {
-			a.add(fmt.Sprintf("%q is not a valid IPv4/IPv6 address", ip),
-				"forward", idx)
+			return fmt.Sprintf("%q is not a valid IPv4/IPv6 address", ip), false
 		}
 	}
+	return "", true
 }
 
 func validateLongForm(a *errAccumulator, m map[string]any, idx string) {

@@ -2,6 +2,7 @@ package config_test
 
 import (
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -10,6 +11,17 @@ import (
 	"github.com/sukekyo26/cocoon/internal/config"
 )
 
+// tomlQuote returns s as a TOML basic-string literal (`"..."`) suitable
+// for embedding adversarial test inputs into a workspace.toml body. The
+// callers in this file only feed characters whose Go-style escape from
+// strconv.Quote happens to overlap with TOML basic-string escapes:
+// \n \t \r \\ \" plus printable ASCII passed verbatim. Callers must
+// not pass arbitrary bytes here — strconv.Quote also emits \a, \v, \f
+// and \xNN hex escapes for other control / non-ASCII bytes, none of
+// which TOML basic strings accept, and the resulting body would fail to
+// parse before validate even runs.
+func tomlQuote(s string) string { return strconv.Quote(s) }
+
 // minimalWorkspace returns a TOML string for a syntactically valid workspace
 // with the smallest possible content. Tests append extra sections to it.
 func minimalWorkspace() string {
@@ -17,8 +29,8 @@ func minimalWorkspace() string {
 [container]
 service_name = "dev"
 username = "developer"
-os = "ubuntu"
-os_version = "24.04"
+image = "ubuntu"
+image_version = "24.04"
 
 [plugins]
 enable = []
@@ -43,56 +55,55 @@ func TestValidate_ContainerInvalidServiceName(t *testing.T) {
 	require.Contains(t, v.Errors[0].Message, "service_name does not match")
 }
 
-// TestValidate_LegacyUbuntuVersionRejected pins the migration error message
-// so the rewrite snippet does not silently regress. A workspace.toml that
-// still uses the pre-multi-OS `ubuntu_version = "..."` field must emit a
-// container.ubuntu_version error containing both the new field names
-// (os / os_version) and the value the user had set, so they can copy the
-// snippet straight from the error and re-run setup.
-func TestValidate_LegacyUbuntuVersionRejected(t *testing.T) {
+// TestValidate_LegacyOsRejected pins the migration error message so the
+// rewrite snippet does not silently regress. A workspace.toml that still
+// uses the pre-v0.3 `os = "..." / os_version = "..."` fields must emit a
+// container.os error containing both the new field names (image /
+// image_version) and the original values, so the user can copy the snippet
+// straight from the error and re-run.
+func TestValidate_LegacyOsRejected(t *testing.T) {
 	t.Parallel()
 	body := strings.ReplaceAll(
 		minimalWorkspace(),
+		`image = "ubuntu"
+image_version = "24.04"`,
 		`os = "ubuntu"
 os_version = "24.04"`,
-		`ubuntu_version = "24.04"`,
 	)
 	err := loadWS(t, body)
 	require.Error(t, err)
 	v, ok := config.AsValidationError(err)
 	require.True(t, ok)
-	// Locate the deprecation entry by Loc; relying on Errors[0] would couple
-	// the test to the order in which container.validate emits errors.
 	var got *config.FieldError
 	for i := range v.Errors {
-		if len(v.Errors[i].Loc) > 0 && v.Errors[i].Loc[len(v.Errors[i].Loc)-1] == "ubuntu_version" {
+		if len(v.Errors[i].Loc) > 0 && v.Errors[i].Loc[len(v.Errors[i].Loc)-1] == "os" {
 			got = &v.Errors[i]
 			break
 		}
 	}
-	require.NotNilf(t, got, "no ubuntu_version error in: %v", v.Errors)
+	require.NotNilf(t, got, "no os deprecation error in: %v", v.Errors)
 	for _, want := range []string{
-		"ubuntu_version is no longer supported",
-		`os = "ubuntu"`,
-		`os_version = "24.04"`,
+		"os / os_version are no longer supported",
+		`image = "ubuntu"`,
+		`image_version = "24.04"`,
 	} {
 		require.Containsf(t, got.Message, want, "migration error must contain %q", want)
 	}
 }
 
-// TestValidate_LegacyUbuntuVersionSuppressesOsErrors verifies that when the
-// legacy ubuntu_version field is present (and os/os_version are therefore
-// missing), the migration error is the only container-OS error emitted.
-// Previously validateOs ran unconditionally and stacked "os is required" /
-// "os_version is required" pairs on top of the migration snippet, burying
-// the actionable rewrite the user actually needs.
-func TestValidate_LegacyUbuntuVersionSuppressesOsErrors(t *testing.T) {
+// TestValidate_LegacyOsSuppressesImageErrors verifies that when the legacy
+// `os` / `os_version` fields are present (and image / image_version are
+// therefore missing), the migration error is the only container-image
+// error emitted. Stacking "image is required" / "image_version is required"
+// on top of the migration snippet would bury the actionable rewrite.
+func TestValidate_LegacyOsSuppressesImageErrors(t *testing.T) {
 	t.Parallel()
 	body := strings.ReplaceAll(
 		minimalWorkspace(),
+		`image = "ubuntu"
+image_version = "24.04"`,
 		`os = "ubuntu"
 os_version = "24.04"`,
-		`ubuntu_version = "24.04"`,
 	)
 	err := loadWS(t, body)
 	require.Error(t, err)
@@ -104,8 +115,11 @@ os_version = "24.04"`,
 			continue
 		}
 		last := loc[len(loc)-1]
-		if last == "os" || last == "os_version" {
-			t.Errorf("validateOs error must be suppressed while ubuntu_version is set, got %v: %q", loc, v.Errors[i].Message)
+		if last == "image" && !strings.Contains(v.Errors[i].Message, "no longer supported") {
+			t.Errorf("validateImage error must be suppressed while os/os_version is set, got %v: %q", loc, v.Errors[i].Message)
+		}
+		if last == "image_version" {
+			t.Errorf("validateImage error must be suppressed while os/os_version is set, got %v: %q", loc, v.Errors[i].Message)
 		}
 	}
 }
@@ -117,6 +131,220 @@ func TestValidate_DuplicatePlugins(t *testing.T) {
 	require.Error(t, err)
 	v, _ := config.AsValidationError(err)
 	require.Contains(t, v.Error(), "duplicate")
+}
+
+// TestValidate_ImageWhitelist exercises validateImage across all seven
+// supported images and every entry in their per-image SupportedImageVersions
+// list. The point is two-fold: catch a future SupportedImageVersions edit
+// that desynchronises from validateImage's lookup, and catch a future
+// SupportedImages edit that adds an entry without the corresponding
+// SupportedImageVersions row. The closed set is small enough that exhausting
+// it here costs <1ms but keeps the validator and the whitelist in lockstep.
+func TestValidate_ImageWhitelist(t *testing.T) {
+	t.Parallel()
+	for _, image := range config.SupportedImages {
+		image := image
+		// Assert the SupportedImageVersions row exists and is non-empty
+		// *before* iterating it. A bare `for _, v := range nil` would
+		// silently iterate zero times and let the test pass even when
+		// SupportedImages and SupportedImageVersions go out of sync —
+		// exactly the desync this test exists to catch.
+		versions, hit := config.SupportedImageVersions[image]
+		require.Truef(t, hit, "SupportedImageVersions has no row for image %q", image)
+		require.NotEmptyf(t, versions, "SupportedImageVersions[%q] is empty", image)
+		for _, version := range versions {
+			version := version
+			t.Run(image+"/"+version, func(t *testing.T) {
+				t.Parallel()
+				body := strings.ReplaceAll(
+					strings.ReplaceAll(
+						minimalWorkspace(),
+						`image = "ubuntu"`,
+						`image = "`+image+`"`,
+					),
+					`image_version = "24.04"`,
+					`image_version = "`+version+`"`,
+				)
+				require.NoError(t, loadWS(t, body))
+			})
+		}
+	}
+}
+
+// TestValidate_ImageRejected covers every way validateImage emits an
+// error: unknown image id, missing version when the image is set, badly
+// formatted version (slash, space, colon — anything outside
+// rxImageVersion), and missing image with a version set. Each case
+// asserts on the message substring users actually see (not on a
+// sentinel — validate.go uses FieldError, not exported sentinels).
+//
+// Note: an off-whitelist but well-formed tag (e.g. "1.26.4-bookworm")
+// is intentionally NOT rejected — that's TestValidate_ImageAcceptsOffWhitelist.
+func TestValidate_ImageRejected(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name        string
+		imageLine   string
+		versionLine string
+		mustContain string
+	}{
+		{
+			name:        "unknown_image",
+			imageLine:   `image = "alpine"`,
+			versionLine: `image_version = "3.20"`,
+			mustContain: "image must be one of",
+		},
+		{
+			name:        "image_version_bad_format_slash",
+			imageLine:   `image = "node"`,
+			versionLine: `image_version = "library/node:24"`,
+			mustContain: "does not match",
+		},
+		{
+			name:        "image_version_bad_format_space",
+			imageLine:   `image = "node"`,
+			versionLine: `image_version = "with space"`,
+			mustContain: "does not match",
+		},
+		{
+			name:        "image_version_bad_format_colon",
+			imageLine:   `image = "node"`,
+			versionLine: `image_version = "24:bookworm"`,
+			mustContain: "does not match",
+		},
+		{
+			name:        "image_version_missing",
+			imageLine:   `image = "node"`,
+			versionLine: `image_version = ""`,
+			mustContain: "image_version is required for image=node",
+		},
+		{
+			name:        "image_missing",
+			imageLine:   `image = ""`,
+			versionLine: `image_version = "26.04"`,
+			mustContain: "image is required",
+		},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			body := strings.ReplaceAll(
+				strings.ReplaceAll(minimalWorkspace(),
+					`image = "ubuntu"`, tc.imageLine),
+				`image_version = "24.04"`, tc.versionLine)
+			err := loadWS(t, body)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.mustContain)
+		})
+	}
+}
+
+// TestValidate_ImageAcceptsOffWhitelist pins the relaxed behavior: any
+// tag matching rxImageVersion is accepted even when SupportedImageVersions
+// does not list it. That lets users pin patches / new minors the day
+// upstream publishes them, instead of waiting for a cocoon release to
+// extend the whitelist.
+func TestValidate_ImageAcceptsOffWhitelist(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		image   string
+		version string
+	}{
+		{"golang", "1.26.4-bookworm"}, // hypothetical future patch
+		{"golang", "1.99-bookworm"},   // hypothetical future minor
+		{"node", "27-bookworm-slim"},  // hypothetical future major
+		{"python", "3.15-slim-bookworm"},
+		{"denoland/deno", "debian-2.7.99"},
+		{"ubuntu", "27.04"},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.image+"_"+tc.version, func(t *testing.T) {
+			t.Parallel()
+			body := strings.ReplaceAll(
+				strings.ReplaceAll(minimalWorkspace(),
+					`image = "ubuntu"`,
+					`image = "`+tc.image+`"`),
+				`image_version = "24.04"`,
+				`image_version = "`+tc.version+`"`)
+			require.NoError(t, loadWS(t, body))
+		})
+	}
+}
+
+// TestValidate_ImagePluginConflict exercises the cross-section check
+// that rejects workspace.toml files combining a language-runtime base
+// image with the matching cocoon plugin. The conflict pairs come from
+// ImageProvidesPlugin (image="golang" ↔ plugin "go", image="rust" ↔
+// plugin "rust"); other combinations (image="python" + uv plugin,
+// image="ubuntu" + go plugin) must remain accepted because they
+// coexist cleanly.
+func TestValidate_ImagePluginConflict(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name        string
+		image       string
+		version     string
+		enable      string
+		wantErr     bool
+		mustContain string
+	}{
+		{
+			name:  "golang_image_plus_go_plugin",
+			image: "golang", version: "1.26-bookworm",
+			enable:      `["go"]`,
+			wantErr:     true,
+			mustContain: `image = "golang" already provides go`,
+		},
+		{
+			name:  "rust_image_plus_rust_plugin",
+			image: "rust", version: "1.95-bookworm",
+			enable:      `["rust"]`,
+			wantErr:     true,
+			mustContain: `image = "rust" already provides rust`,
+		},
+		{
+			name:  "ubuntu_image_plus_go_plugin_ok",
+			image: "ubuntu", version: "24.04",
+			enable:  `["go"]`,
+			wantErr: false,
+		},
+		{
+			name:  "python_image_plus_uv_plugin_ok",
+			image: "python", version: "3.13-slim-bookworm",
+			enable:  `["uv"]`,
+			wantErr: false,
+		},
+		{
+			name:  "golang_image_alone_ok",
+			image: "golang", version: "1.26-bookworm",
+			enable:  `[]`,
+			wantErr: false,
+		},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			body := strings.ReplaceAll(
+				strings.ReplaceAll(
+					strings.ReplaceAll(minimalWorkspace(),
+						`image = "ubuntu"`,
+						`image = "`+tc.image+`"`),
+					`image_version = "24.04"`,
+					`image_version = "`+tc.version+`"`),
+				"enable = []",
+				"enable = "+tc.enable)
+			err := loadWS(t, body)
+			if tc.wantErr {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tc.mustContain)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
 }
 
 func TestValidate_InvalidEnvKey(t *testing.T) {
@@ -347,6 +575,77 @@ func TestValidate_HomeFilesRejectsDuplicate(t *testing.T) {
 	err := loadWS(t, body)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "duplicate")
+}
+
+// TestValidate_HomeFilesRejectsShellMetacharacters table-drives the
+// shell-injection guard: each [home_files].files entry is interpolated
+// raw into the generated initializeCommand snippet, so the validator
+// must reject any path segment that carries shell-special meaning.
+// Covers the obvious vectors (command substitution, separators, pipes,
+// redirections, globs, history expansion, quoting, escapes, whitespace,
+// embedded newlines, tilde, brace and bracket expansion).
+func TestValidate_HomeFilesRejectsShellMetacharacters(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name  string
+		entry string
+	}{
+		{"dollar_command_subst", ".cfg/$(whoami).json"},
+		{"backtick_command_subst", ".cfg/`whoami`.json"},
+		{"semicolon", ".cfg/a;b.json"},
+		{"ampersand", ".cfg/a&b.json"},
+		{"pipe", ".cfg/a|b.json"},
+		{"redirect_lt", ".cfg/a<b.json"},
+		{"redirect_gt", ".cfg/a>b.json"},
+		{"glob_star", ".cfg/*.json"},
+		{"glob_question", ".cfg/a?.json"},
+		{"bang_history", ".cfg/a!b.json"},
+		{"bracket", ".cfg/[a].json"},
+		{"brace", ".cfg/{a,b}.json"},
+		{"double_quote", ".cfg/a\"b.json"},
+		{"single_quote", ".cfg/a'b.json"},
+		{"backslash", ".cfg/a\\b.json"},
+		{"space", ".cfg/a b.json"},
+		{"tab", ".cfg/a\tb.json"},
+		{"newline", ".cfg/a\nb.json"},
+		{"paren_open", ".cfg/(a).json"},
+		{"paren_close", ".cfg/a).json"},
+		{"tilde_mid", ".cfg/~user/foo.json"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			body := minimalWorkspace() + "\n[home_files]\nfiles = [" +
+				tomlQuote(tc.entry) + "]\n"
+			err := loadWS(t, body)
+			require.Error(t, err, "entry %q should be rejected", tc.entry)
+			require.Contains(t, err.Error(), "[A-Za-z0-9._/-]+")
+		})
+	}
+}
+
+// TestValidate_HomeFilesAcceptsBenignPaths pins the whitelist's positive
+// side: typical config-file paths that the docs encourage must continue
+// to validate, including nested dotdirs (.gemini/oauth_creds.json) and
+// hyphen-bearing names (.local/share/foo-bar.json).
+func TestValidate_HomeFilesAcceptsBenignPaths(t *testing.T) {
+	t.Parallel()
+	cases := []string{
+		".gitconfig",
+		".claude.json",
+		".gemini/oauth_creds.json",
+		".local/share/foo-bar.json",
+		".config/git/config",
+		"plain_file_no_dot",
+	}
+	for _, p := range cases {
+		t.Run(p, func(t *testing.T) {
+			t.Parallel()
+			body := minimalWorkspace() + "\n[home_files]\nfiles = [" +
+				tomlQuote(p) + "]\n"
+			require.NoError(t, loadWS(t, body), "entry %q should be accepted", p)
+		})
+	}
 }
 
 func TestValidate_ContainerHostsAcceptsValid(t *testing.T) {

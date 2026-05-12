@@ -5,7 +5,7 @@
 		"docker-compose.yml"
 	],
 	"service": "snapshot-test",
-	"initializeCommand": "mkdir -p ${HOME:?HOME must be set on the host}/.cocoon/certs",
+	"initializeCommand": "mkdir -p \"${HOME:?HOME must be set on the host}/.cocoon/certs\"",
 	"workspaceFolder": "/home/testuser/workspace",
 	"forwardPorts": [
 		3000

@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/sukekyo26/cocoon/internal/config"
@@ -74,13 +72,15 @@ func (c *WorkspaceContext) ComposeForwardPorts() []config.ComposePort {
 }
 
 // DevcontainerForwardPorts returns published-port integers usable by
-// devcontainer.json's `forwardPorts`. When [ports] is absent the default
-// [3000] is returned so the IDE still forwards the canonical port. Entries
-// that cannot be reduced to a single port (port ranges, mode=host) are
-// skipped, with one warning per skip emitted to c.Warnings.
+// devcontainer.json's `forwardPorts`. Returns nil when [ports] is absent so
+// the generator can omit the key entirely rather than baking in a default
+// 3000 the user never asked for; the IDE then forwards only what the
+// workspace declares. Entries that cannot be reduced to a single TCP
+// integer (port ranges, mode=host, protocol=udp) are skipped, with one
+// warning per skip emitted to c.Warnings.
 func (c *WorkspaceContext) DevcontainerForwardPorts() []int {
 	if c.WS == nil || c.WS.Ports == nil {
-		return []int{3000}
+		return nil
 	}
 	return config.DevcontainerPortEntries(c.WS.Ports.Forward, c.Warnings)
 }
@@ -357,35 +357,41 @@ func (c *WorkspaceContext) Mounts() []config.Mount {
 	return c.WS.Mounts
 }
 
-// HomeFileMounts synthesizes one config.Mount per [home_files].files entry,
-// each pointing at <host_home>/<rel> -> /home/${USERNAME}/<rel>. Source paths
-// are expanded to the absolute host home at generation time so the resulting
-// docker-compose.yml is unambiguous (no ${HOME} indirection). Container-side
-// USERNAME is left as a Compose variable for parity with [[mounts]] output.
-//
-// The host home is resolved via os.UserHomeDir(); the homeDir argument lets
-// tests inject a fake $HOME without touching the process environment. Pass
-// an empty string in production to use os.UserHomeDir.
-func (c *WorkspaceContext) HomeFileMounts(homeDir string) ([]config.Mount, error) {
-	if c.WS == nil || c.WS.HomeFiles == nil || len(c.WS.HomeFiles.Files) == 0 {
-		return nil, nil
+// HasHomeFiles reports whether [home_files] declares at least one entry.
+// Used by gen to gate host-side touch + notice and by devcontainerjson to
+// decide whether to emit an initializeCommand.
+func (c *WorkspaceContext) HasHomeFiles() bool {
+	return c.WS != nil && c.WS.HomeFiles != nil && len(c.WS.HomeFiles.Files) > 0
+}
+
+// HomeFilesEntries returns the configured [home_files].files list (never nil).
+func (c *WorkspaceContext) HomeFilesEntries() []string {
+	if !c.HasHomeFiles() {
+		return []string{}
 	}
-	if homeDir == "" {
-		h, err := os.UserHomeDir()
-		if err != nil {
-			return nil, fmt.Errorf("home_files: resolve home: %w", err)
-		}
-		homeDir = h
+	return c.WS.HomeFiles.Files
+}
+
+// HomeFileMounts synthesizes one config.Mount per [home_files].files entry,
+// each pointing at ${HOME:?…}/<rel> -> /home/${USERNAME}/<rel>. Source paths
+// stay as Compose interpolation so the generated docker-compose.yml works
+// when `cocoon gen` ran in one environment (e.g. inside a container) and
+// `docker compose up` runs in another (the Docker host). The actual host
+// touch is performed by `cocoon gen` and by devcontainer.json's
+// initializeCommand.
+func (c *WorkspaceContext) HomeFileMounts() []config.Mount {
+	if !c.HasHomeFiles() {
+		return nil
 	}
 	out := make([]config.Mount, 0, len(c.WS.HomeFiles.Files))
 	for _, rel := range c.WS.HomeFiles.Files {
 		out = append(out, config.Mount{
-			Source:   filepath.Join(homeDir, rel),
+			Source:   HomeFilesHostPathPrefix + "/" + rel,
 			Target:   "/home/${USERNAME}/" + rel,
 			Readonly: false,
 		})
 	}
-	return out, nil
+	return out
 }
 
 // CustomVolumes returns the [volumes] map (never nil).

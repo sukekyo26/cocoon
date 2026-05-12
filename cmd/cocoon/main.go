@@ -6,7 +6,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"os"
 
@@ -16,6 +15,7 @@ import (
 	initcli "github.com/sukekyo26/cocoon/internal/cli/init"
 	plugincli "github.com/sukekyo26/cocoon/internal/cli/plugin"
 	selfupdatecli "github.com/sukekyo26/cocoon/internal/cli/selfupdate"
+	"github.com/sukekyo26/cocoon/internal/logx"
 	"github.com/sukekyo26/cocoon/internal/version"
 )
 
@@ -35,7 +35,7 @@ func exitCode(err error, stderr io.Writer) int {
 	// Subcommands run with cobra's SilenceErrors=true, so it is the binary
 	// boundary's job to surface the message. Print first, then map to the
 	// numeric exit code expected by callers.
-	fmt.Fprintf(stderr, "cocoon: %v\n", err)
+	logx.New(io.Discard, stderr).Errorf("cocoon: %v", err)
 	switch {
 	case errors.Is(err, plugincli.ErrCanceled):
 		return 130

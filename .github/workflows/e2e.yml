@@ -133,8 +133,8 @@ jobs:
           "$COCOON" init --yes \
             --service-name dev \
             --username dev \
-            --os ubuntu \
-            --os-version 22.04 \
+            --image ubuntu \
+            --image-version 22.04 \
             --mount-root . \
             --no-devcontainer \
             --certificates \

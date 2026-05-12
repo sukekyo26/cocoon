@@ -61,10 +61,10 @@ func TestWorkspace_ValidateRejectsBadMountRoot(t *testing.T) {
 	ws := &config.Workspace{
 		Workspace: &config.WorkspaceSpec{MountRoot: "../.."},
 		Container: config.ContainerSpec{
-			ServiceName: "dev",
-			Username:    "shogo",
-			Os:          "ubuntu",
-			OsVersion:   "24.04",
+			ServiceName:  "dev",
+			Username:     "shogo",
+			Image:        "ubuntu",
+			ImageVersion: "24.04",
 		},
 	}
 	err := ws.Validate("test.toml")
@@ -83,10 +83,10 @@ func TestWorkspace_ValidateAcceptsValidMountRoot(t *testing.T) {
 		ws := &config.Workspace{
 			Workspace: &config.WorkspaceSpec{MountRoot: mountRoot},
 			Container: config.ContainerSpec{
-				ServiceName: "dev",
-				Username:    "shogo",
-				Os:          "ubuntu",
-				OsVersion:   "24.04",
+				ServiceName:  "dev",
+				Username:     "shogo",
+				Image:        "ubuntu",
+				ImageVersion: "24.04",
 			},
 		}
 		if err := ws.Validate("test.toml"); err != nil {

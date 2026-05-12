@@ -16,10 +16,10 @@ func TestGenerate_RejectsReservedCustomVolume(t *testing.T) {
 	for _, name := range []string{"local", "cocoon"} {
 		ws := &config.Workspace{
 			Container: config.ContainerSpec{
-				ServiceName: "dev",
-				Username:    "u",
-				Os:          "ubuntu",
-				OsVersion:   "26.04",
+				ServiceName:  "dev",
+				Username:     "u",
+				Image:        "ubuntu",
+				ImageVersion: "26.04",
 			},
 			Volumes: map[string]string{
 				name: "/home/u/some-path",
@@ -46,10 +46,10 @@ func TestGenerate_RejectsCustomVolumeOnReservedMountPath(t *testing.T) {
 	} {
 		ws := &config.Workspace{
 			Container: config.ContainerSpec{
-				ServiceName: "dev",
-				Username:    "u",
-				Os:          "ubuntu",
-				OsVersion:   "26.04",
+				ServiceName:  "dev",
+				Username:     "u",
+				Image:        "ubuntu",
+				ImageVersion: "26.04",
 			},
 			Volumes: map[string]string{
 				"my_state": path,
@@ -73,10 +73,10 @@ func TestGenerate_RejectsPluginsWithCollidingDerivedVolumeNames(t *testing.T) {
 	// keys and `docker compose up` rejects it.
 	ws := &config.Workspace{
 		Container: config.ContainerSpec{
-			ServiceName: "dev",
-			Username:    "u",
-			Os:          "ubuntu",
-			OsVersion:   "26.04",
+			ServiceName:  "dev",
+			Username:     "u",
+			Image:        "ubuntu",
+			ImageVersion: "26.04",
 		},
 		Plugins: config.PluginsSpec{Enable: []string{"alpha", "beta"}},
 	}
@@ -109,10 +109,10 @@ func TestGenerate_RejectsPluginVolumeOnReservedMountPath(t *testing.T) {
 	} {
 		ws := &config.Workspace{
 			Container: config.ContainerSpec{
-				ServiceName: "dev",
-				Username:    "u",
-				Os:          "ubuntu",
-				OsVersion:   "26.04",
+				ServiceName:  "dev",
+				Username:     "u",
+				Image:        "ubuntu",
+				ImageVersion: "26.04",
 			},
 			Plugins: config.PluginsSpec{Enable: []string{"badvol"}},
 		}
