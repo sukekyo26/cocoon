@@ -60,6 +60,6 @@ else
   printf '%sWARNING: SHA256 verification skipped for Node.js (no checksum provided in [plugins.versions.node])%s\n' "$C_YEL" "$C_RST" >&2
 fi
 
-tar -C /usr/local -xJf /tmp/node.tar.xz
-mv "/usr/local/node-v${VERSION}-linux-${NODE_ARCH}" /usr/local/node
+mkdir -p /usr/local/node
+tar -C /usr/local/node --strip-components=1 -xJf /tmp/node.tar.xz
 rm /tmp/node.tar.xz
