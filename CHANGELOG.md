@@ -6,16 +6,7 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Fixed
-
-- `cocoon gen` no longer injects a hardcoded `"forwardPorts": [3000]` into the generated `.devcontainer/devcontainer.json` when the workspace declares no `[ports]` and no `[devcontainer].forward_ports` override. The key is now omitted entirely in that case, so VS Code's "Ports" panel and `docker compose ps` only show ports the user actually declared. Workspaces that opt in via `[ports].forward = [...]` or `cocoon init --ports ...` are unaffected. Existing `.devcontainer/devcontainer.json` files need to be regenerated to pick up the change.
-- UDP-only `[ports].forward` entries (short form `"6060:6060/udp"` or long form `{ target = 53, protocol = "udp" }`) are no longer leaked into `devcontainer.json`'s `forwardPorts`. VS Code's port tunnel is TCP-only, so a UDP entry registered there would silently fail to forward; cocoon now skips those entries with a single-line warning (same shape as the existing range / mode=host skips) so the user can reconcile their compose-only ports with the devcontainer output.
-- Update notifier no longer freezes after a wall-clock rollback. The 24h TTL check now treats a cached `checked_at` in the future (e.g. the laptop slept through a timezone change, or NTP corrected a fast clock) as stale and re-fetches on the next invocation, instead of silently honoring the future timestamp for hours or days.
-- Update notifier no longer delays subcommands by up to 30 seconds when GitHub is unreachable. The network call now has a 2-second budget per invocation (down from `release.DefaultTimeout`), so a stalled `api.github.com` falls back to the silent-fail path almost immediately instead of stalling every `cocoon <cmd>` until the upstream timeout fires.
-
-### Security
-
-- `[home_files].files` entries are now restricted to `[A-Za-z0-9._/-]+` per path segment. Shell-special characters (`$`, backticks, `;`, `&`, `|`, `<`, `>`, `*`, `?`, `!`, quotes, backslashes, whitespace) are rejected at validation time so a repo-provided `workspace.toml` cannot inject commands into the host shell through the generated `initializeCommand`. Existing workspaces that used only conventional dotfile names are unaffected; anything that previously passed validation by accident now fails with an actionable message.
+## [0.3.0] - 2026-05-13
 
 ### Added
 
@@ -36,9 +27,20 @@ adheres to [Semantic Versioning](https://semver.org/).
 - `image_version` is no longer restricted to the curated `SupportedImageVersions` list. Validation now enforces only the Docker-tag character set (letters, digits, dot, underscore, hyphen — no slash or colon) so users can pin a patch / new minor (e.g. `golang:1.26.4-bookworm`) the day upstream publishes it. The whitelist becomes a quick-pick suggestion in `cocoon init` and the recommended-tags table in `docs/configuration.md`; tag existence in the upstream registry is left to `docker pull` at build time.
 - **BREAKING**: `[container].os` / `os_version` renamed to `[container].image` / `image_version`. The supported value set widened from two Linux distributions to seven images, so a name keyed off "OS" no longer fits. Migration: replace `os = "ubuntu"` with `image = "ubuntu"` and `os_version = "26.04"` with `image_version = "26.04"`. The validator emits a fail-fast error containing the rewrite snippet for any workspace.toml still using the old keys, so the migration is one-shot per file.
 - **BREAKING**: `cocoon init --os` / `--os-version` flags renamed to `--image` / `--image-version`. CI invocations that pinned the old flags need a search-and-replace; cocoon does not accept the old names as aliases.
-- **BREAKING**: `[container].ubuntu_version` (deprecated since v0.2.0) is removed. The strict TOML parser now rejects it as an unknown key. Migration: rewrite to `image = "ubuntu"` / `image_version = "..."` directly (the v0.2 chained deprecation `ubuntu_version` → `os` / `os_version` is no longer needed).
 - **BREAKING**: Generated `Dockerfile` ARG names `OS_IMAGE` / `OS_VERSION` and the matching `.env` / docker-compose interpolation keys are renamed to `IMAGE` / `IMAGE_VERSION`. Anything outside cocoon that referenced these (e.g. a custom `docker build --build-arg OS_IMAGE=...` invocation) must be updated.
 - Combining `image = "golang"` with `[plugins].enable = ["go"]`, or `image = "rust"` with `[plugins].enable = ["rust"]`, is now a validation error. The base image and the matching plugin both ship the same toolchain — golang to `/usr/local/go` (plugin tar overwrites the base) and rust to `$HOME/.cargo` (plugin shadows the base on `$PATH`) — so enabling both wasted docker-build time without changing the runtime. Use the base image **or** the plugin, not both; the error message includes the actionable rewrite.
+
+### Fixed
+
+- `cocoon gen` no longer injects a hardcoded `"forwardPorts": [3000]` into the generated `.devcontainer/devcontainer.json` when the workspace declares no `[ports]` and no `[devcontainer].forward_ports` override. The key is now omitted entirely in that case, so VS Code's "Ports" panel and `docker compose ps` only show ports the user actually declared. Workspaces that opt in via `[ports].forward = [...]` or `cocoon init --ports ...` are unaffected. Existing `.devcontainer/devcontainer.json` files need to be regenerated to pick up the change.
+- UDP-only `[ports].forward` entries (short form `"6060:6060/udp"` or long form `{ target = 53, protocol = "udp" }`) are no longer leaked into `devcontainer.json`'s `forwardPorts`. VS Code's port tunnel is TCP-only, so a UDP entry registered there would silently fail to forward; cocoon now skips those entries with a single-line warning (same shape as the existing range / mode=host skips) so the user can reconcile their compose-only ports with the devcontainer output.
+- Update notifier no longer freezes after a wall-clock rollback. The 24h TTL check now treats a cached `checked_at` in the future (e.g. the laptop slept through a timezone change, or NTP corrected a fast clock) as stale and re-fetches on the next invocation, instead of silently honoring the future timestamp for hours or days.
+- Update notifier no longer delays subcommands by up to 30 seconds when GitHub is unreachable. The network call now has a 2-second budget per invocation (down from `release.DefaultTimeout`), so a stalled `api.github.com` falls back to the silent-fail path almost immediately instead of stalling every `cocoon <cmd>` until the upstream timeout fires.
+- **Security**: `[home_files].files` entries are now restricted to `[A-Za-z0-9._/-]+` per path segment. Shell-special characters (`$`, backticks, `;`, `&`, `|`, `<`, `>`, `*`, `?`, `!`, quotes, backslashes, whitespace) are rejected at validation time so a repo-provided `workspace.toml` cannot inject commands into the host shell through the generated `initializeCommand`. Existing workspaces that used only conventional dotfile names are unaffected; anything that previously passed validation by accident now fails with an actionable message.
+
+### Removed
+
+- **BREAKING**: `[container].ubuntu_version` (deprecated since v0.2.0) is removed. The strict TOML parser now rejects it as an unknown key. Migration: rewrite to `image = "ubuntu"` / `image_version = "..."` directly (the v0.2 chained deprecation `ubuntu_version` → `os` / `os_version` is no longer needed).
 
 ## [0.2.0] - 2026-05-11
 
@@ -71,13 +73,6 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Catalog `claude-code` and `copilot-cli` plugins now export `~/.local/bin` to `PATH` via `[install.env]` so the installed CLIs are reachable in interactive shells without depending on another plugin (e.g. `uv`) to set the same PATH.
 - Catalog `go` plugin now installs `build-essential` (gcc / make) so cgo builds and `go install` of native-dependent tools work out of the box.
 
-### Docs
-
-- Add `docs/plugins.md` (English) and `docs/plugins.ja.md` (Japanese) as the single source of truth for plugin authoring. They document the 3-layer LayeredFS, the full `plugin.toml` schema, when to write `install.sh` vs `install_user.sh` (with a decision matrix and concrete examples covering starship plus hypothetical fzf / oh-my-zsh / miniconda cases), the env vars passed to install scripts, the version-pin contract, a catalog tour, and troubleshooting recipes. The plugin-authoring SKILL.md is slimmed to agent workflow only and delegates spec to these docs.
-- Expand `docs/commands.md` plugin section with purpose, runnable example, and gotchas for each subcommand. Document the layered FS (project > user > embedded) at the top, link to `docs/plugins.md` for authoring details, and replace the prior `add → edit → enable → gen` workflow with "list the id under `[plugins].enable`; cp -r or scaffold to customise".
-- Rewrite `README.md` and `docs/README.ja.md` to lead with the "no Docker / docker-compose knowledge required" pitch (target-reader statement + Before/After block) instead of feature bullets. Add a v0.x alpha banner at the top of both READMEs and of every `docs/{architecture,configuration,commands,plugins}.{md,ja.md}` file so the development-stage caveat is visible from any entry point. Drop the trailing `## License` section from both READMEs (the existing badge already covers it).
-- Append a "Removed commands" section to `docs/commands.{md,ja.md}` listing the retired `cocoon config` noun group plus `cocoon plugin add` / `cocoon plugin remove`, with one-line migration pointers, so readers searching for an old command find the replacement immediately.
-
 ### Removed
 
 - **BREAKING**: drop `cocoon plugin remove` subcommand. The implementation was a thin wrapper around `os.RemoveAll` and is fully equivalent to `rm -rf <overlay>`. Migration: replace `cocoon plugin remove <id> --scope user` with `rm -rf ~/.cocoon/plugins/<id>` (or `<workspace>/.cocoon/plugins/<id>` for project scope).
@@ -102,6 +97,7 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Add `COMPOSE_PROJECT_NAME` derivation from the project directory basename so docker compose namespacing matches the host directory.
 - Add i18n catalog (English / Japanese) covering every CLI prompt, error message, and inline `workspace.toml` comment, switched via `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG`.
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/sukekyo26/cocoon/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/sukekyo26/cocoon/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/sukekyo26/cocoon/releases/tag/v0.1.0

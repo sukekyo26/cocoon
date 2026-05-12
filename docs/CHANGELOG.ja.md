@@ -6,16 +6,7 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
-### 修正
-
-- `cocoon gen` で生成される `.devcontainer/devcontainer.json` に `"forwardPorts": [3000]` がハードコードで付与される問題を修正。`[ports]` も `[devcontainer].forward_ports` 上書きも未設定のときは `forwardPorts` キー自体を出力しないようになり、VS Code の「Ports」パネルや `docker compose ps` にユーザーが宣言していないポートが現れない。`[ports].forward = [...]` か `cocoon init --ports ...` で明示的に opt-in したワークスペースには影響なし。既存の `.devcontainer/devcontainer.json` は `cocoon gen` で再生成して新挙動に追従させてください。
-- UDP 限定の `[ports].forward` エントリ (short form `"6060:6060/udp"` や long form `{ target = 53, protocol = "udp" }`) を `devcontainer.json` の `forwardPorts` に流さないように修正。VS Code の port tunnel は TCP only なので UDP を登録しても Ports パネルに出るだけで実際には転送できない。今後はレンジや mode=host のスキップと同じ形式で 1 行 warning を出してスキップする (compose 側の `ports:` には引き続き UDP として正しく反映される)。
-- アップデート通知の TTL チェックがウォールクロック巻き戻しで固まる問題を修正。キャッシュの `checked_at` が「未来」に書き込まれていた場合 (タイムゾーン変更を跨いでサスペンドした、NTP で進んだ時計を補正した、など) も stale 扱いとして次回呼び出し時に再フェッチするようになった。従来は未来タイムスタンプを尊重してしまい、ウォールクロックが追いつくまで通知が抑止されていた。
-- GitHub 不達時にサブコマンドが最大 30 秒待たされる問題を修正。アップデート通知のネットワーク呼び出しに 2 秒のタイムアウトを設けたので (従来は `release.DefaultTimeout` の 30 秒)、`api.github.com` が応答しない場合でも数秒で silent-fail 経路に落ちて本来のサブコマンドが動き出す。
-
-### セキュリティ
-
-- `[home_files].files` の各パスセグメントを `[A-Za-z0-9._/-]+` に制限するようにした。シェル特殊文字 (`$`、バッククォート、`;`、`&`、`|`、`<`、`>`、`*`、`?`、`!`、引用符、バックスラッシュ、空白) は validation 時に reject されるため、repo 提供の `workspace.toml` から生成された `initializeCommand` 経由でホストシェルへコマンド注入される経路を塞ぐ。従来から conventional な dotfile 名のみを使っていたワークスペースには影響しない。
+## [0.3.0] - 2026-05-13
 
 ### 追加
 
@@ -36,9 +27,20 @@ cocoon の主要な変更を記録します。フォーマットは
 - `image_version` の whitelist 厳格チェックを撤廃。Docker タグ文字集合 (英数字・ドット・アンダースコア・ハイフン、スラッシュ / コロン禁止) の形式チェックだけに緩和し、上流レジストリが公開するパッチ・新マイナーをすぐに pin できるようにしました (例: `golang:1.26.4-bookworm`)。`SupportedImageVersions` は `cocoon init` の推奨候補と `docs/configuration.md` の推奨タグ表に位置づけが変わります。タグがレジストリに実在するかは `docker pull` (ビルド時) に委ねます。
 - **BREAKING**: `[container].os` / `os_version` を `[container].image` / `image_version` にリネームしました。サポート対象が 2 種の Linux ディストロから 7 種のイメージに広がったため「OS」という名前は実態と乖離しています。マイグレーション: `os = "ubuntu"` → `image = "ubuntu"`、`os_version = "26.04"` → `image_version = "26.04"`。旧キーを残した `workspace.toml` を読み込ませると validator がリライト例入りの fail-fast エラーを出すので、ファイル単位で 1 回の置換で済みます。
 - **BREAKING**: `cocoon init` の `--os` / `--os-version` フラグを `--image` / `--image-version` にリネーム。旧フラグの alias は提供しないので、CI で旧フラグを固定指定している箇所は置換が必要です。
-- **BREAKING**: `[container].ubuntu_version` (v0.2.0 で deprecated 化していたもの) を撤去。strict TOML パーサが unknown key として reject します。マイグレーション: `image = "ubuntu"` / `image_version = "..."` に直接リライト (v0.2 の `ubuntu_version` → `os` / `os_version` の中間段階は経由しなくて構いません)。
 - **BREAKING**: 生成 `Dockerfile` の ARG 名 `OS_IMAGE` / `OS_VERSION` と、対応する `.env` / docker-compose の補間キーを `IMAGE` / `IMAGE_VERSION` にリネーム。cocoon の外側でこれらに依存していた箇所 (例: `docker build --build-arg OS_IMAGE=...` を自分で叩いていた等) は併せて更新してください。
 - `image = "golang"` と `[plugins].enable = ["go"]` の併用、および `image = "rust"` と `[plugins].enable = ["rust"]` の併用を validation エラーで reject するようにしました。go プラグインは `/usr/local/go` をベースイメージごと上書き、rust プラグインは `$HOME/.cargo/bin` を PATH 先頭に挿入してベースを死蔵させるため、両方有効にすると docker-build 時間を浪費するだけで実行時の挙動は変わりません。ベースイメージかプラグインのどちらか一方を選んでください。エラーメッセージには具体的なリライト案が含まれます。
+
+### 修正
+
+- `cocoon gen` で生成される `.devcontainer/devcontainer.json` に `"forwardPorts": [3000]` がハードコードで付与される問題を修正。`[ports]` も `[devcontainer].forward_ports` 上書きも未設定のときは `forwardPorts` キー自体を出力しないようになり、VS Code の「Ports」パネルや `docker compose ps` にユーザーが宣言していないポートが現れない。`[ports].forward = [...]` か `cocoon init --ports ...` で明示的に opt-in したワークスペースには影響なし。既存の `.devcontainer/devcontainer.json` は `cocoon gen` で再生成して新挙動に追従させてください。
+- UDP 限定の `[ports].forward` エントリ (short form `"6060:6060/udp"` や long form `{ target = 53, protocol = "udp" }`) を `devcontainer.json` の `forwardPorts` に流さないように修正。VS Code の port tunnel は TCP only なので UDP を登録しても Ports パネルに出るだけで実際には転送できない。今後はレンジや mode=host のスキップと同じ形式で 1 行 warning を出してスキップする (compose 側の `ports:` には引き続き UDP として正しく反映される)。
+- アップデート通知の TTL チェックがウォールクロック巻き戻しで固まる問題を修正。キャッシュの `checked_at` が「未来」に書き込まれていた場合 (タイムゾーン変更を跨いでサスペンドした、NTP で進んだ時計を補正した、など) も stale 扱いとして次回呼び出し時に再フェッチするようになった。従来は未来タイムスタンプを尊重してしまい、ウォールクロックが追いつくまで通知が抑止されていた。
+- GitHub 不達時にサブコマンドが最大 30 秒待たされる問題を修正。アップデート通知のネットワーク呼び出しに 2 秒のタイムアウトを設けたので (従来は `release.DefaultTimeout` の 30 秒)、`api.github.com` が応答しない場合でも数秒で silent-fail 経路に落ちて本来のサブコマンドが動き出す。
+- **セキュリティ**: `[home_files].files` の各パスセグメントを `[A-Za-z0-9._/-]+` に制限するようにした。シェル特殊文字 (`$`、バッククォート、`;`、`&`、`|`、`<`、`>`、`*`、`?`、`!`、引用符、バックスラッシュ、空白) は validation 時に reject されるため、repo 提供の `workspace.toml` から生成された `initializeCommand` 経由でホストシェルへコマンド注入される経路を塞ぐ。従来から conventional な dotfile 名のみを使っていたワークスペースには影響しない。
+
+### 削除
+
+- **BREAKING**: `[container].ubuntu_version` (v0.2.0 で deprecated 化していたもの) を撤去。strict TOML パーサが unknown key として reject します。マイグレーション: `image = "ubuntu"` / `image_version = "..."` に直接リライト (v0.2 の `ubuntu_version` → `os` / `os_version` の中間段階は経由しなくて構いません)。
 
 ## [0.2.0] - 2026-05-11
 
@@ -71,13 +73,6 @@ cocoon の主要な変更を記録します。フォーマットは
 - カタログプラグイン `claude-code` / `copilot-cli` が `[install.env]` で `~/.local/bin` を `PATH` に追加するように修正。これにより、`uv` 等の他プラグインに依存することなくインストールされた CLI が対話シェルから即時利用可能になる。
 - カタログプラグイン `go` に `build-essential` (gcc / make) の apt インストールを追加。これにより cgo ビルドや native 依存ツールの `go install` がそのまま動作する。
 
-### ドキュメント
-
-- `docs/plugins.md` (英語) と `docs/plugins.ja.md` (日本語) を新設。プラグイン作成者向けの単一ソースとして、3 層 LayeredFS / `plugin.toml` 全フィールド表 / `install.sh` と `install_user.sh` の使い分け（判断マトリクス + starship 実例 + fzf / oh-my-zsh / miniconda の仮想例）/ install スクリプトに渡される環境変数 / バージョン pin の契約 / catalog ツアー / トラブルシューティングをまとめた。`plugin-authoring` スキル (SKILL.md) は agent 向け作業手順のみに絞り、仕様面はすべて新ドキュメントへ委譲。
-- `docs/commands.md` の plugin セクションを「目的・実行例・落とし穴」付きで全面増補。先頭にレイヤード FS (project > user > embedded) の説明を置き、`docs/plugins.md` への作成者向けクロスリンクを追加。従来の `add → 編集 → 有効化 → gen` ワークフロー記述は「`[plugins].enable` に id を並べる; カスタマイズしたければ cp -r or scaffold」に置き換えた。
-- `README.md` と `docs/README.ja.md` を全面書き直し。機能列挙ではなく「Docker / docker-compose を書きたくない人向け」という想定ユーザー宣言と Before/After 比較を冒頭に置く構成に変更した。両 README と `docs/{architecture,configuration,commands,plugins}.{md,ja.md}` の冒頭に v0.x alpha 警告ブロックを追加し、どのドキュメント入口からも開発段階の注意事項が見えるようにした。冒頭バッジが MIT License を示しているため、両 README 末尾の `## License` セクションは削除した。
-- `docs/commands.{md,ja.md}` 末尾に「削除済みコマンド」節を追加。撤去された `cocoon config` ノウングループと `cocoon plugin add` / `cocoon plugin remove` を 1 行ずつの移行案内付きで列挙し、古いコマンドを探して辿り着いた読者がすぐに代替手段を見つけられるようにした。
-
 ### 削除
 
 - **BREAKING**: `cocoon plugin remove` サブコマンドを削除。実装は `os.RemoveAll` の薄いラッパーで `rm -rf <overlay>` と完全に等価だった。移行手順: `cocoon plugin remove <id> --scope user` を `rm -rf ~/.cocoon/plugins/<id>` (project スコープなら `<workspace>/.cocoon/plugins/<id>`) に置き換える。
@@ -102,6 +97,7 @@ cocoon の主要な変更を記録します。フォーマットは
 - `COMPOSE_PROJECT_NAME` をプロジェクトディレクトリの basename から導出するように変更。docker compose の namespace がホストディレクトリと一致する。
 - 国際化 (英語 / 日本語) カタログを追加。CLI プロンプト・エラーメッセージ・`workspace.toml` インラインコメントすべてを `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` で切替可能。
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/sukekyo26/cocoon/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/sukekyo26/cocoon/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/sukekyo26/cocoon/releases/tag/v0.1.0
