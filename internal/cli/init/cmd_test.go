@@ -454,7 +454,7 @@ func TestPluginsMultiSelect_BuildsForEveryExcludeID(t *testing.T) {
 	cat := i18n.New(i18n.LangEN)
 	var target []string
 
-	for _, excludeID := range []string{"", "rust", "go"} {
+	for _, excludeID := range []string{"", "rust", "go", "node", "deno"} {
 		excludeID := excludeID
 		t.Run("exclude="+excludeID, func(t *testing.T) {
 			t.Parallel()

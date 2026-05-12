@@ -277,7 +277,8 @@ func TestValidate_ImageAcceptsOffWhitelist(t *testing.T) {
 // that rejects workspace.toml files combining a language-runtime base
 // image with the matching cocoon plugin. The conflict pairs come from
 // ImageProvidesPlugin (image="golang" ↔ plugin "go", image="rust" ↔
-// plugin "rust"); other combinations (image="python" + uv plugin,
+// plugin "rust", image="node" ↔ plugin "node", image="denoland/deno" ↔
+// plugin "deno"); other combinations (image="python" + uv plugin,
 // image="ubuntu" + go plugin) must remain accepted because they
 // coexist cleanly.
 func TestValidate_ImagePluginConflict(t *testing.T) {
@@ -303,6 +304,20 @@ func TestValidate_ImagePluginConflict(t *testing.T) {
 			enable:      `["rust"]`,
 			wantErr:     true,
 			mustContain: `image = "rust" already provides rust`,
+		},
+		{
+			name:  "node_image_plus_node_plugin",
+			image: "node", version: "24-bookworm-slim",
+			enable:      `["node"]`,
+			wantErr:     true,
+			mustContain: `image = "node" already provides node`,
+		},
+		{
+			name:  "deno_image_plus_deno_plugin",
+			image: "denoland/deno", version: "debian-2.7.14",
+			enable:      `["deno"]`,
+			wantErr:     true,
+			mustContain: `image = "denoland/deno" already provides deno`,
 		},
 		{
 			name:  "ubuntu_image_plus_go_plugin_ok",

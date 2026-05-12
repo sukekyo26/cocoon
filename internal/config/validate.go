@@ -283,12 +283,12 @@ func validateImage(a *errAccumulator, image, imageVersion string) {
 }
 
 // validateImagePluginConflict rejects workspace.toml files that combine a
-// language-runtime base image with the matching cocoon plugin. The two
-// pairs declared in ImageProvidesPlugin (go ↔ go plugin, rust ↔ rust
-// plugin) both result in the base toolchain being overwritten or shadowed
-// by the plugin, so enabling both wastes docker-build time for no benefit.
-// Other combinations (e.g. image=python + uv plugin) coexist cleanly and
-// are not checked here.
+// language-runtime base image with the matching cocoon plugin. The pairs
+// declared in ImageProvidesPlugin (golang ↔ go, rust ↔ rust, node ↔ node,
+// denoland/deno ↔ deno) all result in the base toolchain being overwritten
+// or shadowed by the plugin, so enabling both wastes docker-build time for
+// no benefit. Other combinations (e.g. image=python + uv plugin) coexist
+// cleanly and are not checked here.
 func (w *Workspace) validateImagePluginConflict(a *errAccumulator) {
 	pluginID, conflicts := ImageProvidesPlugin[w.Container.Image]
 	if !conflicts {

@@ -1,0 +1,18 @@
+[metadata]
+name = "Node.js"
+description = "Node.js JavaScript runtime (https://github.com/nodejs/node)"
+default = false
+
+[apt]
+packages = ["xz-utils"]
+
+[install]
+requires_root = true
+volumes = ["/home/${USERNAME}/.npm", "/home/${USERNAME}/.npm-global"]
+
+[install.env]
+NPM_CONFIG_PREFIX = "/home/${USERNAME}/.npm-global"
+PATH = "/usr/local/node/bin:/home/${USERNAME}/.npm-global/bin:$PATH"
+
+[version]
+version_capable = true

@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- New `node` plugin: installs Node.js from the official nodejs.org tarball into `/usr/local/node` with SHA256 verification (`linux-x64` / `linux-arm64`). When `[plugins.versions.node].pin` is omitted the install script resolves the latest LTS automatically by parsing `https://nodejs.org/dist/index.tab`. `NPM_CONFIG_PREFIX` is set to `/home/${USERNAME}/.npm-global` so `npm install -g` writes to a named volume under the user's home instead of `/usr/local`, and both `~/.npm` (cache) and `~/.npm-global` are persisted across rebuilds.
+- New `deno` plugin: installs Deno from the GitHub Release `deno-*-unknown-linux-gnu.zip` asset into `/usr/local/bin/deno` with SHA256 verification (`x86_64` / `aarch64`). When `[plugins.versions.deno].pin` is omitted the install script follows the `releases/latest` redirect to find the newest stable tag. `DENO_DIR=/home/${USERNAME}/.deno` is persisted across rebuilds via a named volume.
+- Combining `image = "node"` with `[plugins].enable = ["node"]`, or `image = "denoland/deno"` with `[plugins].enable = ["deno"]`, is now a validation error and the matching plugin is hidden from the `cocoon init` picker. Both pairs have the plugin overwriting or shadowing the base image's runtime — node plugin prepends `/usr/local/node/bin` to PATH (shadowing the base's `/usr/local/bin/node`), and the deno plugin unzips directly over `/usr/local/bin/deno` — so enabling both wastes docker-build time. Mirrors the existing `golang` ↔ `go` and `rust` ↔ `rust` conflicts.
+
 ## [0.3.0] - 2026-05-13
 
 ### Added
