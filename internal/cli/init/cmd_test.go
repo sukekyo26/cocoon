@@ -908,21 +908,27 @@ func TestParsePlugins(t *testing.T) {
 
 func TestValidatePluginConflicts(t *testing.T) {
 	t.Parallel()
-	plugins := loadPluginsForTest(t)
+	// The embedded catalog currently ships no plugins with declared
+	// conflicts (custom-ps1 was the only one and has been removed). Build
+	// a synthetic pair in-memory so the validator's symmetric-detection
+	// logic still has a regression guard.
+	plugins := map[string]*plugin.Plugin{
+		"alpha": {Metadata: plugin.Metadata{Name: "Alpha", Conflicts: []string{"beta"}}},
+		"beta":  {Metadata: plugin.Metadata{Name: "Beta", Conflicts: []string{"alpha"}}},
+		"gamma": {Metadata: plugin.Metadata{Name: "Gamma"}},
+	}
 
-	// custom-ps1 ↔ starship is the canonical conflict pair shipped in the
-	// embedded catalog. Picking both must report a conflict.
-	err := validatePluginConflicts(plugins, []string{"custom-ps1", "starship"})
+	err := validatePluginConflicts(plugins, []string{"alpha", "beta"})
 	if !errors.Is(err, ErrUsage) {
-		t.Errorf("custom-ps1+starship should be ErrUsage, got %v", err)
+		t.Errorf("alpha+beta should be ErrUsage, got %v", err)
 	}
 
 	// Either alone is fine.
-	if err := validatePluginConflicts(plugins, []string{"custom-ps1"}); err != nil {
-		t.Errorf("custom-ps1 alone should be ok, got %v", err)
+	if err := validatePluginConflicts(plugins, []string{"alpha"}); err != nil {
+		t.Errorf("alpha alone should be ok, got %v", err)
 	}
-	if err := validatePluginConflicts(plugins, []string{"starship"}); err != nil {
-		t.Errorf("starship alone should be ok, got %v", err)
+	if err := validatePluginConflicts(plugins, []string{"beta"}); err != nil {
+		t.Errorf("beta alone should be ok, got %v", err)
 	}
 
 	// Empty list is trivially ok.
@@ -931,7 +937,7 @@ func TestValidatePluginConflicts(t *testing.T) {
 	}
 
 	// Disjoint plugins do not conflict.
-	if err := validatePluginConflicts(plugins, []string{"go", "uv", "github-cli"}); err != nil {
+	if err := validatePluginConflicts(plugins, []string{"alpha", "gamma"}); err != nil {
 		t.Errorf("disjoint plugins should be ok, got %v", err)
 	}
 }
@@ -991,22 +997,6 @@ func TestRunInit_PluginsFlagRejectsUnknown(t *testing.T) {
 	}
 	if _, statErr := os.Stat(filepath.Join(work, "workspace.toml")); statErr == nil {
 		t.Error("workspace.toml should NOT have been written when --plugins lists an unknown id")
-	}
-}
-
-//nolint:paralleltest // t.Chdir
-func TestRunInit_PluginsFlagRejectsConflict(t *testing.T) {
-	pinEnglish(t)
-	work := t.TempDir()
-	t.Chdir(work)
-
-	cmd := NewCommand(io.Discard, io.Discard)
-	cmd.SetArgs([]string{
-		"--yes", "--service-name", "x", "--username", "y",
-		"--plugins", "custom-ps1,starship",
-	})
-	if err := cmd.Execute(); !errors.Is(err, ErrUsage) {
-		t.Errorf("conflicting plugins should be ErrUsage, got %v", err)
 	}
 }
 
@@ -1108,9 +1098,9 @@ func TestRunInit_PluginVersionsFlagWritesBlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read workspace.toml: %v", err)
 	}
-	// Sorted by id: go before starship; each block is the canonical
-	// FormatPinBlock output (no checksums).
-	want := "[plugins.versions.go]\npin = \"1.23.4\"\n\n[plugins.versions.starship]\npin = \"1.21.1\"\n"
+	// Sorted by id: go before starship; one [plugins.versions] section header
+	// plus an inline-table line per pin (no checksums emitted from --plugin-versions).
+	want := "[plugins.versions]\ngo = { pin = \"1.23.4\" }\nstarship = { pin = \"1.21.1\" }\n"
 	if !strings.Contains(string(body), want) {
 		t.Errorf("workspace.toml missing pin blocks\n--- want ---\n%s\n--- got ---\n%s", want, body)
 	}

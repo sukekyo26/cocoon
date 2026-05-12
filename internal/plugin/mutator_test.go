@@ -82,16 +82,16 @@ func TestUpsertPinBlockRejectsEmptyArgs(t *testing.T) {
 	}
 }
 
-// Whitespace-only "blank" lines (e.g. "  " or "\t") between the target
-// block and the next section must round-trip verbatim through the replace
-// path. The earlier replaceTargetBlock counted blank lines and re-emitted
-// them as "", losing the original whitespace.
+// Whitespace-only "blank" lines (e.g. "  " or "\t") between an existing
+// inline-table line and the next section must round-trip verbatim through
+// the replace path. The renderLines re-emit must preserve the exact
+// blank-line whitespace, not normalize to empty strings.
 func TestUpsertPinBlockReplacePreservesWhitespaceBlankLines(t *testing.T) {
 	t.Parallel()
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "ws.toml")
-	// "  " (two-space) and "\t" (tab) lines between go's block and [mounts].
-	body := []byte("[plugins.versions.go]\npin = \"1.22.0\"\n  \n\t\n[mounts]\nhost = \"./src\"\n")
+	// "  " (two-space) and "\t" (tab) lines between go's pin and [mounts].
+	body := []byte("[plugins.versions]\ngo = { pin = \"1.22.0\" }\n  \n\t\n[mounts]\nhost = \"./src\"\n")
 	if err := os.WriteFile(path, body, 0o600); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
@@ -102,15 +102,14 @@ func TestUpsertPinBlockReplacePreservesWhitespaceBlankLines(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	want := "[plugins.versions.go]\npin = \"1.23.4\"\n  \n\t\n[mounts]\nhost = \"./src\"\n"
+	want := "[plugins.versions]\ngo = { pin = \"1.23.4\" }\n  \n\t\n[mounts]\nhost = \"./src\"\n"
 	if string(got) != want {
 		t.Errorf("whitespace-only blank lines were not preserved verbatim\n--- got ---\n%q\n--- want ---\n%q", got, want)
 	}
 }
 
-// Trailing blank lines outside the target block must be preserved verbatim.
-// The earlier appendAtEOF stripped them, normalizing multi-blank tails to a
-// single separator, which contradicts the "preserved verbatim" contract.
+// Trailing blank lines outside the modified section must be preserved
+// verbatim. The append-new-section path must not strip them.
 func TestUpsertPinBlockPreservesTrailingBlankLines(t *testing.T) {
 	t.Parallel()
 	tmp := t.TempDir()
@@ -126,15 +125,14 @@ func TestUpsertPinBlockPreservesTrailingBlankLines(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	want := "[plugins]\nenable = []\n\n\n[plugins.versions.go]\npin = \"1.23.4\"\n"
+	want := "[plugins]\nenable = []\n\n\n[plugins.versions]\ngo = { pin = \"1.23.4\" }\n"
 	if string(got) != want {
 		t.Errorf("trailing blank lines were not preserved\n--- got ---\n%q\n--- want ---\n%q", got, want)
 	}
 }
 
 // A workspace.toml that came in without a trailing newline must come back
-// without one. Regression guard for the original renderLines bug where the
-// "len(lines) > 0" branch unconditionally appended a final '\n'.
+// without one. Regression guard for the renderLines newline convention.
 func TestUpsertPinBlockPreservesNoTrailingNewline(t *testing.T) {
 	t.Parallel()
 	tmp := t.TempDir()
@@ -156,9 +154,7 @@ enable = ["go"]`) // no trailing \n
 	}
 }
 
-// UpsertPinBlock must not silently relax workspace.toml's permissions. If the
-// user kept their workspace.toml at 0600, --write should rewrite the file at
-// 0600, not the previous hard-coded 0644.
+// UpsertPinBlock must not silently relax workspace.toml's permissions.
 func TestUpsertPinBlockPreservesFileMode(t *testing.T) {
 	t.Parallel()
 	tmp := t.TempDir()
@@ -178,63 +174,31 @@ func TestUpsertPinBlockPreservesFileMode(t *testing.T) {
 	}
 }
 
-// Any per-id key assignment under [plugins.versions] — inline-table or bare
-// scalar / array — collides with a [plugins.versions.<id>] block at parse
-// time. The line-based mutator must refuse uniformly rather than append a
-// duplicate block.
-func TestUpsertPinBlockRejectsVersionsKeyAssign(t *testing.T) {
+// Legacy `[plugins.versions.<id>]` subsection blocks (cocoon's previous
+// emission form) collide with the new inline-table layout. The mutator
+// must refuse so the user explicitly migrates the file.
+func TestUpsertPinBlockRejectsLegacySubsection(t *testing.T) {
 	t.Parallel()
-	cases := []struct {
-		name string
-		body string
-	}{
-		{
-			name: "inline-table",
-			body: `[plugins]
+	body := `[plugins]
 enable = ["go"]
 
-[plugins.versions]
-go = { pin = "1.22.5" }
-`,
-		},
-		{
-			name: "bare-string",
-			body: `[plugins]
-enable = ["go"]
-
-[plugins.versions]
-go = "1.22.5"
-`,
-		},
-		{
-			name: "bare-array",
-			body: `[plugins]
-enable = ["go"]
-
-[plugins.versions]
-go = ["1.22.5"]
-`,
-		},
+[plugins.versions.go]
+pin = "1.22.5"
+`
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "ws.toml")
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatalf("seed: %v", err)
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			tmp := t.TempDir()
-			path := filepath.Join(tmp, "ws.toml")
-			if err := os.WriteFile(path, []byte(tc.body), 0o600); err != nil {
-				t.Fatalf("seed: %v", err)
-			}
-			err := plugin.UpsertPinBlock(path, "go", "1.23.4", "", "")
-			if !errors.Is(err, plugin.ErrPinBlockVersionsKeyAssign) {
-				t.Errorf("got %v, want ErrPinBlockVersionsKeyAssign", err)
-			}
-			got, rerr := os.ReadFile(path) //nolint:gosec // tmp path under t.TempDir
-			if rerr != nil {
-				t.Fatalf("read after refusal: %v", rerr)
-			}
-			if string(got) != tc.body {
-				t.Errorf("workspace.toml was modified despite refusal:\n--- got ---\n%s", got)
-			}
-		})
+	err := plugin.UpsertPinBlock(path, "go", "1.23.4", "", "")
+	if !errors.Is(err, plugin.ErrPinBlockSubsection) {
+		t.Errorf("got %v, want ErrPinBlockSubsection", err)
+	}
+	got, rerr := os.ReadFile(path) //nolint:gosec // tmp path under t.TempDir
+	if rerr != nil {
+		t.Fatalf("read after refusal: %v", rerr)
+	}
+	if string(got) != body {
+		t.Errorf("workspace.toml was modified despite refusal:\n--- got ---\n%s", got)
 	}
 }

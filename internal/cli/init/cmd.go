@@ -608,14 +608,26 @@ func promptForMissing(ans initAnswers, cat *i18n.Catalog, plugins map[string]*pl
 		}
 		ans.PluginsSet = true
 	}
+	// version_capable plugins not already pinned via --plugin-versions get
+	// a per-plugin LATEST / pin prompt. The map is created lazily so a flow
+	// that picks no version_capable plugins keeps PluginVersions nil and
+	// writePluginVersions falls back to the commented-out template.
+	if ans.PluginVersions == nil {
+		ans.PluginVersions = make(map[string]string)
+	}
+	if err := promptPluginVersionsForCapable(cat, plugins, ans.Plugins, ans.PluginVersions); err != nil {
+		return ans, err
+	}
+	ans.PluginVersionsSet = true
 	return ans, nil
 }
 
 // promptPluginsWithRetry runs the plugin multi-select form, then verifies
-// the user did not pick a conflicting pair (e.g. custom-ps1 ↔ starship).
-// On conflict, the form is re-run up to two more times so the user can
-// reconcile without restarting the whole flow. Three failures in a row
-// return ErrUsage so CI / scripted invocations cannot loop forever.
+// the user did not pick a conflicting pair declared in plugin.toml's
+// metadata.conflicts. On conflict, the form is re-run up to two more times
+// so the user can reconcile without restarting the whole flow. Three
+// failures in a row return ErrUsage so CI / scripted invocations cannot
+// loop forever.
 //
 // excludeID hides one plugin id from the picker (empty = hide none); the
 // caller uses it to drop the language-runtime plugin that duplicates the
@@ -873,8 +885,7 @@ func pluginsMultiSelect(cat *i18n.Catalog, plugins map[string]*plugin.Plugin,
 
 // formatPluginLabel collapses Name + short hint into a single display
 // line. The "conflicts" hint surfaces incompatibilities up front so the
-// user does not have to dig into plugin.toml — e.g. picking custom-ps1
-// makes the conflict with starship immediately obvious.
+// user does not have to dig into plugin.toml.
 func formatPluginLabel(id string, p *plugin.Plugin) string {
 	name := p.Metadata.Name
 	if name == "" {
@@ -1058,8 +1069,8 @@ func parsePluginVersions(raw string, plugins map[string]*plugin.Plugin, enabled 
 
 // validatePluginConflicts reports the first incompatible pair in the
 // enabled list. Conflicts are declared on plugin.toml's metadata.conflicts
-// field; the relation is symmetric (custom-ps1 lists starship and vice
-// versa) so checking one direction is enough.
+// field; the relation is required to be symmetric so checking one
+// direction is enough.
 func validatePluginConflicts(plugins map[string]*plugin.Plugin, enabled []string) error {
 	enabledSet := make(map[string]struct{}, len(enabled))
 	for _, id := range enabled {
@@ -1305,27 +1316,22 @@ func renderWorkspaceToml(s containerSpec, cat *i18n.Catalog) string {
 	return strings.TrimRight(sb.String(), "\n") + "\n"
 }
 
-// writePluginVersions emits the [plugins.versions.<id>] blocks for each pin
-// in deterministic id order. When pins is empty it falls back to the
-// commented-out example template so the reader still discovers the section.
+// writePluginVersions emits a single `[plugins.versions]` section with one
+// inline-table line per pin, alphabetically sorted by id. When pins is empty
+// it falls back to the commented-out example template so the reader still
+// discovers the section.
 func writePluginVersions(sb *strings.Builder, cat *i18n.Catalog, pins map[string]string) {
 	if len(pins) == 0 {
 		emitTemplate(sb, cat, "init_toml_template_plugins_versions")
 		return
 	}
-	ids := make([]string, 0, len(pins))
-	for id := range pins {
-		ids = append(ids, id)
+	lines := make([]plugin.PinLine, 0, len(pins))
+	for id, ref := range pins {
+		lines = append(lines, plugin.PinLine{ID: id, Ref: ref, ChecksumAmd64: "", ChecksumArm64: ""})
 	}
-	sort.Strings(ids)
 	sb.WriteString(cat.Msg("init_toml_section_plugins_versions"))
 	sb.WriteByte('\n')
-	for i, id := range ids {
-		if i > 0 {
-			sb.WriteByte('\n')
-		}
-		sb.WriteString(plugin.FormatPinBlock(id, pins[id], "", ""))
-	}
+	sb.WriteString(plugin.FormatPinSection(lines))
 	sb.WriteByte('\n')
 }
 

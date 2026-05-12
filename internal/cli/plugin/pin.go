@@ -75,19 +75,19 @@ func runPin(stdout, stderr io.Writer, id, ref, amd64sum, arm64sum string, write 
 				ErrUsage)
 		}
 		if uErr := plugin.UpsertPinBlock(wsPath, id, ref, amd64sum, arm64sum); uErr != nil {
-			if errors.Is(uErr, plugin.ErrPinBlockVersionsKeyAssign) {
+			if errors.Is(uErr, plugin.ErrPinBlockSubsection) {
 				return fmt.Errorf("%w: %w (in %s)", ErrUsage, uErr, wsPath)
 			}
 			return fmt.Errorf("%w: %w", ErrFailure, uErr)
 		}
-		logx.New(stdout, stderr).Successf("Updated %s: [plugins.versions.%s]", wsPath, id)
+		logx.New(stdout, stderr).Successf("Updated %s: [plugins.versions] %s", wsPath, id)
 		return nil
 	}
 
 	var b strings.Builder
-	fmt.Fprintln(&b, "# Append the following block to workspace.toml under [plugins.versions]:")
+	fmt.Fprintln(&b, "# Add the following line under [plugins.versions] in workspace.toml:")
 	fmt.Fprintln(&b)
-	b.WriteString(plugin.FormatPinBlock(id, ref, amd64sum, arm64sum))
+	b.WriteString(plugin.FormatPinLine(id, ref, amd64sum, arm64sum))
 	fmt.Fprint(stdout, b.String())
 	return nil
 }

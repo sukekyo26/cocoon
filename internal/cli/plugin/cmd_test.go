@@ -95,9 +95,8 @@ func TestPluginPin_PrintsTomlBlock(t *testing.T) {
 	}
 	out := stdout.String()
 	for _, w := range []string{
-		"[plugins.versions.uv]",
-		`pin = "0.5.7"`,
-		`checksum_amd64 = "abc123"`,
+		"[plugins.versions]",
+		`uv = { pin = "0.5.7", checksum_amd64 = "abc123" }`,
 	} {
 		if !strings.Contains(out, w) {
 			t.Errorf("missing %q in:\n%s", w, out)

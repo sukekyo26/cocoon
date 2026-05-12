@@ -23,11 +23,11 @@ var updateGolden = flag.Bool("update-golden", false, "rewrite testdata/init/*.wo
 // file. The matrix covers:
 //
 //   - default      : the e2e.yml minimal case (no --plugins).
-//   - plugins-amd64-full : every plugin enabled (custom-ps1 dropped against
-//     the starship conflict) with all version_capable plugins pinned.
-//   - plugins-arm64-full : the subset whose install.sh works on arm64
-//     (custom-ps1 retained since starship is dropped); pins are limited
-//     to plugins whose install.sh has explicit arm64 support.
+//   - plugins-amd64-full : every plugin enabled with all version_capable
+//     plugins pinned.
+//   - plugins-arm64-full : the subset whose install.sh works on arm64;
+//     pins are limited to plugins whose install.sh has explicit arm64
+//     support.
 //   - plugins-versions-minimal : a focused 2-plugin pin sample.
 //
 // Adding/removing plugins, changing the writer, or tweaking i18n templates
@@ -92,7 +92,7 @@ func TestRunInit_Snapshot(t *testing.T) {
 				"--apt-categories", "text-editors,vcs,utilities,compression,build",
 				"--plugins",
 				"docker-cli,github-cli,claude-code,copilot-cli,proto,mise,uv," +
-					"bun,node,deno,rust,go,custom-ps1,nerd-fonts,terraform,opentofu",
+					"bun,node,deno,rust,go,nerd-fonts,terraform,opentofu",
 				"--plugin-versions",
 				"bun=1.3.3,copilot-cli=0.0.369,deno=2.7.14,go=1.23.4,mise=2025.12.0," +
 					"node=24.15.0,opentofu=1.9.0,proto=0.46.1,terraform=1.10.5,uv=0.5.7",
