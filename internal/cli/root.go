@@ -1,9 +1,11 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
@@ -15,8 +17,15 @@ import (
 	selfupdatecli "github.com/sukekyo26/cocoon/internal/cli/selfupdate"
 	"github.com/sukekyo26/cocoon/internal/logx"
 	"github.com/sukekyo26/cocoon/internal/updatecheck"
-	"github.com/sukekyo26/cocoon/internal/version"
 )
+
+// updateCheckTimeout caps the synchronous network call the notifier makes
+// before every subcommand. The check runs in PersistentPreRun, so an
+// unbounded budget (release.DefaultTimeout = 30s) would stall every
+// invocation when GitHub is unreachable. 2s comfortably covers a healthy
+// API roundtrip while keeping the worst-case user-perceived delay below
+// the threshold where impatience kicks in.
+const updateCheckTimeout = 2 * time.Second
 
 const rootLong = `cocoon — project-aware container workspace generator
 
@@ -51,7 +60,7 @@ func newRootCommand(version string, stdout, stderr io.Writer) *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		PersistentPreRun: func(cmd *cobra.Command, _ []string) {
-			maybeNotifyUpdate(cmd, stderr)
+			maybeNotifyUpdate(cmd, version, stderr)
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
@@ -100,11 +109,21 @@ func addLeafHelpAlias(c *cobra.Command) {
 // maybeNotifyUpdate runs the once-per-day update check unless an opt-out
 // applies. Failures (network down, malformed cache, missing $HOME) are
 // silent so the notifier never interferes with the user's invocation.
-func maybeNotifyUpdate(cmd *cobra.Command, stderr io.Writer) {
+//
+// currentVersion is the same string newRootCommand was constructed with
+// (the value cobra prints for `--version` / `cocoon version`); reusing
+// it keeps the notice consistent with the running binary in embedded
+// or test contexts where a custom version is injected via cli.New.
+//
+// The fetch is bounded by updateCheckTimeout so a stalled GitHub API
+// cannot delay every subcommand by release.DefaultTimeout (30s).
+func maybeNotifyUpdate(cmd *cobra.Command, currentVersion string, stderr io.Writer) {
 	if shouldSkipUpdateCheck(cmd, stderr) {
 		return
 	}
-	notice := updatecheck.Check(cmd.Context(), version.Get(), updatecheck.Options{
+	ctx, cancel := context.WithTimeout(cmd.Context(), updateCheckTimeout)
+	defer cancel()
+	notice := updatecheck.Check(ctx, currentVersion, updatecheck.Options{
 		Now:        nil,
 		CacheDir:   "",
 		HTTPClient: nil,
