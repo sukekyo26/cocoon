@@ -55,7 +55,7 @@ var errInjected = errors.New("injected")
 //nolint:paralleltest // mutates package-level seams (createTempFn)
 func TestAtomicWriteFileWriteError(t *testing.T) {
 	dir := t.TempDir()
-	fake := &fakeFile{name: filepath.Join(dir, ".wsd-tmp-fake"), writeErr: errInjected}
+	fake := &fakeFile{name: filepath.Join(dir, ".cocoon-tmp-fake"), writeErr: errInjected}
 	useFakeCreateTemp(t, fake)
 
 	err := AtomicWriteFile(filepath.Join(dir, "out"), []byte("payload"), 0o644)
@@ -76,7 +76,7 @@ func TestAtomicWriteFileWriteError(t *testing.T) {
 //nolint:paralleltest // mutates package-level seams (createTempFn)
 func TestAtomicWriteFileSyncError(t *testing.T) {
 	dir := t.TempDir()
-	fake := &fakeFile{name: filepath.Join(dir, ".wsd-tmp-fake"), syncErr: errInjected}
+	fake := &fakeFile{name: filepath.Join(dir, ".cocoon-tmp-fake"), syncErr: errInjected}
 	useFakeCreateTemp(t, fake)
 
 	err := AtomicWriteFile(filepath.Join(dir, "out"), []byte("payload"), 0o644)
@@ -97,7 +97,7 @@ func TestAtomicWriteFileSyncError(t *testing.T) {
 //nolint:paralleltest // mutates package-level seams (createTempFn)
 func TestAtomicWriteFileCloseError(t *testing.T) {
 	dir := t.TempDir()
-	fake := &fakeFile{name: filepath.Join(dir, ".wsd-tmp-fake"), closeErr: errInjected}
+	fake := &fakeFile{name: filepath.Join(dir, ".cocoon-tmp-fake"), closeErr: errInjected}
 	useFakeCreateTemp(t, fake)
 
 	err := AtomicWriteFile(filepath.Join(dir, "out"), []byte("payload"), 0o644)
@@ -140,7 +140,7 @@ func TestAtomicWriteFileChmodError(t *testing.T) {
 		t.Fatalf("read dir: %v", readErr)
 	}
 	for _, e := range entries {
-		if strings.HasPrefix(e.Name(), ".wsd-tmp-") {
+		if strings.HasPrefix(e.Name(), ".cocoon-tmp-") {
 			t.Errorf("temp file leaked after chmod failure: %s", e.Name())
 		}
 	}

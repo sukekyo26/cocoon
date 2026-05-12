@@ -4,8 +4,7 @@ name: E2E
 # generate .devcontainer/, then `docker compose build` + start + exec into
 # the container so generation drift breaks CI before it breaks users.
 #
-# The matrix exercises three axes that historically caught regressions in
-# workspace-docker:
+# The matrix exercises three axes that catch generator / plugin regressions:
 #   1. amd64 / minimal — the default-on plugin set (just docker-cli) on
 #      ubuntu-latest. Smallest, fastest job; gates the happy path.
 #   2. amd64 / full    — every shipped plugin enabled (custom-ps1 dropped

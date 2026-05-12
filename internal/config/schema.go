@@ -1,17 +1,10 @@
-// Package config loads, validates and re-emits workspace.toml and plugin.toml
-// files for the wsd binary.
+// Package config loads, validates and re-emits workspace.toml and plugin.toml.
 //
-// The structures defined here mirror the Pydantic models in src/wsd/config so
-// the Go implementation can be swapped in for the Python CLI without changing
-// the shell consumers in lib/*.sh.
-//
-// All struct field names are kept aligned with the legacy implementation so
-// JSON/TOML round-trips remain byte-compatible. Optional sections are modelled
-// as pointers so a missing section can be distinguished from an empty one
-// (Pydantic's None vs. {}).
+// Optional sections are modelled as pointers so a missing section can be
+// distinguished from an empty one.
 package config
 
-// Workspace mirrors src/wsd/config.Workspace.
+// Workspace is the root model of workspace.toml.
 type Workspace struct {
 	Workspace    *WorkspaceSpec            `toml:"workspace,omitempty"`
 	Container    ContainerSpec             `toml:"container"`
@@ -72,7 +65,7 @@ func (w *WorkspaceSpec) DevContainerOrDefault() bool {
 	return *w.DevContainer
 }
 
-// ContainerSpec mirrors src/wsd/config.ContainerSpec. Image is the
+// ContainerSpec models the [container] section. Image is the
 // canonical DockerHub image name pulled verbatim into the FROM line:
 // "ubuntu" / "debian" / "node" / "python" / "golang" / "rust" /
 // "denoland/deno". ImageVersion is the image-specific tag ("26.04" for
@@ -255,7 +248,7 @@ type ContainerShellSpec struct {
 	Env     map[string]string `toml:"env,omitempty"`
 }
 
-// Resources mirrors src/wsd/config.Resources.
+// Resources models the [container.resources] table.
 type Resources struct {
 	ShmSize         *string  `toml:"shm_size,omitempty"`
 	PidsLimit       *int     `toml:"pids_limit,omitempty"`
@@ -266,20 +259,20 @@ type Resources struct {
 	NofileHard      *int     `toml:"nofile_hard,omitempty"`
 }
 
-// PluginsSpec mirrors src/wsd/config.PluginsSpec.
+// PluginsSpec models the [plugins] section.
 type PluginsSpec struct {
 	Enable   []string                         `toml:"enable"`
 	Versions map[string]PluginVersionOverride `toml:"versions,omitempty"`
 }
 
-// PluginVersionOverride mirrors src/wsd/config.PluginVersionOverride.
+// PluginVersionOverride models one entry under [plugins.versions].
 type PluginVersionOverride struct {
 	Pin           string  `toml:"pin"`
 	ChecksumAmd64 *string `toml:"checksum_amd64,omitempty"`
 	ChecksumArm64 *string `toml:"checksum_arm64,omitempty"`
 }
 
-// PortsSpec mirrors src/wsd/config.PortsSpec. Each Forward entry is either a
+// PortsSpec models the [ports] section. Each Forward entry is either a
 // docker-compose short-form string ("3000:3000", "127.0.0.1:5432:5432/tcp",
 // "3000-3005:3000-3005") or a long-form table with the keys target,
 // published, host_ip, protocol, mode. See ComposePortEntries for the
@@ -288,7 +281,7 @@ type PortsSpec struct {
 	Forward []any `toml:"forward"`
 }
 
-// AptSpec mirrors src/wsd/config.AptSpec.
+// AptSpec models the [apt] section.
 type AptSpec struct {
 	Packages []string    `toml:"packages,omitempty"`
 	Mirror   *AptMirror  `toml:"mirror,omitempty"`
@@ -323,13 +316,13 @@ type AptSource struct {
 	Arch       *string  `toml:"arch,omitempty"`
 }
 
-// LocaleSpec mirrors src/wsd/config.LocaleSpec.
+// LocaleSpec models the [locale] table.
 type LocaleSpec struct {
 	Timezone *string `toml:"timezone,omitempty"`
 	Lang     *string `toml:"lang,omitempty"`
 }
 
-// GitIdentitySpec mirrors src/wsd/config.GitIdentitySpec.
+// GitIdentitySpec models the [git] table.
 type GitIdentitySpec struct {
 	UserName  *string `toml:"user_name,omitempty"`
 	UserEmail *string `toml:"user_email,omitempty"`
@@ -352,13 +345,13 @@ func (c *CertificatesSpec) EnableOrDefault() bool {
 	return *c.Enable
 }
 
-// DockerfileSpec mirrors src/wsd/config.DockerfileSpec.
+// DockerfileSpec models the [dockerfile] table.
 type DockerfileSpec struct {
 	PreUserSetup *string `toml:"pre_user_setup,omitempty"`
 	PostPlugins  *string `toml:"post_plugins,omitempty"`
 }
 
-// Mount mirrors src/wsd/config.Mount.
+// Mount models one [[mounts]] entry.
 type Mount struct {
 	Source   string `toml:"source"`
 	Target   string `toml:"target"`
@@ -385,7 +378,7 @@ type HomeFilesSpec struct {
 	Files []string `toml:"files"`
 }
 
-// SidecarMount mirrors src/wsd/config.SidecarMount.
+// SidecarMount models one [[services.<name>.mounts]] entry.
 type SidecarMount struct {
 	Source   string `toml:"source"`
 	Target   string `toml:"target"`
@@ -403,10 +396,11 @@ const (
 	RestartUnlessStopped SidecarRestart = "unless-stopped"
 )
 
-// HealthcheckSpec mirrors src/wsd/config.HealthcheckSpec which allows extras.
+// HealthcheckSpec models the [services.<name>.healthcheck] table. Extra keys
+// are preserved verbatim.
 type HealthcheckSpec map[string]any
 
-// SidecarService mirrors src/wsd/config.SidecarService.
+// SidecarService models one [services.<name>] table.
 type SidecarService struct {
 	Image       string            `toml:"image"`
 	Ports       []any             `toml:"ports,omitempty"`
@@ -419,7 +413,7 @@ type SidecarService struct {
 	Restart     *SidecarRestart   `toml:"restart,omitempty"`
 }
 
-// RepositoryClone mirrors src/wsd/config.RepositoryClone.
+// RepositoryClone models one [[repositories.clone]] entry.
 type RepositoryClone struct {
 	URL               string  `toml:"url"`
 	Path              *string `toml:"path,omitempty"`
@@ -428,12 +422,11 @@ type RepositoryClone struct {
 	RecurseSubmodules *bool   `toml:"recurse_submodules,omitempty"`
 }
 
-// RepositoriesSpec mirrors src/wsd/config.RepositoriesSpec.
+// RepositoriesSpec models the [repositories] section.
 type RepositoriesSpec struct {
 	Clone []RepositoryClone `toml:"clone"`
 }
 
-// Devcontainer mirrors src/wsd/config.Devcontainer (extra=allow). All known
-// fields fall through into the map and the dump-devcontainer subcommand emits
-// the entries verbatim.
+// Devcontainer models the [devcontainer] table. All known fields fall through
+// into the map and the dump-devcontainer subcommand emits the entries verbatim.
 type Devcontainer map[string]any

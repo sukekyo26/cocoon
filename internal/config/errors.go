@@ -7,11 +7,9 @@ import (
 	"strings"
 )
 
-// FieldError represents a single field-level validation failure.
-//
-// It mirrors the per-field errors emitted by Pydantic in src/wsd: each entry
-// pairs a dotted location path (e.g. "container.username") with a human
-// message. The empty Loc is rendered as "(root)".
+// FieldError represents a single field-level validation failure: a dotted
+// location path (e.g. "container.username") paired with a human message. The
+// empty Loc is rendered as "(root)".
 type FieldError struct {
 	Loc     []string
 	Message string
@@ -32,10 +30,8 @@ func (e FieldError) LocString() string {
 }
 
 // ValidationError aggregates one or more FieldError values for a single TOML
-// file. It mirrors src/wsd/config.ConfigValidationError.
-//
-// The path is preserved so CLI subcommands can format errors as
-// "ERROR: <path>: <loc>: <msg>" exactly like the legacy Python output.
+// file. The path is preserved so CLI subcommands can format errors as
+// "ERROR: <path>: <loc>: <msg>".
 type ValidationError struct {
 	Path   string
 	Errors []FieldError
@@ -54,8 +50,8 @@ func (e *ValidationError) Error() string {
 	return fmt.Sprintf("%s: %s: %s (and %d more)", e.Path, first.LocString(), first.Message, len(e.Errors)-1)
 }
 
-// Sort returns a copy of e with errors sorted lexicographically by location,
-// matching the Python implementation's deterministic output order.
+// Sort returns a copy of e with errors sorted lexicographically by location
+// for deterministic output.
 func (e *ValidationError) Sort() *ValidationError {
 	out := make([]FieldError, len(e.Errors))
 	copy(out, e.Errors)

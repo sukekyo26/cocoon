@@ -57,9 +57,8 @@ func TestExpandAptCategoriesIgnoresUnknown(t *testing.T) {
 func TestExpandAptCategoriesNewCategories(t *testing.T) {
 	t.Parallel()
 
-	// vcs and utilities are new in the workspace-docker → cocoon migration.
-	// Pin their contents so future drift is caught at CI rather than at
-	// `apt-get install` time inside a built image.
+	// Pin the contents of vcs / utilities so future drift is caught at CI
+	// rather than at `apt-get install` time inside a built image.
 	got := aptcategories.ExpandAptCategories([]string{"vcs", "utilities"})
 	want := []string{
 		"git", "openssh-client", "gnupg",

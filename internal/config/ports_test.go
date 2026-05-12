@@ -14,7 +14,7 @@ import (
 
 // TestPortShortFormPattern guards the JSON Schema pattern against drift from
 // the Go validator. Both must accept and reject the same set of strings so
-// editor-side validation matches `wsd config validate-workspace`.
+// editor-side validation matches what cocoon enforces at load time.
 func TestPortShortFormPattern(t *testing.T) {
 	t.Parallel()
 	rx := regexp.MustCompile(config.PortShortFormPattern)

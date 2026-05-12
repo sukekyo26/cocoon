@@ -10,12 +10,8 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
-// LoadWorkspace parses and validates a workspace.toml file.
-//
-// Unknown top-level or nested keys produce a *ValidationError so the strict
-// extra="forbid" semantics of the Pydantic models are preserved. Validation
-// rules that go beyond TOML decoding (regex patterns, cross-field checks)
-// will be added in PR2-b on top of the structures decoded here.
+// LoadWorkspace parses and validates a workspace.toml file. Unknown top-level
+// or nested keys are rejected as *ValidationError.
 func LoadWorkspace(path string) (*Workspace, error) {
 	data, err := os.ReadFile(path) //nolint:gosec // path provided by trusted caller
 	if err != nil {
@@ -45,7 +41,7 @@ func StrictUnmarshal(path string, data []byte, v any) error {
 }
 
 // toValidationError converts a go-toml error into a *ValidationError so the
-// downstream CLI can render Pydantic-compatible messages.
+// downstream CLI can render uniform "<path>: <loc>: <msg>" messages.
 func toValidationError(path string, err error) error {
 	var strict *toml.StrictMissingError
 	if errors.As(err, &strict) {

@@ -33,7 +33,7 @@ var (
 // The destination directory must exist; AtomicWriteFile does not create it.
 func AtomicWriteFile(path string, data []byte, perm os.FileMode) (retErr error) {
 	dir := filepath.Dir(path)
-	f, err := createTempFn(dir, ".wsd-tmp-*")
+	f, err := createTempFn(dir, ".cocoon-tmp-*")
 	if err != nil {
 		return fmt.Errorf("fsx: create temp: %w", err)
 	}

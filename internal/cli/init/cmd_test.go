@@ -1648,8 +1648,7 @@ func TestRenderWorkspaceToml_NoDeprecatedSections(t *testing.T) {
 
 // TestRenderWorkspaceToml_TemplateOrdering pins that container.* extras
 // land between the active [container] block and the active
-// [container.shell] block, matching workspace-docker's convention of
-// grouping sub-table extras under their parent.
+// [container.shell] block, grouping sub-table extras under their parent.
 func TestRenderWorkspaceToml_TemplateOrdering(t *testing.T) {
 	t.Parallel()
 	cat := i18n.New(i18n.LangEN)
