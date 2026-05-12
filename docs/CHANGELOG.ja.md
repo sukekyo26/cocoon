@@ -6,6 +6,11 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+### 追加
+
+- 新しい `node` プラグイン: nodejs.org 公式 tarball から Node.js を `/usr/local/node` にインストールし、SHA256 で検証します (`linux-x64` / `linux-arm64`)。`[plugins.versions.node].pin` を省略するとインストールスクリプトが `https://nodejs.org/dist/index.tab` をパースして最新 LTS を自動解決します。`NPM_CONFIG_PREFIX=/home/${USERNAME}/.npm-global` を設定し、`npm install -g` の書き込み先を `/usr/local` ではなくユーザーホーム配下の named volume に逃すので、`~/.npm` (キャッシュ) と `~/.npm-global` (グローバルインストール先) は再ビルドを跨いで永続化されます。
+- 新しい `deno` プラグイン: GitHub Release の `deno-*-unknown-linux-gnu.zip` から Deno を `/usr/local/bin/deno` にインストールし、SHA256 で検証します (`x86_64` / `aarch64`)。`[plugins.versions.deno].pin` を省略するとインストールスクリプトが `releases/latest` のリダイレクトから最新 stable タグを取得します。`DENO_DIR=/home/${USERNAME}/.deno` を named volume として永続化します。
+
 ## [0.3.0] - 2026-05-13
 
 ### 追加

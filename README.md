@@ -86,9 +86,9 @@ Each answer becomes a self-documenting line in `workspace.toml`. Pass `--yes` to
 
 ## Plugins
 
-20 plugins ship inside the binary via `go:embed`:
+22 plugins ship inside the binary via `go:embed`:
 
-`aws-cli`, `aws-sam-cli`, `bun`, `claude-code`, `copilot-cli`, `custom-ps1`, `docker-cli`, `github-cli`, `go`, `google-chrome`, `lazygit`, `mise`, `nerd-fonts`, `opentofu`, `proto`, `rust`, `starship`, `terraform`, `uv`, `zig`
+`aws-cli`, `aws-sam-cli`, `bun`, `claude-code`, `copilot-cli`, `custom-ps1`, `deno`, `docker-cli`, `github-cli`, `go`, `google-chrome`, `lazygit`, `mise`, `nerd-fonts`, `node`, `opentofu`, `proto`, `rust`, `starship`, `terraform`, `uv`, `zig`
 
 Override or add your own under `~/.cocoon/plugins/<id>/` (user scope) or `<project>/.cocoon/plugins/<id>/` (project scope, checked into the repo) — both layers win over the embedded catalog. See [`docs/plugins.md`](docs/plugins.md) for the authoring guide.
 

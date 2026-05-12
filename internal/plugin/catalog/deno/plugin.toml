@@ -1,0 +1,17 @@
+[metadata]
+name = "Deno"
+description = "Deno JavaScript / TypeScript runtime (https://github.com/denoland/deno)"
+default = false
+
+[apt]
+packages = ["unzip"]
+
+[install]
+requires_root = true
+volumes = ["/home/${USERNAME}/.deno"]
+
+[install.env]
+DENO_DIR = "/home/${USERNAME}/.deno"
+
+[version]
+version_capable = true
