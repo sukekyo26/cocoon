@@ -1470,6 +1470,61 @@ func TestRunInit_NoPorts_EmitsCommentedTemplate(t *testing.T) {
 	}
 }
 
+// TestPortsInputValidator pins the i18n behavior of the interactive prompt
+// validator: rejection messages come from the catalog (EN / JA), not from
+// config.ValidateShortForm's English text. Accept paths return nil so huh
+// advances to the next group.
+func TestPortsInputValidator(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		lang i18n.Lang
+		in   string
+		// substring asserted in err.Error(); empty = nil expected.
+		wantSubstr string
+	}{
+		{"en_accept_blank", i18n.LangEN, "", ""},
+		{"en_accept_single", i18n.LangEN, "3000:3000", ""},
+		{
+			"en_accept_all_forms", i18n.LangEN,
+			"3000,3000-3005,8000:8000,127.0.0.1:8001:8001,6060:6060/udp", "",
+		},
+		{
+			"en_reject_uses_catalog_phrase", i18n.LangEN, "abc",
+			"is not a valid port short form",
+		},
+		{
+			"ja_reject_uses_catalog_phrase", i18n.LangJA, "abc",
+			"はポート指定として無効です",
+		},
+		{
+			"ja_reject_out_of_range", i18n.LangJA, "99999:80",
+			"はポート指定として無効です",
+		},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cat := i18n.New(tc.lang)
+			err := portsInputValidator(cat)(tc.in)
+			if tc.wantSubstr == "" {
+				if err != nil {
+					t.Fatalf("validator(%q) = %v, want nil", tc.in, err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("validator(%q) = nil, want error containing %q", tc.in, tc.wantSubstr)
+			}
+			if !strings.Contains(err.Error(), tc.wantSubstr) {
+				t.Errorf("validator(%q) err = %q, want substring %q",
+					tc.in, err.Error(), tc.wantSubstr)
+			}
+		})
+	}
+}
+
 //nolint:paralleltest // t.Chdir
 func TestRunInit_PortsFlagRejectsInvalid(t *testing.T) {
 	pinEnglish(t)

@@ -810,17 +810,35 @@ func promptForPorts(cat *i18n.Catalog) ([]string, error) {
 // portsInput renders a free-text input for comma-separated docker-compose
 // short-form port mappings. Blank input is accepted (= no [ports] block;
 // the renderer emits the commented-out template hint instead). Non-empty
-// input is validated against config.ValidateShortForm so init never accepts
-// a string that `cocoon gen` would later reject.
+// input is validated by portsInputValidator so init never accepts a string
+// that `cocoon gen` would later reject.
 func portsInput(cat *i18n.Catalog, target *string) *huh.Input {
 	return huh.NewInput().
 		Title(cat.Msg("init_prompt_ports")).
 		Description(cat.Msg("init_desc_ports")).
-		Validate(func(s string) error {
-			_, err := parsePorts(s)
-			return err
-		}).
+		Validate(portsInputValidator(cat)).
 		Value(target)
+}
+
+// portsInputValidator returns a per-keystroke validator for the ports
+// prompt. The message returned on rejection is localized via the catalog
+// — huh prints it verbatim in the form footer, so EN runs see English
+// and JA runs see Japanese. Kept separate from parsePorts so the flag
+// path (`--ports`) keeps its English usage error consistent with the
+// other init flag validators.
+func portsInputValidator(cat *i18n.Catalog) func(string) error {
+	return func(s string) error {
+		for _, part := range strings.Split(s, ",") {
+			p := strings.TrimSpace(part)
+			if p == "" {
+				continue
+			}
+			if err := config.ValidateShortForm(p); err != nil {
+				return errors.New(cat.Msg("init_err_port_invalid_fmt", p)) //nolint:err113 // user-facing prompt
+			}
+		}
+		return nil
+	}
 }
 
 // pluginsMultiSelect renders the embedded plugin catalog as a single
