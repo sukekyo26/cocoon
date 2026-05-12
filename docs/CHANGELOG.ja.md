@@ -8,6 +8,7 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ### 修正
 
+- `cocoon gen` で生成される `.devcontainer/devcontainer.json` に `"forwardPorts": [3000]` がハードコードで付与される問題を修正。`[ports]` も `[devcontainer].forward_ports` 上書きも未設定のときは `forwardPorts` キー自体を出力しないようになり、VS Code の「Ports」パネルや `docker compose ps` にユーザーが宣言していないポートが現れない。`[ports].forward = [...]` か `cocoon init --ports ...` で明示的に opt-in したワークスペースには影響なし。既存の `.devcontainer/devcontainer.json` は `cocoon gen` で再生成して新挙動に追従させてください。
 - アップデート通知の TTL チェックがウォールクロック巻き戻しで固まる問題を修正。キャッシュの `checked_at` が「未来」に書き込まれていた場合 (タイムゾーン変更を跨いでサスペンドした、NTP で進んだ時計を補正した、など) も stale 扱いとして次回呼び出し時に再フェッチするようになった。従来は未来タイムスタンプを尊重してしまい、ウォールクロックが追いつくまで通知が抑止されていた。
 - GitHub 不達時にサブコマンドが最大 30 秒待たされる問題を修正。アップデート通知のネットワーク呼び出しに 2 秒のタイムアウトを設けたので (従来は `release.DefaultTimeout` の 30 秒)、`api.github.com` が応答しない場合でも数秒で silent-fail 経路に落ちて本来のサブコマンドが動き出す。
 

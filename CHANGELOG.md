@@ -8,6 +8,7 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- `cocoon gen` no longer injects a hardcoded `"forwardPorts": [3000]` into the generated `.devcontainer/devcontainer.json` when the workspace declares no `[ports]` and no `[devcontainer].forward_ports` override. The key is now omitted entirely in that case, so VS Code's "Ports" panel and `docker compose ps` only show ports the user actually declared. Workspaces that opt in via `[ports].forward = [...]` or `cocoon init --ports ...` are unaffected. Existing `.devcontainer/devcontainer.json` files need to be regenerated to pick up the change.
 - Update notifier no longer freezes after a wall-clock rollback. The 24h TTL check now treats a cached `checked_at` in the future (e.g. the laptop slept through a timezone change, or NTP corrected a fast clock) as stale and re-fetches on the next invocation, instead of silently honoring the future timestamp for hours or days.
 - Update notifier no longer delays subcommands by up to 30 seconds when GitHub is unreachable. The network call now has a 2-second budget per invocation (down from `release.DefaultTimeout`), so a stalled `api.github.com` falls back to the silent-fail path almost immediately instead of stalling every `cocoon <cmd>` until the upstream timeout fires.
 

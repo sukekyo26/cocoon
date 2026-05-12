@@ -162,13 +162,40 @@ func TestGenerateMinimalDefaults(t *testing.T) {
 	for _, want := range []string{
 		`"service": "dev"`,
 		`"workspaceFolder": "/home/developer/workspace/dev"`,
-		`"forwardPorts": [`,
 		`"shutdownAction": "stopCompose"`,
 		`"extensions": []`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("expected %q in output:\n%s", want, got)
 		}
+	}
+	// With no [ports] section and no devcontainer.forward_ports override,
+	// the forwardPorts key must be omitted entirely — emitting [3000]
+	// (the historic default) silently forwarded a port the user never
+	// declared, polluting `docker compose ps` and VS Code's "Ports" panel.
+	if strings.Contains(got, `"forwardPorts"`) {
+		t.Errorf("forwardPorts should be omitted when no ports are declared, got:\n%s", got)
+	}
+}
+
+// TestGenerateForwardPortsFromOverrideOnly verifies the key is emitted
+// when devcontainer.forward_ports supplies values but [ports] is absent —
+// the override path is the sole source.
+func TestGenerateForwardPortsFromOverrideOnly(t *testing.T) {
+	t.Parallel()
+	ctx := &generate.WorkspaceContext{
+		WS: &config.Workspace{
+			Devcontainer: config.Devcontainer{
+				"forwardPorts": []any{int64(9000)},
+			},
+		},
+	}
+	got, err := devcontainerjson.Generate(ctx)
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	if !strings.Contains(got, "\"forwardPorts\": [\n\t\t9000\n\t]") {
+		t.Errorf("expected forwardPorts=[9000] from override, got:\n%s", got)
 	}
 }
 
