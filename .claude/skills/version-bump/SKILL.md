@@ -13,7 +13,9 @@ description: 'Bump project version following Semantic Versioning. Use when asked
 |:---------|:-----------|
 | 破壊的変更（BREAKING） | **major** (X.0.0) |
 | 新機能追加（Added） | **minor** (x.Y.0) |
-| バグ修正のみ（Fixed/Changed） | **patch** (x.y.Z) |
+| バグ修正のみ（Fixed/Changed/Removed without BREAKING） | **patch** (x.y.Z) |
+
+> CHANGELOG のカテゴリは `Added` → `Changed` → `Fixed` → `Removed` の 4 種類のみ。詳細は changelog スキル参照。
 
 `CHANGELOG.md` の `## [Unreleased]` セクションの内容から判断する。
 
@@ -35,7 +37,7 @@ description: 'Bump project version following Semantic Versioning. Use when asked
 3. 上記 1〜4 を更新（`echo x.y.z > VERSION`、`internal/version/version.go` の `var Version = "..."` を新値に書き換え）
 4. `## [Unreleased]` 見出しは残す（次の開発用）。見出しの下は空にする
 5. `just ci` を実行してグリーンを確認（`internal/version/version.go` 変更で test 影響がないか保険的に）
-6. コミット: `feat: release vX.Y.Z`（`feature/*` ブランチで実行 → develop → main の流れ。`main` 上の VERSION 変更が `release.yml` をトリガしてタグを切る）
+6. コミット: `feat: release vX.Y.Z` を **`develop` ブランチに直接コミット** する（version bump は CLAUDE.md「機能単位で feature/ ブランチを切る」ルールの例外。`feature/release-vX.Y.Z` は作らない）。その後 `develop` を push し、`develop` → `main` のリリース PR を出す。`main` 上の VERSION 変更が `release.yml` をトリガしてタグを切る
 
 > `justfile` の `version` 変数は `VERSION` ファイルの内容を読み込み `-ldflags "-X github.com/sukekyo26/cocoon/internal/version.Version=..."` を渡す。`just build` 経由のバイナリは ldflags が効くが、`go install github.com/sukekyo26/cocoon/cmd/cocoon@latest` 経由では効かないので、ソース側 `internal/version/version.go` の literal も同期させる必要がある。
 
@@ -53,6 +55,9 @@ description: 'Bump project version following Semantic Versioning. Use when asked
 - ...
 
 ### Fixed
+- ...
+
+### Removed
 - ...
 ```
 
