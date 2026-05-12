@@ -294,8 +294,9 @@ func ValidateShortForm(s string) error {
 
 // shortFormReason returns ("", true) on accept and (humanReadableReason,
 // false) on reject. Used by both ValidateShortForm (which wraps the reason
-// in ErrPortShortForm for external callers) and the accumulator-flavored
-// validateShortForm (which already carries field/idx context).
+// in ErrPortShortForm for external callers — `cocoon init` and `--ports`)
+// and validatePortsForward (which feeds the reason into errAccumulator with
+// the field/idx context the `[ports].forward` schema validation carries).
 func shortFormReason(s string) (string, bool) {
 	m := rxPortShortForm.FindStringSubmatch(s)
 	if m == nil {

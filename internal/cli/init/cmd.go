@@ -115,7 +115,9 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 		&flags.Ports,
 		"ports",
 		"",
-		"comma-separated host:container short forms (e.g. 3000:3000,5432:5432); skips the ports prompt",
+		"comma-separated docker-compose short-form port mappings — "+
+			"[HOST_IP:][HOST:]CONTAINER[/PROTOCOL]; numeric ranges (N-M) and tcp|udp are accepted "+
+			"(e.g. 3000,3000-3005,8000:8000,127.0.0.1:5432:5432/tcp,6060:6060/udp); skips the ports prompt",
 	)
 	cmd.Flags().BoolVar(&flags.Force, "force", false, "overwrite an existing workspace.toml")
 	return cmd

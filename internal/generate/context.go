@@ -75,9 +75,9 @@ func (c *WorkspaceContext) ComposeForwardPorts() []config.ComposePort {
 // devcontainer.json's `forwardPorts`. Returns nil when [ports] is absent so
 // the generator can omit the key entirely rather than baking in a default
 // 3000 the user never asked for; the IDE then forwards only what the
-// workspace declares. Entries that cannot be reduced to a single port
-// (port ranges, mode=host) are skipped, with one warning per skip emitted
-// to c.Warnings.
+// workspace declares. Entries that cannot be reduced to a single TCP
+// integer (port ranges, mode=host, protocol=udp) are skipped, with one
+// warning per skip emitted to c.Warnings.
 func (c *WorkspaceContext) DevcontainerForwardPorts() []int {
 	if c.WS == nil || c.WS.Ports == nil {
 		return nil
