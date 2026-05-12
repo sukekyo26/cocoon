@@ -142,6 +142,13 @@ func shouldSkipUpdateCheck(cmd *cobra.Command, stderr io.Writer) bool {
 	case "version", "self-update", "help":
 		return true
 	}
+	// `cocoon --version` / `-v` runs the root command (cmd.Name() ==
+	// "cocoon"), so the subcommand switch above misses it. Cobra
+	// auto-registers the `version` flag on any command with a non-empty
+	// Version field; check whether the user actually toggled it.
+	if vf := cmd.Flags().Lookup("version"); vf != nil && vf.Changed {
+		return true
+	}
 	// stderr must be an *os.File pointing at a terminal; otherwise the
 	// caller is piping output to a file/pipe/CI log and a notice would be
 	// noise. Buffers and io.Discard are not *os.File so they always skip.
