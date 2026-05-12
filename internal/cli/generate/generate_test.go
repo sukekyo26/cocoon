@@ -27,15 +27,8 @@ func runPipeline(t *testing.T, wsPath, pluginsDir, outDir string, stderr io.Writ
 	return generatecli.WriteArtifacts(arts, outDir)
 }
 
-// TestRun_Variants exercises `wsd generate-all` end-to-end with a handful
-// of workspace.toml shapes and asserts substrings on the generated files.
-//
-// It replaces the bash integration tests previously living under:
-//   - tests/integration/generation/test_compose.sh
-//   - tests/integration/generation/test_devcontainer.sh
-//   - tests/integration/generation/test_dockerfile.sh
-//   - tests/integration/generation/test_generate_all.sh
-//   - tests/integration/test_pipeline.sh (the e2e portion)
+// TestRun_Variants exercises `cocoon gen` end-to-end with a handful of
+// workspace.toml shapes and asserts substrings on the generated files.
 func TestRun_Variants(t *testing.T) {
 	t.Parallel()
 

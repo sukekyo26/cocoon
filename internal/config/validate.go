@@ -10,7 +10,7 @@ import (
 )
 
 // ============================================================
-// Compiled validation patterns (mirrors src/wsd/config/models.py).
+// Compiled validation patterns.
 // ============================================================
 
 var (
@@ -107,7 +107,7 @@ func (a *errAccumulator) add(msg string, seg ...string) {
 // Top-level Validate entry points.
 // ============================================================
 
-// Validate runs every cross-field check that the Pydantic models perform.
+// Validate runs every cross-field check on the workspace.
 // On failure the returned error is a *ValidationError with Path = path.
 func (w *Workspace) Validate(path string) error {
 	a := newAccumulator()

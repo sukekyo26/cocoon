@@ -3,10 +3,8 @@
 // that sources the user's persistent shellrc (~/.cocoon/.shellrc, or
 // ~/.cocoon/.shellrc.fish for fish) from the cocoon named volume.
 //
-// The cocoon design (local/plan.md) abolishes the old workspace-docker pattern
-// of writing a *.generated companion file on the host that the container's rc
-// sources at startup; instead the contents are appended to ~/.{shell}rc inside
-// the image so no host-side artifact remains. Bash and zsh share POSIX-style
+// The env/aliases are appended directly to ~/.{shell}rc inside the image so no
+// host-side companion artifact is written. Bash and zsh share POSIX-style
 // `export K=V` / `alias k='v'` syntax (anchored on shellx.ShellQuote); fish
 // uses `set -gx K V` / `alias k 'v'` (anchored on shellx.FishQuote).
 //

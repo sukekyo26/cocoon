@@ -36,7 +36,7 @@ description: 'CHANGELOG 記載ルールと更新手順。changelog, 変更履歴
 
 - 新しい `workspace.toml` フィールド・セクション（例: `[repositories]`、`[shell]`、`[devcontainer.forwardPorts]`）
 - 新しいプラグイン、またはプラグイン仕様の変更（`install.sh` インターフェース、`plugin.toml` スキーマ等）
-- 新しい CLI サブコマンド・フラグ（`setup-docker.sh`、`wsd` サブコマンド等）
+- 新しい CLI サブコマンド・フラグ（`cocoon init`、`cocoon plugin` などのサブコマンド等）
 - ユーザーが体験していた動作不具合の修正
 - BREAKING changes（設定ファイルの形式変更・フィールド削除・前提条件の変更等）
 - セキュリティ修正
