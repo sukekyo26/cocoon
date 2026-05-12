@@ -154,6 +154,32 @@ func TestCheck_CacheExpiredRefetches(t *testing.T) {
 	}
 }
 
+func TestCheck_FutureTimestampRefetches(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	cachePath := filepath.Join(dir, "update_check.json")
+	// CheckedAt 1h in the "future" relative to Now(). A naive
+	// now().Sub(CheckedAt) returns a negative duration that is always
+	// `< CacheTTL`, so without the >=0 guard the stale cache would win
+	// indefinitely. Verify the network path runs instead.
+	if err := os.WriteFile(cachePath, mustJSON(t, map[string]any{
+		"checked_at":     time.Date(2026, 1, 1, 13, 0, 0, 0, time.UTC),
+		"latest_version": "0.1.0", // stale: older than current.
+		"schema_version": 1,
+	}), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	client := serverServing(t, "v9.9.9")
+	n := updatecheck.Check(context.Background(), "0.5.0", updatecheck.Options{
+		CacheDir:   dir,
+		HTTPClient: client,
+		Now:        func() time.Time { return time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC) },
+	})
+	if n == nil || n.Latest != "9.9.9" {
+		t.Fatalf("expected refetched notice 9.9.9, got %+v", n)
+	}
+}
+
 func TestCheck_MalformedCacheRefetches(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()

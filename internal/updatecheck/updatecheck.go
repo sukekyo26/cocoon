@@ -76,8 +76,15 @@ func Check(ctx context.Context, currentVersion string, opts Options) *Notice {
 	cachePath, cacheOK := resolveCachePath(opts.CacheDir)
 
 	if cacheOK {
-		if c, ok := readCache(cachePath); ok && now().Sub(c.CheckedAt) < CacheTTL {
-			return buildNotice(currentVersion, c.LatestVersion)
+		// A future CheckedAt (clock skew at write time, then a wall-clock
+		// rollback) would make now().Sub(...) negative and always satisfy
+		// `< CacheTTL`, effectively freezing the notifier until the wall
+		// clock caught up. Reject negatives so the next call refetches.
+		if c, ok := readCache(cachePath); ok {
+			since := now().Sub(c.CheckedAt)
+			if since >= 0 && since < CacheTTL {
+				return buildNotice(currentVersion, c.LatestVersion)
+			}
 		}
 	}
 

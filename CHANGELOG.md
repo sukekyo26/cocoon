@@ -6,6 +6,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Update notifier no longer freezes after a wall-clock rollback. The 24h TTL check now treats a cached `checked_at` in the future (e.g. the laptop slept through a timezone change, or NTP corrected a fast clock) as stale and re-fetches on the next invocation, instead of silently honoring the future timestamp for hours or days.
+
 ### Security
 
 - `[home_files].files` entries are now restricted to `[A-Za-z0-9._/-]+` per path segment. Shell-special characters (`$`, backticks, `;`, `&`, `|`, `<`, `>`, `*`, `?`, `!`, quotes, backslashes, whitespace) are rejected at validation time so a repo-provided `workspace.toml` cannot inject commands into the host shell through the generated `initializeCommand`. Existing workspaces that used only conventional dotfile names are unaffected; anything that previously passed validation by accident now fails with an actionable message.
