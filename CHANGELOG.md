@@ -11,6 +11,15 @@ adheres to [Semantic Versioning](https://semver.org/).
 - New `node` plugin: installs Node.js from the official nodejs.org tarball into `/usr/local/node` with SHA256 verification (`linux-x64` / `linux-arm64`). When `[plugins.versions.node].pin` is omitted the install script resolves the latest LTS automatically by parsing `https://nodejs.org/dist/index.tab`. `NPM_CONFIG_PREFIX` is set to `/home/${USERNAME}/.npm-global` so `npm install -g` writes to a named volume under the user's home instead of `/usr/local`, and both `~/.npm` (cache) and `~/.npm-global` are persisted across rebuilds.
 - New `deno` plugin: installs Deno from the GitHub Release `deno-*-unknown-linux-gnu.zip` asset into `/usr/local/bin/deno` with SHA256 verification (`x86_64` / `aarch64`). When `[plugins.versions.deno].pin` is omitted the install script follows the `releases/latest` redirect to find the newest stable tag. `DENO_DIR=/home/${USERNAME}/.deno` is persisted across rebuilds via a named volume.
 - Combining `image = "node"` with `[plugins].enable = ["node"]`, or `image = "denoland/deno"` with `[plugins].enable = ["deno"]`, is now a validation error and the matching plugin is hidden from the `cocoon init` picker. Both pairs have the plugin overwriting or shadowing the base image's runtime — node plugin prepends `/usr/local/node/bin` to PATH (shadowing the base's `/usr/local/bin/node`), and the deno plugin unzips directly over `/usr/local/bin/deno` — so enabling both wastes docker-build time. Mirrors the existing `golang` ↔ `go` and `rust` ↔ `rust` conflicts.
+- `cocoon init` now offers a per-plugin version pin prompt for every enabled `version_capable` plugin: a Yes/No confirm (Yes = type a version pin, No = LATEST at build time) followed, on Yes, by an Input prompt validated by the same character set as `image_version`. Plugins already pinned via `--plugin-versions` are skipped (flag wins). LATEST is encoded as the absence of an entry in `[plugins.versions]`, so the install script's PIN-empty branch resolves the latest version at container build time.
+
+### Changed
+
+- **BREAKING**: `cocoon init` and `cocoon plugin pin --write` now emit `[plugins.versions]` as one section header with one inline-table line per plugin (`go = { pin = "1.23.4" }`) instead of the previous `[plugins.versions.<id>]` subsection blocks. The TOML loader still accepts both forms, but `cocoon plugin pin --write` refuses to operate on a workspace.toml that still contains legacy subsection blocks; convert each block to an inline-table line under `[plugins.versions]` before invoking `--write`. Existing files keep loading; regenerating them via `cocoon init` or `cocoon plugin pin --write` migrates the format.
+
+### Removed
+
+- **BREAKING**: The `custom-ps1` plugin was removed. `starship` covers every shell (bash / zsh / fish) the bash-only `custom-ps1` covered, with a single declarative config. Workspace.toml files that still list `"custom-ps1"` under `[plugins].enable` fail validation with an `unknown plugin` error; replace it with `"starship"` (or drop the entry) and re-run `cocoon gen`.
 
 ## [0.3.0] - 2026-05-13
 
