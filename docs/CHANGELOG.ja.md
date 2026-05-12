@@ -10,6 +10,7 @@ cocoon の主要な変更を記録します。フォーマットは
 
 - 新しい `node` プラグイン: nodejs.org 公式 tarball から Node.js を `/usr/local/node` にインストールし、SHA256 で検証します (`linux-x64` / `linux-arm64`)。`[plugins.versions.node].pin` を省略するとインストールスクリプトが `https://nodejs.org/dist/index.tab` をパースして最新 LTS を自動解決します。`NPM_CONFIG_PREFIX=/home/${USERNAME}/.npm-global` を設定し、`npm install -g` の書き込み先を `/usr/local` ではなくユーザーホーム配下の named volume に逃すので、`~/.npm` (キャッシュ) と `~/.npm-global` (グローバルインストール先) は再ビルドを跨いで永続化されます。
 - 新しい `deno` プラグイン: GitHub Release の `deno-*-unknown-linux-gnu.zip` から Deno を `/usr/local/bin/deno` にインストールし、SHA256 で検証します (`x86_64` / `aarch64`)。`[plugins.versions.deno].pin` を省略するとインストールスクリプトが `releases/latest` のリダイレクトから最新 stable タグを取得します。`DENO_DIR=/home/${USERNAME}/.deno` を named volume として永続化します。
+- `image = "node"` と `[plugins].enable = ["node"]` の併用、および `image = "denoland/deno"` と `[plugins].enable = ["deno"]` の併用を validation エラーで reject するようにしました。あわせて `cocoon init` のピッカーでも対応する base image を選んだとき該当プラグインを選択肢から非表示にします。どちらの組み合わせも node プラグインが `/usr/local/node/bin` を PATH 先頭に挿してベース (`/usr/local/bin/node`) を死蔵させ、deno プラグインは `/usr/local/bin/deno` を直接上書きするため、両方有効にすると docker-build 時間を浪費するだけで実行時の挙動は変わりません (`golang` ↔ `go` / `rust` ↔ `rust` の既存挙動と統一)。
 
 ## [0.3.0] - 2026-05-13
 

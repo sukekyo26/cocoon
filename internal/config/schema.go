@@ -194,15 +194,21 @@ var SupportedImageVersions = map[string][]string{
 //     prepends the user-local cargo dir ahead of the base image's
 //     /usr/local/cargo/bin, so the base toolchain is shadowed and never
 //     used.
+//   - "node" → "node": the node plugin extracts the official tarball into
+//     /usr/local/node and prepends /usr/local/node/bin to PATH, so the
+//     base image's /usr/local/bin/node is shadowed and never used.
+//   - "denoland/deno" → "deno": the deno plugin unzips the binary directly
+//     over /usr/local/bin/deno, overwriting the one the base image ships.
 //
-// Other supported images (ubuntu, debian, node, python, denoland/deno)
-// have no matching plugin in the catalog and therefore no conflict to
-// declare here.
+// Other supported images (ubuntu, debian, python) have no matching plugin
+// in the catalog and therefore no conflict to declare here.
 //
 //nolint:gochecknoglobals // tabular configuration data, file-scoped by design.
 var ImageProvidesPlugin = map[string]string{
-	"golang": "go",
-	"rust":   "rust",
+	"golang":        "go",
+	"rust":          "rust",
+	"node":          "node",
+	"denoland/deno": "deno",
 }
 
 // SkelEntry mirrors one [[container.skel]] entry. Source is a path relative
