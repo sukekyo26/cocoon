@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	"github.com/sukekyo26/cocoon/internal/logx"
 )
 
 const showLong = `cocoon plugin show — print the resolved plugin manifest for <id>
@@ -30,7 +32,7 @@ func newShowCmd(stdout, stderr io.Writer) *cobra.Command {
 	return cmd
 }
 
-func runShow(stdout, _ io.Writer, id string) error {
+func runShow(stdout, stderr io.Writer, id string) error {
 	layered, err := resolveLayered()
 	if err != nil {
 		return err
@@ -44,36 +46,41 @@ func runShow(stdout, _ io.Writer, id string) error {
 		return fmt.Errorf("%w: %w", ErrFailure, err)
 	}
 
-	fmt.Fprintf(stdout, "id:           %s\n", id)
-	fmt.Fprintf(stdout, "source:       %s\n", src)
-	fmt.Fprintf(stdout, "name:         %s\n", p.Metadata.Name)
-	fmt.Fprintf(stdout, "description:  %s\n", p.Metadata.Description)
-	fmt.Fprintf(stdout, "default:      %t\n", p.Metadata.Default)
+	log := logx.New(stdout, stderr)
+	// Label widths are pre-padded so colored bold sits flush against the
+	// value with no extra separator; matches the legacy %s%s layout.
+	row := func(label, value string) { log.Infof("%s%s", log.Bold(label), value) }
+	row("id:           ", id)
+	row("source:       ", src)
+	row("name:         ", p.Metadata.Name)
+	row("description:  ", p.Metadata.Description)
+	row("default:      ", fmt.Sprintf("%t", p.Metadata.Default))
 	if len(p.Metadata.Conflicts) > 0 {
-		fmt.Fprintf(stdout, "conflicts:    %s\n", strings.Join(p.Metadata.Conflicts, ", "))
+		row("conflicts:    ", strings.Join(p.Metadata.Conflicts, ", "))
 	}
-	fmt.Fprintf(stdout, "requires_root: %t\n", p.Install.RequiresRoot)
-	fmt.Fprintf(stdout, "version_capable: %t\n", p.Version.VersionCapable)
+	row("requires_root: ", fmt.Sprintf("%t", p.Install.RequiresRoot))
+	row("version_capable: ", fmt.Sprintf("%t", p.Version.VersionCapable))
 	if p.Apt != nil && len(p.Apt.Packages) > 0 {
 		pkgs := append([]string(nil), p.Apt.Packages...)
 		sort.Strings(pkgs)
-		fmt.Fprintf(stdout, "apt_packages: %s\n", strings.Join(pkgs, ", "))
+		row("apt_packages: ", strings.Join(pkgs, ", "))
 	}
 	if len(p.Install.BuildArgs) > 0 {
-		fmt.Fprintf(stdout, "build_args:   %s\n", strings.Join(p.Install.BuildArgs, ", "))
+		row("build_args:   ", strings.Join(p.Install.BuildArgs, ", "))
 	}
 	if len(p.Install.Volumes) > 0 {
-		fmt.Fprintf(stdout, "volumes:      %s\n", strings.Join(p.Install.Volumes, ", "))
+		row("volumes:      ", strings.Join(p.Install.Volumes, ", "))
 	}
+
 	if len(p.Install.Env) > 0 {
 		keys := make([]string, 0, len(p.Install.Env))
 		for k := range p.Install.Env {
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
-		fmt.Fprintln(stdout, "env:")
+		log.Info(log.Bold("env:"))
 		for _, k := range keys {
-			fmt.Fprintf(stdout, "  %s=%s\n", k, p.Install.Env[k])
+			log.Infof("  %s=%s", k, p.Install.Env[k])
 		}
 	}
 	return nil

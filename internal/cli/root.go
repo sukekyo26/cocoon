@@ -1,9 +1,13 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"io"
+	"os"
+	"time"
 
+	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 
 	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
@@ -11,7 +15,17 @@ import (
 	initcli "github.com/sukekyo26/cocoon/internal/cli/init"
 	plugincli "github.com/sukekyo26/cocoon/internal/cli/plugin"
 	selfupdatecli "github.com/sukekyo26/cocoon/internal/cli/selfupdate"
+	"github.com/sukekyo26/cocoon/internal/logx"
+	"github.com/sukekyo26/cocoon/internal/updatecheck"
 )
+
+// updateCheckTimeout caps the synchronous network call the notifier makes
+// before every subcommand. The check runs in PersistentPreRun, so an
+// unbounded budget (release.DefaultTimeout = 30s) would stall every
+// invocation when GitHub is unreachable. 2s comfortably covers a healthy
+// API roundtrip while keeping the worst-case user-perceived delay below
+// the threshold where impatience kicks in.
+const updateCheckTimeout = 2 * time.Second
 
 const rootLong = `cocoon — project-aware container workspace generator
 
@@ -45,6 +59,9 @@ func newRootCommand(version string, stdout, stderr io.Writer) *cobra.Command {
 		Args:          cobra.ArbitraryArgs, // RunE handles unknown args explicitly.
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		PersistentPreRun: func(cmd *cobra.Command, _ []string) {
+			maybeNotifyUpdate(cmd, version, stderr)
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
 				return cmd.Help() //nolint:wrapcheck // top-level help write error is descriptive
@@ -87,6 +104,59 @@ func addLeafHelpAlias(c *cobra.Command) {
 		}
 		clihelpers.AttachHelpAlias(child)
 	}
+}
+
+// maybeNotifyUpdate runs the once-per-day update check unless an opt-out
+// applies. Failures (network down, malformed cache, missing $HOME) are
+// silent so the notifier never interferes with the user's invocation.
+//
+// currentVersion is the same string newRootCommand was constructed with
+// (the value cobra prints for `--version` / `cocoon version`); reusing
+// it keeps the notice consistent with the running binary in embedded
+// or test contexts where a custom version is injected via cli.New.
+//
+// The fetch is bounded by updateCheckTimeout so a stalled GitHub API
+// cannot delay every subcommand by release.DefaultTimeout (30s).
+func maybeNotifyUpdate(cmd *cobra.Command, currentVersion string, stderr io.Writer) {
+	if shouldSkipUpdateCheck(cmd, stderr) {
+		return
+	}
+	ctx, cancel := context.WithTimeout(cmd.Context(), updateCheckTimeout)
+	defer cancel()
+	notice := updatecheck.Check(ctx, currentVersion, updatecheck.Options{
+		Now:        nil,
+		CacheDir:   "",
+		HTTPClient: nil,
+	})
+	if notice == nil {
+		return
+	}
+	logx.New(io.Discard, stderr).Notice(notice.Format())
+}
+
+func shouldSkipUpdateCheck(cmd *cobra.Command, stderr io.Writer) bool {
+	if os.Getenv("COCOON_NO_UPDATE_CHECK") == "1" {
+		return true
+	}
+	switch cmd.Name() {
+	case "version", "self-update", "help":
+		return true
+	}
+	// `cocoon --version` / `-v` runs the root command (cmd.Name() ==
+	// "cocoon"), so the subcommand switch above misses it. Cobra
+	// auto-registers the `version` flag on any command with a non-empty
+	// Version field; check whether the user actually toggled it.
+	if vf := cmd.Flags().Lookup("version"); vf != nil && vf.Changed {
+		return true
+	}
+	// stderr must be an *os.File pointing at a terminal; otherwise the
+	// caller is piping output to a file/pipe/CI log and a notice would be
+	// noise. Buffers and io.Discard are not *os.File so they always skip.
+	f, ok := stderr.(*os.File)
+	if !ok {
+		return true
+	}
+	return !isatty.IsTerminal(f.Fd())
 }
 
 // newVersionSubcommand mirrors the bare positional `cocoon version`

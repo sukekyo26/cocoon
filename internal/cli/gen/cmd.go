@@ -26,6 +26,7 @@ import (
 	"github.com/sukekyo26/cocoon/internal/config"
 	"github.com/sukekyo26/cocoon/internal/generate"
 	"github.com/sukekyo26/cocoon/internal/i18n"
+	"github.com/sukekyo26/cocoon/internal/logx"
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
 
@@ -88,6 +89,7 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 
 func runGen(stdout, stderr io.Writer, workspaceFlag, outputFlag string) error {
 	cat := i18n.New(i18n.Detect())
+	log := logx.New(stdout, stderr)
 	wsPath, err := resolveWorkspace(workspaceFlag)
 	if err != nil {
 		return err
@@ -121,26 +123,26 @@ func runGen(stdout, stderr io.Writer, workspaceFlag, outputFlag string) error {
 		return fmt.Errorf("%w: %w", ErrFailure, err)
 	}
 	if ctx.CertificatesEnabled() {
-		if err := ensureUserCertsDir(stdout, cat); err != nil {
+		if err := ensureUserCertsDir(log, cat); err != nil {
 			return fmt.Errorf("%w: %w", ErrFailure, err)
 		}
 	}
 	if ctx.HasHomeFiles() {
-		if err := ensureHomeFiles(ctx, stdout, stderr, cat); err != nil {
+		if err := ensureHomeFiles(ctx, log, cat); err != nil {
 			return fmt.Errorf("%w: %w", ErrFailure, err)
 		}
 	}
 
 	cwd, _ := os.Getwd() //nolint:errcheck // cwd is best-effort for pretty-printing only.
 	for _, a := range arts {
-		fmt.Fprintln(stdout, cat.Msg("gen_wrote", displayPath(cwd, filepath.Join(outDir, a.Rel))))
+		log.Success(cat.Msg("gen_wrote", displayPath(cwd, filepath.Join(outDir, a.Rel))))
 	}
-	printNextSteps(stdout, cat, ctx.WS.Workspace.DevContainerOrDefault())
+	printNextSteps(log, cat, ctx.WS.Workspace.DevContainerOrDefault())
 	if ctx.CertificatesEnabled() {
-		printCertNotice(stdout, cat)
+		printCertNotice(log, cat)
 	}
 	if ctx.HasHomeFiles() {
-		printHomeFilesNotice(stdout, cat, ctx.HomeFilesEntries())
+		printHomeFilesNotice(log, cat, ctx.HomeFilesEntries())
 	}
 	return nil
 }
@@ -200,7 +202,7 @@ func userPluginsDir() (string, error) {
 // docker-compose's additional_contexts can resolve before the build
 // starts. Only the first-run case prints a status line; re-runs stay
 // quiet. Mirrors the plugin overlay's 0700 posture (private user data).
-func ensureUserCertsDir(stdout io.Writer, cat *i18n.Catalog) error {
+func ensureUserCertsDir(log *logx.Logger, cat *i18n.Catalog) error {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("resolve home dir: %w", err)
@@ -218,26 +220,26 @@ func ensureUserCertsDir(stdout io.Writer, cat *i18n.Catalog) error {
 	if mkErr := os.MkdirAll(dir, 0o700); mkErr != nil {
 		return fmt.Errorf("mkdir %s: %w", dir, mkErr)
 	}
-	fmt.Fprintln(stdout, cat.Msg("gen_certs_dir_created", dir))
+	log.Success(cat.Msg("gen_certs_dir_created", dir))
 	return nil
 }
 
-func printNextSteps(stdout io.Writer, cat *i18n.Catalog, devcontainer bool) {
-	fmt.Fprintln(stdout)
-	fmt.Fprintln(stdout, cat.Msg("gen_next_header"))
-	fmt.Fprintln(stdout, cat.Msg("gen_next_step_compose"))
+func printNextSteps(log *logx.Logger, cat *i18n.Catalog, devcontainer bool) {
+	log.Info("")
+	log.Info(log.Bold(cat.Msg("gen_next_header")))
+	log.Info(cat.Msg("gen_next_step_compose"))
 	if devcontainer {
-		fmt.Fprintln(stdout, cat.Msg("gen_next_step_vscode"))
+		log.Info(cat.Msg("gen_next_step_vscode"))
 	}
 }
 
 // printCertNotice surfaces `~/.cocoon/certs/` as the drop-zone for user
 // CA certs in stdout, so users do not have to read configuration.md.
-func printCertNotice(stdout io.Writer, cat *i18n.Catalog) {
-	fmt.Fprintln(stdout)
-	fmt.Fprintln(stdout, cat.Msg("gen_certs_notice_header"))
-	fmt.Fprintln(stdout, cat.Msg("gen_certs_notice_path"))
-	fmt.Fprintln(stdout, cat.Msg("gen_certs_notice_team"))
+func printCertNotice(log *logx.Logger, cat *i18n.Catalog) {
+	log.Info("")
+	log.Info(log.Bold(cat.Msg("gen_certs_notice_header")))
+	log.Info(cat.Msg("gen_certs_notice_path"))
+	log.Info(cat.Msg("gen_certs_notice_team"))
 }
 
 // ensureHomeFiles touches each [home_files] entry on the host with mode
@@ -248,13 +250,13 @@ func printCertNotice(stdout io.Writer, cat *i18n.Catalog) {
 // cocoon gen is running inside a container, the host is unreachable from
 // here — emit a warning but still attempt the touch so contained dev
 // loops where HOME happens to match still work.
-func ensureHomeFiles(ctx *generate.WorkspaceContext, stdout, stderr io.Writer, cat *i18n.Catalog) error {
+func ensureHomeFiles(ctx *generate.WorkspaceContext, log *logx.Logger, cat *i18n.Catalog) error {
 	files := ctx.HomeFilesEntries()
 	if len(files) == 0 {
 		return nil
 	}
 	if generate.InContainer() {
-		fmt.Fprintln(stderr, cat.Msg("gen_home_files_in_container_warning"))
+		log.Warn(cat.Msg("gen_home_files_in_container_warning"))
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -267,7 +269,7 @@ func ensureHomeFiles(ctx *generate.WorkspaceContext, stdout, stderr io.Writer, c
 		case statErr == nil && info.Mode()&os.ModeSymlink != 0:
 			continue
 		case statErr == nil && info.IsDir():
-			fmt.Fprintln(stderr, cat.Msg("gen_home_files_is_directory", path, path))
+			log.Warn(cat.Msg("gen_home_files_is_directory", path, path))
 			return fmt.Errorf("%s: %w", path, generate.ErrHomeFileIsDirectory)
 		case statErr == nil:
 			continue
@@ -291,7 +293,7 @@ func ensureHomeFiles(ctx *generate.WorkspaceContext, stdout, stderr io.Writer, c
 		if closeErr := f.Close(); closeErr != nil {
 			return fmt.Errorf("close %s: %w", path, closeErr)
 		}
-		fmt.Fprintln(stdout, cat.Msg("gen_home_file_touched", path))
+		log.Success(cat.Msg("gen_home_file_touched", path))
 	}
 	return nil
 }
@@ -299,11 +301,11 @@ func ensureHomeFiles(ctx *generate.WorkspaceContext, stdout, stderr io.Writer, c
 // printHomeFilesNotice surfaces the configured [home_files] entries so
 // users who skip VS Code Dev Containers (and therefore initializeCommand)
 // can verify the host files exist before `docker compose up`.
-func printHomeFilesNotice(stdout io.Writer, cat *i18n.Catalog, files []string) {
-	fmt.Fprintln(stdout)
-	fmt.Fprintln(stdout, cat.Msg("gen_home_files_notice_header"))
-	fmt.Fprintln(stdout, cat.Msg("gen_home_files_notice_check"))
+func printHomeFilesNotice(log *logx.Logger, cat *i18n.Catalog, files []string) {
+	log.Info("")
+	log.Info(log.Bold(cat.Msg("gen_home_files_notice_header")))
+	log.Info(cat.Msg("gen_home_files_notice_check"))
 	for _, rel := range files {
-		fmt.Fprintln(stdout, cat.Msg("gen_home_files_notice_item", rel))
+		log.Info(cat.Msg("gen_home_files_notice_item", rel))
 	}
 }

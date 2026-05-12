@@ -19,6 +19,7 @@ import (
 	"github.com/sukekyo26/cocoon/internal/aptcategories"
 	"github.com/sukekyo26/cocoon/internal/config"
 	"github.com/sukekyo26/cocoon/internal/i18n"
+	"github.com/sukekyo26/cocoon/internal/logx"
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
 
@@ -211,7 +212,7 @@ func zeroAnswers() initAnswers {
 	}
 }
 
-func runInit(cmd *cobra.Command, stdout, _ io.Writer, flags *initFlags) error {
+func runInit(cmd *cobra.Command, stdout, stderr io.Writer, flags *initFlags) error {
 	if flags.Devcontainer && flags.NoDevcontainer {
 		return fmt.Errorf("%w: --devcontainer and --no-devcontainer are mutually exclusive", ErrUsage)
 	}
@@ -259,19 +260,20 @@ func runInit(cmd *cobra.Command, stdout, _ io.Writer, flags *initFlags) error {
 		return fmt.Errorf("%w: write %s: %w", ErrFailure, target, err)
 	}
 
-	fmt.Fprintln(stdout, cat.Msg("init_wrote", target))
-	printNextSteps(stdout, cat, ans.Devcontainer)
+	log := logx.New(stdout, stderr)
+	log.Success(cat.Msg("init_wrote", target))
+	printNextSteps(log, cat, ans.Devcontainer)
 	_ = cmd // reserved for future ctx-aware flows
 	return nil
 }
 
-func printNextSteps(stdout io.Writer, cat *i18n.Catalog, devcontainer bool) {
-	fmt.Fprintln(stdout)
-	fmt.Fprintln(stdout, cat.Msg("init_next_header"))
-	fmt.Fprintln(stdout, cat.Msg("init_next_step_gen"))
-	fmt.Fprintln(stdout, cat.Msg("init_next_step_compose"))
+func printNextSteps(log *logx.Logger, cat *i18n.Catalog, devcontainer bool) {
+	log.Info("")
+	log.Info(log.Bold(cat.Msg("init_next_header")))
+	log.Info(cat.Msg("init_next_step_gen"))
+	log.Info(cat.Msg("init_next_step_compose"))
 	if devcontainer {
-		fmt.Fprintln(stdout, cat.Msg("init_next_step_vscode"))
+		log.Info(cat.Msg("init_next_step_vscode"))
 	}
 }
 

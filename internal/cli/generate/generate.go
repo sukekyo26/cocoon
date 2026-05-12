@@ -20,6 +20,7 @@ import (
 	"github.com/sukekyo26/cocoon/internal/generate/devcontainerjson"
 	"github.com/sukekyo26/cocoon/internal/generate/dockerfile"
 	"github.com/sukekyo26/cocoon/internal/generate/envfile"
+	"github.com/sukekyo26/cocoon/internal/logx"
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
 
@@ -56,7 +57,8 @@ func LoadContext(
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrFailure, err)
 	}
-	plugins, err := plugin.LoadEnabledFromFS(pluginsFS, ws.Plugins.Enable, stderr, pluginsPathHint)
+	warnW := logx.YellowWriter(stderr)
+	plugins, err := plugin.LoadEnabledFromFS(pluginsFS, ws.Plugins.Enable, warnW, pluginsPathHint)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrFailure, err)
 	}
@@ -68,7 +70,7 @@ func LoadContext(
 		PluginsFS:  pluginsFS,
 		ProjectDir: filepath.Dir(wsPath),
 		Plugins:    plugins,
-		Warnings:   stderr,
+		Warnings:   warnW,
 	}, nil
 }
 
@@ -77,8 +79,9 @@ func LoadContext(
 // the given loaded WorkspaceContext.
 func BuildArtifacts(ctx *generate.WorkspaceContext, stderr io.Writer) ([]Artifact, error) {
 	arts := make([]Artifact, 0, 5)
+	warnW := logx.YellowWriter(stderr)
 
-	body, err := compose.Generate(ctx, compose.Options{Plugins: ctx.Plugins, Warnings: stderr})
+	body, err := compose.Generate(ctx, compose.Options{Plugins: ctx.Plugins, Warnings: warnW})
 	if err != nil {
 		return nil, fmt.Errorf("%w: compose: %w", ErrFailure, err)
 	}
@@ -88,7 +91,7 @@ func BuildArtifacts(ctx *generate.WorkspaceContext, stderr io.Writer) ([]Artifac
 		WorkspaceRoot: ctx.ProjectDir,
 		RepoDir:       "",
 		Plugins:       ctx.Plugins,
-		Warnings:      stderr,
+		Warnings:      warnW,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("%w: dockerfile: %w", ErrFailure, err)

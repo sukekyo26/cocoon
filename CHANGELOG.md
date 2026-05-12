@@ -6,12 +6,19 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Update notifier no longer freezes after a wall-clock rollback. The 24h TTL check now treats a cached `checked_at` in the future (e.g. the laptop slept through a timezone change, or NTP corrected a fast clock) as stale and re-fetches on the next invocation, instead of silently honoring the future timestamp for hours or days.
+- Update notifier no longer delays subcommands by up to 30 seconds when GitHub is unreachable. The network call now has a 2-second budget per invocation (down from `release.DefaultTimeout`), so a stalled `api.github.com` falls back to the silent-fail path almost immediately instead of stalling every `cocoon <cmd>` until the upstream timeout fires.
+
 ### Security
 
 - `[home_files].files` entries are now restricted to `[A-Za-z0-9._/-]+` per path segment. Shell-special characters (`$`, backticks, `;`, `&`, `|`, `<`, `>`, `*`, `?`, `!`, quotes, backslashes, whitespace) are rejected at validation time so a repo-provided `workspace.toml` cannot inject commands into the host shell through the generated `initializeCommand`. Existing workspaces that used only conventional dotfile names are unaffected; anything that previously passed validation by accident now fails with an actionable message.
 
 ### Added
 
+- Colorized CLI output: errors print in red, warnings in yellow, success messages (file writes, completions) in green, notices (e.g. update-available banner) in cyan, headers and labels in bold, and the `cocoon self-update` `downloading ...` progress line is dimmed. Applies to `cocoon`, `cocoon gen`, `cocoon init`, `cocoon self-update`, `cocoon plugin show|pin`, the `install.sh` boot-strap script, and the plugin install scripts (`internal/plugin/catalog/*/install.sh`). Honors `NO_COLOR` (https://no-color.org) and `FORCE_COLOR`; auto-disabled when stderr is not a TTY.
+- Update notifier: every `cocoon <cmd>` invocation checks GitHub Releases once per 24 hours and prints a single-line cyan notice on stderr when a newer release exists (`A new version vX.Y.Z is available (current: vA.B.C). Run \`cocoon self-update\` to upgrade.`). The result is cached at `~/.cache/cocoon/update_check.json` (respects `$XDG_CACHE_HOME`). Skipped for `cocoon version`, `cocoon self-update`, `cocoon help`, `--version`, when stderr is not a TTY, when `COCOON_NO_UPDATE_CHECK=1` is set, and on any network or cache error (failures are silent so the notifier never blocks the actual command).
 - `cocoon gen` now touches each `[home_files].files` entry on the host with mode `0600` when missing (idempotent — existing files are left as-is, symlinks are trusted, and existing directories surface an error pointing at `rm -rf <path>` for recovery). Pairs with a new `initializeCommand` step in the generated `devcontainer.json` so VS Code "Reopen in Container" users get the same preparation without invoking `cocoon gen`. Previously the bind source could be silently auto-created as an empty directory by Docker at `docker compose up` time when the file was missing, breaking file-shaped readers in the container.
 - `cocoon gen` prints a "Host files for [home_files]:" notice listing each declared entry so developers who skip VS Code Dev Containers can verify the host files exist before `docker compose up`.
 - `cocoon gen` emits a warning to stderr when it detects it is running inside a container (`/.dockerenv` exists) and `[home_files]` is non-empty, since the host-side touch then runs against the inner container's `$HOME` instead of the Docker host's. Generation still proceeds because the compose source is `${HOME:?…}`-interpolated and resolves correctly when `docker compose up` is later invoked from the host.

@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/sukekyo26/cocoon/internal/config"
+	"github.com/sukekyo26/cocoon/internal/logx"
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
 
@@ -47,7 +48,7 @@ func newPinCmd(stdout, stderr io.Writer) *cobra.Command {
 	return cmd
 }
 
-func runPin(stdout, _ io.Writer, id, ref, amd64sum, arm64sum string, write bool) error {
+func runPin(stdout, stderr io.Writer, id, ref, amd64sum, arm64sum string, write bool) error {
 	if id == "" || ref == "" {
 		return fmt.Errorf("%w: both <id> and <ref> are required", ErrUsage)
 	}
@@ -79,7 +80,7 @@ func runPin(stdout, _ io.Writer, id, ref, amd64sum, arm64sum string, write bool)
 			}
 			return fmt.Errorf("%w: %w", ErrFailure, uErr)
 		}
-		fmt.Fprintf(stdout, "Updated %s: [plugins.versions.%s]\n", wsPath, id)
+		logx.New(stdout, stderr).Successf("Updated %s: [plugins.versions.%s]", wsPath, id)
 		return nil
 	}
 
