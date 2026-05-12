@@ -9,6 +9,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
+	"github.com/sukekyo26/cocoon/internal/config"
 	"github.com/sukekyo26/cocoon/internal/i18n"
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
@@ -1343,6 +1346,155 @@ func TestRunInit_AliasBundlesFlagRejectsUnknown(t *testing.T) {
 	})
 	if err := cmd.Execute(); !errors.Is(err, ErrUsage) {
 		t.Errorf("--alias-bundles k8s should be ErrUsage, got %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------
+// --ports flag + parsePorts CSV helper
+// ---------------------------------------------------------------------
+
+func TestParsePorts(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		raw     string
+		want    []string
+		wantErr bool
+	}{
+		{"empty_returns_nil", "", nil, false},
+		{"whitespace_only_returns_nil", " , ,\t,", nil, false},
+		{"single_short", "3000:3000", []string{"3000:3000"}, false},
+		{"multiple_short", "3000:3000,5432:5432", []string{"3000:3000", "5432:5432"}, false},
+		{"trims_whitespace", " 3000:3000 , 5432:5432 ", []string{"3000:3000", "5432:5432"}, false},
+		{
+			"accepts_all_documented_forms",
+			"3000,3000-3005,8000:8000,9090-9091:8080-8081,49100:22," +
+				"127.0.0.1:8001:8001,127.0.0.1:5000-5010:5000-5010,6060:6060/udp",
+			[]string{
+				"3000", "3000-3005", "8000:8000", "9090-9091:8080-8081", "49100:22",
+				"127.0.0.1:8001:8001", "127.0.0.1:5000-5010:5000-5010", "6060:6060/udp",
+			},
+			false,
+		},
+		{"rejects_garbage", "abc", nil, true},
+		{"rejects_out_of_range", "99999:80", nil, true},
+		{"rejects_bad_ip", "999.999.999.999:80:80", nil, true},
+		{"rejects_unknown_proto", "3000:3000/sctp", nil, true},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := parsePorts(tc.raw)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("parsePorts(%q) err = nil, want error", tc.raw)
+				}
+				if !errors.Is(err, ErrUsage) {
+					t.Errorf("parsePorts(%q) err = %v, want errors.Is ErrUsage", tc.raw, err)
+				}
+				if !errors.Is(err, config.ErrPortShortForm) {
+					t.Errorf("parsePorts(%q) err = %v, want errors.Is config.ErrPortShortForm", tc.raw, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parsePorts(%q) err = %v, want nil", tc.raw, err)
+			}
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("parsePorts(%q) mismatch (-want +got):\n%s", tc.raw, diff)
+			}
+		})
+	}
+}
+
+//nolint:paralleltest // t.Chdir
+func TestRunInit_PortsFlagWritesActiveBlock(t *testing.T) {
+	pinEnglish(t)
+	work := t.TempDir()
+	t.Chdir(work)
+	cmd := NewCommand(io.Discard, io.Discard)
+	cmd.SetArgs([]string{
+		"--yes", "--service-name", "x", "--username", "y",
+		"--ports", "3000:3000,5432:5432",
+	})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("init --ports: %v", err)
+	}
+	body, err := os.ReadFile(filepath.Join(work, "workspace.toml"))
+	if err != nil {
+		t.Fatalf("read workspace.toml: %v", err)
+	}
+	got := string(body)
+	for _, want := range []string{
+		"\n[ports]\n",
+		"forward = [\n    \"3000:3000\",\n    \"5432:5432\",\n]\n",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("workspace.toml missing %q\n--- got ---\n%s", want, got)
+		}
+	}
+	// Active block replaces the commented template; the literal example
+	// "# forward = [\"3000:3000\", \"5432:5432\"]" must not also appear,
+	// or readers would see two competing port lists.
+	if strings.Contains(got, "# forward = [\"3000:3000\", \"5432:5432\"]") {
+		t.Errorf("active --ports should suppress the commented template, got:\n%s", got)
+	}
+}
+
+//nolint:paralleltest // t.Chdir
+func TestRunInit_NoPorts_EmitsCommentedTemplate(t *testing.T) {
+	pinEnglish(t)
+	work := t.TempDir()
+	t.Chdir(work)
+	cmd := NewCommand(io.Discard, io.Discard)
+	cmd.SetArgs([]string{"--yes", "--service-name", "x", "--username", "y"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("init --yes: %v", err)
+	}
+	body, err := os.ReadFile(filepath.Join(work, "workspace.toml"))
+	if err != nil {
+		t.Fatalf("read workspace.toml: %v", err)
+	}
+	got := string(body)
+	// No --ports = template commented out; no live `forward = [...]`
+	// (the active line would lack a leading `#`).
+	for _, line := range strings.Split(got, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "forward = ") &&
+			!strings.HasPrefix(strings.TrimSpace(line), "#") {
+			t.Errorf("unexpected active forward line: %q", line)
+		}
+	}
+	if !strings.Contains(got, "# forward = [\"3000:3000\", \"5432:5432\"]") {
+		t.Errorf("expected commented [ports] template to remain when --ports unset, got:\n%s", got)
+	}
+}
+
+//nolint:paralleltest // t.Chdir
+func TestRunInit_PortsFlagRejectsInvalid(t *testing.T) {
+	pinEnglish(t)
+	cases := []struct {
+		name string
+		flag string
+	}{
+		{"garbage", "abc"},
+		{"out_of_range", "99999:80"},
+		{"bad_ip", "999.999.999.999:80:80"},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			work := t.TempDir()
+			t.Chdir(work)
+			cmd := NewCommand(io.Discard, io.Discard)
+			cmd.SetArgs([]string{
+				"--yes", "--service-name", "x", "--username", "y",
+				"--ports", tc.flag,
+			})
+			if err := cmd.Execute(); !errors.Is(err, ErrUsage) {
+				t.Errorf("--ports %q should be ErrUsage, got %v", tc.flag, err)
+			}
+		})
 	}
 }
 

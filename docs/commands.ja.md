@@ -45,6 +45,7 @@
 | `--plugins <ids>` | string | カンマ区切りで有効化するプラグイン ID。 |
 | `--plugin-versions <id>=<ref>,...` | string | カンマ区切りの `<id>=<ref>` でプラグインを pin する。各 `<id>` は `--plugins` にも含まれ、かつ `version_capable = true` である必要があり、重複は不可。`[plugins.versions]` ブロックを生成 `workspace.toml` に直接書き込む。 |
 | `--alias-bundles <ids>` | string | カンマ区切りエイリアスバンドル ID (例: `git,ls`)。 |
+| `--ports <values>` | string | カンマ区切りの docker-compose short-form ポートマッピング (例: `3000:3000,5432:5432`)。`[ports].forward` で扱う全形式を受理: コンテナ単独 `3000`、範囲 `3000-3005:3000-3005`、IPv4/IPv6 バインド `127.0.0.1:8001:8001` / `[::1]:80:80`、プロトコル `6060:6060/udp`。プロンプトをスキップ。空 / 未指定の場合はアクティブな `[ports]` ブロックを書かない（コメント雛形のみ残り、後から有効化できる）。 |
 | `--force` | bool | 既存 `workspace.toml` を上書き。 |
 
 ### 対話フロー
@@ -60,8 +61,9 @@
 7. mount range
 8. devcontainer y/n
 9. certificates y/n (`~/.cocoon/certs/` からの TLS 自動取り込みを opt-in。デフォルト no)
-10. apt categories (multi-select)
-11. plugins (multi-select)
+10. ポートフォワード (カンマ区切りの docker-compose short form。空 Enter で見送り — `[ports]` のコメント雛形は残り、後から有効化できる)
+11. apt categories (multi-select)
+12. plugins (multi-select)
 
 ### 例
 
@@ -76,7 +78,8 @@ cocoon init --yes \
     --shell bash --mount-root . --devcontainer \
     --apt-categories text-editors,vcs,utilities,compression,build \
     --plugins go,uv,github-cli \
-    --alias-bundles git,ls
+    --alias-bundles git,ls \
+    --ports 3000:3000,5432:5432
 ```
 
 ---
