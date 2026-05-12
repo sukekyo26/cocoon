@@ -117,9 +117,11 @@ func runSelfUpdate(ctx context.Context, stdout, stderr io.Writer, checkOnly, for
 
 	binPath := filepath.Join(tmp, assetName)
 	sumsPath := filepath.Join(tmp, "SHA256SUMS")
-	// downloading line is a progress notice — dim it so it does not compete
-	// with the success/version output.
-	log.Infof("%s", log.Dim(fmt.Sprintf("downloading %s...", assetName)))
+	// Progress lines belong on stderr (transient, not data) so scripts
+	// parsing stdout see only the stable version / success output. The
+	// pre-colorize implementation wrote this to stderr too; Progressf
+	// preserves that contract and dims the line under a TTY.
+	log.Progressf("downloading %s...", assetName)
 	if err = downloadFile(ctx, assetURL, binPath); err != nil {
 		return fmt.Errorf("%w: download %s: %w", ErrFailure, assetName, err)
 	}

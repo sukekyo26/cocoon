@@ -112,6 +112,19 @@ func (l *Logger) Noticef(format string, args ...any) {
 	l.Notice(fmt.Sprintf(format, args...))
 }
 
+// Progress writes msg to stderr in dim — for transient progress lines
+// (download spinners, "doing X ..." steps) that should not pollute
+// stdout so scripts parsing stdout see only stable info / success
+// output.
+func (l *Logger) Progress(msg string) {
+	_, _ = fmt.Fprintf(l.stderr, "%s%s%s\n", l.stderrDim, msg, l.stderrReset)
+}
+
+// Progressf writes the formatted message to stderr in dim.
+func (l *Logger) Progressf(format string, args ...any) {
+	l.Progress(fmt.Sprintf(format, args...))
+}
+
 // Bold returns s wrapped in ANSI bold sequences when the stdout sink
 // supports color. Used to emphasise labels and headers inline.
 func (l *Logger) Bold(s string) string {

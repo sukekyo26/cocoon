@@ -71,6 +71,20 @@ func TestNoticeAndNoticef(t *testing.T) {
 	}
 }
 
+func TestProgressAndProgressf(t *testing.T) {
+	t.Parallel()
+	l, stdout, stderr := newLogger(t)
+	l.Progress("downloading foo...")
+	l.Progressf("verifying %s", "sha256")
+
+	if got, want := stderr.String(), "downloading foo...\nverifying sha256\n"; got != want {
+		t.Fatalf("stderr = %q, want %q", got, want)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("stdout = %q, want empty", stdout.String())
+	}
+}
+
 func TestSuccessAndSuccessf(t *testing.T) {
 	t.Parallel()
 	l, stdout, stderr := newLogger(t)
@@ -104,10 +118,11 @@ func TestColorAlways(t *testing.T) {
 	l.Error("e")
 	l.Warn("w")
 	l.Notice("n")
+	l.Progress("p")
 	l.Success("s")
 
 	if got, want := stderr.String(),
-		"\x1b[31me\x1b[0m\n\x1b[33mw\x1b[0m\n\x1b[36mn\x1b[0m\n"; got != want {
+		"\x1b[31me\x1b[0m\n\x1b[33mw\x1b[0m\n\x1b[36mn\x1b[0m\n\x1b[2mp\x1b[0m\n"; got != want {
 		t.Errorf("stderr = %q, want %q", got, want)
 	}
 	if got, want := stdout.String(), "\x1b[32ms\x1b[0m\n"; got != want {
