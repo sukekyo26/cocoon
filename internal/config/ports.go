@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -9,6 +10,12 @@ import (
 	"strconv"
 	"strings"
 )
+
+// ErrPortShortForm marks every rejection emitted by ValidateShortForm so
+// callers (e.g. the init prompt and the `--ports` flag parser) can identify
+// the failure class via errors.Is and surface their own usage prefix without
+// double-wrapping the package's sentinel chain.
+var ErrPortShortForm = errors.New("invalid port short form")
 
 // PortShortFormPattern is the ECMA-262 regex used in workspace.schema.json
 // for `[ports].forward` short-form strings:
@@ -240,7 +247,9 @@ func validatePortsForward(a *errAccumulator, forward []any) {
 		idx := strconv.Itoa(i)
 		switch v := raw.(type) {
 		case string:
-			validateShortForm(a, v, idx)
+			if msg, ok := shortFormReason(v); !ok {
+				a.add(msg, "forward", idx)
+			}
 		case map[string]any:
 			validateLongForm(a, v, idx)
 		case int, int64, float64:
@@ -256,14 +265,30 @@ func validatePortsForward(a *errAccumulator, forward []any) {
 	}
 }
 
-func validateShortForm(a *errAccumulator, s, idx string) {
+// ValidateShortForm reports whether s is a valid docker-compose short-form
+// port mapping (regex shape + host/container in [portMin, portMax] +
+// IPv4/IPv6 literal). Returns nil on accept; on reject returns an error that
+// wraps ErrPortShortForm with a message naming the rule that failed. The
+// `[ports].forward` schema validator and the `cocoon init` prompt share this
+// single rule so a string that init accepts cannot be rejected later by gen.
+func ValidateShortForm(s string) error {
+	msg, ok := shortFormReason(s)
+	if ok {
+		return nil
+	}
+	return fmt.Errorf("%w: %s", ErrPortShortForm, msg)
+}
+
+// shortFormReason returns ("", true) on accept and (humanReadableReason,
+// false) on reject. Used by both ValidateShortForm (which wraps the reason
+// in ErrPortShortForm for external callers) and the accumulator-flavored
+// validateShortForm (which already carries field/idx context).
+func shortFormReason(s string) (string, bool) {
 	m := rxPortShortForm.FindStringSubmatch(s)
 	if m == nil {
-		a.add(fmt.Sprintf(
+		return fmt.Sprintf(
 			"%q does not match docker-compose short form "+
-				"[HOST_IP:][HOST:]CONTAINER[/PROTOCOL]", s),
-			"forward", idx)
-		return
+				"[HOST_IP:][HOST:]CONTAINER[/PROTOCOL]", s), false
 	}
 	for _, name := range []string{"host", "container"} {
 		raw := m[rxPortShortForm.SubexpIndex(name)]
@@ -273,20 +298,18 @@ func validateShortForm(a *errAccumulator, s, idx string) {
 		for _, part := range strings.Split(raw, "-") {
 			n, err := strconv.Atoi(part)
 			if err != nil || n < portMin || n > portMax {
-				a.add(fmt.Sprintf("port must be in [%d,%d] (got %q)",
-					portMin, portMax, part),
-					"forward", idx)
-				return
+				return fmt.Sprintf("port must be in [%d,%d] (got %q)",
+					portMin, portMax, part), false
 			}
 		}
 	}
 	if ip := m[rxPortShortForm.SubexpIndex("ip")]; ip != "" {
 		bare := strings.TrimSuffix(strings.TrimPrefix(ip, "["), "]")
 		if net.ParseIP(bare) == nil {
-			a.add(fmt.Sprintf("%q is not a valid IPv4/IPv6 address", ip),
-				"forward", idx)
+			return fmt.Sprintf("%q is not a valid IPv4/IPv6 address", ip), false
 		}
 	}
+	return "", true
 }
 
 func validateLongForm(a *errAccumulator, m map[string]any, idx string) {
