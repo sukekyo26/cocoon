@@ -104,9 +104,10 @@ func ComposePortEntries(forward []any) []ComposePort {
 
 // DevcontainerPortEntries returns the published-port integers that
 // devcontainer.json `forwardPorts` can express. Entries that cannot be
-// reduced to a single integer (port ranges, mode=host) are skipped; if warn
-// is non-nil each skip is announced as a single line so the user can
-// reconcile their docker-compose-only ports with the devcontainer output.
+// reduced to a single TCP integer (port ranges, mode=host, protocol=udp)
+// are skipped; if warn is non-nil each skip is announced as a single line
+// so the user can reconcile their docker-compose-only ports with the
+// devcontainer output.
 func DevcontainerPortEntries(forward []any, warn io.Writer) []int {
 	if len(forward) == 0 {
 		return nil
@@ -146,6 +147,12 @@ func shortFormHostPort(s string) (int, bool, string) {
 	if m == nil {
 		return 0, false, fmt.Sprintf("= %q is not a valid short-form port", s)
 	}
+	// devcontainer.json's forwardPorts is TCP-only — VS Code's port
+	// tunnel does not carry UDP, so a UDP entry registered here would
+	// show up in the Ports panel but silently fail to forward.
+	if proto := m[rxPortShortForm.SubexpIndex("proto")]; proto == "udp" {
+		return 0, false, fmt.Sprintf("= %q uses protocol = \"udp\"", s)
+	}
 	host := m[rxPortShortForm.SubexpIndex("host")]
 	container := m[rxPortShortForm.SubexpIndex("container")]
 	pick := host
@@ -165,6 +172,12 @@ func shortFormHostPort(s string) (int, bool, string) {
 func longFormHostPort(m map[string]any) (int, bool, string) {
 	if mode, ok := stringField(m, "mode"); ok && mode == "host" {
 		return 0, false, "uses mode = \"host\""
+	}
+	// Symmetric with the short-form check above: devcontainer.json's
+	// forwardPorts cannot carry UDP, so a long-form entry with
+	// protocol = "udp" is skipped with the same warning class.
+	if proto, ok := stringField(m, "protocol"); ok && proto == "udp" {
+		return 0, false, "uses protocol = \"udp\""
 	}
 	if v, ok := m["published"]; ok {
 		if n, parsed := publishedHostPort(v); parsed {

@@ -232,6 +232,11 @@ func TestDevcontainerPortEntries(t *testing.T) {
 			wantWarn: "uses a published range",
 		},
 		{
+			// UDP entries are TCP-incompatible for the devcontainer
+			// port tunnel; they're skipped with a "protocol = \"udp\""
+			// warning. Sibling TCP / unspecified-proto entries flow
+			// through. The range entry triggers its own skip warning,
+			// covering both reasons in one fixture.
 			name: "mixed",
 			in: []any{
 				"3000",
@@ -239,8 +244,26 @@ func TestDevcontainerPortEntries(t *testing.T) {
 				"3000-3005:3000-3005",
 				"127.0.0.1:8080:8080/udp",
 			},
-			want:     []int{3000, 5432, 8080},
+			want:     []int{3000, 5432},
 			wantWarn: "uses a port range",
+		},
+		{
+			name:     "short_form_udp_skipped",
+			in:       []any{"6060:6060/udp"},
+			want:     []int{},
+			wantWarn: "uses protocol = \"udp\"",
+		},
+		{
+			name: "long_form_udp_skipped",
+			in: []any{
+				map[string]any{
+					"target":    int64(53),
+					"published": int64(53),
+					"protocol":  "udp",
+				},
+			},
+			want:     []int{},
+			wantWarn: "uses protocol = \"udp\"",
 		},
 	}
 	for _, tc := range cases {
