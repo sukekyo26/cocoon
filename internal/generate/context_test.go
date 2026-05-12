@@ -26,8 +26,8 @@ func TestWorkspaceContext_NilSafe(t *testing.T) {
 	if got := c.ComposeForwardPorts(); got != nil {
 		t.Errorf("ComposeForwardPorts should be nil, got %v", got)
 	}
-	if got := c.DevcontainerForwardPorts(); len(got) != 1 || got[0] != 3000 {
-		t.Errorf("DevcontainerForwardPorts = %v, want [3000]", got)
+	if got := c.DevcontainerForwardPorts(); got != nil {
+		t.Errorf("DevcontainerForwardPorts should be nil when [ports] is absent, got %v", got)
 	}
 	if c.Resources() != nil {
 		t.Error("Resources should be nil")

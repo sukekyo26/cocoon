@@ -111,6 +111,14 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 		"",
 		"comma-separated shell-alias bundle IDs (skips the bundles multi-select prompt; e.g. git,ls)",
 	)
+	cmd.Flags().StringVar(
+		&flags.Ports,
+		"ports",
+		"",
+		"comma-separated docker-compose short-form port mappings — "+
+			"[HOST_IP:][HOST:]CONTAINER[/PROTOCOL]; numeric ranges (N-M) and tcp|udp are accepted "+
+			"(e.g. 3000,3000-3005,8000:8000,127.0.0.1:5432:5432/tcp,6060:6060/udp); skips the ports prompt",
+	)
 	cmd.Flags().BoolVar(&flags.Force, "force", false, "overwrite an existing workspace.toml")
 	return cmd
 }
@@ -131,6 +139,7 @@ type initFlags struct {
 	Plugins        string
 	PluginVersions string
 	AliasBundles   string
+	Ports          string
 	Force          bool
 }
 
@@ -151,6 +160,7 @@ func zeroFlags() initFlags {
 		Plugins:        "",
 		PluginVersions: "",
 		AliasBundles:   "",
+		Ports:          "",
 		Force:          false,
 	}
 }
@@ -183,6 +193,8 @@ type initAnswers struct {
 	PluginVersionsSet bool
 	AliasBundles      []string
 	AliasBundlesSet   bool
+	Ports             []string
+	PortsSet          bool
 }
 
 func zeroAnswers() initAnswers {
@@ -209,6 +221,8 @@ func zeroAnswers() initAnswers {
 		PluginVersionsSet: false,
 		AliasBundles:      nil,
 		AliasBundlesSet:   false,
+		Ports:             nil,
+		PortsSet:          false,
 	}
 }
 
@@ -255,6 +269,7 @@ func runInit(cmd *cobra.Command, stdout, stderr io.Writer, flags *initFlags) err
 		Packages:       pkgs,
 		Plugins:        ans.Plugins,
 		PluginVersions: ans.PluginVersions,
+		Ports:          ans.Ports,
 	}, cat)
 	if err := os.WriteFile(target, []byte(content), 0o644); err != nil { //nolint:gosec // workspace.toml is user-readable.
 		return fmt.Errorf("%w: write %s: %w", ErrFailure, target, err)
@@ -422,6 +437,13 @@ func applyFlags(flags *initFlags, plugins map[string]*plugin.Plugin) (initAnswer
 		}
 		ans.AliasBundles, ans.AliasBundlesSet = ids, true
 	}
+	if flags.Ports != "" {
+		ports, err := parsePorts(flags.Ports)
+		if err != nil {
+			return ans, err
+		}
+		ans.Ports, ans.PortsSet = ports, true
+	}
 	return ans, nil
 }
 
@@ -463,6 +485,9 @@ func applyDefaults(ans initAnswers, plugins map[string]*plugin.Plugin) (initAnsw
 	if !ans.AliasBundlesSet {
 		ans.AliasBundles, ans.AliasBundlesSet = aliasbundles.DefaultAliasBundleIDs(), true
 	}
+	if !ans.PortsSet {
+		ans.Ports, ans.PortsSet = nil, true
+	}
 	return ans, nil
 }
 
@@ -472,7 +497,7 @@ func applyDefaults(ans initAnswers, plugins map[string]*plugin.Plugin) (initAnsw
 // cursor stuck under scrolling options; independent forms side-step
 // it. Tradeoff: no shift+tab back-nav; re-run `cocoon init` to fix.
 //
-//nolint:gocognit,gocyclo // sequence of independent prompt steps; splitting hides intent.
+//nolint:funlen,gocognit,gocyclo // sequence of independent prompt steps; splitting hides intent.
 func promptForMissing(ans initAnswers, cat *i18n.Catalog, plugins map[string]*plugin.Plugin) (initAnswers, error) {
 	if ans.ServiceName == "" {
 		if err := runStrictIdentForm(cat, "init_prompt_service_name",
@@ -556,6 +581,13 @@ func promptForMissing(ans initAnswers, cat *i18n.Catalog, plugins map[string]*pl
 			return ans, err
 		}
 		ans.CertificatesSet = true
+	}
+	if !ans.PortsSet {
+		ports, err := promptForPorts(cat)
+		if err != nil {
+			return ans, err
+		}
+		ans.Ports, ans.PortsSet = ports, true
 	}
 	if !ans.AptSet {
 		ans.AptCategories = aptcategories.DefaultAptCategoryIDs()
@@ -762,6 +794,55 @@ func aliasBundlesMultiSelect(cat *i18n.Catalog, target *[]string) *huh.MultiSele
 		Value(target)
 }
 
+// promptForPorts runs the ports input form and converts the CSV input
+// into the []string the renderer consumes. Returns (nil, nil) when the
+// user submits a blank prompt — the renderer then falls back to the
+// commented-out [ports] template.
+func promptForPorts(cat *i18n.Catalog) ([]string, error) {
+	var raw string
+	if err := runSingleFieldForm(portsInput(cat, &raw)); err != nil {
+		return nil, err
+	}
+	// Validate already accepted; re-parse to convert the raw CSV into
+	// []string. A failure here would mean the validator and parser
+	// disagree — fail loud rather than silently dropping it.
+	return parsePorts(raw)
+}
+
+// portsInput renders a free-text input for comma-separated docker-compose
+// short-form port mappings. Blank input is accepted (= no [ports] block;
+// the renderer emits the commented-out template hint instead). Non-empty
+// input is validated by portsInputValidator so init never accepts a string
+// that `cocoon gen` would later reject.
+func portsInput(cat *i18n.Catalog, target *string) *huh.Input {
+	return huh.NewInput().
+		Title(cat.Msg("init_prompt_ports")).
+		Description(cat.Msg("init_desc_ports")).
+		Validate(portsInputValidator(cat)).
+		Value(target)
+}
+
+// portsInputValidator returns a per-keystroke validator for the ports
+// prompt. The message returned on rejection is localized via the catalog
+// — huh prints it verbatim in the form footer, so EN runs see English
+// and JA runs see Japanese. Kept separate from parsePorts so the flag
+// path (`--ports`) keeps its English usage error consistent with the
+// other init flag validators.
+func portsInputValidator(cat *i18n.Catalog) func(string) error {
+	return func(s string) error {
+		for _, part := range strings.Split(s, ",") {
+			p := strings.TrimSpace(part)
+			if p == "" {
+				continue
+			}
+			if err := config.ValidateShortForm(p); err != nil {
+				return errors.New(cat.Msg("init_err_port_invalid_fmt", p)) //nolint:err113 // user-facing prompt
+			}
+		}
+		return nil
+	}
+}
+
 // pluginsMultiSelect renders the embedded plugin catalog as a single
 // multi-select. Options are sorted by id so the order is stable across
 // runs (LoadDir returns a map so iteration order is otherwise random).
@@ -849,6 +930,34 @@ func parseAptCategories(raw string) ([]string, error) {
 		ids = append(ids, id)
 	}
 	return ids, nil
+}
+
+// parsePorts splits a comma-separated short-form port list and validates
+// each entry via config.ValidateShortForm so init accepts the same set
+// `cocoon gen` does. Empty raw (or all-whitespace entries) returns
+// (nil, nil) — the renderer treats nil as "user opted out" and falls back
+// to the commented-out [ports] template.
+//
+// Callers: (1) applyFlags for the `--ports` flag path (the wrapped error
+// surfaces an English usage message, matching the other init flag
+// validators); (2) promptForPorts to convert the raw CSV string the
+// interactive prompt produced into the []string the renderer consumes.
+// The prompt's per-keystroke Validate hook intentionally bypasses
+// parsePorts and calls config.ValidateShortForm directly so its rejection
+// message can be localized via the i18n catalog (see portsInputValidator).
+func parsePorts(raw string) ([]string, error) {
+	var ports []string
+	for _, part := range strings.Split(raw, ",") {
+		p := strings.TrimSpace(part)
+		if p == "" {
+			continue
+		}
+		if err := config.ValidateShortForm(p); err != nil {
+			return nil, fmt.Errorf("%w: --ports %w", ErrUsage, err)
+		}
+		ports = append(ports, p)
+	}
+	return ports, nil
 }
 
 // parseAliasBundles splits a comma-separated alias-bundle id list and
@@ -1057,6 +1166,7 @@ type containerSpec struct {
 	Packages       []string
 	Plugins        []string
 	PluginVersions map[string]string
+	Ports          []string
 }
 
 // renderWorkspaceToml emits workspace.toml. Inline comments come from
@@ -1152,12 +1262,28 @@ func renderWorkspaceToml(s containerSpec, cat *i18n.Catalog) string {
 		sb.WriteString("enable = true\n\n")
 	}
 
+	// [ports] is the only top-level extras section that may be emitted as
+	// an active block — when the user supplied ports via --ports or the
+	// interactive prompt. With no ports the commented-out template still
+	// emits so the file remains self-documenting (matches [volumes] /
+	// [env] / [mounts] behavior).
+	if len(s.Ports) > 0 {
+		sb.WriteString(cat.Msg("init_toml_section_ports"))
+		sb.WriteByte('\n')
+		sb.WriteString("[ports]\nforward = [\n")
+		for _, p := range s.Ports {
+			fmt.Fprintf(&sb, "    %q,\n", p)
+		}
+		sb.WriteString("]\n\n")
+	} else {
+		emitTemplate(&sb, cat, "init_toml_template_ports")
+	}
+
 	// Top-level opt-in extras at the end of the file. Order roughly
 	// follows "compose runtime knobs first, then host-side persistence,
 	// then locale + Dockerfile hooks, then certificates, then sidecars +
 	// IDE config".
 	templateKeys := []string{
-		"init_toml_template_ports",
 		"init_toml_template_volumes",
 		"init_toml_template_env",
 		"init_toml_template_mounts",

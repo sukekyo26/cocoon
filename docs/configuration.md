@@ -277,12 +277,25 @@ Third-party apt repositories with signed-by GPG keys. The key is fetched from `k
 
 | Field | Type | Description |
 |---|---|---|
-| `forward` | array | Either Compose short-form strings (`"3000:3000"`, `"127.0.0.1:5432:5432/tcp"`, ranges `"3000-3005:3000-3005"`) or long-form tables with `target`, `published`, `host_ip`, `protocol`, `mode`. |
+| `forward` | array | Either Compose short-form strings or long-form tables. Short form covers `[HOST_IP:][HOST:]CONTAINER[/PROTOCOL]` with numeric ranges (`N-M`) and `tcp`/`udp` protocols. Long form uses the keys `target`, `published`, `host_ip`, `protocol`, `mode`. |
+
+Short-form accepted patterns (all eight are validated by both `cocoon init --ports` and `cocoon gen`):
 
 ```toml
 [ports]
-forward = ["3000:3000", "5432:5432"]
+forward = [
+    "3000",                            # container port only
+    "3000-3005",                       # container range
+    "8000:8000",                       # host:container
+    "9090-9091:8080-8081",             # host range:container range
+    "49100:22",                        # host:container
+    "127.0.0.1:8001:8001",             # IPv4 bind:host:container
+    "127.0.0.1:5000-5010:5000-5010",   # IPv4 bind:host range:container range
+    "6060:6060/udp",                   # host:container/protocol
+]
 ```
+
+IPv6 binds are also accepted as `[::1]:80:80`. Each numeric component must be in `[1, 65535]`.
 
 ---
 

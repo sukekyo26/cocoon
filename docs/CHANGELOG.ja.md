@@ -8,6 +8,8 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ### 修正
 
+- `cocoon gen` で生成される `.devcontainer/devcontainer.json` に `"forwardPorts": [3000]` がハードコードで付与される問題を修正。`[ports]` も `[devcontainer].forward_ports` 上書きも未設定のときは `forwardPorts` キー自体を出力しないようになり、VS Code の「Ports」パネルや `docker compose ps` にユーザーが宣言していないポートが現れない。`[ports].forward = [...]` か `cocoon init --ports ...` で明示的に opt-in したワークスペースには影響なし。既存の `.devcontainer/devcontainer.json` は `cocoon gen` で再生成して新挙動に追従させてください。
+- UDP 限定の `[ports].forward` エントリ (short form `"6060:6060/udp"` や long form `{ target = 53, protocol = "udp" }`) を `devcontainer.json` の `forwardPorts` に流さないように修正。VS Code の port tunnel は TCP only なので UDP を登録しても Ports パネルに出るだけで実際には転送できない。今後はレンジや mode=host のスキップと同じ形式で 1 行 warning を出してスキップする (compose 側の `ports:` には引き続き UDP として正しく反映される)。
 - アップデート通知の TTL チェックがウォールクロック巻き戻しで固まる問題を修正。キャッシュの `checked_at` が「未来」に書き込まれていた場合 (タイムゾーン変更を跨いでサスペンドした、NTP で進んだ時計を補正した、など) も stale 扱いとして次回呼び出し時に再フェッチするようになった。従来は未来タイムスタンプを尊重してしまい、ウォールクロックが追いつくまで通知が抑止されていた。
 - GitHub 不達時にサブコマンドが最大 30 秒待たされる問題を修正。アップデート通知のネットワーク呼び出しに 2 秒のタイムアウトを設けたので (従来は `release.DefaultTimeout` の 30 秒)、`api.github.com` が応答しない場合でも数秒で silent-fail 経路に落ちて本来のサブコマンドが動き出す。
 
@@ -17,6 +19,7 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ### 追加
 
+- `cocoon init` に **ポートフォワード入力プロンプト** を追加。ユーザーが値を入力した場合のみアクティブな `[ports]` ブロックを書き出し、空 Enter で見送るとコメントアウト済みの `# [ports]` 雛形だけが残る (後から有効化できるようにセクション自体は発見可能なまま)。非対話パス用に `--ports <values>` フラグも追加。受理する short-form は `[ports].forward` の全形式 — コンテナ単独 (`3000`)、host:container (`8000:8000`)、範囲 (`3000-3005:3000-3005` / `9090-9091:8080-8081`)、IPv4/IPv6 バインド (`127.0.0.1:8001:8001`、`[::1]:80:80`)、プロトコル (`6060:6060/udp`) — を `cocoon gen` と同じ regex + 数値範囲 + IP リテラル検証で受理するので、init が通した文字列は必ず gen でも通る。対話プロンプトでの拒否メッセージは i18n catalog 経由で出るので、`LANG=ja_*` 環境では日本語で表示される。`--ports` フラグの usage error は他フラグ (`--service-name` / `--image` / `--username` 等) と同じく英語のままで一貫させている。
 - CLI 出力をセマンティック色分け: エラーは赤、警告は黄、成功メッセージ (ファイル生成・更新完了など) は緑、お知らせ (アップデート通知など) はシアン、見出し・ラベルは太字、`cocoon self-update` の `downloading ...` 進捗行は dim 表示。対象は `cocoon` 自体のエラー出口・`cocoon gen` / `cocoon init` / `cocoon self-update` / `cocoon plugin show|pin`・ブートストラップ用 `install.sh`・プラグイン install スクリプト (`internal/plugin/catalog/*/install.sh`)。`NO_COLOR` (https://no-color.org) と `FORCE_COLOR` をサポートし、stderr が TTY でない場合は自動で色を抑制します。
 - アップデート通知: `cocoon <cmd>` 実行時に GitHub Releases を 1 日 1 回チェックし、新しいリリースがあればシアン色の 1 行通知を stderr に出力します (`A new version vX.Y.Z is available (current: vA.B.C). Run \`cocoon self-update\` to upgrade.`)。結果は `~/.cache/cocoon/update_check.json` にキャッシュ (`$XDG_CACHE_HOME` を尊重)。`cocoon version` / `cocoon self-update` / `cocoon help` / `--version` 実行時、stderr が TTY でない時、`COCOON_NO_UPDATE_CHECK=1` 設定時、およびネットワーク / キャッシュ I/O のエラー時はスキップ (silent fail) なので、通知のためにコマンド本体が止まることはありません。
 - `cocoon gen` が `[home_files].files` の各エントリをホスト側 (`~/<rel>`) で mode `0600` の空ファイルとして自動 touch するようになった (idempotent — 既存ファイルは触らず、シンボリックリンクは尊重、既存ディレクトリは `rm -rf <path>` を案内するエラーになる)。併せて生成された `devcontainer.json` の `initializeCommand` でも同等の touch が走るので、VS Code「Reopen in Container」ユーザーは `cocoon gen` を介さなくても準備される。これまでファイル不在のまま `docker compose up` すると Docker が bind source を空ディレクトリとして自動作成してしまい、ファイル前提のリーダーが silent failure を起こしていた問題を解消する。

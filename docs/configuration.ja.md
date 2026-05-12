@@ -277,12 +277,25 @@ signed-by GPG キー方式のサードパーティ apt リポジトリ。`key_ur
 
 | フィールド | 型 | 説明 |
 |---|---|---|
-| `forward` | array | Compose short-form 文字列 (`"3000:3000"`、`"127.0.0.1:5432:5432/tcp"`、レンジ `"3000-3005:3000-3005"`) または `target` / `published` / `host_ip` / `protocol` / `mode` を持つ long-form テーブル。 |
+| `forward` | array | Compose short-form 文字列、または long-form テーブル。short form は `[HOST_IP:][HOST:]CONTAINER[/PROTOCOL]` を網羅し、数値範囲 (`N-M`) と `tcp`/`udp` プロトコルを受理。long form は `target` / `published` / `host_ip` / `protocol` / `mode` キーを持つ。 |
+
+short-form の受理パターン (`cocoon init --ports` と `cocoon gen` の両方で同じ規則で検証):
 
 ```toml
 [ports]
-forward = ["3000:3000", "5432:5432"]
+forward = [
+    "3000",                            # コンテナポートのみ
+    "3000-3005",                       # コンテナ範囲
+    "8000:8000",                       # host:container
+    "9090-9091:8080-8081",             # host 範囲:container 範囲
+    "49100:22",                        # host:container
+    "127.0.0.1:8001:8001",             # IPv4 バインド:host:container
+    "127.0.0.1:5000-5010:5000-5010",   # IPv4 バインド:host 範囲:container 範囲
+    "6060:6060/udp",                   # host:container/protocol
+]
 ```
+
+IPv6 バインドは `[::1]:80:80` のように指定可能。各数値要素は `[1, 65535]` の範囲内であること。
 
 ---
 

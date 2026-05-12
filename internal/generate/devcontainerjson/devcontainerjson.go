@@ -38,7 +38,27 @@ func Generate(ctx *generate.WorkspaceContext) (string, error) {
 }
 
 func buildConfig(ctx *generate.WorkspaceContext) *orderedMap {
-	forwardPorts := append([]int{}, ctx.DevcontainerForwardPorts()...)
+	// Resolve forwardPorts up-front so the key is emitted exactly once
+	// when it has a value, and elided when both [ports] and the
+	// devcontainer.forward_ports override are empty. Pre-resolving also
+	// keeps insertion order stable: whether the value comes from base
+	// alone, from the override alone, or from a merge of both, the key
+	// always lands between workspaceFolder and shutdownAction.
+	//
+	// forwardPorts is left as nil (typed any) when neither source yields
+	// a port — the emit check below uses `!= nil` so we never write an
+	// empty `"forwardPorts": []` array.
+	basePorts := append([]int{}, ctx.DevcontainerForwardPorts()...)
+	overrides := ctx.DevcontainerOverrides()
+	var forwardPorts any
+	if extra, ok := overrides["forwardPorts"]; ok {
+		delete(overrides, "forwardPorts")
+		if merged := mergeForwardPorts(basePorts, extra); len(merged) > 0 {
+			forwardPorts = merged
+		}
+	} else if len(basePorts) > 0 {
+		forwardPorts = basePorts
+	}
 
 	base := newOrderedMap()
 	base.set("name", ctx.ServiceName())
@@ -54,7 +74,9 @@ func buildConfig(ctx *generate.WorkspaceContext) *orderedMap {
 		workspaceFolder += "/" + ctx.ServiceName()
 	}
 	base.set("workspaceFolder", workspaceFolder)
-	base.set("forwardPorts", forwardPorts)
+	if forwardPorts != nil {
+		base.set("forwardPorts", forwardPorts)
+	}
 	base.set("shutdownAction", "stopCompose")
 
 	customizations := newOrderedMap()
@@ -63,15 +85,8 @@ func buildConfig(ctx *generate.WorkspaceContext) *orderedMap {
 	customizations.set("vscode", vscode)
 	base.set("customizations", customizations)
 
-	overrides := ctx.DevcontainerOverrides()
 	if len(overrides) == 0 {
 		return base
-	}
-
-	if extra, ok := overrides["forwardPorts"]; ok {
-		delete(overrides, "forwardPorts")
-		merged := mergeForwardPorts(forwardPorts, extra)
-		base.set("forwardPorts", merged)
 	}
 	deepMerge(base, overrides)
 	return base

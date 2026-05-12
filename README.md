@@ -78,10 +78,11 @@ docker compose -f .devcontainer/docker-compose.yml up -d # or VS Code → "Reope
 6. **Mount range** — cwd only, or its parent (for fat workspaces where sibling repos must be visible)
 7. **VS Code Dev Containers** support — emit `devcontainer.json` or skip
 8. **Corporate CA auto-bake** — opt in to picking up `.crt` files from `~/.cocoon/certs/` at build time (off by default; see below)
-9. **apt categories** — text-editors, vcs, utilities, build, network, … (multi-select)
-10. **Plugins** to enable from the embedded catalog (multi-select, 20 to choose from)
+9. **Port forwards** — comma-separated docker-compose short forms (e.g. `3000:3000,5432:5432`); blank to skip and the `[ports]` template stays as a commented-out hint
+10. **apt categories** — text-editors, vcs, utilities, build, network, … (multi-select)
+11. **Plugins** to enable from the embedded catalog (multi-select, 20 to choose from)
 
-Each answer becomes a self-documenting line in `workspace.toml`. Pass `--yes` together with the value flags (`--service-name`, `--username`, `--image`, `--plugins`, `--certificates`, …) to drive it from CI without a TTY.
+Each answer becomes a self-documenting line in `workspace.toml`. Pass `--yes` together with the value flags (`--service-name`, `--username`, `--image`, `--plugins`, `--certificates`, `--ports`, …) to drive it from CI without a TTY.
 
 ## Plugins
 
