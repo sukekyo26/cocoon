@@ -938,8 +938,13 @@ func parseAptCategories(raw string) ([]string, error) {
 // (nil, nil) — the renderer treats nil as "user opted out" and falls back
 // to the commented-out [ports] template.
 //
-// Used by both the --ports flag path and the interactive prompt's Validate
-// hook so the two routes share the exact same acceptance rule.
+// Callers: (1) applyFlags for the `--ports` flag path (the wrapped error
+// surfaces an English usage message, matching the other init flag
+// validators); (2) promptForPorts to convert the raw CSV string the
+// interactive prompt produced into the []string the renderer consumes.
+// The prompt's per-keystroke Validate hook intentionally bypasses
+// parsePorts and calls config.ValidateShortForm directly so its rejection
+// message can be localized via the i18n catalog (see portsInputValidator).
 func parsePorts(raw string) ([]string, error) {
 	var ports []string
 	for _, part := range strings.Split(raw, ",") {
