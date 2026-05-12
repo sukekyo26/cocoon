@@ -212,7 +212,7 @@ func zeroAnswers() initAnswers {
 	}
 }
 
-func runInit(cmd *cobra.Command, stdout, _ io.Writer, flags *initFlags) error {
+func runInit(cmd *cobra.Command, stdout, stderr io.Writer, flags *initFlags) error {
 	if flags.Devcontainer && flags.NoDevcontainer {
 		return fmt.Errorf("%w: --devcontainer and --no-devcontainer are mutually exclusive", ErrUsage)
 	}
@@ -260,7 +260,7 @@ func runInit(cmd *cobra.Command, stdout, _ io.Writer, flags *initFlags) error {
 		return fmt.Errorf("%w: write %s: %w", ErrFailure, target, err)
 	}
 
-	log := logx.New(stdout, os.Stderr)
+	log := logx.New(stdout, stderr)
 	log.Success(cat.Msg("init_wrote", target))
 	printNextSteps(log, cat, ans.Devcontainer)
 	_ = cmd // reserved for future ctx-aware flows
