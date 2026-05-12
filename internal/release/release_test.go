@@ -89,6 +89,24 @@ func TestFetchLatest_ContextCancelled(t *testing.T) {
 	}
 }
 
+// TestFetchLatest_NilHTTPClientUsesDefault asserts WithHTTPClient(nil)
+// is a no-op so the default *http.Client is retained. The earlier
+// `cfg.client = c` form silently installed nil and panicked inside
+// FetchLatest at `cfg.client.Do(req)`.
+func TestFetchLatest_NilHTTPClientUsesDefault(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	// We cannot exercise the real GitHub API in unit tests, but a
+	// cancelled context still drives the request to cfg.client.Do —
+	// which must not panic with a nil receiver. A non-panic error
+	// return is sufficient.
+	_, err := release.FetchLatest(ctx, release.WithHTTPClient(nil))
+	if err == nil {
+		t.Fatal("err = nil, want cancelled error from default client")
+	}
+}
+
 // rewritingTransport rewrites api.github.com requests to the test server
 // so FetchLatest's hardcoded URL routes through httptest.
 type rewritingTransport struct {

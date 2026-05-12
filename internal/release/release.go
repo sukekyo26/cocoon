@@ -61,8 +61,16 @@ type fetchConfig struct {
 }
 
 // WithHTTPClient overrides the http.Client used for the API request.
+// Passing nil is treated as "use the default" so callers can forward an
+// optional client without a nil check at every call site — otherwise the
+// nil would overwrite http.DefaultClient and panic inside FetchLatest.
 func WithHTTPClient(c *http.Client) Option {
-	return func(cfg *fetchConfig) { cfg.client = c }
+	return func(cfg *fetchConfig) {
+		if c == nil {
+			return
+		}
+		cfg.client = c
+	}
 }
 
 // FetchLatest returns the latest release published for cocoon. The
