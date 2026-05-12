@@ -68,6 +68,13 @@ type Options struct {
 // swallowed: this runs on every cocoon invocation and must not block
 // or noise-spam the user.
 func Check(ctx context.Context, currentVersion string, opts Options) *Notice {
+	// Check is exported and may be reached from embedders that forward
+	// an optional context. Mirror the silent-fail philosophy of the
+	// other error paths here instead of panicking inside the eventual
+	// http.NewRequestWithContext / cfg.client.Do call chain.
+	if ctx == nil {
+		return nil
+	}
 	now := opts.Now
 	if now == nil {
 		now = time.Now

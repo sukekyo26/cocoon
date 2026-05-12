@@ -180,6 +180,20 @@ func TestCheck_FutureTimestampRefetches(t *testing.T) {
 	}
 }
 
+// TestCheck_NilContextReturnsNil pins the silent-fail entry guard. The
+// notifier must never panic, so a nil context (which would otherwise
+// panic inside http.NewRequestWithContext) is treated as "no notice".
+func TestCheck_NilContextReturnsNil(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	n := updatecheck.Check(nil, "0.1.0", updatecheck.Options{ //nolint:staticcheck // intentionally testing nil ctx
+		CacheDir: dir,
+	})
+	if n != nil {
+		t.Fatalf("expected nil for nil context, got %+v", n)
+	}
+}
+
 func TestCheck_MalformedCacheRefetches(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
