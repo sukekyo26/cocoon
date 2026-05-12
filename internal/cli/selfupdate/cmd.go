@@ -87,7 +87,12 @@ func runSelfUpdate(ctx context.Context, stdout, stderr io.Writer, checkOnly, for
 		return nil
 	}
 	if checkOnly {
-		log.Warnf("newer release %s available; rerun without --check-only to install", latest)
+		// stdout (not stderr) so the line stays on the same stream as
+		// the surrounding "current version" / "latest release" labels
+		// and matches the pre-color behavior — scripts that grep this
+		// text on stdout keep working; the exit code (100) is still
+		// the canonical signal for "newer available".
+		log.Infof("newer release %s available; rerun without --check-only to install", latest)
 		// cancel the api timeout context before exit so the deferred
 		// cleanup is not skipped by os.Exit (gocritic exitAfterDefer).
 		cancel()
