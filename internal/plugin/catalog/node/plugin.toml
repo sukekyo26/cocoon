@@ -3,6 +3,9 @@ name = "Node.js"
 description = "Node.js JavaScript runtime (https://github.com/nodejs/node)"
 default = false
 
+[apt]
+packages = ["xz-utils"]
+
 [install]
 requires_root = true
 volumes = ["/home/${USERNAME}/.npm", "/home/${USERNAME}/.npm-global"]
