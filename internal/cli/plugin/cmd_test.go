@@ -83,7 +83,7 @@ func TestPluginShow_PrintsResolvedManifest(t *testing.T) {
 }
 
 //nolint:paralleltest // t.Setenv on HOME forbids t.Parallel.
-func TestPluginPin_PrintsTomlBlock(t *testing.T) {
+func TestPluginPin_PrintsInlineLine(t *testing.T) {
 	withIsolatedHome(t)
 	var stdout, stderr bytes.Buffer
 	cmd := plugincli.NewCommand(&stdout, &stderr)

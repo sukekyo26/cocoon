@@ -96,7 +96,7 @@ enable = [
 ]
 
 # [plugins.versions] — pinned versions for the enabled plugins above.
-#   Add checksum_amd64 / checksum_arm64 (64 lowercase hex chars) per block to verify install tarballs.
+#   Add checksum_amd64 / checksum_arm64 (64 lowercase hex chars) per entry to verify install tarballs.
 [plugins.versions]
 bun = { pin = "1.3.3" }
 copilot-cli = { pin = "0.0.369" }

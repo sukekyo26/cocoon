@@ -609,9 +609,10 @@ func promptForMissing(ans initAnswers, cat *i18n.Catalog, plugins map[string]*pl
 		ans.PluginsSet = true
 	}
 	// version_capable plugins not already pinned via --plugin-versions get
-	// a per-plugin LATEST / pin prompt. The map is created lazily so a flow
-	// that picks no version_capable plugins keeps PluginVersions nil and
-	// writePluginVersions falls back to the commented-out template.
+	// a per-plugin LATEST / pin prompt. The map is allocated here so the
+	// prompt loop can record picks; an empty map after the prompt is
+	// equivalent to nil in writePluginVersions (both hit the len==0
+	// fallback that emits the commented-out template).
 	if ans.PluginVersions == nil {
 		ans.PluginVersions = make(map[string]string)
 	}

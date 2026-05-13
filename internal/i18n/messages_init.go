@@ -84,7 +84,7 @@ var messagesEN_init = map[string]string{
 	"init_toml_section_plugins": "# [plugins] — enable cocoon plugins (run `cocoon plugin list` for the catalog).\n" +
 		"#   Pin versions in [plugins.versions] when you need reproducible builds.",
 	"init_toml_section_plugins_versions": "# [plugins.versions] — pinned versions for the enabled plugins above.\n" +
-		"#   Add checksum_amd64 / checksum_arm64 (64 lowercase hex chars) per block to verify install tarballs.",
+		"#   Add checksum_amd64 / checksum_arm64 (64 lowercase hex chars) per entry to verify install tarballs.",
 	"init_toml_section_apt": "# [apt] — extra apt packages installed on top of cocoon's minimal base + selected categories.\n" +
 		"#   Re-run `cocoon init --force` to change category checkboxes, or edit this list directly.",
 	"init_toml_section_certificates": "# [certificates] — TLS certificate auto-bake from ~/.cocoon/certs/ on the host.\n" +
@@ -195,7 +195,7 @@ var messagesJA_init = map[string]string{
 	"init_toml_section_plugins": "# [plugins] — cocoon プラグインの有効化（一覧は `cocoon plugin list`）。\n" +
 		"#   再現性が必要なら [plugins.versions] でバージョン固定。",
 	"init_toml_section_plugins_versions": "# [plugins.versions] — 上で有効化したプラグインに対するバージョン固定。\n" +
-		"#   各ブロックに checksum_amd64 / checksum_arm64（64 文字小文字 hex）を足すと install 時のハッシュ検証が有効になる。",
+		"#   各エントリに checksum_amd64 / checksum_arm64（64 文字小文字 hex）を足すと install 時のハッシュ検証が有効になる。",
 	"init_toml_section_certificates": "# [certificates] — ホスト側 ~/.cocoon/certs/ の TLS 証明書をコンテナイメージに自動取り込み (opt-in)。\n" +
 		"#   enable = true のときジェネレータが docker-compose の additional_contexts と Dockerfile の\n" +
 		"#   RUN --mount=type=bind を配線し、ホスト側 *.crt が build 時にトラストストアへマージされる。\n" +

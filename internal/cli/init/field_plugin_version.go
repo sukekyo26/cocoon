@@ -21,9 +21,10 @@ import (
 // without version_capable = true are also skipped because their install.sh
 // cannot consume a $PIN.
 //
-// "LATEST" is encoded as the absence of an entry in pins, so the writer's
-// fallback (omit [plugins.versions.<id>], install.sh resolves latest at
-// build time) is reused unchanged.
+// "LATEST" is encoded as the absence of an entry in pins. The writer
+// emits one inline-table line per pin under a single [plugins.versions]
+// section, so a missing entry means the `<id> = { ... }` line is simply
+// not emitted and install.sh resolves latest at container build time.
 func promptPluginVersionsForCapable(
 	cat *i18n.Catalog,
 	plugins map[string]*plugin.Plugin,

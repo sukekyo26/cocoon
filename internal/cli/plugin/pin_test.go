@@ -63,7 +63,7 @@ func TestPin_StdoutOnlyByDefault(t *testing.T) {
 // + inline-table line appended, stdout reports the path that was edited.
 //
 //nolint:paralleltest // t.Chdir mutates process cwd.
-func TestPin_WriteAppendsBlockInPlace(t *testing.T) {
+func TestPin_WriteAppendsInlineLineInPlace(t *testing.T) {
 	withIsolatedHome(t)
 	dir := t.TempDir()
 	path := seedWorkspace(t, dir, "[plugins]\nenable = [\"go\"]\n")
