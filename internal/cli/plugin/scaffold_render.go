@@ -105,7 +105,7 @@ curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-erro
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/{{ .ID }}.tar.gz" | sha256sum -c -
 else
-  echo "WARNING: SHA256 verification skipped for {{ .Name }} (no checksum provided in [plugins.versions.{{ .ID }}])" >&2
+  echo "WARNING: SHA256 verification skipped for {{ .Name }} (no checksum for {{ .ID }} in [plugins.versions])" >&2
 fi
 
 # TODO: extract to the right destination.

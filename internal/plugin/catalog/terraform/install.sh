@@ -42,7 +42,7 @@ curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-erro
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/terraform.zip" | sha256sum -c -
 else
-  printf '%sWARNING: SHA256 verification skipped for Terraform (no checksum provided in [plugins.versions.terraform])%s\n' "$C_YEL" "$C_RST" >&2
+  printf '%sWARNING: SHA256 verification skipped for Terraform (no checksum for terraform in [plugins.versions])%s\n' "$C_YEL" "$C_RST" >&2
 fi
 
 unzip -q -o /tmp/terraform.zip -d /usr/local/bin/

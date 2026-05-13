@@ -13,7 +13,7 @@ Reference for every command exposed by the `cocoon` binary.
 | `cocoon gen` | Generate `.devcontainer/` artifacts |
 | `cocoon plugin list` | List every available plugin (embedded + overlays) |
 | `cocoon plugin show <id>` | Print the resolved manifest for one plugin |
-| `cocoon plugin pin <id> <ref>` | Emit a `[plugins.versions.<id>]` block (stdout, or in-place with `--write`) |
+| `cocoon plugin pin <id> <ref>` | Emit an inline-table line for `[plugins.versions]` (stdout, or in-place with `--write`) |
 | `cocoon plugin scaffold <id>` | Create a new `<id>/` directory from a template |
 | `cocoon self-update` | Replace this binary with the latest GitHub release |
 | `cocoon version` | Print binary version |
@@ -175,28 +175,25 @@ volumes: [/home/${USERNAME}/go]
 
 ### `cocoon plugin pin <id> <ref>`
 
-**Purpose:** record an upstream version (and optional per-arch checksums) for a `version_capable` plugin in `workspace.toml` under `[plugins.versions.<id>]`. The block declares `pin = "<ref>"` plus optional `checksum_amd64` / `checksum_arm64` lines that `install.sh` reads via `$PIN` and `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64`.
+**Purpose:** record an upstream version (and optional per-arch checksums) for a `version_capable` plugin in `workspace.toml` under `[plugins.versions]`. The entry is emitted as a single inline-table line — `<id> = { pin = "<ref>", checksum_amd64 = "...", checksum_arm64 = "..." }` — that `install.sh` reads via `$PIN` and `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64`.
 
 **Example (default — stdout, manual paste):**
 
 ```console
 $ cocoon plugin pin go 1.23.4 --amd64-checksum abc123 --arm64-checksum def456
-# Append the following block to workspace.toml under [plugins.versions]:
+# Add the following line under [plugins.versions] in workspace.toml:
 
-[plugins.versions.go]
-pin = "1.23.4"
-checksum_amd64 = "abc123"
-checksum_arm64 = "def456"
+go = { pin = "1.23.4", checksum_amd64 = "abc123", checksum_arm64 = "def456" }
 ```
 
 **Example (`--write` — in-place mutation):**
 
 ```console
 $ cocoon plugin pin go 1.23.4 --write
-Updated /home/alice/proj/workspace.toml: [plugins.versions.go]
+Updated /home/alice/proj/workspace.toml: [plugins.versions] go
 ```
 
-`--write` parses `workspace.toml` line-by-line and replaces the existing block (if any) or appends a new one after the last `[plugins.versions.*]` block. Comments and blank lines outside the target block are preserved.
+`--write` parses `workspace.toml` line-by-line, replaces the existing `<id> = { ... }` line under `[plugins.versions]` (if any) or appends a new one to that section. Comments and blank lines outside the target line are preserved.
 
 **Flags:**
 
@@ -204,14 +201,14 @@ Updated /home/alice/proj/workspace.toml: [plugins.versions.go]
 |---|---|
 | `--amd64-checksum <sha256>` | SHA256 of the amd64 artifact. |
 | `--arm64-checksum <sha256>` | SHA256 of the arm64 artifact. |
-| `--write` | Insert (or replace) the block in `workspace.toml` (auto-discovered from cwd). |
+| `--write` | Insert (or replace) the inline-table line in `workspace.toml` (auto-discovered from cwd). |
 
 **Gotchas:**
 
-- `pin` only makes sense for plugins whose `[version].version_capable = true`. The pin block is ignored at `gen` time for non-version-capable plugins.
+- `pin` only makes sense for plugins whose `[version].version_capable = true`. The pin entry is ignored at `gen` time for non-version-capable plugins.
 - Checksum flags only matter when the plugin's `install.sh` actually reads `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` (i.e. `tarball` template plugins). They are silently inert for `curl-pipe` / `generic` templates.
 - `--write` requires a discoverable `workspace.toml` from cwd; without `--write`, the command works from anywhere because it only resolves the layered FS for id validation.
-- `--write` only edits the multi-line `[plugins.versions.<id>]` form. If `workspace.toml` has any per-id key assignment directly under `[plugins.versions]` — `<id> = "1.23.4"`, `<id> = [..]`, or the inline-table `<id> = { pin = "..." }` style the `init` template suggests in commented-out lines — `--write` refuses with a usage error rather than appending a duplicate block. Convert each entry to a `[plugins.versions.<id>]` block first, or edit `workspace.toml` manually.
+- `--write` only edits the inline-table form (`<id> = { pin = "..." }` lines under a single `[plugins.versions]` section). If `workspace.toml` still contains legacy `[plugins.versions.<id>]` subsection blocks, `--write` refuses with a usage error rather than appending a duplicate entry. Convert each legacy block to an inline-table line under `[plugins.versions]` first, or edit `workspace.toml` manually.
 
 ### `cocoon plugin scaffold <id>`
 
