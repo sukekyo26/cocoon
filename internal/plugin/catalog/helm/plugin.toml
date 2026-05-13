@@ -1,0 +1,10 @@
+[metadata]
+name = "Helm"
+description = "Kubernetes package manager (https://github.com/helm/helm)"
+default = false
+
+[install]
+requires_root = true
+
+[version]
+version_capable = true

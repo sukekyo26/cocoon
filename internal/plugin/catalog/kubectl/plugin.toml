@@ -1,0 +1,10 @@
+[metadata]
+name = "kubectl"
+description = "Kubernetes command-line tool (https://github.com/kubernetes/kubectl)"
+default = false
+
+[install]
+requires_root = true
+
+[version]
+version_capable = true
