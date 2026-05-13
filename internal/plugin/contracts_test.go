@@ -199,6 +199,16 @@ func TestPluginContracts(t *testing.T) {
 			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
 		},
 		{
+			id: "docker-buildx", name: "Docker Buildx",
+			requiresRoot: true, versionCapable: true,
+			mustContain: []string{
+				"buildx", "github.com/docker/buildx", "sha256sum -c -",
+				"tlsv1.2", "retry 3", "dpkg --print-architecture",
+				"/usr/libexec/docker/cli-plugins",
+			},
+			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
+		},
+		{
 			id: "terraform", name: "Terraform",
 			requiresRoot: true, versionCapable: true,
 			mustContain: []string{

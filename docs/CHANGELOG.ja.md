@@ -17,6 +17,7 @@ cocoon の主要な変更を記録します。フォーマットは
 - 新しい `shellcheck` プラグイン: GitHub Release の `shellcheck-v${VERSION}.linux.${DOWNLOAD_ARCH}.tar.xz` から shell スクリプト静的解析ツールを `/usr/local/bin/shellcheck` にインストールし、SHA256 で検証します (`x86_64` / `aarch64`)。`[plugins.versions]` 配下の `shellcheck = { pin = "..." }` を省略するとインストールスクリプトが `koalaman/shellcheck` の `releases/latest` リダイレクトから最新タグを取得します。最小ベースイメージで tar.xz を展開できるよう、`xz-utils` を apt 依存として宣言しています。
 - 新しい `shfmt` プラグイン: GitHub Release の `shfmt_v${VERSION}_linux_${ARCH}` (Go 製の static binary) を `/usr/local/bin/shfmt` にインストールし、SHA256 で検証します (amd64 / arm64)。`[plugins.versions]` 配下の `shfmt = { pin = "..." }` を省略するとインストールスクリプトが `mvdan/sh` の `releases/latest` リダイレクトから最新タグを取得します。
 - 新しい `dev-tools` apt カテゴリ (デフォルト OFF): `git-lfs` (ML モデル / メディア / 大容量バイナリ asset 用)、`strace` (コンテナ内で固まったプロセスのシステムコール追跡)、`tmux` (端末多重化。`docker exec` で長時間 build / training を仕掛けて切断しても継続) を一括で導入します。
+- 新しい `docker-buildx` プラグイン: BuildKit ベースの `docker buildx` CLI プラグイン (単体バイナリ) を `docker/buildx` の GitHub Release から `/usr/libexec/docker/cli-plugins/docker-buildx` にインストールし、SHA256 で検証します (amd64 / arm64)。`docker-cli` プラグイン (または docker 同梱のベースイメージ) と組み合わせると、cocoon e2e ワークフロー側の `docker buildx bake` と同等の操作 (`docker buildx version` / `buildx build --cache-from=type=gha` / マルチプラットフォーム build) がコンテナ内から直接行えるようになります。`[plugins.versions]` 配下の `docker-buildx = { pin = "..." }` を省略するとインストールスクリプトが `docker/buildx` の `releases/latest` リダイレクトから最新タグを取得します。
 
 ### 変更
 
