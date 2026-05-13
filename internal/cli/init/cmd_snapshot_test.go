@@ -75,10 +75,12 @@ func TestRunInit_Snapshot(t *testing.T) {
 				"--plugins",
 				"docker-cli,aws-cli,aws-sam-cli,github-cli,claude-code,copilot-cli," +
 					"proto,mise,uv,bun,node,deno,zig,rust,go,lazygit,starship," +
-					"nerd-fonts,google-chrome,terraform,opentofu",
+					"nerd-fonts,google-chrome,terraform,opentofu," +
+					"kubectl,helm,shellcheck,shfmt",
 				"--plugin-versions",
-				"bun=1.3.3,copilot-cli=0.0.369,deno=2.7.14,go=1.23.4,lazygit=0.44.1," +
-					"mise=2025.12.0,node=24.15.0,opentofu=1.9.0,proto=0.46.1," +
+				"bun=1.3.3,copilot-cli=0.0.369,deno=2.7.14,go=1.23.4,helm=3.16.0," +
+					"kubectl=1.31.0,lazygit=0.44.1,mise=2025.12.0,node=24.15.0," +
+					"opentofu=1.9.0,proto=0.46.1,shellcheck=0.10.0,shfmt=3.10.0," +
 					"starship=1.21.1,terraform=1.10.5,uv=0.5.7,zig=0.13.0",
 			},
 		},
@@ -92,10 +94,12 @@ func TestRunInit_Snapshot(t *testing.T) {
 				"--apt-categories", "text-editors,vcs,utilities,compression,build",
 				"--plugins",
 				"docker-cli,github-cli,claude-code,copilot-cli,proto,mise,uv," +
-					"bun,node,deno,rust,go,nerd-fonts,terraform,opentofu",
+					"bun,node,deno,rust,go,nerd-fonts,terraform,opentofu," +
+					"kubectl,helm,shellcheck,shfmt",
 				"--plugin-versions",
-				"bun=1.3.3,copilot-cli=0.0.369,deno=2.7.14,go=1.23.4,mise=2025.12.0," +
-					"node=24.15.0,opentofu=1.9.0,proto=0.46.1,terraform=1.10.5,uv=0.5.7",
+				"bun=1.3.3,copilot-cli=0.0.369,deno=2.7.14,go=1.23.4,helm=3.16.0," +
+					"kubectl=1.31.0,mise=2025.12.0,node=24.15.0,opentofu=1.9.0," +
+					"proto=0.46.1,shellcheck=0.10.0,shfmt=3.10.0,terraform=1.10.5,uv=0.5.7",
 			},
 		},
 		{

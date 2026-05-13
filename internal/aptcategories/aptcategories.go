@@ -109,6 +109,18 @@ var AptCategories = []AptCategory{
 		Packages:    []string{"jq", "yq"},
 		Default:     false,
 	},
+	{
+		ID:    "dev-tools",
+		Label: "Developer tools",
+		// git-lfs: large-file storage (ML models, media, HF / Civitai assets).
+		// strace: trace syscalls of a stuck process inside the container.
+		// tmux: terminal multiplexer so long-running builds / training survive
+		// a `docker exec` disconnect and pane splits let you watch logs and a
+		// server side-by-side.
+		Description: "git-lfs, strace, tmux",
+		Packages:    []string{"git-lfs", "strace", "tmux"},
+		Default:     false,
+	},
 }
 
 // AptCategoryByID returns the category with the given ID, or nil when the

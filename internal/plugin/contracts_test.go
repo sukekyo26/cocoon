@@ -163,6 +163,42 @@ func TestPluginContracts(t *testing.T) {
 			mustNotContain: []string{`>> ~/.bashrc`},
 		},
 		{
+			id: "kubectl", name: "kubectl",
+			requiresRoot: true, versionCapable: true,
+			mustContain: []string{
+				"kubectl", "dl.k8s.io", "sha256sum -c -",
+				"tlsv1.2", "retry 3", "dpkg --print-architecture",
+			},
+			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
+		},
+		{
+			id: "helm", name: "Helm",
+			requiresRoot: true, versionCapable: true,
+			mustContain: []string{
+				"helm", "get.helm.sh", "sha256sum -c -",
+				"tlsv1.2", "retry 3", "dpkg --print-architecture", "tar",
+			},
+			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
+		},
+		{
+			id: "shellcheck", name: "ShellCheck",
+			requiresRoot: true, versionCapable: true,
+			mustContain: []string{
+				"shellcheck", "github.com/koalaman/shellcheck", "sha256sum -c -",
+				"tlsv1.2", "retry 3", "dpkg --print-architecture", "tar -xJ",
+			},
+			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
+		},
+		{
+			id: "shfmt", name: "shfmt",
+			requiresRoot: true, versionCapable: true,
+			mustContain: []string{
+				"shfmt", "github.com/mvdan/sh", "sha256sum -c -",
+				"tlsv1.2", "retry 3", "dpkg --print-architecture",
+			},
+			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
+		},
+		{
 			id: "terraform", name: "Terraform",
 			requiresRoot: true, versionCapable: true,
 			mustContain: []string{
