@@ -525,12 +525,13 @@ func promptForMissing(ans initAnswers, cat *i18n.Catalog, plugins map[string]*pl
 	if !ans.ImageVersionSet {
 		// Custom huh.Field: curated suggestions stacked above an inline
 		// free-text input row. Cursor on a suggestion = select; cursor
-		// on the input row = type. See internal/cli/init/field_image_version.go.
+		// on the input row = type. See internal/cli/init/field_select_or_input.go.
 		versions := config.SupportedImageVersions[ans.Image]
 		if ans.ImageVersion == "" {
 			ans.ImageVersion = defaultImageVersion(ans.Image)
 		}
-		field := newImageVersionField(&ans.ImageVersion, versions, cat.Msg("init_option_image_version_other")).
+		field := newSelectOrInputField("image_version", &ans.ImageVersion, versions,
+			cat.Msg("init_option_image_version_other")).
 			Title(cat.Msg("init_prompt_image_version_static")).
 			Description(cat.Msg("init_desc_image_version_static")).
 			Validate(func(s string) error {

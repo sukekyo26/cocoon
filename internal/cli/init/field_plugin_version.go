@@ -5,16 +5,14 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/huh"
-
 	"github.com/sukekyo26/cocoon/internal/i18n"
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
 
 // promptPluginVersionsForCapable walks the user-enabled plugins in order and,
-// for each one whose plugin.toml declares version_capable = true, asks the
-// user whether to pin a specific version or keep LATEST (resolved at
-// container build time). The result is merged into pins.
+// for each one whose plugin.toml declares version_capable = true, shows a
+// single-screen picker: a LATEST row followed by an editable free-text row
+// ("Other (manual input)"). The chosen value is merged into pins.
 //
 // Plugins already pinned via --plugin-versions are skipped: the flag value
 // takes precedence so non-interactive flows stay deterministic. Plugins
@@ -25,6 +23,11 @@ import (
 // emits one inline-table line per pin under a single [plugins.versions]
 // section, so a missing entry means the `<id> = { ... }` line is simply
 // not emitted and install.sh resolves latest at container build time.
+//
+// The picker does not verify whether the typed string actually exists
+// upstream — that is the user's responsibility (the i18n description
+// points them at the upstream URL). The format validator only enforces
+// a TOML-safe character set so the inline-table line stays parseable.
 func promptPluginVersionsForCapable(
 	cat *i18n.Catalog,
 	plugins map[string]*plugin.Plugin,
@@ -50,42 +53,48 @@ func promptPluginVersionsForCapable(
 	return nil
 }
 
-// promptOnePluginVersion runs the two-step Yes/No → optional input prompt
-// for one plugin. Returns "" when the user kept LATEST.
+// pluginVersionLatestSentinel is the row label shown for the "no pin,
+// resolve latest at build time" option. The empty pin string in pins
+// is what the writer actually keys off; this label is just the UI
+// representation of that state. Keep it short so the picker line stays
+// scannable.
+const pluginVersionLatestSentinel = "LATEST"
+
+// promptOnePluginVersion runs the single-screen LATEST / manual-input
+// picker for one plugin. Returns "" when the user kept LATEST.
 func promptOnePluginVersion(cat *i18n.Catalog, id string) (string, error) {
-	wantPin := false
-	confirm := huh.NewConfirm().
+	var picked string
+	field := newSelectOrInputField(
+		"plugin_version_"+id,
+		&picked,
+		[]string{pluginVersionLatestSentinel},
+		cat.Msg("init_option_image_version_other"),
+	).
 		Title(fmt.Sprintf(cat.Msg("init_prompt_plugin_version"), id)).
 		Description(cat.Msg("init_desc_plugin_version")).
-		Affirmative(cat.Msg("init_plugin_version_pin_label")).
-		Negative(cat.Msg("init_plugin_version_latest_label")).
-		Value(&wantPin)
-	if err := runSingleFieldForm(confirm); err != nil {
+		Validate(pluginPinValidator(cat))
+	if err := runSingleFieldForm(field); err != nil {
 		return "", err
 	}
-	if !wantPin {
+	if picked == pluginVersionLatestSentinel {
 		return "", nil
 	}
-
-	var pin string
-	input := huh.NewInput().
-		Title(fmt.Sprintf(cat.Msg("init_prompt_plugin_version_pin"), id)).
-		Description(cat.Msg("init_desc_plugin_version_pin")).
-		Validate(pluginPinValidator(cat)).
-		Value(&pin)
-	if err := runSingleFieldForm(input); err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(pin), nil
+	return strings.TrimSpace(picked), nil
 }
 
-// pluginPinValidator enforces the same character set as image_version
-// (`rxImageVersionInput`) so a pin accepted here cannot be rejected by the
-// loader's [plugins.versions] regex (`rxImageVersion`). The error string is
-// localized via the catalog because huh prints it verbatim in the form footer.
+// pluginPinValidator only enforces a TOML-safe character set (same
+// regex image_version uses) so the inline-table line stays parseable.
+// It deliberately does NOT check whether the version exists upstream —
+// the picker description tells the user to verify that themselves. The
+// LATEST sentinel always passes; an empty manual entry is rejected so
+// "I pressed Enter on the empty input row" doesn't silently encode as
+// LATEST (which the user could have picked from the row above).
 func pluginPinValidator(cat *i18n.Catalog) func(string) error {
 	return func(s string) error {
 		s = strings.TrimSpace(s)
+		if s == pluginVersionLatestSentinel {
+			return nil
+		}
 		if s == "" {
 			return errors.New(cat.Msg("init_err_required")) //nolint:err113 // user-facing prompt
 		}
