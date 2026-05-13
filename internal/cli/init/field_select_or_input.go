@@ -231,8 +231,11 @@ func (f *selectOrInputField) View() string {
 		sb.WriteString("\n")
 	}
 	if f.urlLine != "" {
-		sb.WriteString(styles.Description.Render(f.urlLine))
-		sb.WriteString("\n")
+		urlStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.AdaptiveColor{Light: "#0066CC", Dark: "#7FDBFF"}).
+			Underline(true)
+		sb.WriteString(urlStyle.Render(f.urlLine))
+		sb.WriteString("\n\n")
 	}
 
 	cursorIndicator := styles.SelectSelector.String()
@@ -397,6 +400,7 @@ func (f *selectOrInputField) printAccessibleHeader(w io.Writer) {
 	}
 	if f.urlLine != "" {
 		fmt.Fprintln(w, f.urlLine)
+		fmt.Fprintln(w)
 	}
 	for i, s := range f.suggestions {
 		fmt.Fprintf(w, "%d. %s\n", i+1, s)
