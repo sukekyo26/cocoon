@@ -2,10 +2,8 @@
 enable = ["go"]
 
 # Keep checksum lines together with the pin for review.
-[plugins.versions.go]
-pin = "1.22.0"
-checksum_amd64 = "old-amd64"
-checksum_arm64 = "old-arm64"
+[plugins.versions]
+go = { pin = "1.22.0", checksum_amd64 = "old-amd64", checksum_arm64 = "old-arm64" }
 
 [mounts]
 host = "./src"

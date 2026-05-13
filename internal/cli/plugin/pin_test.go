@@ -47,8 +47,8 @@ func TestPin_StdoutOnlyByDefault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("pin: err=%v stderr=%s", err, stderr)
 	}
-	if !strings.Contains(stdout, "[plugins.versions.go]") || !strings.Contains(stdout, `pin = "1.23.4"`) {
-		t.Errorf("stdout missing pin block:\n%s", stdout)
+	if !strings.Contains(stdout, "[plugins.versions]") || !strings.Contains(stdout, `go = { pin = "1.23.4" }`) {
+		t.Errorf("stdout missing inline pin line:\n%s", stdout)
 	}
 	body, rerr := os.ReadFile(path) //nolint:gosec // tmp under t.TempDir
 	if rerr != nil {
@@ -59,11 +59,11 @@ func TestPin_StdoutOnlyByDefault(t *testing.T) {
 	}
 }
 
-// --write happy path: workspace.toml gets the new block appended in place,
-// stdout reports the path that was edited.
+// --write happy path: workspace.toml gets a new [plugins.versions] section
+// + inline-table line appended, stdout reports the path that was edited.
 //
 //nolint:paralleltest // t.Chdir mutates process cwd.
-func TestPin_WriteAppendsBlockInPlace(t *testing.T) {
+func TestPin_WriteAppendsInlineLineInPlace(t *testing.T) {
 	withIsolatedHome(t)
 	dir := t.TempDir()
 	path := seedWorkspace(t, dir, "[plugins]\nenable = [\"go\"]\n")
@@ -73,23 +73,21 @@ func TestPin_WriteAppendsBlockInPlace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("pin --write: err=%v stderr=%s", err, stderr)
 	}
-	if !strings.Contains(stdout, "Updated") || !strings.Contains(stdout, "[plugins.versions.go]") {
+	if !strings.Contains(stdout, "Updated") || !strings.Contains(stdout, "[plugins.versions]") {
 		t.Errorf("stdout missing Updated marker:\n%s", stdout)
 	}
 	got, rerr := os.ReadFile(path) //nolint:gosec // tmp under t.TempDir
 	if rerr != nil {
 		t.Fatalf("read: %v", rerr)
 	}
-	if !strings.Contains(string(got), "[plugins.versions.go]") || !strings.Contains(string(got), `pin = "1.23.4"`) {
-		t.Errorf("workspace.toml missing new block:\n%s", got)
+	if !strings.Contains(string(got), "[plugins.versions]") || !strings.Contains(string(got), `go = { pin = "1.23.4" }`) {
+		t.Errorf("workspace.toml missing new line:\n%s", got)
 	}
 }
 
-// --write on a workspace.toml that already has [plugins.versions.<other>]
-// must append the new block alongside (appendAfterVersions path), not at EOF.
-// This locks the layout `pin uv 0.5.7 --write` produces when go is already
-// pinned: both blocks live together, the new one inserted right after the
-// existing versions cluster.
+// --write on a workspace.toml that already has [plugins.versions] with
+// another id pinned must append the new line alongside (within the same
+// section), not at EOF or under a new section.
 //
 //nolint:paralleltest // t.Chdir mutates process cwd.
 func TestPin_WriteAppendsAlongsideExisting(t *testing.T) {
@@ -98,8 +96,8 @@ func TestPin_WriteAppendsAlongsideExisting(t *testing.T) {
 	path := seedWorkspace(t, dir, `[plugins]
 enable = ["go", "uv"]
 
-[plugins.versions.go]
-pin = "1.23.4"
+[plugins.versions]
+go = { pin = "1.23.4" }
 
 [mounts]
 host = "./src"
@@ -114,13 +112,15 @@ host = "./src"
 		t.Fatalf("read: %v", rerr)
 	}
 	body := string(got)
-	// Both blocks must be present, in the order go → uv (uv inserted after
-	// the existing versions cluster).
-	goIdx := strings.Index(body, "[plugins.versions.go]")
-	uvIdx := strings.Index(body, "[plugins.versions.uv]")
+	// Section header must be unique, both ids must be present, [mounts] intact.
+	if strings.Count(body, "[plugins.versions]") != 1 {
+		t.Errorf("expected exactly one [plugins.versions] section header:\n%s", body)
+	}
+	goIdx := strings.Index(body, `go = { pin = "1.23.4" }`)
+	uvIdx := strings.Index(body, `uv = { pin = "0.5.7" }`)
 	mountsIdx := strings.Index(body, "[mounts]")
 	if goIdx < 0 || uvIdx < 0 {
-		t.Fatalf("expected both blocks present:\n%s", body)
+		t.Fatalf("expected both pins present:\n%s", body)
 	}
 	if goIdx >= uvIdx || uvIdx >= mountsIdx {
 		t.Errorf("expected order: go < uv < mounts; got %d / %d / %d\n%s", goIdx, uvIdx, mountsIdx, body)
@@ -130,8 +130,8 @@ host = "./src"
 	}
 }
 
-// --write on a workspace.toml that already has [plugins.versions.go] must
-// replace the existing block (pin/checksums) rather than append a duplicate.
+// --write on a workspace.toml that already has a pin for the same id must
+// replace the existing line rather than append a duplicate.
 //
 //nolint:paralleltest // t.Chdir mutates process cwd.
 func TestPin_WriteReplacesExistingBlock(t *testing.T) {
@@ -140,8 +140,8 @@ func TestPin_WriteReplacesExistingBlock(t *testing.T) {
 	path := seedWorkspace(t, dir, `[plugins]
 enable = ["go"]
 
-[plugins.versions.go]
-pin = "1.22.0"
+[plugins.versions]
+go = { pin = "1.22.0" }
 `)
 	t.Chdir(dir)
 
@@ -155,24 +155,24 @@ pin = "1.22.0"
 	if strings.Contains(string(got), `pin = "1.22.0"`) {
 		t.Errorf("old pin not replaced:\n%s", got)
 	}
-	if strings.Count(string(got), "[plugins.versions.go]") != 1 {
-		t.Errorf("expected exactly one [plugins.versions.go] block:\n%s", got)
+	if strings.Count(string(got), "go = {") != 1 {
+		t.Errorf("expected exactly one `go = {` line:\n%s", got)
 	}
 }
 
-// --write on a workspace.toml using the inline-table form must refuse with
-// ErrUsage rather than appending a duplicate-key block. This locks the
-// pin.go side mapping of plugin.ErrPinBlockVersionsKeyAssign → ErrUsage.
+// --write on a workspace.toml that still uses the legacy
+// `[plugins.versions.<id>]` subsection format must refuse with ErrUsage and
+// leave the file untouched. The error message must point at the migration.
 //
 //nolint:paralleltest // t.Chdir mutates process cwd.
-func TestPin_WriteRefusesInlineForm(t *testing.T) {
+func TestPin_WriteRefusesLegacySubsection(t *testing.T) {
 	withIsolatedHome(t)
 	dir := t.TempDir()
 	original := `[plugins]
 enable = ["go"]
 
-[plugins.versions]
-go = { pin = "1.22.5" }
+[plugins.versions.go]
+pin = "1.22.5"
 `
 	path := seedWorkspace(t, dir, original)
 	t.Chdir(dir)
@@ -181,8 +181,8 @@ go = { pin = "1.22.5" }
 	if !errors.Is(err, plugincli.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage", err)
 	}
-	if !strings.Contains(err.Error(), "key assignments") {
-		t.Errorf("err should mention key assignments: %v\nstderr: %s", err, stderr)
+	if !strings.Contains(err.Error(), "subsection") {
+		t.Errorf("err should mention subsection: %v\nstderr: %s", err, stderr)
 	}
 	got, rerr := os.ReadFile(path) //nolint:gosec // tmp under t.TempDir
 	if rerr != nil {

@@ -51,7 +51,7 @@ curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-erro
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/lazygit.tar.gz" | sha256sum -c -
 else
-  printf '%sWARNING: SHA256 verification skipped for lazygit (no checksum provided in [plugins.versions.lazygit])%s\n' "$C_YEL" "$C_RST" >&2
+  printf '%sWARNING: SHA256 verification skipped for lazygit (no checksum for lazygit in [plugins.versions])%s\n' "$C_YEL" "$C_RST" >&2
 fi
 
 tar -xzf /tmp/lazygit.tar.gz -C /usr/local/bin lazygit

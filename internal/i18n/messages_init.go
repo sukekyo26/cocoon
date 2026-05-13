@@ -26,7 +26,7 @@ var messagesEN_init = map[string]string{
 	"init_desc_image_version":           "Pulled as FROM %s:<version> in the generated Dockerfile.",
 	"init_prompt_image_version_static":  "Image version",
 	"init_desc_image_version_static":    "Type a tag, or press Tab to cycle through curated suggestions (e.g. 1.26.3-bookworm). Any well-formed tag the upstream registry publishes is accepted. Rules: first character is a letter, digit, or underscore; trailing characters add `.` and `-`; no slash, no colon.",
-	"init_option_image_version_other":   "Other (manual input)",
+	"init_option_other_manual_input":    "Other (manual input)",
 	"init_err_image_version_fmt":        "must be a plain Docker tag — first character alnum or underscore; trailing characters may add `.` and `-`; no slash or colon",
 	"init_prompt_shell":                 "Login shell",
 	"init_desc_shell":                   "Container login shell. bash is the cocoon default; zsh / fish drive shellrc generation differently.",
@@ -47,6 +47,9 @@ var messagesEN_init = map[string]string{
 	"init_err_plugin_unknown_fmt":       "unknown plugin %q (run `cocoon plugin list` for the catalog)",
 	"init_err_plugin_conflict_fmt":      "%s conflicts with %s — pick one",
 	"init_err_plugin_load_fmt":          "load plugin catalog: %s",
+	"init_prompt_plugin_version":        "%s version",
+	"init_desc_plugin_version":          "Pick LATEST to let cocoon resolve the newest version at container build time, or select Other to type a pin (e.g. 1.23.4). cocoon does NOT verify that the typed version actually exists — check the upstream release page yourself before saving. The format only enforces TOML-safe characters: first character alnum or underscore; trailing characters may add `.` and `-`; no slash or colon.",
+	"init_err_plugin_pin_fmt":           "must be a plain version pin — first character alnum or underscore; trailing characters may add `.` and `-`; no slash or colon",
 	"init_prompt_alias_bundles":         "Select shell alias bundles",
 	"init_desc_alias_bundles":           "Pre-canned alias sets merged into [container.shell].aliases. All start unchecked — opt in only what you want.",
 	"init_err_alias_bundle_unknown_fmt": "unknown alias bundle %q",
@@ -77,7 +80,7 @@ var messagesEN_init = map[string]string{
 	"init_toml_section_plugins": "# [plugins] — enable cocoon plugins (run `cocoon plugin list` for the catalog).\n" +
 		"#   Pin versions in [plugins.versions] when you need reproducible builds.",
 	"init_toml_section_plugins_versions": "# [plugins.versions] — pinned versions for the enabled plugins above.\n" +
-		"#   Add checksum_amd64 / checksum_arm64 (64 lowercase hex chars) per block to verify install tarballs.",
+		"#   Add checksum_amd64 / checksum_arm64 (64 lowercase hex chars) per entry to verify install tarballs.",
 	"init_toml_section_apt": "# [apt] — extra apt packages installed on top of cocoon's minimal base + selected categories.\n" +
 		"#   Re-run `cocoon init --force` to change category checkboxes, or edit this list directly.",
 	"init_toml_section_certificates": "# [certificates] — TLS certificate auto-bake from ~/.cocoon/certs/ on the host.\n" +
@@ -129,7 +132,7 @@ var messagesJA_init = map[string]string{
 	"init_prompt_image_version":         "%s のバージョン",
 	"init_desc_image_version":           "生成される Dockerfile の FROM %s:<version> に展開されます。",
 	"init_prompt_image_version_static":  "イメージのバージョン",
-	"init_option_image_version_other":   "その他 (手動入力)",
+	"init_option_other_manual_input":    "その他 (手動入力)",
 	"init_err_image_version_fmt":        "Docker タグの形式である必要があります (先頭は英数字または `_`、2 文字目以降は `.` / `-` も可、スラッシュ・コロン禁止)",
 	"init_desc_image_version_static":    "タグを入力するか、Tab キーで推奨候補を循環できます (例: 1.26.3-bookworm)。上流レジストリが公開している正しい形式のタグなら自由に入力可。形式: 先頭は英数字または `_`、2 文字目以降は `.` / `-` も可、スラッシュ・コロン禁止。",
 	"init_prompt_shell":                 "ログインシェル",
@@ -151,6 +154,9 @@ var messagesJA_init = map[string]string{
 	"init_err_plugin_unknown_fmt":       "未知のプラグイン %q (`cocoon plugin list` で一覧を確認してください)",
 	"init_err_plugin_conflict_fmt":      "%s と %s は併用できません — どちらか一方を選んでください",
 	"init_err_plugin_load_fmt":          "プラグインカタログの読み込みに失敗: %s",
+	"init_prompt_plugin_version":        "%s のバージョン",
+	"init_desc_plugin_version":          "LATEST を選ぶとコンテナビルド時に最新版を自動取得します。バージョンを固定したい場合は「その他 (手動入力)」を選んで入力してください (例: 1.23.4)。なお、入力されたバージョンが上流に実在するかどうかの検証はしません。保存前に上流のリリースページで実在を確認してください。形式は TOML が壊れない文字集合のみチェックします: 先頭は英数字または `_`、2 文字目以降は `.` / `-` も可、スラッシュ・コロン禁止。",
+	"init_err_plugin_pin_fmt":           "バージョン pin 形式である必要があります (先頭は英数字または `_`、2 文字目以降は `.` / `-` も可、スラッシュ・コロン禁止)",
 	"init_prompt_alias_bundles":         "シェルエイリアスバンドルを選択",
 	"init_desc_alias_bundles":           "プリセットの alias セットを [container.shell].aliases にマージします。初期チェックは全部 OFF — 欲しいものだけ選んでください。",
 	"init_err_alias_bundle_unknown_fmt": "未知のエイリアスバンドル %q",
@@ -181,7 +187,7 @@ var messagesJA_init = map[string]string{
 	"init_toml_section_plugins": "# [plugins] — cocoon プラグインの有効化（一覧は `cocoon plugin list`）。\n" +
 		"#   再現性が必要なら [plugins.versions] でバージョン固定。",
 	"init_toml_section_plugins_versions": "# [plugins.versions] — 上で有効化したプラグインに対するバージョン固定。\n" +
-		"#   各ブロックに checksum_amd64 / checksum_arm64（64 文字小文字 hex）を足すと install 時のハッシュ検証が有効になる。",
+		"#   各エントリに checksum_amd64 / checksum_arm64（64 文字小文字 hex）を足すと install 時のハッシュ検証が有効になる。",
 	"init_toml_section_certificates": "# [certificates] — ホスト側 ~/.cocoon/certs/ の TLS 証明書をコンテナイメージに自動取り込み (opt-in)。\n" +
 		"#   enable = true のときジェネレータが docker-compose の additional_contexts と Dockerfile の\n" +
 		"#   RUN --mount=type=bind を配線し、ホスト側 *.crt が build 時にトラストストアへマージされる。\n" +

@@ -77,12 +77,6 @@ func TestPluginContracts(t *testing.T) {
 			mustNotContain: []string{"{{FETCH}}", "{{VERSION}}"},
 		},
 		{
-			id: "custom-ps1", name: "Custom PS1",
-			requiresRoot:   false,
-			mustContain:    []string{"PS1=", "GIT_PS1_SHOWDIRTYSTATE", "__git_ps1", `"$RC_FILE"`, "LOGIN_SHELL"},
-			mustNotContain: []string{`>> ~/.bashrc`},
-		},
-		{
 			id: "docker-cli", name: "Docker CLI",
 			requiresRoot: true,
 			mustContain:  []string{"Docker", "retry 3"},

@@ -14,19 +14,23 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// imageVersionField is a custom huh.Field that combines curated
-// image-tag suggestions with a trailing free-text input row, all on a
-// single screen. When the cursor sits on any suggestion row, Enter
-// commits that exact tag; when it sits on the bottom input row, the
-// row becomes editable and Enter commits whatever the user typed
-// (after the same format validator validateImage uses server-side).
+// selectOrInputField is a custom huh.Field that combines curated
+// suggestions with a trailing free-text input row, all on a single
+// screen. When the cursor sits on any suggestion row, Enter commits
+// that exact label; when it sits on the bottom input row, the row
+// becomes editable and Enter commits whatever the user typed (after
+// the optional format validator).
 //
 // huh's stock Select rows are immutable Option labels, so this shape
 // isn't expressible by composing Select + Input — the field implements
 // huh.Field directly. The bespoke code is worth the UX win: no second
 // screen, no always-visible Input below the list, no "Other" sentinel
 // to thread through promptForMissing.
-type imageVersionField struct {
+//
+// cocoon reuses this field for image tag picking and plugin version
+// pinning — both fit the "small curated set OR free text" shape.
+type selectOrInputField struct {
+	key         string
 	title       string
 	description string
 	suggestions []string
@@ -47,16 +51,21 @@ type imageVersionField struct {
 	access bool
 }
 
-// newImageVersionField builds a Bubble Tea / huh field that presents
+// newSelectOrInputField builds a Bubble Tea / huh field that presents
 // suggestions as a select list with an editable trailing input row.
-// otherLabel is the placeholder text for the input row when the cursor
-// is parked elsewhere.
-func newImageVersionField(target *string, suggestions []string, otherLabel string) *imageVersionField {
+// key is the huh field identifier (used by huh internals; cocoon runs
+// single-field forms so it rarely matters). otherLabel is the
+// placeholder text for the input row when the cursor is parked
+// elsewhere.
+func newSelectOrInputField(
+	key string, target *string, suggestions []string, otherLabel string,
+) *selectOrInputField {
 	ti := textinput.New()
 	ti.Prompt = ""
 	ti.CharLimit = 128
 
-	f := &imageVersionField{
+	f := &selectOrInputField{
+		key:         key,
 		title:       "",
 		description: "",
 		suggestions: suggestions,
@@ -96,10 +105,10 @@ func newImageVersionField(target *string, suggestions []string, otherLabel strin
 }
 
 // Title sets the title rendered above the option list.
-func (f *imageVersionField) Title(s string) *imageVersionField { f.title = s; return f }
+func (f *selectOrInputField) Title(s string) *selectOrInputField { f.title = s; return f }
 
 // Description sets the secondary line shown under the title.
-func (f *imageVersionField) Description(s string) *imageVersionField {
+func (f *selectOrInputField) Description(s string) *selectOrInputField {
 	f.description = s
 	return f
 }
@@ -107,7 +116,7 @@ func (f *imageVersionField) Description(s string) *imageVersionField {
 // Validate registers the validator run against the chosen value on
 // Submit. The same regex validateImage uses server-side is the typical
 // argument.
-func (f *imageVersionField) Validate(fn func(string) error) *imageVersionField {
+func (f *selectOrInputField) Validate(fn func(string) error) *selectOrInputField {
 	f.validate = fn
 	return f
 }
@@ -116,12 +125,12 @@ func (f *imageVersionField) Validate(fn func(string) error) *imageVersionField {
 
 // Init satisfies tea.Model. Returning textinput.Blink keeps the caret
 // animating from frame one when the cursor starts on the input row.
-func (*imageVersionField) Init() tea.Cmd { return textinput.Blink }
+func (*selectOrInputField) Init() tea.Cmd { return textinput.Blink }
 
 // Update routes keypresses: navigation keys move the cursor between
 // suggestion rows and the input row; typing on the input row falls
 // through to textinput; Submit commits via commit().
-func (f *imageVersionField) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (f *selectOrInputField) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	keymsg, ok := msg.(tea.KeyMsg)
 	if !ok {
 		// Forward non-key messages (e.g. cursor blink) to textinput only
@@ -149,7 +158,7 @@ func (f *imageVersionField) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return f, nil
 }
 
-func (f *imageVersionField) handleNav(msg tea.KeyMsg) (tea.Cmd, bool) {
+func (f *selectOrInputField) handleNav(msg tea.KeyMsg) (tea.Cmd, bool) {
 	onInput := f.cursor == len(f.suggestions)
 	switch {
 	case key.Matches(msg, f.keymap.Up):
@@ -181,7 +190,7 @@ func (f *imageVersionField) handleNav(msg tea.KeyMsg) (tea.Cmd, bool) {
 	return nil, false
 }
 
-func (f *imageVersionField) handleSubmit(msg tea.KeyMsg) (tea.Cmd, bool) {
+func (f *selectOrInputField) handleSubmit(msg tea.KeyMsg) (tea.Cmd, bool) {
 	switch {
 	case key.Matches(msg, f.keymap.Prev):
 		return huh.PrevField, true
@@ -191,7 +200,7 @@ func (f *imageVersionField) handleSubmit(msg tea.KeyMsg) (tea.Cmd, bool) {
 	return nil, false
 }
 
-func (f *imageVersionField) commit() tea.Cmd {
+func (f *selectOrInputField) commit() tea.Cmd {
 	var val string
 	if f.cursor == len(f.suggestions) {
 		val = strings.TrimSpace(f.input.Value())
@@ -208,7 +217,7 @@ func (f *imageVersionField) commit() tea.Cmd {
 	return huh.NextField
 }
 
-func (f *imageVersionField) activeStyles() *huh.FieldStyles {
+func (f *selectOrInputField) activeStyles() *huh.FieldStyles {
 	theme := f.theme
 	if theme == nil {
 		theme = huh.ThemeCharm()
@@ -223,7 +232,7 @@ func (f *imageVersionField) activeStyles() *huh.FieldStyles {
 // input row. The input row falls back to a placeholder line when the
 // cursor is elsewhere so users can still see the "type any tag"
 // affordance while browsing.
-func (f *imageVersionField) View() string {
+func (f *selectOrInputField) View() string {
 	styles := f.activeStyles()
 	maxW := f.width - styles.Base.GetHorizontalFrameSize()
 
@@ -279,7 +288,7 @@ func (f *imageVersionField) View() string {
 }
 
 // Blur removes focus from the field and the embedded textinput.
-func (f *imageVersionField) Blur() tea.Cmd {
+func (f *selectOrInputField) Blur() tea.Cmd {
 	f.focused = false
 	f.input.Blur()
 	return nil
@@ -287,7 +296,7 @@ func (f *imageVersionField) Blur() tea.Cmd {
 
 // Focus marks the field active; when the cursor is on the input row
 // the embedded textinput is also focused so the caret renders.
-func (f *imageVersionField) Focus() tea.Cmd {
+func (f *selectOrInputField) Focus() tea.Cmd {
 	f.focused = true
 	if f.cursor == len(f.suggestions) {
 		return f.input.Focus()
@@ -296,14 +305,14 @@ func (f *imageVersionField) Focus() tea.Cmd {
 }
 
 // Error returns the most recent validation error, if any.
-func (f *imageVersionField) Error() error { return f.err }
+func (f *selectOrInputField) Error() error { return f.err }
 
 // Skip reports whether huh should skip this field (always false).
-func (*imageVersionField) Skip() bool { return false }
+func (*selectOrInputField) Skip() bool { return false }
 
 // Zoom reports whether huh should give the field exclusive screen
 // height (always false).
-func (*imageVersionField) Zoom() bool { return false }
+func (*selectOrInputField) Zoom() bool { return false }
 
 // KeyBinds returns the bindings huh shows in the help bar. Prev is
 // intentionally omitted: cocoon runs each prompt as its own
@@ -311,41 +320,41 @@ func (*imageVersionField) Zoom() bool { return false }
 // field to land on and advertising "back" in the help row would be a
 // lie. The Prev keymap is still wired through Update so the binding
 // itself stays consistent with the rest of huh, just not listed.
-func (f *imageVersionField) KeyBinds() []key.Binding {
+func (f *selectOrInputField) KeyBinds() []key.Binding {
 	return []key.Binding{f.keymap.Up, f.keymap.Down, f.keymap.Submit}
 }
 
 // WithTheme injects huh's theme so the field renders styles in sync
 // with the rest of the form.
-func (f *imageVersionField) WithTheme(t *huh.Theme) huh.Field { f.theme = t; return f }
+func (f *selectOrInputField) WithTheme(t *huh.Theme) huh.Field { f.theme = t; return f }
 
 // WithAccessible toggles the accessibility (screen reader) mode.
-func (f *imageVersionField) WithAccessible(b bool) huh.Field { f.access = b; return f }
+func (f *selectOrInputField) WithAccessible(b bool) huh.Field { f.access = b; return f }
 
 // WithKeyMap pulls the navigation keymap from huh's Select profile so
 // Up/Down/Submit/Prev match every other field in the form.
-func (f *imageVersionField) WithKeyMap(k *huh.KeyMap) huh.Field { f.keymap = k.Select; return f }
+func (f *selectOrInputField) WithKeyMap(k *huh.KeyMap) huh.Field { f.keymap = k.Select; return f }
 
 // WithWidth sets the rendered width (forwarded from huh.Form layout).
-func (f *imageVersionField) WithWidth(w int) huh.Field { f.width = w; return f }
+func (f *selectOrInputField) WithWidth(w int) huh.Field { f.width = w; return f }
 
 // WithHeight sets the rendered height (forwarded from huh.Form layout).
-func (f *imageVersionField) WithHeight(h int) huh.Field { f.height = h; return f }
+func (f *selectOrInputField) WithHeight(h int) huh.Field { f.height = h; return f }
 
 // WithPosition accepts huh's position info; this field's layout is
 // independent of group position, so the input is ignored. The receiver
 // is kept named so the method can still return the same pointer for
 // huh's fluent chaining contract.
-func (f *imageVersionField) WithPosition(_ huh.FieldPosition) huh.Field {
+func (f *selectOrInputField) WithPosition(_ huh.FieldPosition) huh.Field {
 	return f
 }
 
 // GetKey returns the catalog key used to look the field's value up
 // after the form exits.
-func (*imageVersionField) GetKey() string { return "image_version" }
+func (f *selectOrInputField) GetKey() string { return f.key }
 
 // GetValue returns the field's committed value as an any.
-func (f *imageVersionField) GetValue() any {
+func (f *selectOrInputField) GetValue() any {
 	if f.target == nil {
 		return ""
 	}
@@ -356,12 +365,12 @@ func (f *imageVersionField) GetValue() any {
 // promptForMissing always wraps it in runSingleFieldForm, but this
 // keeps the type compatible with `(huh.Field).Run()` in case it's
 // reused outside the package.
-func (f *imageVersionField) Run() error {
+func (f *selectOrInputField) Run() error {
 	if f.access {
 		return f.RunAccessible(os.Stdout, os.Stdin)
 	}
 	if err := huh.NewForm(huh.NewGroup(f)).Run(); err != nil {
-		return fmt.Errorf("imageVersionField form: %w", err)
+		return fmt.Errorf("selectOrInputField form: %w", err)
 	}
 	return nil
 }
@@ -369,7 +378,7 @@ func (f *imageVersionField) Run() error {
 // RunAccessible is the screen-reader fallback. Suggestions are listed
 // numbered; the user may answer with the number or type a verbatim
 // tag. The same validator the Bubble Tea UI runs gates manual entries.
-func (f *imageVersionField) RunAccessible(w io.Writer, r io.Reader) error {
+func (f *selectOrInputField) RunAccessible(w io.Writer, r io.Reader) error {
 	f.printAccessibleHeader(w)
 	for {
 		fmt.Fprint(w, "Choose by number or type a tag: ")
@@ -382,7 +391,7 @@ func (f *imageVersionField) RunAccessible(w io.Writer, r io.Reader) error {
 		// returns n=0 with a non-EOF error and falls through to the
 		// empty-input retry, which is the right behavior.
 		if err != nil && errors.Is(err, io.EOF) {
-			return fmt.Errorf("imageVersionField: stdin closed before answer: %w", err)
+			return fmt.Errorf("selectOrInputField: stdin closed before answer: %w", err)
 		}
 		choice = strings.TrimSpace(choice)
 		if choice == "" {
@@ -405,7 +414,7 @@ func (f *imageVersionField) RunAccessible(w io.Writer, r io.Reader) error {
 	}
 }
 
-func (f *imageVersionField) printAccessibleHeader(w io.Writer) {
+func (f *selectOrInputField) printAccessibleHeader(w io.Writer) {
 	if f.title != "" {
 		fmt.Fprintln(w, f.title)
 	}
@@ -421,7 +430,7 @@ func (f *imageVersionField) printAccessibleHeader(w io.Writer) {
 // tryIndex returns the suggestion matched by a single-/two-digit
 // numeric answer, or (_, false) when the answer isn't an in-range
 // index.
-func (f *imageVersionField) tryIndex(choice string) (string, bool) {
+func (f *selectOrInputField) tryIndex(choice string) (string, bool) {
 	if len(choice) == 0 || len(choice) > 2 {
 		return "", false
 	}
@@ -435,11 +444,11 @@ func (f *imageVersionField) tryIndex(choice string) (string, bool) {
 	return f.suggestions[n-1], true
 }
 
-func (f *imageVersionField) assignTarget(v string) {
+func (f *selectOrInputField) assignTarget(v string) {
 	if f.target != nil {
 		*f.target = v
 	}
 }
 
-// Compile-time assertion that imageVersionField fully satisfies huh.Field.
-var _ huh.Field = (*imageVersionField)(nil)
+// Compile-time assertion that selectOrInputField fully satisfies huh.Field.
+var _ huh.Field = (*selectOrInputField)(nil)

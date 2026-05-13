@@ -55,7 +55,7 @@ curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-erro
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/deno.zip" | sha256sum -c -
 else
-  printf '%sWARNING: SHA256 verification skipped for Deno (no checksum provided in [plugins.versions.deno])%s\n' "$C_YEL" "$C_RST" >&2
+  printf '%sWARNING: SHA256 verification skipped for Deno (no checksum for deno in [plugins.versions])%s\n' "$C_YEL" "$C_RST" >&2
 fi
 
 unzip -q -o /tmp/deno.zip -d /usr/local/bin

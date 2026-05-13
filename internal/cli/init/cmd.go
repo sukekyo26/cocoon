@@ -51,11 +51,41 @@ var (
 	// rxImageVersionInput mirrors config.validate's rxImageVersion so the
 	// "Other (manual input)" prompt rejects bad input in the form rather
 	// than letting it slip through to `cocoon gen` and surface as a
-	// container.image_version validation error. Keep this pattern in
-	// lockstep with rxImageVersion (Docker tag spec: alnum / underscore
-	// can lead, period / hyphen cannot).
+	// container.image_version validation error. Reused by the plugin
+	// version picker because plugins.versions's pin field has the same
+	// character constraints. Keep this pattern in lockstep with
+	// rxImageVersion (Docker tag spec: alnum / underscore can lead,
+	// period / hyphen cannot).
 	rxImageVersionInput = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._-]*$`)
 )
+
+// versionStringValidator builds a huh.Validate function for prompts that
+// accept a version-like string (image tag, plugin pin). The TOML-safe
+// character set is enforced via rxImageVersionInput; verification that
+// the value actually exists upstream is intentionally NOT done — the
+// prompt description tells the user to check the upstream URL.
+//
+// formatErrKey selects the i18n message returned on regex failure so
+// each prompt can phrase the error in its own terms. When latestSentinel
+// is non-empty, an exact match against it is accepted unconditionally
+// (used by the plugin version picker where "LATEST" is a UI sentinel
+// for "leave unpinned"). Empty manual input is always rejected so a
+// stray Enter on the input row never silently encodes as a sentinel.
+func versionStringValidator(cat *i18n.Catalog, formatErrKey, latestSentinel string) func(string) error {
+	return func(s string) error {
+		s = strings.TrimSpace(s)
+		if latestSentinel != "" && s == latestSentinel {
+			return nil
+		}
+		if s == "" {
+			return errors.New(cat.Msg("init_err_required")) //nolint:err113 // user-facing prompt
+		}
+		if !rxImageVersionInput.MatchString(s) {
+			return errors.New(cat.Msg(formatErrKey)) //nolint:err113 // user-facing prompt
+		}
+		return nil
+	}
+}
 
 // NewCommand returns the cobra command for ` + "`cocoon init`" + `.
 func NewCommand(stdout, stderr io.Writer) *cobra.Command {
@@ -525,23 +555,16 @@ func promptForMissing(ans initAnswers, cat *i18n.Catalog, plugins map[string]*pl
 	if !ans.ImageVersionSet {
 		// Custom huh.Field: curated suggestions stacked above an inline
 		// free-text input row. Cursor on a suggestion = select; cursor
-		// on the input row = type. See internal/cli/init/field_image_version.go.
+		// on the input row = type. See internal/cli/init/field_select_or_input.go.
 		versions := config.SupportedImageVersions[ans.Image]
 		if ans.ImageVersion == "" {
 			ans.ImageVersion = defaultImageVersion(ans.Image)
 		}
-		field := newImageVersionField(&ans.ImageVersion, versions, cat.Msg("init_option_image_version_other")).
+		field := newSelectOrInputField("image_version", &ans.ImageVersion, versions,
+			cat.Msg("init_option_other_manual_input")).
 			Title(cat.Msg("init_prompt_image_version_static")).
 			Description(cat.Msg("init_desc_image_version_static")).
-			Validate(func(s string) error {
-				if s == "" {
-					return errors.New(cat.Msg("init_err_required")) //nolint:err113 // user-facing prompt
-				}
-				if !rxImageVersionInput.MatchString(s) {
-					return errors.New(cat.Msg("init_err_image_version_fmt")) //nolint:err113 // user-facing prompt
-				}
-				return nil
-			})
+			Validate(versionStringValidator(cat, "init_err_image_version_fmt", ""))
 		if err := runSingleFieldForm(field); err != nil {
 			return ans, err
 		}
@@ -608,14 +631,27 @@ func promptForMissing(ans initAnswers, cat *i18n.Catalog, plugins map[string]*pl
 		}
 		ans.PluginsSet = true
 	}
+	// version_capable plugins not already pinned via --plugin-versions get
+	// a per-plugin LATEST / pin prompt. The map is allocated here so the
+	// prompt loop can record picks; an empty map after the prompt is
+	// equivalent to nil in writePluginVersions (both hit the len==0
+	// fallback that emits the commented-out template).
+	if ans.PluginVersions == nil {
+		ans.PluginVersions = make(map[string]string)
+	}
+	if err := promptPluginVersionsForCapable(cat, plugins, ans.Plugins, ans.PluginVersions); err != nil {
+		return ans, err
+	}
+	ans.PluginVersionsSet = true
 	return ans, nil
 }
 
 // promptPluginsWithRetry runs the plugin multi-select form, then verifies
-// the user did not pick a conflicting pair (e.g. custom-ps1 ↔ starship).
-// On conflict, the form is re-run up to two more times so the user can
-// reconcile without restarting the whole flow. Three failures in a row
-// return ErrUsage so CI / scripted invocations cannot loop forever.
+// the user did not pick a conflicting pair declared in plugin.toml's
+// metadata.conflicts. On conflict, the form is re-run up to two more times
+// so the user can reconcile without restarting the whole flow. Three
+// failures in a row return ErrUsage so CI / scripted invocations cannot
+// loop forever.
 //
 // excludeID hides one plugin id from the picker (empty = hide none); the
 // caller uses it to drop the language-runtime plugin that duplicates the
@@ -873,8 +909,7 @@ func pluginsMultiSelect(cat *i18n.Catalog, plugins map[string]*plugin.Plugin,
 
 // formatPluginLabel collapses Name + short hint into a single display
 // line. The "conflicts" hint surfaces incompatibilities up front so the
-// user does not have to dig into plugin.toml — e.g. picking custom-ps1
-// makes the conflict with starship immediately obvious.
+// user does not have to dig into plugin.toml.
 func formatPluginLabel(id string, p *plugin.Plugin) string {
 	name := p.Metadata.Name
 	if name == "" {
@@ -1058,8 +1093,8 @@ func parsePluginVersions(raw string, plugins map[string]*plugin.Plugin, enabled 
 
 // validatePluginConflicts reports the first incompatible pair in the
 // enabled list. Conflicts are declared on plugin.toml's metadata.conflicts
-// field; the relation is symmetric (custom-ps1 lists starship and vice
-// versa) so checking one direction is enough.
+// field; the relation is required to be symmetric so checking one
+// direction is enough.
 func validatePluginConflicts(plugins map[string]*plugin.Plugin, enabled []string) error {
 	enabledSet := make(map[string]struct{}, len(enabled))
 	for _, id := range enabled {
@@ -1305,27 +1340,22 @@ func renderWorkspaceToml(s containerSpec, cat *i18n.Catalog) string {
 	return strings.TrimRight(sb.String(), "\n") + "\n"
 }
 
-// writePluginVersions emits the [plugins.versions.<id>] blocks for each pin
-// in deterministic id order. When pins is empty it falls back to the
-// commented-out example template so the reader still discovers the section.
+// writePluginVersions emits a single `[plugins.versions]` section with one
+// inline-table line per pin, alphabetically sorted by id. When pins is empty
+// it falls back to the commented-out example template so the reader still
+// discovers the section.
 func writePluginVersions(sb *strings.Builder, cat *i18n.Catalog, pins map[string]string) {
 	if len(pins) == 0 {
 		emitTemplate(sb, cat, "init_toml_template_plugins_versions")
 		return
 	}
-	ids := make([]string, 0, len(pins))
-	for id := range pins {
-		ids = append(ids, id)
+	lines := make([]plugin.PinLine, 0, len(pins))
+	for id, ref := range pins {
+		lines = append(lines, plugin.PinLine{ID: id, Ref: ref, ChecksumAmd64: "", ChecksumArm64: ""})
 	}
-	sort.Strings(ids)
 	sb.WriteString(cat.Msg("init_toml_section_plugins_versions"))
 	sb.WriteByte('\n')
-	for i, id := range ids {
-		if i > 0 {
-			sb.WriteByte('\n')
-		}
-		sb.WriteString(plugin.FormatPinBlock(id, pins[id], "", ""))
-	}
+	sb.WriteString(plugin.FormatPinSection(lines))
 	sb.WriteByte('\n')
 }
 

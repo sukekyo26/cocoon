@@ -80,15 +80,15 @@ docker compose -f .devcontainer/docker-compose.yml up -d # または VS Code で
 8. **社内 CA 自動取り込み** — `~/.cocoon/certs/` 配下の `.crt` をビルド時に取り込むか opt-in (デフォルト off。下記参照)
 9. **ポートフォワード** — カンマ区切りの docker-compose short form (例: `3000:3000,5432:5432`)。空 Enter で見送ると `[ports]` 雛形はコメント行のまま残る (後で有効化可能)
 10. **apt カテゴリ** — text-editors / vcs / utilities / build / network / … (複数選択)
-11. **プラグイン** — 同梱カタログ 22 種から選択 (複数選択)
+11. **プラグイン** — 同梱カタログ 21 種から選択 (複数選択)
 
 各回答は自己説明的な 1 行として `workspace.toml` に書き込まれます。`--yes` と各値フラグ (`--service-name` / `--username` / `--image` / `--plugins` / `--certificates` / `--ports` …) を組み合わせれば TTY なしで CI から呼び出せます。
 
 ## プラグイン
 
-22 のプラグインが `go:embed` でバイナリに同梱されています:
+21 のプラグインが `go:embed` でバイナリに同梱されています:
 
-`aws-cli`, `aws-sam-cli`, `bun`, `claude-code`, `copilot-cli`, `custom-ps1`, `deno`, `docker-cli`, `github-cli`, `go`, `google-chrome`, `lazygit`, `mise`, `nerd-fonts`, `node`, `opentofu`, `proto`, `rust`, `starship`, `terraform`, `uv`, `zig`
+`aws-cli`, `aws-sam-cli`, `bun`, `claude-code`, `copilot-cli`, `deno`, `docker-cli`, `github-cli`, `go`, `google-chrome`, `lazygit`, `mise`, `nerd-fonts`, `node`, `opentofu`, `proto`, `rust`, `starship`, `terraform`, `uv`, `zig`
 
 `~/.cocoon/plugins/<id>/` (ユーザースコープ) や `<project>/.cocoon/plugins/<id>/` (プロジェクトスコープ。リポジトリにコミット可) で上書き・追加できます。どちらの層も埋め込みカタログより優先されます。作成手順は [`docs/plugins.ja.md`](plugins.ja.md) を参照してください。
 
