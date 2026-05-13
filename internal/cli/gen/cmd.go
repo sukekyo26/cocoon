@@ -36,7 +36,6 @@ var ErrUsage = errors.New("usage error")
 // ErrFailure signals a runtime failure during generation.
 var ErrFailure = errors.New("gen failed")
 
-// errCertsPathNotDirectory: caller wraps with ErrFailure once.
 var errCertsPathNotDirectory = errors.New("cocoon certs path exists but is not a directory")
 
 const genLong = `cocoon gen — generate .devcontainer/{Dockerfile, docker-compose.yml, devcontainer.json}
@@ -54,7 +53,7 @@ After generation, start the container yourself:
 
 …or open the project in VS Code and pick "Reopen in Container".`
 
-// NewCommand returns the cobra command for ` + "`cocoon gen`" + `.
+// NewCommand returns the cobra command for `cocoon gen`.
 func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 	var (
 		workspaceFlag string
@@ -147,9 +146,7 @@ func runGen(stdout, stderr io.Writer, workspaceFlag, outputFlag string) error {
 	return nil
 }
 
-// displayPath shortens an absolute path to a cwd-relative form when the
-// result stays inside cwd, so users see "wrote .devcontainer/Dockerfile"
-// rather than "wrote /tmp/.../.devcontainer/Dockerfile".
+// displayPath returns a cwd-relative form when the result stays inside cwd.
 func displayPath(cwd, p string) string {
 	if cwd == "" {
 		return p
@@ -189,7 +186,7 @@ func resolveWorkspace(flag string) (string, error) {
 	return found, nil
 }
 
-// userPluginsDir returns ~/.cocoon/plugins, the LayeredFS user layer root.
+// userPluginsDir is the LayeredFS user-layer root (~/.cocoon/plugins).
 func userPluginsDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -198,10 +195,8 @@ func userPluginsDir() (string, error) {
 	return filepath.Join(home, ".cocoon", "plugins"), nil
 }
 
-// ensureUserCertsDir mkdirs ~/.cocoon/certs (mode 0700) if missing so
-// docker-compose's additional_contexts can resolve before the build
-// starts. Only the first-run case prints a status line; re-runs stay
-// quiet. Mirrors the plugin overlay's 0700 posture (private user data).
+// ensureUserCertsDir mkdirs ~/.cocoon/certs (0700) so additional_contexts
+// resolves before the build starts. Idempotent: re-runs stay quiet.
 func ensureUserCertsDir(log *logx.Logger, cat *i18n.Catalog) error {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -233,8 +228,7 @@ func printNextSteps(log *logx.Logger, cat *i18n.Catalog, devcontainer bool) {
 	}
 }
 
-// printCertNotice surfaces `~/.cocoon/certs/` as the drop-zone for user
-// CA certs in stdout, so users do not have to read configuration.md.
+// printCertNotice surfaces ~/.cocoon/certs/ as the user-CA drop zone.
 func printCertNotice(log *logx.Logger, cat *i18n.Catalog) {
 	log.Info("")
 	log.Info(log.Bold(cat.Msg("gen_certs_notice_header")))
@@ -242,14 +236,11 @@ func printCertNotice(log *logx.Logger, cat *i18n.Catalog) {
 	log.Info(cat.Msg("gen_certs_notice_team"))
 }
 
-// ensureHomeFiles touches each [home_files] entry on the host with mode
-// 0600 so Docker does not auto-create them as directories at the first
-// `docker compose up`. Existing files are left untouched (idempotent),
-// directories collide with ErrHomeFileIsDirectory (callers see actionable
-// recovery guidance in stderr), and symlinks are trusted as-is. When
-// cocoon gen is running inside a container, the host is unreachable from
-// here — emit a warning but still attempt the touch so contained dev
-// loops where HOME happens to match still work.
+// ensureHomeFiles touches each [home_files] entry (mode 0600) so Docker
+// does not auto-create them as directories. Idempotent on regular files;
+// directories collide with ErrHomeFileIsDirectory; symlinks are trusted.
+// When run inside a container the host is unreachable, so we warn but
+// still try (contained loops where HOME matches still work).
 func ensureHomeFiles(ctx *generate.WorkspaceContext, log *logx.Logger, cat *i18n.Catalog) error {
 	files := ctx.HomeFilesEntries()
 	if len(files) == 0 {
@@ -281,10 +272,8 @@ func ensureHomeFiles(ctx *generate.WorkspaceContext, log *logx.Logger, cat *i18n
 		}
 		f, openErr := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 		if errors.Is(openErr, os.ErrExist) {
-			// Lost the TOCTOU race against another writer (VS Code's
-			// initializeCommand, a parallel `cocoon gen`, the user's
-			// own touch in another terminal). The desired state — file
-			// exists — is satisfied; skip the announcement and move on.
+			// Lost a TOCTOU race against another writer; the desired
+			// state (file exists) is already satisfied.
 			continue
 		}
 		if openErr != nil {

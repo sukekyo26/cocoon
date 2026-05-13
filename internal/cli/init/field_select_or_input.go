@@ -14,21 +14,11 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// selectOrInputField is a custom huh.Field that combines curated
-// suggestions with a trailing free-text input row, all on a single
-// screen. When the cursor sits on any suggestion row, Enter commits
-// that exact label; when it sits on the bottom input row, the row
-// becomes editable and Enter commits whatever the user typed (after
-// the optional format validator).
-//
-// huh's stock Select rows are immutable Option labels, so this shape
-// isn't expressible by composing Select + Input — the field implements
-// huh.Field directly. The bespoke code is worth the UX win: no second
-// screen, no always-visible Input below the list, no "Other" sentinel
-// to thread through promptForMissing.
-//
-// cocoon reuses this field for image tag picking and plugin version
-// pinning — both fit the "small curated set OR free text" shape.
+// selectOrInputField is a custom huh.Field with curated suggestions plus
+// a trailing free-text input row on a single screen. huh's stock Select
+// rows are immutable Option labels so this shape isn't expressible by
+// composing Select + Input. Used for image-tag picking and plugin-version
+// pinning (both fit "small curated set OR free text").
 type selectOrInputField struct {
 	key         string
 	title       string
@@ -51,12 +41,8 @@ type selectOrInputField struct {
 	access bool
 }
 
-// newSelectOrInputField builds a Bubble Tea / huh field that presents
-// suggestions as a select list with an editable trailing input row.
-// key is the huh field identifier (used by huh internals; cocoon runs
-// single-field forms so it rarely matters). otherLabel is the
-// placeholder text for the input row when the cursor is parked
-// elsewhere.
+// newSelectOrInputField builds the field. otherLabel is the placeholder
+// shown on the input row when the cursor is parked elsewhere.
 func newSelectOrInputField(
 	key string, target *string, suggestions []string, otherLabel string,
 ) *selectOrInputField {
@@ -83,9 +69,7 @@ func newSelectOrInputField(
 		access:      false,
 	}
 
-	// Preset cursor + input value from any pre-filled *target. Matching
-	// a suggestion lands the cursor on that row; an off-whitelist tag
-	// jumps to the input row with the value pre-typed.
+	// Off-whitelist pre-fill lands on the input row with the value pre-typed.
 	initial := ""
 	if target != nil {
 		initial = *target
@@ -113,28 +97,22 @@ func (f *selectOrInputField) Description(s string) *selectOrInputField {
 	return f
 }
 
-// Validate registers the validator run against the chosen value on
-// Submit. The same regex validateImage uses server-side is the typical
-// argument.
+// Validate registers the validator run against the chosen value on Submit.
 func (f *selectOrInputField) Validate(fn func(string) error) *selectOrInputField {
 	f.validate = fn
 	return f
 }
 
-// ---- Bubble Tea / huh.Field implementation ----
-
-// Init satisfies tea.Model. Returning textinput.Blink keeps the caret
-// animating from frame one when the cursor starts on the input row.
+// Init keeps the caret animating from frame one when the cursor starts on
+// the input row.
 func (*selectOrInputField) Init() tea.Cmd { return textinput.Blink }
 
-// Update routes keypresses: navigation keys move the cursor between
-// suggestion rows and the input row; typing on the input row falls
-// through to textinput; Submit commits via commit().
+// Update routes keypresses and forwards stray messages to textinput.
 func (f *selectOrInputField) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	keymsg, ok := msg.(tea.KeyMsg)
 	if !ok {
 		// Forward non-key messages (e.g. cursor blink) to textinput only
-		// while the input row is active, so its caret keeps blinking.
+		// while the input row is active so its caret keeps blinking.
 		if f.cursor == len(f.suggestions) {
 			var cmd tea.Cmd
 			f.input, cmd = f.input.Update(msg)
@@ -149,7 +127,6 @@ func (f *selectOrInputField) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if cmd, handled := f.handleSubmit(keymsg); handled {
 		return f, cmd
 	}
-	// Fall through: on input row, forward unhandled keys to textinput.
 	if f.cursor == len(f.suggestions) {
 		var cmd tea.Cmd
 		f.input, cmd = f.input.Update(msg)
@@ -228,10 +205,8 @@ func (f *selectOrInputField) activeStyles() *huh.FieldStyles {
 	return &theme.Blurred
 }
 
-// View renders the title, description, suggestion list, and inline
-// input row. The input row falls back to a placeholder line when the
-// cursor is elsewhere so users can still see the "type any tag"
-// affordance while browsing.
+// View shows the input row as a placeholder line when the cursor is
+// elsewhere so the "type any tag" affordance stays visible while browsing.
 func (f *selectOrInputField) View() string {
 	styles := f.activeStyles()
 	maxW := f.width - styles.Base.GetHorizontalFrameSize()
@@ -287,15 +262,15 @@ func (f *selectOrInputField) View() string {
 		Render(sb.String())
 }
 
-// Blur removes focus from the field and the embedded textinput.
+// Blur removes focus.
 func (f *selectOrInputField) Blur() tea.Cmd {
 	f.focused = false
 	f.input.Blur()
 	return nil
 }
 
-// Focus marks the field active; when the cursor is on the input row
-// the embedded textinput is also focused so the caret renders.
+// Focus also focuses the embedded textinput when the cursor is on the
+// input row so the caret renders.
 func (f *selectOrInputField) Focus() tea.Cmd {
 	f.focused = true
 	if f.cursor == len(f.suggestions) {
@@ -304,56 +279,47 @@ func (f *selectOrInputField) Focus() tea.Cmd {
 	return nil
 }
 
-// Error returns the most recent validation error, if any.
+// Error returns the most recent validation error.
 func (f *selectOrInputField) Error() error { return f.err }
 
-// Skip reports whether huh should skip this field (always false).
+// Skip always returns false.
 func (*selectOrInputField) Skip() bool { return false }
 
-// Zoom reports whether huh should give the field exclusive screen
-// height (always false).
+// Zoom always returns false.
 func (*selectOrInputField) Zoom() bool { return false }
 
-// KeyBinds returns the bindings huh shows in the help bar. Prev is
-// intentionally omitted: cocoon runs each prompt as its own
-// single-field huh.Form (see initLong), so Shift+Tab has no previous
-// field to land on and advertising "back" in the help row would be a
-// lie. The Prev keymap is still wired through Update so the binding
-// itself stays consistent with the rest of huh, just not listed.
+// KeyBinds omits Prev intentionally: each prompt is its own single-field
+// form, so advertising "back" would be a lie. Prev is still wired through
+// Update so the binding stays consistent with the rest of huh.
 func (f *selectOrInputField) KeyBinds() []key.Binding {
 	return []key.Binding{f.keymap.Up, f.keymap.Down, f.keymap.Submit}
 }
 
-// WithTheme injects huh's theme so the field renders styles in sync
-// with the rest of the form.
+// WithTheme injects huh's theme.
 func (f *selectOrInputField) WithTheme(t *huh.Theme) huh.Field { f.theme = t; return f }
 
-// WithAccessible toggles the accessibility (screen reader) mode.
+// WithAccessible toggles screen-reader mode.
 func (f *selectOrInputField) WithAccessible(b bool) huh.Field { f.access = b; return f }
 
-// WithKeyMap pulls the navigation keymap from huh's Select profile so
-// Up/Down/Submit/Prev match every other field in the form.
+// WithKeyMap pulls navigation from huh's Select profile.
 func (f *selectOrInputField) WithKeyMap(k *huh.KeyMap) huh.Field { f.keymap = k.Select; return f }
 
-// WithWidth sets the rendered width (forwarded from huh.Form layout).
+// WithWidth sets the rendered width.
 func (f *selectOrInputField) WithWidth(w int) huh.Field { f.width = w; return f }
 
-// WithHeight sets the rendered height (forwarded from huh.Form layout).
+// WithHeight sets the rendered height.
 func (f *selectOrInputField) WithHeight(h int) huh.Field { f.height = h; return f }
 
-// WithPosition accepts huh's position info; this field's layout is
-// independent of group position, so the input is ignored. The receiver
-// is kept named so the method can still return the same pointer for
-// huh's fluent chaining contract.
+// WithPosition ignores huh's position info; this field's layout is
+// independent of group position.
 func (f *selectOrInputField) WithPosition(_ huh.FieldPosition) huh.Field {
 	return f
 }
 
-// GetKey returns the catalog key used to look the field's value up
-// after the form exits.
+// GetKey returns the field key.
 func (f *selectOrInputField) GetKey() string { return f.key }
 
-// GetValue returns the field's committed value as an any.
+// GetValue returns the committed value.
 func (f *selectOrInputField) GetValue() any {
 	if f.target == nil {
 		return ""
@@ -361,10 +327,8 @@ func (f *selectOrInputField) GetValue() any {
 	return *f.target
 }
 
-// Run renders the field as a standalone single-field form. cocoon's
-// promptForMissing always wraps it in runSingleFieldForm, but this
-// keeps the type compatible with `(huh.Field).Run()` in case it's
-// reused outside the package.
+// Run keeps the type compatible with `(huh.Field).Run()` even though
+// promptForMissing always wraps it in runSingleFieldForm.
 func (f *selectOrInputField) Run() error {
 	if f.access {
 		return f.RunAccessible(os.Stdout, os.Stdin)
@@ -375,21 +339,17 @@ func (f *selectOrInputField) Run() error {
 	return nil
 }
 
-// RunAccessible is the screen-reader fallback. Suggestions are listed
-// numbered; the user may answer with the number or type a verbatim
-// tag. The same validator the Bubble Tea UI runs gates manual entries.
+// RunAccessible is the screen-reader fallback; users answer with the
+// number or type a verbatim tag.
 func (f *selectOrInputField) RunAccessible(w io.Writer, r io.Reader) error {
 	f.printAccessibleHeader(w)
 	for {
 		fmt.Fprint(w, "Choose by number or type a tag: ")
 		var choice string
 		_, err := fmt.Fscanln(r, &choice)
-		// EOF (or any persistent read error) means the reader is closed —
-		// keep looping in that state would spin forever on the empty-input
-		// branch below, so surface it as a wrapped error and let the
-		// caller decide. "unexpected newline" (blank line on a live tty)
-		// returns n=0 with a non-EOF error and falls through to the
-		// empty-input retry, which is the right behavior.
+		// EOF would spin the empty-input retry forever. "unexpected newline"
+		// (blank line on a live tty) returns n=0 with a non-EOF error and
+		// correctly falls through to the retry.
 		if err != nil && errors.Is(err, io.EOF) {
 			return fmt.Errorf("selectOrInputField: stdin closed before answer: %w", err)
 		}
@@ -427,9 +387,7 @@ func (f *selectOrInputField) printAccessibleHeader(w io.Writer) {
 	fmt.Fprintln(w, "Or type any tag directly.")
 }
 
-// tryIndex returns the suggestion matched by a single-/two-digit
-// numeric answer, or (_, false) when the answer isn't an in-range
-// index.
+// tryIndex maps a 1- or 2-digit numeric answer to the matching suggestion.
 func (f *selectOrInputField) tryIndex(choice string) (string, bool) {
 	if len(choice) == 0 || len(choice) > 2 {
 		return "", false
@@ -450,5 +408,4 @@ func (f *selectOrInputField) assignTarget(v string) {
 	}
 }
 
-// Compile-time assertion that selectOrInputField fully satisfies huh.Field.
 var _ huh.Field = (*selectOrInputField)(nil)

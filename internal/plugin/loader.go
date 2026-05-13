@@ -12,10 +12,8 @@ import (
 	"github.com/sukekyo26/cocoon/internal/config"
 )
 
-// Load parses and validates a single plugin TOML file. The parameter
-// is named tomlPath (not path) so it does not shadow the imported
-// "path" package — `path.Join` calls inside this function would
-// otherwise refer to the string argument and stop compiling.
+// Load parses and validates a single plugin TOML file. The parameter is
+// named tomlPath so it does not shadow the imported "path" package.
 func Load(tomlPath string) (*Plugin, error) {
 	data, err := os.ReadFile(tomlPath) //nolint:gosec // path provided by trusted caller.
 	if err != nil {
@@ -24,9 +22,7 @@ func Load(tomlPath string) (*Plugin, error) {
 	return parsePluginTOML(tomlPath, data)
 }
 
-// loadFromFS reads <id>/plugin.toml out of src and validates it. The
-// label argument is used purely for error wrapping so messages mirror
-// the on-disk Load behaviour.
+// loadFromFS uses label for error wrapping so messages mirror Load.
 func loadFromFS(src fs.FS, id, label string) (*Plugin, error) {
 	data, err := fs.ReadFile(src, path.Join(id, "plugin.toml"))
 	if err != nil {
@@ -46,27 +42,19 @@ func parsePluginTOML(label string, data []byte) (*Plugin, error) {
 	return &p, nil
 }
 
-// ErrNilPluginsFS is returned by LoadEnabledFromFS when called with a
-// nil source. Callers can identify it via errors.Is to distinguish a
-// programming error (forgot to wire the LayeredFS) from a missing
-// plugin on a real filesystem.
+// ErrNilPluginsFS lets callers distinguish "forgot to wire PluginsFS" from
+// missing plugins via errors.Is.
 var ErrNilPluginsFS = errors.New("plugin: source fs is nil")
 
-// LoadEnabled loads plugin.toml for every id in `enabled` from `pluginsDir`.
-// Missing plugins emit a stderr-style warning to `warnings` (mirroring the
-// Python `_load_plugin_data` warning) and are skipped.
+// LoadEnabled emits one stderr warning to `warnings` per missing plugin and
+// skips it.
 func LoadEnabled(pluginsDir string, enabled []string, warnings io.Writer) (map[string]*Plugin, error) {
 	return LoadEnabledFromFS(os.DirFS(pluginsDir), enabled, warnings, pluginsDir)
 }
 
-// LoadEnabledFromFS is the fs.FS-backed counterpart of LoadEnabled. The
-// optional pathPrefix is only used to decorate the warning message for
-// missing plugins so on-disk callers can keep their absolute-path
-// diagnostic; pass "" for embedded sources.
-//
-// Returns ErrNilPluginsFS when src is nil. (fs.Stat / fs.ReadFile would
-// otherwise panic on the nil interface, masking the actual configuration
-// bug — a caller built a WorkspaceContext without wiring PluginsFS.)
+// LoadEnabledFromFS uses pathPrefix purely to decorate the missing-plugin
+// warning (pass "" for embedded sources). Returns ErrNilPluginsFS so a nil
+// src surfaces as a clear config bug rather than a fs.Stat panic.
 func LoadEnabledFromFS(src fs.FS, enabled []string, warnings io.Writer, pathPrefix string) (map[string]*Plugin, error) {
 	if src == nil {
 		return nil, ErrNilPluginsFS

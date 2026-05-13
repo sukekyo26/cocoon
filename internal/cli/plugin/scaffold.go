@@ -17,21 +17,15 @@ import (
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
 
-// errInputRequired is returned by huh input validators when the user submits
-// an empty value.
-var errInputRequired = errors.New("required")
+var (
+	errInputRequired    = errors.New("required")
+	errURLInDescription = errors.New("include URL in parentheses, e.g. \"(https://...)\"")
+	errPathNotADir      = errors.New("not a directory")
+)
 
-// errURLInDescription is returned by the description-input validator when the
-// user submits a description that does not embed an upstream URL.
-var errURLInDescription = errors.New("include URL in parentheses, e.g. \"(https://...)\"")
-
-// errPathNotADir is returned by dirExists when the candidate path exists but
-// points at a non-directory entry.
-var errPathNotADir = errors.New("not a directory")
-
-// scaffoldOpts collects all values that drive code generation. The CLI flag
-// parser fills in whatever the user supplied; remaining holes are filled by
-// the interactive form (unless --non-interactive was passed).
+// scaffoldOpts collects all values that drive code generation; holes the
+// user did not pass via flags are filled by the interactive form (unless
+// --non-interactive).
 type scaffoldOpts struct {
 	id              string
 	pluginsDir      string
@@ -45,8 +39,8 @@ type scaffoldOpts struct {
 	nonInteractive  bool
 	force           bool
 
-	// Track which flags were explicitly set so the interactive form can
-	// distinguish "user passed --default=false" from "user did not pass --default".
+	// set* lets the form distinguish "user passed --default=false" from
+	// "user did not pass --default".
 	setName            bool
 	setDescription     bool
 	setDefaultEnabled  bool
@@ -88,29 +82,23 @@ func validateDescriptionInput(s string) error {
 	return nil
 }
 
-// applyPickedTemplate transfers a non-empty template selection from the form
-// closure into opts. Extracted from the inline defer so the assignment is
-// reachable from unit tests without invoking the huh form.
+// applyPickedTemplate transfers a non-empty template selection into opts.
 func applyPickedTemplate(opts *scaffoldOpts, picked string) {
 	if picked != "" {
 		opts.template = templateKind(picked)
 	}
 }
 
-// prompter abstracts the interactive form runner so tests can substitute a
-// deterministic fake for the huh.Form. The interface is unexported because
-// the only production implementation is huhPrompter and callers outside the
-// package have no business swapping it.
+// prompter abstracts the interactive form so tests can substitute a fake.
 type prompter interface {
 	Run(groups []*huh.Group) error
 }
 
-// huhPrompter is the production prompter backed by charmbracelet/huh.
+// huhPrompter is the charmbracelet/huh backed prompter.
 type huhPrompter struct{}
 
-// Run implements [prompter] by assembling a huh.Form from the supplied groups
-// and invoking form.Run. Empty groups short-circuit to nil so callers can
-// safely pass an unconditional slice.
+// Run short-circuits to nil on empty groups so callers can pass an
+// unconditional slice.
 func (huhPrompter) Run(groups []*huh.Group) error {
 	if len(groups) == 0 {
 		return nil
@@ -198,8 +186,8 @@ func promptMissing(opts *scaffoldOpts, cat *i18n.Catalog, p prompter) error {
 	return nil
 }
 
-// finalizeOpts performs the cross-field validation that applies to both
-// interactive and non-interactive modes (e.g. tarball implies version_capable).
+// finalizeOpts runs the cross-field rules shared by both interactive and
+// non-interactive modes (e.g. tarball implies version_capable).
 func finalizeOpts(opts *scaffoldOpts, cat *i18n.Catalog, stderr io.Writer) error {
 	log := logx.New(io.Discard, stderr)
 	switch opts.template {
@@ -211,11 +199,9 @@ func finalizeOpts(opts *scaffoldOpts, cat *i18n.Catalog, stderr io.Writer) error
 	}
 
 	if opts.nonInteractive {
-		// Truly-missing flags (empty string / not provided) keep the existing
-		// `plugin_scaffold_missing_flag` actionable message that names the
-		// missing flag explicitly. Only non-empty inputs reach the shared
-		// validators, whose sentinel errors are mapped to localized keys so
-		// raw English from err.Error() never leaks into ja output.
+		// Only non-empty inputs reach the shared validators so the localized
+		// `plugin_scaffold_missing_flag` actionable message wins over the
+		// English sentinel for the "missing" case.
 		if opts.name == "" {
 			log.Error("ERROR: " + cat.Msg("plugin_scaffold_missing_flag", "name"))
 			return ErrUsage
@@ -235,9 +221,6 @@ func finalizeOpts(opts *scaffoldOpts, cat *i18n.Catalog, stderr io.Writer) error
 			case errors.Is(err, errURLInDescription):
 				log.Error("ERROR: " + cat.Msg("plugin_scaffold_desc_missing_url"))
 			default:
-				// Defensive fallback for future sentinels not yet in this
-				// switch; emit a localized generic message so non-ja text
-				// never reaches output.
 				log.Error("ERROR: " + cat.Msg("plugin_scaffold_desc_invalid"))
 			}
 			return ErrUsage
@@ -251,15 +234,8 @@ func finalizeOpts(opts *scaffoldOpts, cat *i18n.Catalog, stderr io.Writer) error
 	return nil
 }
 
-// resolvePluginsDir returns opts.pluginsDir verbatim when set, or
-// auto-discovers <workspace>/.cocoon/plugins from cwd.
-//
-// Error semantics mirror projectPluginsDir:
-//   - (path, nil)                   when --plugins-dir was set or discovery succeeded
-//   - ("", ErrWorkspaceNotFound)   when running outside a cocoon project — the
-//     caller turns this into an actionable ErrUsage with a localized message
-//   - ("", wrapped err)             on filesystem-level failures, mapped to
-//     ErrFailure by the caller so context is preserved
+// resolvePluginsDir auto-discovers <workspace>/.cocoon/plugins when
+// --plugins-dir is unset. Error semantics mirror projectPluginsDir.
 func resolvePluginsDir(opts scaffoldOpts) (string, error) {
 	if opts.pluginsDir != "" {
 		return opts.pluginsDir, nil
@@ -267,9 +243,8 @@ func resolvePluginsDir(opts scaffoldOpts) (string, error) {
 	return projectPluginsDir()
 }
 
-// renderAndWrite renders a single scaffold file via render and writes it under
-// dir/name with the given mode. On failure it logs and triggers cleanup.
-// Returns the path written on success — relative if dir was relative.
+// renderAndWrite triggers cleanup() on any failure. Returns the path
+// written (relative iff dir was relative).
 func renderAndWrite(
 	dir, name string, mode os.FileMode,
 	render func() (string, error),

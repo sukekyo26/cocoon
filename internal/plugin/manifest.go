@@ -1,7 +1,6 @@
 // Package plugin owns the plugin.toml schema, its loader, conflict
 // detection, and the volume helpers consumed by the dockerfile/compose
-// generators. It replaces the doc-only stub that previously delegated all
-// of this responsibility to internal/config and internal/generate.
+// generators.
 package plugin
 
 // Plugin mirrors the plugin.toml manifest under plugins/<id>/plugin.toml.

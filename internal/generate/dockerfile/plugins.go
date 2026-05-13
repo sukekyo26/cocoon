@@ -25,9 +25,9 @@ const installHeredocDelim = "COCOON_PLUGIN_EOF"
 // class with errors.Is without scraping the message.
 var ErrHeredocCollision = errors.New("dockerfile: plugin install script collides with heredoc delimiter")
 
-// fileExistsInFS returns (false, nil) when name is missing or a directory,
-// and (false, err) for permission / I/O failures so the caller can surface
-// them instead of silently dropping the plugin. fsys must be non-nil.
+// fileExistsInFS returns (false, nil) for missing entries / directories,
+// (false, err) for permission / I/O failures so the caller surfaces them
+// instead of silently dropping the plugin. fsys must be non-nil.
 func fileExistsInFS(fsys fs.FS, name string) (bool, error) {
 	st, err := fs.Stat(fsys, name)
 	if err != nil {
@@ -39,12 +39,10 @@ func fileExistsInFS(fsys fs.FS, name string) (bool, error) {
 	return !st.IsDir(), nil
 }
 
-// checkHeredocCollision scans scriptBody for a line equal to
-// installHeredocDelim. The heredoc form `bash <<'EOF' … EOF` terminates
-// at the first line that exactly matches the closing delimiter, so a
-// third-party plugin whose install script happens to contain that
-// literal would be silently truncated mid-build. We reject it here so
-// the failure is loud and points at the offending plugin id.
+// checkHeredocCollision rejects scripts containing a line that exactly
+// matches installHeredocDelim. The heredoc form `bash <<'EOF' … EOF`
+// truncates at the first matching line, so a third-party plugin with
+// that literal would silently be cut off mid-build.
 func checkHeredocCollision(pluginID string, scriptBody []byte) error {
 	for _, line := range strings.Split(string(scriptBody), "\n") {
 		if line == installHeredocDelim {
@@ -55,9 +53,8 @@ func checkHeredocCollision(pluginID string, scriptBody []byte) error {
 	return nil
 }
 
-// readFileFromFS reads name out of fsys, wrapping errors with the
-// fs-relative path so renderer failures point at the offending file.
-// fsys must be non-nil; see fileExistsInFS for the contract.
+// readFileFromFS wraps errors with the fs-relative path so renderer
+// failures point at the offending file.
 func readFileFromFS(fsys fs.FS, name string) ([]byte, error) {
 	data, err := fs.ReadFile(fsys, name)
 	if err != nil {
@@ -169,14 +166,9 @@ func buildPluginSnippets(
 		return pluginSnippets{}, false, err
 	}
 	if hasUserInstall {
-		// Plugin-level ARG declarations need to be in scope for the
-		// install_user.sh RUN as well so its per-RUN env prefix
-		// (`<name>="${<name>}"`) resolves to a real value rather than
-		// an empty string. ARG scope is stage-wide, so when install.sh
-		// already emitted the ARG lines we skip them here to avoid a
-		// redundant duplicate declaration. When install.sh is absent,
-		// emit them from the install_user.sh snippet so build_args
-		// works symmetrically across both hooks.
+		// ARG scope is stage-wide: emit declarations only when install.sh
+		// did not, so install_user.sh's per-RUN env prefix resolves
+		// without a duplicate ARG line.
 		var userArgLines []string
 		if !hasInstall {
 			userArgLines = rs.argLines
@@ -189,9 +181,8 @@ func buildPluginSnippets(
 	return out, true, nil
 }
 
-// runSpec bundles the per-plugin context shared by the install and
-// install_user emitters so buildPluginSnippets does not have to
-// thread a dozen positional args through each helper.
+// runSpec bundles the per-plugin context so buildPluginSnippets does not
+// have to thread a dozen positional args through each helper.
 type runSpec struct {
 	id             string
 	comment        string
@@ -205,8 +196,6 @@ type runSpec struct {
 	sh             shellEnv
 }
 
-// resolveOverride collapses the version-pin lookup into a single call
-// site so buildPluginSnippets stays focused on the snippet layout.
 func resolveOverride(
 	id string,
 	versionCapable bool,
@@ -222,10 +211,8 @@ func resolveOverride(
 	return o, true
 }
 
-// renderInstallSnippet emits the heredoc RUN + env block when install.sh
-// exists, or just the env block (with an "(env)" marker) when only
-// [install.env] is set. ENV is USER-agnostic, so an env-only entry can
-// land in either bucket without changing semantics.
+// renderInstallSnippet falls back to an env-only block when install.sh
+// is absent; ENV is USER-agnostic so the entry can land in either bucket.
 func renderInstallSnippet(rs runSpec, hasInstall bool, installPath string) (string, error) {
 	if hasInstall {
 		body, err := readFileFromFS(rs.pluginsFS, installPath)
@@ -250,9 +237,8 @@ func renderInstallSnippet(rs runSpec, hasInstall bool, installPath string) (stri
 
 // renderUserInstallSnippet renders the install_user.sh heredoc with
 // the "# Configure … (user)" comment used in the non-root bucket.
-// argLines carries plugin-level ARG declarations to emit before the
-// RUN; pass nil when install.sh already emitted them (their scope is
-// the whole stage, so a second declaration is redundant).
+// renderUserInstallSnippet expects argLines nil when install.sh already
+// emitted the ARGs (stage-wide scope makes a second declaration redundant).
 func renderUserInstallSnippet(rs runSpec, userPath string, argLines []string) (string, error) {
 	body, err := readFileFromFS(rs.pluginsFS, userPath)
 	if err != nil {
@@ -283,13 +269,10 @@ func renderEnvBlock(env map[string]string, pluginsFS fs.FS, id string) (string, 
 	return strings.Join(envLines, "\n"), nil
 }
 
-// collectAllUserDirs collects every container-side directory the user-dirs
-// mkdir block must own. Plugin entries contribute their [install].volumes
-// (validated to live under /home/${USERNAME}/...), and the caller-supplied
-// `extra` slice carries `[volumes]` targets from workspace.toml — those can
-// point anywhere inside the container, including paths outside the user
-// home (e.g. /var/cache/...). enabled preserves user-declared order.
-// Missing plugin entries are silently skipped (callers warn elsewhere).
+// collectAllUserDirs returns the dirs the user-dirs mkdir block must own:
+// plugin [install].volumes (under /home/${USERNAME}/...) plus `extra`
+// (workspace.toml [volumes] targets, which can point anywhere). Order
+// follows `enabled`. Missing plugin entries are skipped (warned elsewhere).
 func collectAllUserDirs(plugins map[string]*plugin.Plugin, enabled, extra []string) []string {
 	out := make([]string, 0)
 	for _, id := range enabled {
@@ -350,13 +333,9 @@ func generatePluginInstalls(
 	warnings io.Writer,
 	sh shellEnv,
 ) (string, error) {
-	// Fail fast when any enabled plugin actually got loaded but the
-	// caller forgot to wire up PluginsFS. Without this check, downstream
-	// fileExistsInFS calls would silently report "no install.sh" for
-	// every plugin and emit a Dockerfile that ignores the plugin set
-	// entirely. Plugins listed in enabled but absent from `plugins`
-	// (already warned about elsewhere) do not trip the check, so a
-	// project that lists no plugins keeps working with PluginsFS = nil.
+	// Fail fast when any enabled plugin loaded but the caller forgot to
+	// wire PluginsFS — otherwise fileExistsInFS would silently emit a
+	// Dockerfile that ignores the plugin set entirely.
 	if pluginsFS == nil {
 		for _, id := range enabled {
 			if _, ok := plugins[id]; ok {
@@ -376,16 +355,14 @@ func generatePluginInstalls(
 	if err != nil {
 		return "", err
 	}
-	// Track which USER the previous emitted line ends in so we only emit a
-	// `USER` directive when the next phase actually needs to switch. The block
-	// is invoked from a `USER ${USERNAME}` baseline and we leave it in the same
-	// state so the surrounding template stays unchanged.
+	// Track the prior USER so we emit a `USER` directive only on real
+	// transitions, leaving the surrounding template's `USER ${USERNAME}`
+	// baseline unchanged.
 	var parts []string
 	currentUser := "${USERNAME}"
 	if dirBlock != "" {
-		// userDirsBlockTmpl ends in `USER root` (the trailing `USER ${USERNAME}`
-		// is delegated here so we can fall straight into a root-requiring
-		// plugin install without emitting a redundant toggle pair).
+		// userDirsBlockTmpl ends in `USER root`; we defer the `USER ${USERNAME}`
+		// trailer here so a root-requiring install runs without a toggle pair.
 		parts = append(parts, dirBlock)
 		currentUser = "root"
 	}
@@ -411,12 +388,10 @@ type installRunData struct {
 	ScriptBody string
 }
 
-// installRunTmpl emits the plugin install script as a single RUN with
-// the shell body inlined via a quoted heredoc. Single-quoted
-// 'COCOON_PLUGIN_EOF' suppresses parameter and command substitution so
-// the catalog install.sh contents land verbatim, and per-RUN env vars
-// (PIN / RC_FILE / etc.) stay scoped to that step rather than leaking
-// into subsequent layers.
+// installRunTmpl inlines the install body via a quoted heredoc. The
+// single-quoted 'COCOON_PLUGIN_EOF' suppresses parameter/command
+// substitution so the script lands verbatim, and per-RUN env vars
+// (PIN / RC_FILE / etc.) stay scoped to that step.
 var installRunTmpl = tmplx.MustParse("dockerfile-plugin-install", `{{ .Comment }}
 {{- range .ArgLines }}
 {{ . }}
@@ -424,8 +399,8 @@ var installRunTmpl = tmplx.MustParse("dockerfile-plugin-install", `{{ .Comment }
 RUN {{ range .EnvPairs }}{{ . }} {{ end }}bash <<'COCOON_PLUGIN_EOF'
 {{ .ScriptBody }}COCOON_PLUGIN_EOF`, nil)
 
-// renderInstallRun normalises the trailing newline so the closing
-// COCOON_PLUGIN_EOF lands on its own line regardless of input shape.
+// renderInstallRun normalises the trailing newline so the closing delim
+// lands on its own line regardless of input shape.
 func renderInstallRun(
 	pluginID, comment string,
 	argLines []string,
@@ -435,7 +410,7 @@ func renderInstallRun(
 	buildArgs []string,
 	sh shellEnv,
 ) string {
-	_ = pluginID // reserved for future log/comment hooks; kept to preserve callers.
+	_ = pluginID
 	envPairs := buildInstallEnvPairs(versionCapable, hasOverride, override, buildArgs, sh)
 	body := string(scriptBody)
 	if !strings.HasSuffix(body, "\n") {
@@ -536,11 +511,9 @@ func validateVersionOverrides(
 	return nil
 }
 
-// userDirsBlockTmpl emits the volume-mount mkdir/chown step. The trailing
-// `USER ${USERNAME}` switch is intentionally omitted: generatePluginInstalls
-// is responsible for emitting it (or skipping it when the next phase also
-// needs root) so the boundary between this block and root-requiring plugin
-// installs does not produce a redundant USER toggle pair.
+// userDirsBlockTmpl omits the trailing `USER ${USERNAME}`: the caller
+// emits it (or skips it when the next phase needs root) so the boundary
+// produces no redundant USER toggle.
 var userDirsBlockTmpl = tmplx.MustParse(
 	"dockerfile-user-dirs",
 	`# Prepare volume mount directories with correct ownership
@@ -564,9 +537,8 @@ func generateUserDirsBlock(userDirs []string) string {
 	return out
 }
 
-// expandUserDirs walks each input dir; for paths under /home/${USERNAME}/, every
-// intermediate directory is emitted so `mkdir -p` and `chown` cover the full
-// chain. Returns a sorted, deduplicated slice.
+// expandUserDirs emits every intermediate dir under /home/${USERNAME}/ so
+// `chown` covers the full chain. Returns sorted, deduplicated.
 func expandUserDirs(userDirs []string) []string {
 	const home = "/home/${USERNAME}"
 	homePrefix := home + "/"

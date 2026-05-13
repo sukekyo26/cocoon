@@ -69,8 +69,6 @@ func UpsertPinLine(path, id, ref, amd64Sum, arm64Sum string) error {
 	return nil
 }
 
-// upsertPinLineBytes is the pure transformation core, exposed for unit tests
-// without requiring filesystem fixtures.
 func upsertPinLineBytes(input []byte, id, ref, amd64Sum, arm64Sum string) ([]byte, error) {
 	hadTrailingNewline := bytes.HasSuffix(input, []byte("\n"))
 	raw := strings.TrimSuffix(string(input), "\n")
@@ -113,8 +111,8 @@ func upsertPinLineBytes(input []byte, id, ref, amd64Sum, arm64Sum string) ([]byt
 	return renderLines(out, hadTrailingNewline)
 }
 
-// hasLegacySubsection reports whether lines contain any `[plugins.versions.<id>]`
-// subsection header — the format cocoon used before inline-table emission.
+// hasLegacySubsection detects `[plugins.versions.<id>]` blocks, the format
+// cocoon emitted before switching to inline tables.
 func hasLegacySubsection(lines []string) bool {
 	const versionsPrefix = "plugins.versions."
 	for _, ln := range lines {

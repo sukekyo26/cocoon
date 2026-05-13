@@ -15,13 +15,8 @@ import (
 
 const header = "// Auto-generated from workspace.toml — do not edit directly.\n"
 
-// Generate returns the devcontainer.json body for ctx. HTML escaping is
-// disabled so shell snippets in initializeCommand (e.g. `&&` chains)
-// survive as the literal `&&` rather than json.Marshal's default
-// `\u0026\u0026` (the encoder's escapeHTML pass rewrites `&`,
-// `<`, `>` to their `\u00XX` JSON escapes for HTML-embedding
-// safety, which we don't need here), matching the package-level
-// "raw UTF-8" promise.
+// Generate disables HTML escaping so shell snippets in initializeCommand
+// (e.g. `&&` chains) survive as literals instead of being rewritten.
 func Generate(ctx *generate.WorkspaceContext) (string, error) {
 	cfg := buildConfig(ctx)
 	var raw bytes.Buffer
@@ -38,16 +33,10 @@ func Generate(ctx *generate.WorkspaceContext) (string, error) {
 }
 
 func buildConfig(ctx *generate.WorkspaceContext) *orderedMap {
-	// Resolve forwardPorts up-front so the key is emitted exactly once
-	// when it has a value, and elided when both [ports] and the
-	// devcontainer.forward_ports override are empty. Pre-resolving also
-	// keeps insertion order stable: whether the value comes from base
-	// alone, from the override alone, or from a merge of both, the key
-	// always lands between workspaceFolder and shutdownAction.
-	//
-	// forwardPorts is left as nil (typed any) when neither source yields
-	// a port — the emit check below uses `!= nil` so we never write an
-	// empty `"forwardPorts": []` array.
+	// Pre-resolve forwardPorts so its slot stays between workspaceFolder and
+	// shutdownAction regardless of which source(s) supply ports. Leaves nil
+	// (typed any) when both are empty so the key is elided rather than
+	// emitted as `"forwardPorts": []`.
 	basePorts := append([]int{}, ctx.DevcontainerForwardPorts()...)
 	overrides := ctx.DevcontainerOverrides()
 	var forwardPorts any
@@ -92,20 +81,12 @@ func buildConfig(ctx *generate.WorkspaceContext) *orderedMap {
 	return base
 }
 
-// initializeCommand assembles the host-side preparation that VS Code's
-// Dev Containers extension runs before `docker compose up`. It mkdirs the
-// certs build context (so BuildKit can resolve additional_contexts) and
-// touches each [home_files] entry with mode 0o600 (so Docker does not
-// auto-create them as directories when the file is missing on the host).
-// Returns "" when neither feature is configured, in which case the caller
-// omits the initializeCommand key entirely.
-//
-// Every path that embeds ${HOME:?…} is wrapped in double quotes so a
-// host $HOME containing spaces (e.g. "/Users/Jane Doe" on macOS) does
-// not word-split into two arguments. `dirname --` defends against the
-// theoretical case of a home directory starting with `-`. The per-segment
-// whitelist on home_files entries already rejects shell metacharacters,
-// so quoting plus `--` is the remaining belt-and-suspenders.
+// initializeCommand mkdirs the certs build context (so BuildKit can resolve
+// additional_contexts) and touches each [home_files] entry with mode 0o600
+// (so Docker does not auto-create them as directories). ${HOME:?…} paths are
+// double-quoted to survive host $HOME containing spaces; `dirname --`
+// defends against a home directory starting with `-`. Returns "" when
+// neither feature is configured.
 func initializeCommand(ctx *generate.WorkspaceContext) string {
 	var cmds []string
 	if ctx.CertificatesEnabled() {

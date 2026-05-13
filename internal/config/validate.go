@@ -9,10 +9,6 @@ import (
 	"strings"
 )
 
-// ============================================================
-// Compiled validation patterns.
-// ============================================================
-
 var (
 	rxServiceName = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
 	rxUsername    = regexp.MustCompile(`^[a-z_][a-z0-9_-]*$`)
@@ -66,18 +62,13 @@ const (
 	portMax = 65535
 )
 
-// IsValidPluginID reports whether id is a syntactically valid plugin id
-// (kebab-case, must start with a lowercase letter). It mirrors the regex
-// applied to entries of [plugins].enable so that scaffolders can reject
-// bad ids before any files are written.
+// IsValidPluginID lets scaffolders reject bad ids before files are written,
+// mirroring the [plugins].enable regex.
 func IsValidPluginID(id string) bool {
 	return rxPluginID.MatchString(id)
 }
 
-// ============================================================
 // errAccumulator collects FieldError rows scoped under a base path.
-// ============================================================
-
 type errAccumulator struct {
 	base []string
 	errs *[]FieldError
@@ -95,7 +86,6 @@ func (a *errAccumulator) at(seg ...string) *errAccumulator {
 	return &errAccumulator{base: out, errs: a.errs}
 }
 
-// add appends a single field error at the current scope plus extra segments.
 func (a *errAccumulator) add(msg string, seg ...string) {
 	loc := make([]string, 0, len(a.base)+len(seg))
 	loc = append(loc, a.base...)
@@ -103,12 +93,8 @@ func (a *errAccumulator) add(msg string, seg ...string) {
 	*a.errs = append(*a.errs, FieldError{Loc: loc, Message: msg})
 }
 
-// ============================================================
-// Top-level Validate entry points.
-// ============================================================
-
-// Validate runs every cross-field check on the workspace.
-// On failure the returned error is a *ValidationError with Path = path.
+// Validate runs every cross-field check on the workspace. On failure the
+// returned error is a *ValidationError with Path = path.
 func (w *Workspace) Validate(path string) error {
 	a := newAccumulator()
 	w.runValidate(a)
@@ -117,10 +103,6 @@ func (w *Workspace) Validate(path string) error {
 	}
 	return &ValidationError{Path: path, Errors: *a.errs}
 }
-
-// ============================================================
-// Workspace tree walk.
-// ============================================================
 
 func (w *Workspace) runValidate(a *errAccumulator) {
 	if w.Workspace != nil {
@@ -216,9 +198,8 @@ func (c *ContainerSpec) validate(a *errAccumulator) {
 	validateSkel(a.at("skel"), c.Skel)
 }
 
-// validateSkel checks each [[container.skel]] entry's Source / Target for
-// path-traversal and dotfile-shape violations. Existence of Source is left
-// to docker build (where COPY surfaces a clean "file not found" error).
+// validateSkel leaves existence of Source to docker build (COPY surfaces a
+// clean "file not found" error).
 func validateSkel(a *errAccumulator, entries []SkelEntry) {
 	seenSrc := map[string]int{}
 	seenTgt := map[string]int{}
@@ -243,17 +224,13 @@ func validateSkel(a *errAccumulator, entries []SkelEntry) {
 	}
 }
 
-// validateImage checks [container].image against the closed SupportedImages
-// set and [container].image_version against rxImageVersion. Both fields are
-// required.
-//
-// image_version is intentionally NOT restricted to SupportedImageVersions —
-// that map is a curated suggestion list (cocoon's picker defaults) but
-// users may pin any patch / new-minor tag the upstream registry publishes
-// (e.g. golang:1.26.4-bookworm) without waiting for a cocoon release. The
-// only constraint is the regex: alnum + dot + underscore + hyphen, which
-// excludes the colon and slash that would let a malformed tag smuggle a
-// second `<image>:<tag>` segment past the FROM template.
+// validateImage rejects [container].image outside SupportedImages and
+// [container].image_version that fails rxImageVersion. image_version is
+// intentionally NOT restricted to SupportedImageVersions — that map is a
+// curated suggestion list (the picker defaults) but users may pin any
+// patch / new-minor tag upstream publishes without waiting for a cocoon
+// release. The regex excludes colon and slash that would let a malformed
+// tag smuggle a second `<image>:<tag>` segment past the FROM template.
 func validateImage(a *errAccumulator, image, imageVersion string) {
 	if image == "" {
 		a.add("image is required and must be one of "+strings.Join(SupportedImages, ", "), "image")
@@ -282,13 +259,9 @@ func validateImage(a *errAccumulator, image, imageVersion string) {
 	}
 }
 
-// validateImagePluginConflict rejects workspace.toml files that combine a
-// language-runtime base image with the matching cocoon plugin. The pairs
-// declared in ImageProvidesPlugin (golang ↔ go, rust ↔ rust, node ↔ node,
-// denoland/deno ↔ deno) all result in the base toolchain being overwritten
-// or shadowed by the plugin, so enabling both wastes docker-build time for
-// no benefit. Other combinations (e.g. image=python + uv plugin) coexist
-// cleanly and are not checked here.
+// validateImagePluginConflict rejects pairs from ImageProvidesPlugin where
+// the base toolchain would be overwritten or shadowed by the plugin (wasting
+// docker-build time for no benefit). Other combinations coexist cleanly.
 func (w *Workspace) validateImagePluginConflict(a *errAccumulator) {
 	pluginID, conflicts := ImageProvidesPlugin[w.Container.Image]
 	if !conflicts {
@@ -335,10 +308,9 @@ func checkSkelPath(a *errAccumulator, p, label string) {
 	}
 }
 
-// containsWhitespaceOrCtrl reports whether s holds any whitespace or
-// control byte. Used to defend the generated Dockerfile COPY line against
-// arguments that would split tokens, inject newlines, or otherwise change
-// the parser's view of the directive.
+// containsWhitespaceOrCtrl defends the generated Dockerfile COPY line
+// against arguments that would split tokens, inject newlines, or otherwise
+// change the parser's view of the directive.
 func containsWhitespaceOrCtrl(s string) bool {
 	for _, r := range s {
 		if r <= 0x20 || r == 0x7f {
@@ -348,8 +320,8 @@ func containsWhitespaceOrCtrl(s string) bool {
 	return false
 }
 
-// hasDotDotSegment reports whether p contains ".." as a full path segment
-// (split on "/"), distinct from a substring like "foo..bar".
+// hasDotDotSegment treats ".." as a full path segment (split on "/"),
+// distinct from a substring like "foo..bar".
 func hasDotDotSegment(p string) bool {
 	return slices.Contains(strings.Split(p, "/"), "..")
 }
@@ -389,9 +361,9 @@ func checkCapList(a *errAccumulator, caps []string) {
 	}
 }
 
-// validateSysctls accepts numeric or string values; Compose v3 forwards both
-// transparently to the kernel. Anything else (bool, table, …) is rejected so
-// the user notices typos before docker compose up complains.
+// validateSysctls accepts numeric or string values (Compose v3 forwards both
+// transparently). Anything else is rejected so users notice typos before
+// docker compose up complains.
 func validateSysctls(a *errAccumulator, sysctls map[string]any) {
 	for key, val := range sysctls {
 		if !rxSysctlKey.MatchString(key) {
@@ -426,9 +398,8 @@ func (d *DNSSpec) validate(a *errAccumulator) {
 	}
 }
 
-// validateExtraHosts enforces hostname keys plus IP-or-"host-gateway" values
-// for [container.hosts]. Empty maps are skipped silently so the generator can
-// omit the compose extra_hosts key entirely.
+// validateExtraHosts enforces hostname keys plus IP-or-"host-gateway" values.
+// Empty maps are skipped so the generator can omit extra_hosts entirely.
 func validateExtraHosts(a *errAccumulator, hosts map[string]string) {
 	for host, addr := range hosts {
 		if !rxHostname.MatchString(host) {
@@ -508,11 +479,10 @@ func (m *AptMirror) validate(a *errAccumulator) {
 	}
 }
 
-// containsUnsafeForSed reports whether s holds any byte that would either
-// break the generated `sed 's|FROM|TO|g'` pattern (single quote ends the
-// arg; `|` ends the s-command; `&` is a backreference to the whole match;
-// `\` escapes the next char) or break Dockerfile parsing (whitespace can
-// split tokens, control chars / newlines can inject directives).
+// containsUnsafeForSed rejects bytes that would break the generated
+// `sed 's|FROM|TO|g'` pattern (single quote ends the arg; `|` ends the
+// s-command; `&` is a backreference; `\` escapes) or Dockerfile parsing
+// (whitespace splits tokens, control chars inject directives).
 func containsUnsafeForSed(s string) bool {
 	for _, r := range s {
 		if r <= 0x20 || r == 0x7f {
@@ -585,8 +555,8 @@ func (g *GitIdentitySpec) validate(a *errAccumulator) {
 	}
 }
 
-// validate is a no-op hook (only field is enable: bool); kept so future
-// fields slot in without re-wiring runValidate.
+// No-op hook (only field is enable: bool); kept so future fields slot in
+// without re-wiring runValidate.
 func (*CertificatesSpec) validate(_ *errAccumulator) {}
 
 func (m *Mount) validate(a *errAccumulator) {
@@ -598,9 +568,8 @@ func (m *Mount) validate(a *errAccumulator) {
 	}
 }
 
-// rxHomeFilesSegmentPath reports whether every `/`-separated segment of
-// p passes rxHomeFilesSegment. Empty / `..` segments are caught upstream
-// by the dedicated checks; this guards the shell-character whitelist.
+// rxHomeFilesSegmentPath guards the shell-character whitelist. Empty / `..`
+// segments are caught upstream by dedicated checks.
 func rxHomeFilesSegmentPath(p string) bool {
 	for _, seg := range strings.Split(p, "/") {
 		if !rxHomeFilesSegment.MatchString(seg) {
@@ -656,8 +625,6 @@ func (h *HomeFilesSpec) validate(a *errAccumulator) {
 	}
 }
 
-// validateServices walks every sidecar service definition.
-//
 //nolint:gocognit,gocyclo // composed of small per-service checks; splitting hurts readability.
 func (w *Workspace) validateServices(a *errAccumulator) {
 	if len(w.Services) == 0 {
@@ -738,8 +705,6 @@ func (sm *SidecarMount) validate(a *errAccumulator) {
 	}
 }
 
-// validateRepositories enforces uniqueness, path safety, and self-reference rules.
-//
 //nolint:gocognit,gocyclo // straight-line per-entry validation; splitting fragments the rules.
 func (w *Workspace) validateRepositories(a *errAccumulator) {
 	if w.Repositories == nil || len(w.Repositories.Clone) == 0 {
@@ -822,10 +787,6 @@ func (w *Workspace) validateRepositories(a *errAccumulator) {
 		}
 	}
 }
-
-// ============================================================
-// Helpers.
-// ============================================================
 
 func checkMapKeys(a *errAccumulator, m map[string]string, rx *regexp.Regexp, label string) {
 	for k := range m {

@@ -9,30 +9,12 @@ import (
 	"testing"
 )
 
-// updateGolden, when set via `go test ./internal/cli/init -update-golden`,
-// rewrites the testdata/init/*.workspace.toml golden files from the live
-// `cocoon init` writer instead of asserting against them. Mirrors the
-// dockerfile generator's `-update-golden` flag (internal/generate/dockerfile/
-// dockerfile_test.go) so the cocoon-wide regen workflow stays consistent.
-//
 //nolint:gochecknoglobals // test-only flag scoped to this test file.
 var updateGolden = flag.Bool("update-golden", false, "rewrite testdata/init/*.workspace.toml from current init output")
 
-// TestRunInit_Snapshot exercises representative `cocoon init --yes` flag
-// combinations end-to-end and pins the generated workspace.toml as a golden
-// file. The matrix covers:
-//
-//   - default      : the e2e.yml minimal case (no --plugins).
-//   - plugins-amd64-full : every plugin enabled with all version_capable
-//     plugins pinned.
-//   - plugins-arm64-full : the subset whose install.sh works on arm64;
-//     pins are limited to plugins whose install.sh has explicit arm64
-//     support.
-//   - plugins-versions-minimal : a focused 2-plugin pin sample.
-//
-// Adding/removing plugins, changing the writer, or tweaking i18n templates
-// will all surface here as a deliberate diff. Re-run with `-update-golden`
-// after intentional changes and review the diff before committing.
+// TestRunInit_Snapshot pins `cocoon init --yes` output across a matrix of
+// flag combinations. Re-run with `-update-golden` after intentional writer
+// or i18n changes and review the diff before committing.
 //
 //nolint:paralleltest // each subtest uses t.Chdir, which mutates process cwd
 func TestRunInit_Snapshot(t *testing.T) {

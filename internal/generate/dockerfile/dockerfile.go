@@ -18,17 +18,13 @@ import (
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
 
-// entrypointScript is the contents of docker-entrypoint.sh that the generator
-// writes alongside the generated Dockerfile (.devcontainer/docker-entrypoint.sh).
-// It is embedded so cocoon ships as a single binary with no host-side script
-// dependency.
+// entrypointScript embeds docker-entrypoint.sh so cocoon ships as a single
+// binary with no host-side script dependency.
 //
 //go:embed entrypoint.sh
 var entrypointScript string
 
-// EntrypointScript returns the docker-entrypoint.sh contents that should be
-// written next to the generated Dockerfile. Callers (cocoon gen) add it to
-// the artifact set with mode 0o755.
+// EntrypointScript is written next to the Dockerfile with mode 0o755.
 func EntrypointScript() string { return entrypointScript }
 
 // ErrInvalidVersionOverride is returned when [plugins.versions] references an
@@ -222,7 +218,7 @@ CMD ["sleep", "infinity"]
 WORKDIR /home/${USERNAME}/workspace
 `, nil)
 
-// Generate produces Dockerfile contents from ctx and opts.
+// Generate produces Dockerfile contents.
 func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 	root := opts.WorkspaceRoot
 	if root == "" {
@@ -317,9 +313,8 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 	return out, nil
 }
 
-// pickRepoDir returns the explicit override when set, otherwise the basename
-// of the workspace root. Tests rely on this so the Dockerfile snapshot does
-// not depend on the local checkout's directory name.
+// pickRepoDir falls back to filepath.Base(WorkspaceRoot). Tests pass an
+// explicit override so the snapshot does not depend on the checkout name.
 func pickRepoDir(override, root string) string {
 	if override != "" {
 		return override
@@ -340,9 +335,8 @@ func filterShellPackages(pkgs []string, base map[string]struct{}) []string {
 	return out
 }
 
-// buildShellCompletionInit returns the RUN block that wires up shell
-// completion in the chosen login shell's rc file. Empty for fish (its native
-// completions auto-load with no rc tweak).
+// buildShellCompletionInit wires shell completion into the rc-file. Empty
+// for fish (its native completions auto-load).
 func buildShellCompletionInit(shell, rcFile string) string {
 	switch shell {
 	case "bash":
@@ -362,8 +356,8 @@ func buildShellCompletionInit(shell, rcFile string) string {
 	return ""
 }
 
-// buildShellHistoryInit returns the RUN block that configures shell history
-// for the chosen login shell. Each shell uses a separate state file.
+// buildShellHistoryInit configures shell history; each shell uses a separate
+// state file.
 func buildShellHistoryInit(shell, rcFile string) string {
 	switch shell {
 	case "bash":
@@ -386,8 +380,8 @@ func buildShellHistoryInit(shell, rcFile string) string {
 	return ""
 }
 
-// formatAptContinuations renders one Dockerfile RUN-continuation line per
-// package: "    pkg \\\n". Returns "" when packages is empty.
+// formatAptContinuations renders one RUN-continuation line per package
+// ("    pkg \\\n"). Returns "" when packages is empty.
 func formatAptContinuations(packages []string) string {
 	if len(packages) == 0 {
 		return ""
@@ -521,9 +515,8 @@ func aptMirrorOriginHosts(image string) []string {
 	}
 }
 
-// buildAptProxyConf writes /etc/apt/apt.conf.d/95proxy with the configured
-// HTTP/HTTPS proxies. Returns "" when [apt.proxy] is unset or both fields
-// are nil.
+// buildAptProxyConf writes /etc/apt/apt.conf.d/95proxy. Returns "" when
+// [apt.proxy] is unset or both fields are nil.
 func buildAptProxyConf(ctx *generate.WorkspaceContext) string {
 	p := ctx.AptProxy()
 	if p == nil || (p.HTTP == nil && p.HTTPS == nil) {
@@ -548,9 +541,8 @@ func buildAptProxyConf(ctx *generate.WorkspaceContext) string {
 }
 
 // buildAptThirdParty installs ca-certificates / curl / gpg, then writes one
-// keyring + sources.list.d entry per [[apt.sources]] block, so subsequent
-// apt-get update sees the third-party repository. Returns "" when no
-// sources are declared.
+// keyring + sources.list.d entry per [[apt.sources]] block so subsequent
+// apt-get update sees the third-party repository.
 func buildAptThirdParty(ctx *generate.WorkspaceContext) string {
 	sources := ctx.AptSources()
 	if len(sources) == 0 {
@@ -579,12 +571,10 @@ func buildAptThirdParty(ctx *generate.WorkspaceContext) string {
 	return b.String()
 }
 
-// buildSkelCopies emits one Dockerfile COPY per [[container.skel]] entry.
-// Files land under /etc/skel and are picked up automatically by the
-// subsequent `useradd -m` (Linux's standard skeleton-copy behaviour, which
-// also chowns to the new user — no explicit chown needed here). The
-// generator inserts this block between the pre_user_setup hook and the
-// useradd RUN, where the build is still executing as root.
+// buildSkelCopies emits COPY directives that land under /etc/skel; the
+// subsequent `useradd -m` copies and chowns them to the new user (no
+// explicit chown needed). Inserted between pre_user_setup and useradd
+// while the build is still executing as root.
 func buildSkelCopies(ctx *generate.WorkspaceContext) string {
 	entries := ctx.SkelEntries()
 	if len(entries) == 0 {
@@ -704,9 +694,7 @@ func collectPluginAptPackages(
 }
 
 // generateCertificateInstall returns the cert install RUN block + the
-// post-USER SSL_CERT_FILE / etc. ENV block. Generate() calls this only
-// when CertificatesEnabled() is true; on the disabled branch neither
-// block lands in the Dockerfile.
+// post-USER SSL_CERT_FILE ENV block. Only called when CertificatesEnabled().
 func generateCertificateInstall() (rootBlock, envBlock string) {
 	return certInstallRootBlock, certInstallEnvBlock
 }
