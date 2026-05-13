@@ -1,7 +1,6 @@
 package initcli
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
@@ -69,11 +68,11 @@ func promptOnePluginVersion(cat *i18n.Catalog, id string) (string, error) {
 		"plugin_version_"+id,
 		&picked,
 		[]string{pluginVersionLatestSentinel},
-		cat.Msg("init_option_image_version_other"),
+		cat.Msg("init_option_other_manual_input"),
 	).
 		Title(fmt.Sprintf(cat.Msg("init_prompt_plugin_version"), id)).
 		Description(cat.Msg("init_desc_plugin_version")).
-		Validate(pluginPinValidator(cat))
+		Validate(versionStringValidator(cat, "init_err_plugin_pin_fmt", pluginVersionLatestSentinel))
 	if err := runSingleFieldForm(field); err != nil {
 		return "", err
 	}
@@ -81,27 +80,4 @@ func promptOnePluginVersion(cat *i18n.Catalog, id string) (string, error) {
 		return "", nil
 	}
 	return strings.TrimSpace(picked), nil
-}
-
-// pluginPinValidator only enforces a TOML-safe character set (same
-// regex image_version uses) so the inline-table line stays parseable.
-// It deliberately does NOT check whether the version exists upstream —
-// the picker description tells the user to verify that themselves. The
-// LATEST sentinel always passes; an empty manual entry is rejected so
-// "I pressed Enter on the empty input row" doesn't silently encode as
-// LATEST (which the user could have picked from the row above).
-func pluginPinValidator(cat *i18n.Catalog) func(string) error {
-	return func(s string) error {
-		s = strings.TrimSpace(s)
-		if s == pluginVersionLatestSentinel {
-			return nil
-		}
-		if s == "" {
-			return errors.New(cat.Msg("init_err_required")) //nolint:err113 // user-facing prompt
-		}
-		if !rxImageVersionInput.MatchString(s) {
-			return errors.New(cat.Msg("init_err_plugin_pin_fmt")) //nolint:err113 // user-facing prompt
-		}
-		return nil
-	}
 }

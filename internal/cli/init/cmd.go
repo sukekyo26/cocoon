@@ -51,11 +51,41 @@ var (
 	// rxImageVersionInput mirrors config.validate's rxImageVersion so the
 	// "Other (manual input)" prompt rejects bad input in the form rather
 	// than letting it slip through to `cocoon gen` and surface as a
-	// container.image_version validation error. Keep this pattern in
-	// lockstep with rxImageVersion (Docker tag spec: alnum / underscore
-	// can lead, period / hyphen cannot).
+	// container.image_version validation error. Reused by the plugin
+	// version picker because plugins.versions's pin field has the same
+	// character constraints. Keep this pattern in lockstep with
+	// rxImageVersion (Docker tag spec: alnum / underscore can lead,
+	// period / hyphen cannot).
 	rxImageVersionInput = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._-]*$`)
 )
+
+// versionStringValidator builds a huh.Validate function for prompts that
+// accept a version-like string (image tag, plugin pin). The TOML-safe
+// character set is enforced via rxImageVersionInput; verification that
+// the value actually exists upstream is intentionally NOT done — the
+// prompt description tells the user to check the upstream URL.
+//
+// formatErrKey selects the i18n message returned on regex failure so
+// each prompt can phrase the error in its own terms. When latestSentinel
+// is non-empty, an exact match against it is accepted unconditionally
+// (used by the plugin version picker where "LATEST" is a UI sentinel
+// for "leave unpinned"). Empty manual input is always rejected so a
+// stray Enter on the input row never silently encodes as a sentinel.
+func versionStringValidator(cat *i18n.Catalog, formatErrKey, latestSentinel string) func(string) error {
+	return func(s string) error {
+		s = strings.TrimSpace(s)
+		if latestSentinel != "" && s == latestSentinel {
+			return nil
+		}
+		if s == "" {
+			return errors.New(cat.Msg("init_err_required")) //nolint:err113 // user-facing prompt
+		}
+		if !rxImageVersionInput.MatchString(s) {
+			return errors.New(cat.Msg(formatErrKey)) //nolint:err113 // user-facing prompt
+		}
+		return nil
+	}
+}
 
 // NewCommand returns the cobra command for ` + "`cocoon init`" + `.
 func NewCommand(stdout, stderr io.Writer) *cobra.Command {
@@ -531,18 +561,10 @@ func promptForMissing(ans initAnswers, cat *i18n.Catalog, plugins map[string]*pl
 			ans.ImageVersion = defaultImageVersion(ans.Image)
 		}
 		field := newSelectOrInputField("image_version", &ans.ImageVersion, versions,
-			cat.Msg("init_option_image_version_other")).
+			cat.Msg("init_option_other_manual_input")).
 			Title(cat.Msg("init_prompt_image_version_static")).
 			Description(cat.Msg("init_desc_image_version_static")).
-			Validate(func(s string) error {
-				if s == "" {
-					return errors.New(cat.Msg("init_err_required")) //nolint:err113 // user-facing prompt
-				}
-				if !rxImageVersionInput.MatchString(s) {
-					return errors.New(cat.Msg("init_err_image_version_fmt")) //nolint:err113 // user-facing prompt
-				}
-				return nil
-			})
+			Validate(versionStringValidator(cat, "init_err_image_version_fmt", ""))
 		if err := runSingleFieldForm(field); err != nil {
 			return ans, err
 		}
