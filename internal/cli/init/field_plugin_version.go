@@ -54,10 +54,11 @@ func promptPluginVersionsForCapable(
 }
 
 // pluginVersionLatestSentinel is the row label shown for the "no pin,
-// resolve latest at build time" option. The empty pin string in pins
-// is what the writer actually keys off; this label is just the UI
-// representation of that state. Keep it short so the picker line stays
-// scannable.
+// resolve latest at build time" option. Picking it is encoded as
+// *absence* of the plugin id in the pins map (promptPluginVersionsForCapable
+// skips the assignment when the returned pin is ""), which downstream
+// writePluginVersions treats as the LATEST case. Keep the label short
+// so the picker line stays scannable.
 const pluginVersionLatestSentinel = "LATEST"
 
 // promptOnePluginVersion runs the single-screen LATEST / manual-input

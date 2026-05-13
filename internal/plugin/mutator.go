@@ -154,9 +154,11 @@ func findVersionsSection(lines []string) (start, end int) {
 }
 
 // appendNewVersionsSection appends a fresh `[plugins.versions]` section
-// (header + one inline-table line) at end-of-file, separated from the
-// previous non-blank line by exactly one blank line. Existing trailing
-// blank lines are preserved verbatim.
+// (header + one inline-table line) at end-of-file. Guarantees at least
+// one blank line of separation from the previous non-blank line: when
+// the file already ends in one or more blank lines those are preserved
+// verbatim (so the resulting separation may be >1), and when it ends
+// with content a single blank line is inserted.
 func appendNewVersionsSection(lines []string, inlineLine string) []string {
 	if len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) != "" {
 		lines = append(lines, "")
