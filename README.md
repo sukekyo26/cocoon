@@ -80,15 +80,15 @@ docker compose -f .devcontainer/docker-compose.yml up -d # or VS Code → "Reope
 8. **Corporate CA auto-bake** — opt in to picking up `.crt` files from `~/.cocoon/certs/` at build time (off by default; see below)
 9. **Port forwards** — comma-separated docker-compose short forms (e.g. `3000:3000,5432:5432`); blank to skip and the `[ports]` template stays as a commented-out hint
 10. **apt categories** — text-editors, vcs, utilities, build, network, … (multi-select)
-11. **Plugins** to enable from the embedded catalog (multi-select, 25 to choose from)
+11. **Plugins** to enable from the embedded catalog (multi-select, 26 to choose from)
 
 Each answer becomes a self-documenting line in `workspace.toml`. Pass `--yes` together with the value flags (`--service-name`, `--username`, `--image`, `--plugins`, `--certificates`, `--ports`, …) to drive it from CI without a TTY.
 
 ## Plugins
 
-25 plugins ship inside the binary via `go:embed`:
+26 plugins ship inside the binary via `go:embed`:
 
-`aws-cli`, `aws-sam-cli`, `bun`, `claude-code`, `copilot-cli`, `deno`, `docker-cli`, `github-cli`, `go`, `google-chrome`, `helm`, `kubectl`, `lazygit`, `mise`, `nerd-fonts`, `node`, `opentofu`, `proto`, `rust`, `shellcheck`, `shfmt`, `starship`, `terraform`, `uv`, `zig`
+`aws-cli`, `aws-sam-cli`, `bun`, `claude-code`, `copilot-cli`, `deno`, `docker-buildx`, `docker-cli`, `github-cli`, `go`, `google-chrome`, `helm`, `kubectl`, `lazygit`, `mise`, `nerd-fonts`, `node`, `opentofu`, `proto`, `rust`, `shellcheck`, `shfmt`, `starship`, `terraform`, `uv`, `zig`
 
 Override or add your own under `~/.cocoon/plugins/<id>/` (user scope) or `<project>/.cocoon/plugins/<id>/` (project scope, checked into the repo) — both layers win over the embedded catalog. See [`docs/plugins.md`](docs/plugins.md) for the authoring guide.
 
