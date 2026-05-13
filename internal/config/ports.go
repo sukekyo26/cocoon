@@ -11,10 +11,9 @@ import (
 	"strings"
 )
 
-// ErrPortShortForm marks every rejection emitted by ValidateShortForm so
-// callers (e.g. the init prompt and the `--ports` flag parser) can identify
-// the failure class via errors.Is and surface their own usage prefix without
-// double-wrapping the package's sentinel chain.
+// ErrPortShortForm marks every rejection from ValidateShortForm so callers
+// (the init prompt and `--ports` flag parser) can identify the class via
+// errors.Is and surface their own usage prefix without double-wrapping.
 var ErrPortShortForm = errors.New("invalid port short form")
 
 // PortShortFormPattern is the ECMA-262 regex used in workspace.schema.json
@@ -23,19 +22,15 @@ var ErrPortShortForm = errors.New("invalid port short form")
 //	[HOST_IP:][HOST:]CONTAINER[/PROTOCOL]
 //
 // HOST_IP is IPv4 (1.2.3.4) or [IPv6]; HOST and CONTAINER may be a single
-// port or a numeric range (N or N-M); PROTOCOL is tcp|udp.
-//
-// Editors that consume the JSON Schema use this pattern for early validation
-// and autocomplete. Keep this in sync with rxPortShortForm below — they
-// must accept the same set of strings.
+// port or a numeric range (N or N-M); PROTOCOL is tcp|udp. Keep this in
+// sync with rxPortShortForm below — they must accept the same set.
 const PortShortFormPattern = `^(?:(?:(?:\d{1,3}\.){3}\d{1,3}|\[[\da-fA-F:]+\]):)?` +
 	`(?:\d+(?:-\d+)?:)?` +
 	`\d+(?:-\d+)?` +
 	`(?:/(?:tcp|udp))?$`
 
-// rxPortShortForm is the Go (RE2) version of PortShortFormPattern with named
-// capture groups so validateShortForm and shortFormHostPort can extract the
-// IP / host / container / protocol fragments.
+// rxPortShortForm is the Go (RE2) twin of PortShortFormPattern with named
+// capture groups for IP / host / container / protocol.
 var rxPortShortForm = regexp.MustCompile(
 	`^(?:(?P<ip>(?:\d{1,3}\.){3}\d{1,3}|\[[\da-fA-F:]+\]):)?` +
 		`(?:(?P<host>\d+(?:-\d+)?):)?` +
@@ -43,11 +38,10 @@ var rxPortShortForm = regexp.MustCompile(
 		`(?:/(?P<proto>tcp|udp))?$`,
 )
 
-// longFormKeyOrder fixes the YAML output order for long-form port entries so
-// generated docker-compose.yml is deterministic.
+// longFormKeyOrder fixes YAML output order so docker-compose.yml is
+// deterministic.
 var longFormKeyOrder = []string{"target", "published", "host_ip", "protocol", "mode"}
 
-// allowedLongFormKeys is the set used to reject unknown keys at validation.
 var allowedLongFormKeys = map[string]struct{}{
 	"target":    {},
 	"published": {},
@@ -56,36 +50,33 @@ var allowedLongFormKeys = map[string]struct{}{
 	"mode":      {},
 }
 
-// allowedProtocols / allowedModes mirror the docker-compose v3 spec subset.
+// docker-compose v3 subset.
 var (
 	allowedProtocols = map[string]struct{}{"tcp": {}, "udp": {}}
 	allowedModes     = map[string]struct{}{"ingress": {}, "host": {}}
 )
 
-// rxLongFormPublishedString matches the string form of long-form `published`:
-// a single port (`"8080"`) or a numeric range (`"8000-8010"`). Each numeric
+// rxLongFormPublishedString matches a single port or numeric range. Each
 // component is bounded by [portMin, portMax] in validateLongFormPublished.
 var rxLongFormPublishedString = regexp.MustCompile(`^\d+(?:-\d+)?$`)
 
-// ComposePort holds a normalized port entry ready for docker-compose YAML
-// emission. Exactly one of Short / Long is populated.
+// ComposePort is a normalized port entry. Exactly one of Short / Long is
+// populated.
 type ComposePort struct {
-	// Short carries the raw docker-compose short-form string ("3000:3000",
+	// Short is the raw docker-compose short-form ("3000:3000",
 	// "127.0.0.1:5432:5432/tcp", "3000-3005:3000-3005", ...).
 	Short string
-	// Long carries the long-form keys (target / published / host_ip /
-	// protocol / mode). Only valid keys are kept; values are normalized to
-	// int (target / published) or string (host_ip / protocol / mode).
+	// Long holds the long-form keys (target / published / host_ip /
+	// protocol / mode). Values are normalized to int (target / published)
+	// or string (host_ip / protocol / mode).
 	Long map[string]any
 }
 
 // IsLong reports whether this entry should be rendered as a YAML mapping.
 func (p ComposePort) IsLong() bool { return p.Long != nil }
 
-// ComposePortEntries converts the raw [ports].forward array (decoded by
-// pelletier/go-toml v2 as []any of strings or map[string]any) into a slice of
-// ComposePort. Validation of individual entries is the caller's job —
-// ComposePortEntries trusts that PortsSpec.validate has already run.
+// ComposePortEntries trusts that PortsSpec.validate has already run; it
+// only normalizes the raw decoded shapes.
 func ComposePortEntries(forward []any) []ComposePort {
 	if len(forward) == 0 {
 		return nil
@@ -102,12 +93,10 @@ func ComposePortEntries(forward []any) []ComposePort {
 	return out
 }
 
-// DevcontainerPortEntries returns the published-port integers that
-// devcontainer.json `forwardPorts` can express. Entries that cannot be
-// reduced to a single TCP integer (port ranges, mode=host, protocol=udp)
-// are skipped; if warn is non-nil each skip is announced as a single line
-// so the user can reconcile their docker-compose-only ports with the
-// devcontainer output.
+// DevcontainerPortEntries skips entries that cannot reduce to a single TCP
+// integer (port ranges, mode=host, protocol=udp). If warn is non-nil each
+// skip is announced so the user can reconcile docker-compose-only ports
+// with devcontainer output.
 func DevcontainerPortEntries(forward []any, warn io.Writer) []int {
 	if len(forward) == 0 {
 		return nil
@@ -128,9 +117,8 @@ func DevcontainerPortEntries(forward []any, warn io.Writer) []int {
 	return out
 }
 
-// devcontainerPort extracts the host-side port from one entry. Returns
-// (port, true, "") on success, or (0, false, reason) when the entry is not
-// representable as a single integer.
+// devcontainerPort returns (port, true, "") on success or (0, false, reason)
+// when the entry cannot be expressed as a single integer.
 func devcontainerPort(raw any) (int, bool, string) {
 	switch v := raw.(type) {
 	case string:
@@ -195,8 +183,7 @@ func longFormHostPort(m map[string]any) (int, bool, string) {
 	return 0, false, "is missing target/published"
 }
 
-// publishedHostPort extracts a single integer host port from a long-form
-// `published` value. Returns (n, true) for int / int64 / integer-valued
+// publishedHostPort returns (n, true) for int / int64 / integer-valued
 // float64 / numeric string ("8080"); (0, false) for string ranges
 // ("8000-8010") so the caller can skip the entry for devcontainer.json.
 func publishedHostPort(v any) (int, bool) {
@@ -211,13 +198,10 @@ func publishedHostPort(v any) (int, bool) {
 	return 0, false
 }
 
-// normalizeLongForm produces a map containing only the allowed long-form
-// keys, with int / string values coerced from go-toml's decoded shapes.
-// Unknown keys are dropped (validation already rejected them upstream).
-//
-// `target` is always int; `published` is preserved as int or string so the
-// docker-compose range form (`published = "8000-8010"`) flows through to the
-// generated YAML without losing the dash.
+// normalizeLongForm keeps only allowed keys. `target` is always int;
+// `published` is preserved as int or string so the docker-compose range
+// form (`published = "8000-8010"`) flows through to the generated YAML
+// without losing the dash.
 func normalizeLongForm(in map[string]any) map[string]any {
 	out := make(map[string]any, len(in))
 	for _, k := range longFormKeyOrder {
@@ -245,16 +229,12 @@ func normalizeLongForm(in map[string]any) map[string]any {
 	return out
 }
 
-// LongFormKeyOrder returns the fixed key order for emitting long-form port
-// mappings to YAML. Generators iterate over this slice and look up each key
-// in ComposePort.Long.
+// LongFormKeyOrder returns a copy of the fixed YAML emission order.
 func LongFormKeyOrder() []string {
 	return append([]string{}, longFormKeyOrder...)
 }
 
-// validatePortsForward runs the per-entry validation that PortsSpec.validate
-// dispatches into. It is exported only via PortsSpec; the function lives here
-// so the parsing logic stays alongside the normalizer.
+// validatePortsForward keeps the per-entry parsing alongside the normalizer.
 func validatePortsForward(a *errAccumulator, forward []any) {
 	for i, raw := range forward {
 		idx := strconv.Itoa(i)
@@ -278,12 +258,9 @@ func validatePortsForward(a *errAccumulator, forward []any) {
 	}
 }
 
-// ValidateShortForm reports whether s is a valid docker-compose short-form
-// port mapping (regex shape + host/container in [portMin, portMax] +
-// IPv4/IPv6 literal). Returns nil on accept; on reject returns an error that
-// wraps ErrPortShortForm with a message naming the rule that failed. The
-// `[ports].forward` schema validator and the `cocoon init` prompt share this
-// single rule so a string that init accepts cannot be rejected later by gen.
+// ValidateShortForm wraps ErrPortShortForm on reject. The schema validator
+// and `cocoon init` prompt share this rule so a string init accepts cannot
+// be rejected later by gen.
 func ValidateShortForm(s string) error {
 	msg, ok := shortFormReason(s)
 	if ok {
@@ -292,11 +269,8 @@ func ValidateShortForm(s string) error {
 	return fmt.Errorf("%w: %s", ErrPortShortForm, msg)
 }
 
-// shortFormReason returns ("", true) on accept and (humanReadableReason,
-// false) on reject. Used by both ValidateShortForm (which wraps the reason
-// in ErrPortShortForm for external callers — `cocoon init` and `--ports`)
-// and validatePortsForward (which feeds the reason into errAccumulator with
-// the field/idx context the `[ports].forward` schema validation carries).
+// shortFormReason returns ("", true) on accept and (reason, false) on
+// reject. Shared by ValidateShortForm and validatePortsForward.
 func shortFormReason(s string) (string, bool) {
 	m := rxPortShortForm.FindStringSubmatch(s)
 	if m == nil {
@@ -373,10 +347,9 @@ func validateIntPortField(a *errAccumulator, v any, idx, key string) {
 	}
 }
 
-// validateLongFormPublished accepts either an integer (single port) or a
-// string matching `\d+(?:-\d+)?`. The string form mirrors docker-compose's
-// long-form spec for port ranges (`published = "8000-8010"`); each numeric
-// component is bounded by [portMin, portMax].
+// validateLongFormPublished accepts an integer or string matching
+// `\d+(?:-\d+)?` (docker-compose's range form `published = "8000-8010"`).
+// Each numeric component is bounded by [portMin, portMax].
 func validateLongFormPublished(a *errAccumulator, v any, idx string) {
 	if _, ok := intField(v); ok {
 		validateIntPortField(a, v, idx, "published")
@@ -404,10 +377,8 @@ func validateLongFormPublished(a *errAccumulator, v any, idx string) {
 	}
 }
 
-// validateLongFormStringField applies check to m[name] when it is a string,
-// emits a "must be a string" error when present but typed wrong, and is a
-// no-op when the key is absent. The `check` callback returns the message to
-// emit (or "" to accept).
+// validateLongFormStringField is a no-op when the key is absent. The
+// `check` callback returns the message to emit (or "" to accept).
 func validateLongFormStringField(
 	a *errAccumulator,
 	m map[string]any,

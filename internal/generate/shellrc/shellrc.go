@@ -21,16 +21,10 @@ import (
 	"github.com/sukekyo26/cocoon/internal/generate/shellx"
 )
 
-// RenderDockerfileBlock returns the RUN block that appends [container.shell]
-// env/aliases plus the persistent ~/.cocoon/.shellrc bootstrap to the
-// login-shell rc file inside the image. The bootstrap is always emitted; the
-// env/aliases sections are only emitted when configured.
-//
-// The generated form is a Dockerfile heredoc (`RUN <<MARKER ... MARKER`)
-// containing a shell-level heredoc, which avoids the multi-layer single-quote
-// escaping that nested `echo '...' >> file` would require for values such as
-// `it's`. Dockerfile heredocs are supported by BuildKit since the 1.4 syntax
-// (cocoon emits `# syntax=docker/dockerfile:1.7`).
+// RenderDockerfileBlock emits the bootstrap unconditionally; env/aliases
+// only when configured. Uses a Dockerfile heredoc wrapping a shell
+// heredoc to avoid the multi-layer single-quote escaping that nested
+// `echo '...' >> file` would require for values like `it's`.
 func RenderDockerfileBlock(ctx *generate.WorkspaceContext) (string, error) {
 	if ctx == nil {
 		return "", nil
@@ -68,11 +62,9 @@ func RenderDockerfileBlock(ctx *generate.WorkspaceContext) (string, error) {
 	return b.String(), nil
 }
 
-// persistentShellrcBootstrap returns the single line that sources
-// ~/.cocoon/.shellrc (POSIX) or ~/.cocoon/.shellrc.fish (fish), guarded by
-// an existence check so the rc file stays valid even if the user removes
-// the file. Placed last in the rc so user edits override cocoon's own
-// env/aliases settings.
+// persistentShellrcBootstrap guards the source with an existence check so
+// the rc stays valid if the user removes the file. Placed last so user
+// edits override cocoon's env/aliases.
 func persistentShellrcBootstrap(syntax string) string {
 	if syntax == "fish" {
 		return `test -f "$HOME/.cocoon/.shellrc.fish"; and source "$HOME/.cocoon/.shellrc.fish"`

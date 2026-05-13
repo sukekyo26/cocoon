@@ -4,20 +4,17 @@
 // generated workspace.toml.
 package aptcategories
 
-// AptCategory groups commonly-bundled apt packages so `cocoon init` can
-// present them as a single checkbox during the interactive bootstrap.
+// AptCategory bundles apt packages into one multi-select checkbox.
 type AptCategory struct {
 	ID          string
 	Label       string
 	Description string
 	Packages    []string
-	// Default is true when the category should start with the box
-	// pre-checked in `cocoon init`'s multi-select.
+	// Default pre-checks the box in `cocoon init`'s multi-select.
 	Default bool
 }
 
-// AptCategories is the curated list `cocoon init` shows. Order is the
-// order options appear to the user.
+// AptCategories is the curated list `cocoon init` shows; slice order = UI order.
 var AptCategories = []AptCategory{
 	{
 		ID:          "text-editors",
@@ -123,8 +120,7 @@ var AptCategories = []AptCategory{
 	},
 }
 
-// AptCategoryByID returns the category with the given ID, or nil when the
-// ID is not in [AptCategories].
+// AptCategoryByID returns nil when id is not in AptCategories.
 func AptCategoryByID(id string) *AptCategory {
 	for i := range AptCategories {
 		if AptCategories[i].ID == id {
@@ -134,8 +130,7 @@ func AptCategoryByID(id string) *AptCategory {
 	return nil
 }
 
-// DefaultAptCategoryIDs returns the IDs of categories whose Default flag is
-// true, preserving the catalog order.
+// DefaultAptCategoryIDs preserves catalog order.
 func DefaultAptCategoryIDs() []string {
 	var ids []string
 	for _, c := range AptCategories {
@@ -146,9 +141,7 @@ func DefaultAptCategoryIDs() []string {
 	return ids
 }
 
-// ExpandAptCategories returns the deduplicated apt package list for the
-// given category IDs. Unknown IDs are skipped. Order matches
-// [AptCategories]'s iteration order through the requested IDs.
+// ExpandAptCategories dedupes packages and skips unknown IDs.
 func ExpandAptCategories(ids []string) []string {
 	seen := make(map[string]struct{})
 	var pkgs []string

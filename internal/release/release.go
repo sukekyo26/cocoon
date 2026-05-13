@@ -1,10 +1,6 @@
-// Package release encapsulates the GitHub Releases lookup for the cocoon
-// binary. Both `cocoon self-update` and the per-invocation update notifier
-// consume this package; keeping it cross-cutting avoids two copies of the
-// API call drifting out of sync.
-//
-// All exported errors are wrapped so callers can identify failure classes
-// via errors.Is.
+// Package release is the single GitHub Releases lookup shared by both
+// `cocoon self-update` and the per-invocation update notifier so the API
+// call cannot drift out of sync.
 package release
 
 import (
@@ -24,9 +20,8 @@ const (
 	DefaultTimeout = 30 * time.Second
 )
 
-// ErrHTTPStatus is wrapped when the GitHub API returns a non-2xx status.
-// Callers can match on this sentinel via errors.Is instead of pattern-
-// matching status codes from the wrapped message.
+// ErrHTTPStatus lets callers match non-2xx via errors.Is rather than
+// pattern-matching the wrapped status message.
 var ErrHTTPStatus = errors.New("unexpected http status")
 
 // Asset is a single uploaded artifact attached to a GitHub release.
@@ -60,10 +55,8 @@ type fetchConfig struct {
 	client *http.Client
 }
 
-// WithHTTPClient overrides the http.Client used for the API request.
-// Passing nil is treated as "use the default" so callers can forward an
-// optional client without a nil check at every call site — otherwise the
-// nil would overwrite http.DefaultClient and panic inside FetchLatest.
+// WithHTTPClient treats nil as "use the default" so callers can forward
+// an optional client without a nil check.
 func WithHTTPClient(c *http.Client) Option {
 	return func(cfg *fetchConfig) {
 		if c == nil {
@@ -73,10 +66,8 @@ func WithHTTPClient(c *http.Client) Option {
 	}
 }
 
-// FetchLatest returns the latest release published for cocoon. The
-// supplied ctx must include a deadline (or be wrapped by FetchLatest
-// when it has none) — callers in interactive paths should pass a short
-// timeout so a stalled GitHub API does not freeze the CLI.
+// FetchLatest applies DefaultTimeout when ctx has no deadline so a stalled
+// GitHub API cannot freeze interactive paths.
 func FetchLatest(ctx context.Context, opts ...Option) (*Release, error) {
 	cfg := fetchConfig{client: http.DefaultClient}
 	for _, o := range opts {

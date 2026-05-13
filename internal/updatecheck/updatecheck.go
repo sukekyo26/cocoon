@@ -1,14 +1,10 @@
-// Package updatecheck runs the once-per-day GitHub Releases check that
-// cocoon emits on every interactive invocation. It is intentionally
-// distinct from internal/cli/selfupdate (which performs the actual
-// binary replacement) because the call is cross-cutting: it runs as a
-// root PersistentPreRun on every subcommand, must never error out, and
-// caches its answer to avoid hammering api.github.com.
+// Package updatecheck runs cocoon's once-per-day GitHub Releases check.
+// Distinct from selfupdate (the binary replacement) because this call is
+// cross-cutting: it runs in root PersistentPreRun, must never error out,
+// and caches its answer to avoid hammering api.github.com.
 //
-// All failures (network, malformed cache, write-protected cache dir)
-// are silent: Check returns nil when no notice should be shown, and any
-// error path also returns nil. Update notification must never get in
-// the way of the user's actual command.
+// All failures are silent — Check returns nil. Update notification must
+// never get in the way of the user's command.
 package updatecheck
 
 import (
@@ -26,20 +22,16 @@ import (
 	"github.com/sukekyo26/cocoon/internal/release"
 )
 
-// CacheTTL is how long a fetched latest-version answer is reused before
-// re-hitting the GitHub API.
+// CacheTTL caps how long a fetched latest-version answer is reused.
 const CacheTTL = 24 * time.Hour
 
-// cacheFile is the filename appended under <UserCacheDir>/cocoon/.
 const cacheFile = "update_check.json"
 
-// cacheSchemaVersion bumps when the on-disk JSON layout changes
-// incompatibly.
+// cacheSchemaVersion bumps on incompatible JSON layout changes.
 const cacheSchemaVersion = 1
 
-// Notice is the result of a successful check: the running binary is
-// older than the latest published release. Format renders it as a
-// single-line message; coloring is left to the caller (Logger.Noticef).
+// Notice signals the running binary is older than the latest published
+// release. Coloring is left to the caller (Logger.Noticef).
 type Notice struct {
 	Current, Latest string
 }
@@ -62,16 +54,11 @@ type Options struct {
 	HTTPClient *http.Client
 }
 
-// Check returns a non-nil *Notice when a newer release exists than
-// currentVersion. Otherwise (already up-to-date, network error, cache
-// I/O error, parse error, ...) it returns nil. Errors are deliberately
-// swallowed: this runs on every cocoon invocation and must not block
-// or noise-spam the user.
+// Check swallows every error (network, cache I/O, parse) and returns nil.
+// It runs on every invocation and must not block or noise-spam the user.
 func Check(ctx context.Context, currentVersion string, opts Options) *Notice {
-	// Check is exported and may be reached from embedders that forward
-	// an optional context. Mirror the silent-fail philosophy of the
-	// other error paths here instead of panicking inside the eventual
-	// http.NewRequestWithContext / cfg.client.Do call chain.
+	// Nil ctx mirrors the silent-fail philosophy; would otherwise panic in
+	// http.NewRequestWithContext.
 	if ctx == nil {
 		return nil
 	}
@@ -106,9 +93,7 @@ func Check(ctx context.Context, currentVersion string, opts Options) *Notice {
 	latest := strings.TrimPrefix(rel.TagName, "v")
 
 	if cacheOK {
-		// Cache write errors are deliberately silent: the user can retry
-		// the check tomorrow (or with COCOON_NO_UPDATE_CHECK=1 to skip).
-		// Mid-run we have nothing useful to surface.
+		// Cache write errors are silent — retry tomorrow.
 		if err := writeCache(cachePath, cacheState{
 			CheckedAt:     now(),
 			LatestVersion: latest,
@@ -154,7 +139,6 @@ func readCache(path string) (cacheState, bool) {
 	data, err := os.ReadFile(path) //nolint:gosec // path resolved via os.UserCacheDir or test-supplied tempdir.
 	if err != nil {
 		if !errors.Is(err, fs.ErrNotExist) {
-			// Other read errors (permissions, etc.) — silent treat as no cache.
 			return cacheState{CheckedAt: time.Time{}, LatestVersion: "", SchemaVersion: 0}, false
 		}
 		return cacheState{CheckedAt: time.Time{}, LatestVersion: "", SchemaVersion: 0}, false

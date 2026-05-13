@@ -98,8 +98,7 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 	return header + string(body), nil
 }
 
-// volSrc tracks who introduced a given mount path so we can emit precise
-// dedup warnings.
+// volSrc names the source of a mount path so dedup warnings can be precise.
 type volSrc struct{ label, volName string }
 
 // mergeVolumes mirrors ComposeGenerator's de-duplication and conflict checks.
@@ -467,9 +466,8 @@ func stringSeq(values []string) *yaml.Node {
 	return yamlx.Seq(items...)
 }
 
-// sysctlNode emits the sysctl value as a plain int when it parsed as a
-// numeric, otherwise as a (possibly quoted) string. Validation already
-// rejects any other type.
+// sysctlNode renders numerics as int, everything else as a quoted string.
+// Validation already rejected unsupported types.
 func sysctlNode(v any) *yaml.Node {
 	switch n := v.(type) {
 	case int:

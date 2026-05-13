@@ -87,14 +87,11 @@ func runSelfUpdate(ctx context.Context, stdout, stderr io.Writer, checkOnly, for
 		return nil
 	}
 	if checkOnly {
-		// stdout (not stderr) so the line stays on the same stream as
-		// the surrounding "current version" / "latest release" labels
-		// and matches the pre-color behavior — scripts that grep this
-		// text on stdout keep working; the exit code (100) is still
-		// the canonical signal for "newer available".
+		// stdout: keeps the line on the same stream as the version labels
+		// so grep-on-stdout scripts keep working. Exit code 100 is still
+		// the canonical "newer available" signal.
 		log.Infof("newer release %s available; rerun without --check-only to install", latest)
-		// cancel the api timeout context before exit so the deferred
-		// cleanup is not skipped by os.Exit (gocritic exitAfterDefer).
+		// Cancel before os.Exit (gocritic exitAfterDefer).
 		cancel()
 		os.Exit(ExitNewerAvailable) //nolint:gocritic // cancel() above runs the only pending defer.
 	}
@@ -117,10 +114,8 @@ func runSelfUpdate(ctx context.Context, stdout, stderr io.Writer, checkOnly, for
 
 	binPath := filepath.Join(tmp, assetName)
 	sumsPath := filepath.Join(tmp, "SHA256SUMS")
-	// Progress lines belong on stderr (transient, not data) so scripts
-	// parsing stdout see only the stable version / success output. The
-	// pre-colorize implementation wrote this to stderr too; Progressf
-	// preserves that contract and dims the line under a TTY.
+	// Progressf writes to stderr (transient, not data) so stdout-grep
+	// scripts see only the stable version / success output.
 	log.Progressf("downloading %s...", assetName)
 	if err = downloadFile(ctx, assetURL, binPath); err != nil {
 		return fmt.Errorf("%w: download %s: %w", ErrFailure, assetName, err)
@@ -213,9 +208,8 @@ func sha256File(path string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-// atomicReplace swaps the contents of dst with src. os.Rename is the
-// happy path; when src and dst are on different filesystems we fall
-// back to a copy + chmod.
+// atomicReplace falls back to copy+chmod when src and dst are on
+// different filesystems (os.Rename's EXDEV).
 func atomicReplace(src, dst string) error {
 	if err := os.Rename(src, dst); err == nil {
 		return nil
@@ -226,7 +220,6 @@ func atomicReplace(src, dst string) error {
 	}
 	defer func() { _ = in.Close() }()
 	tmp := dst + ".cocoon-update.tmp"
-	// tmp lives next to dst (Executable path); 0755 matches a typical CLI binary.
 	out, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o755) //nolint:gosec
 	if err != nil {
 		return fmt.Errorf("create %s: %w", tmp, err)

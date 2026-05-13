@@ -48,29 +48,17 @@ non-interactively from CI.`
 var (
 	rxServiceName = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
 	rxUsername    = regexp.MustCompile(`^[a-z_][a-z0-9_-]*$`)
-	// rxImageVersionInput mirrors config.validate's rxImageVersion so the
-	// "Other (manual input)" prompt rejects bad input in the form rather
-	// than letting it slip through to `cocoon gen` and surface as a
-	// container.image_version validation error. Reused by the plugin
-	// version picker because plugins.versions's pin field has the same
-	// character constraints. Keep this pattern in lockstep with
-	// rxImageVersion (Docker tag spec: alnum / underscore can lead,
-	// period / hyphen cannot).
+	// rxImageVersionInput must stay in lockstep with config.rxImageVersion
+	// so prompts reject the same set `cocoon gen` does (Docker tag spec:
+	// alnum / underscore can lead, period / hyphen cannot).
 	rxImageVersionInput = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._-]*$`)
 )
 
-// versionStringValidator builds a huh.Validate function for prompts that
-// accept a version-like string (image tag, plugin pin). The TOML-safe
-// character set is enforced via rxImageVersionInput; verification that
-// the value actually exists upstream is intentionally NOT done — the
-// prompt description tells the user to check the upstream URL.
-//
-// formatErrKey selects the i18n message returned on regex failure so
-// each prompt can phrase the error in its own terms. When latestSentinel
-// is non-empty, an exact match against it is accepted unconditionally
-// (used by the plugin version picker where "LATEST" is a UI sentinel
-// for "leave unpinned"). Empty manual input is always rejected so a
-// stray Enter on the input row never silently encodes as a sentinel.
+// versionStringValidator enforces the TOML-safe charset via rxImageVersionInput.
+// Upstream existence is intentionally NOT verified. latestSentinel, when
+// non-empty, is accepted unconditionally (the plugin picker uses "LATEST" for
+// "leave unpinned"). Empty input is always rejected so a stray Enter does not
+// silently encode as a sentinel.
 func versionStringValidator(cat *i18n.Catalog, formatErrKey, latestSentinel string) func(string) error {
 	return func(s string) error {
 		s = strings.TrimSpace(s)
@@ -87,7 +75,7 @@ func versionStringValidator(cat *i18n.Catalog, formatErrKey, latestSentinel stri
 	}
 }
 
-// NewCommand returns the cobra command for ` + "`cocoon init`" + `.
+// NewCommand returns the cobra command for `cocoon init`.
 func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 	flags := zeroFlags()
 	cmd := &cobra.Command{
@@ -195,11 +183,10 @@ func zeroFlags() initFlags {
 	}
 }
 
-// initAnswers is the resolved value set written into workspace.toml.
-// The *Set companions distinguish "not yet provided" from a zero value
-// the user actively chose (e.g. devcontainer = false). Without them
-// flag-set vs prompt-pending would be ambiguous and the prompt builder
-// would skip groups whose value happens to look empty.
+// initAnswers is what gets written into workspace.toml. The *Set companions
+// distinguish "not yet provided" from a zero value the user actively chose
+// (e.g. devcontainer = false), so the prompt builder doesn't skip groups
+// whose value happens to look empty.
 type initAnswers struct {
 	ServiceName       string
 	Username          string
@@ -322,16 +309,10 @@ func printNextSteps(log *logx.Logger, cat *i18n.Catalog, devcontainer bool) {
 	}
 }
 
-// collectAnswers folds CLI flags into initAnswers, then either applies
-// safe defaults (when --yes is set) or runs an interactive form for
-// whatever is still missing.
-//
-// A final image/plugin cross-check runs in both paths so the
-// non-interactive route (`--plugins go --image golang`) fails fast
-// here instead of writing a workspace.toml that `cocoon gen` would
-// later reject via validateImagePluginConflict. The interactive
-// picker already filters the conflict out of the multi-select, so
-// the check is a no-op there — it's the guard for scripted runs.
+// collectAnswers runs the cross-check on both paths so the non-interactive
+// route (`--plugins go --image golang`) fails fast instead of writing a
+// workspace.toml that `cocoon gen` would later reject. The interactive
+// picker already filters conflicts; the check is a no-op there.
 func collectAnswers(flags *initFlags, cat *i18n.Catalog, plugins map[string]*plugin.Plugin) (initAnswers, error) {
 	ans, err := applyFlags(flags, plugins)
 	if err != nil {
@@ -351,10 +332,8 @@ func collectAnswers(flags *initFlags, cat *i18n.Catalog, plugins map[string]*plu
 	return ans, nil
 }
 
-// assertNoImagePluginConflict fails fast when the chosen image
-// duplicates a language-runtime plugin (image=golang + go plugin,
-// image=rust + rust plugin). The user-facing message names the
-// matching --plugins / --image rewrite so the fix is one edit.
+// assertNoImagePluginConflict names the matching --plugins / --image rewrite
+// in the error so the fix is one edit.
 func assertNoImagePluginConflict(ans initAnswers) error {
 	conflict, hit := config.ImageProvidesPlugin[ans.Image]
 	if !hit {
@@ -370,9 +349,8 @@ func assertNoImagePluginConflict(ans initAnswers) error {
 	)
 }
 
-// applyFlags copies validated CLI-flag values into initAnswers and marks
-// the corresponding *Set flags. Empty flags leave the field zero so the
-// prompt or default layer knows to fill it in.
+// applyFlags marks *Set on every populated flag. Empty flags leave the field
+// zero so the prompt or default layer fills it in.
 //
 //nolint:gocognit,gocyclo,funlen // sequence of independent flag checks; splitting hides intent.
 func applyFlags(flags *initFlags, plugins map[string]*plugin.Plugin) (initAnswers, error) {
@@ -521,10 +499,9 @@ func applyDefaults(ans initAnswers, plugins map[string]*plugin.Plugin) (initAnsw
 	return ans, nil
 }
 
-// promptForMissing runs the interactive flow as a sequence of
-// single-field huh.Forms (one prompt per screen). Multi-Group +
-// OptionsFunc had a viewport race vs. async TitleFunc that left the
-// cursor stuck under scrolling options; independent forms side-step
+// promptForMissing uses single-field huh.Forms (one prompt per screen).
+// Multi-Group + OptionsFunc had a viewport race vs. async TitleFunc that
+// left the cursor stuck under scrolling options; independent forms side-step
 // it. Tradeoff: no shift+tab back-nav; re-run `cocoon init` to fix.
 //
 //nolint:funlen,gocognit,gocyclo // sequence of independent prompt steps; splitting hides intent.
@@ -553,9 +530,6 @@ func promptForMissing(ans initAnswers, cat *i18n.Catalog, plugins map[string]*pl
 		ans.ImageSet = true
 	}
 	if !ans.ImageVersionSet {
-		// Custom huh.Field: curated suggestions stacked above an inline
-		// free-text input row. Cursor on a suggestion = select; cursor
-		// on the input row = type. See internal/cli/init/field_select_or_input.go.
 		versions := config.SupportedImageVersions[ans.Image]
 		if ans.ImageVersion == "" {
 			ans.ImageVersion = defaultImageVersion(ans.Image)
@@ -620,10 +594,9 @@ func promptForMissing(ans initAnswers, cat *i18n.Catalog, plugins map[string]*pl
 		ans.AptSet = true
 	}
 	if !ans.PluginsSet {
-		// Plugins whose toolchain duplicates the chosen base image (e.g.
-		// rust plugin when image = "rust") are hidden from the picker and
-		// removed from the defaults so the user cannot accidentally pick
-		// a combination validateImagePluginConflict would later reject.
+		// Hide plugins whose toolchain duplicates the chosen base image so the
+		// user cannot accidentally pick a combination validateImagePluginConflict
+		// would later reject.
 		excludeID := config.ImageProvidesPlugin[ans.Image]
 		ans.Plugins = filterPluginIDs(defaultPluginIDs(plugins), excludeID)
 		if err := promptPluginsWithRetry(cat, plugins, excludeID, &ans.Plugins); err != nil {
@@ -631,10 +604,8 @@ func promptForMissing(ans initAnswers, cat *i18n.Catalog, plugins map[string]*pl
 		}
 		ans.PluginsSet = true
 	}
-	// version_capable plugins not already pinned via --plugin-versions get
-	// a per-plugin LATEST / pin prompt. The map is allocated here so the
-	// prompt loop can record picks; an empty map after the prompt is
-	// equivalent to nil in writePluginVersions (both hit the len==0
+	// Allocate the map even if the prompt produces no picks; an empty map
+	// is equivalent to nil in writePluginVersions (both hit the len==0
 	// fallback that emits the commented-out template).
 	if ans.PluginVersions == nil {
 		ans.PluginVersions = make(map[string]string)
@@ -646,16 +617,10 @@ func promptForMissing(ans initAnswers, cat *i18n.Catalog, plugins map[string]*pl
 	return ans, nil
 }
 
-// promptPluginsWithRetry runs the plugin multi-select form, then verifies
-// the user did not pick a conflicting pair declared in plugin.toml's
-// metadata.conflicts. On conflict, the form is re-run up to two more times
-// so the user can reconcile without restarting the whole flow. Three
-// failures in a row return ErrUsage so CI / scripted invocations cannot
-// loop forever.
-//
-// excludeID hides one plugin id from the picker (empty = hide none); the
-// caller uses it to drop the language-runtime plugin that duplicates the
-// chosen base image, so validateImagePluginConflict cannot fire later.
+// promptPluginsWithRetry re-runs the multi-select on conflict (up to 2 more
+// times) so the user can reconcile without restarting the whole flow. Three
+// failures in a row return ErrUsage so scripted invocations cannot loop
+// forever. excludeID hides one plugin id from the picker (empty = none).
 func promptPluginsWithRetry(cat *i18n.Catalog, plugins map[string]*plugin.Plugin,
 	excludeID string, target *[]string,
 ) error {
@@ -668,9 +633,9 @@ func promptPluginsWithRetry(cat *i18n.Catalog, plugins map[string]*plugin.Plugin
 		if err == nil {
 			return nil
 		}
-		// Echo the conflict to stderr so the user sees why the form is
-		// re-appearing (huh's prompt body is fully redrawn between runs
-		// and prior status lines are not preserved).
+		// huh redraws the prompt body and drops prior status lines, so
+		// echo the conflict to stderr or the user has no idea why the
+		// form is reappearing.
 		fmt.Fprintln(os.Stderr, err)
 	}
 	return fmt.Errorf("%w: plugin conflict not resolved after %d attempts", ErrUsage, maxAttempts)
@@ -711,11 +676,9 @@ func runSingleFieldForm(field huh.Field) error {
 	return nil
 }
 
-// keyMapWithoutPrevHelp returns huh's default key bindings with the
-// Shift+Tab "back" help text stripped from every field profile. The
-// binding itself still routes through Update so the keystroke remains
-// a no-op rather than a hard error; only its appearance in the help
-// bar is suppressed.
+// keyMapWithoutPrevHelp strips the Shift+Tab "back" help text from every
+// field profile. The binding still routes through Update (no-op) so the
+// keystroke is silently ignored rather than erroring.
 func keyMapWithoutPrevHelp() *huh.KeyMap {
 	km := huh.NewDefaultKeyMap()
 	km.Confirm.Prev.SetHelp("", "")
@@ -728,10 +691,10 @@ func keyMapWithoutPrevHelp() *huh.KeyMap {
 	return km
 }
 
-// runStrictIdentForm prompts for one required text identifier with a
-// strict-on-empty validator. Single-Group / single-Field form means
-// there is no previous group to navigate back to, so the validator
-// cannot trap the user inside a blurred-with-error field.
+// runStrictIdentForm uses a strict-on-empty validator. Safe only because
+// the single-Group / single-Field form has no previous group to navigate
+// back to, so the validator cannot trap the user in a blurred-with-error
+// field.
 func runStrictIdentForm(cat *i18n.Catalog, titleKey, descKey, charsKey string,
 	pattern *regexp.Regexp, target *string,
 ) error {
@@ -748,10 +711,9 @@ func identInput(cat *i18n.Catalog, titleKey, descKey, charsKey string,
 		Value(target)
 }
 
-// Select/MultiSelect helpers below omit Height() intentionally: huh's
-// default already covers our options count, but explicit Height(len+2)
-// breaks when the title+description wraps to two lines (cursor stuck
-// under a scrolling viewport).
+// Select/MultiSelect helpers omit Height() intentionally: explicit Height(len+2)
+// breaks when title+description wraps to two lines (cursor stuck under a
+// scrolling viewport); huh's default already covers our options count.
 
 func imageSelect(cat *i18n.Catalog, target *string) *huh.Select[string] {
 	options := make([]huh.Option[string], len(config.SupportedImages))
@@ -830,26 +792,21 @@ func aliasBundlesMultiSelect(cat *i18n.Catalog, target *[]string) *huh.MultiSele
 		Value(target)
 }
 
-// promptForPorts runs the ports input form and converts the CSV input
-// into the []string the renderer consumes. Returns (nil, nil) when the
-// user submits a blank prompt — the renderer then falls back to the
-// commented-out [ports] template.
+// promptForPorts returns (nil, nil) on blank input — the renderer then
+// emits the commented-out [ports] template.
 func promptForPorts(cat *i18n.Catalog) ([]string, error) {
 	var raw string
 	if err := runSingleFieldForm(portsInput(cat, &raw)); err != nil {
 		return nil, err
 	}
-	// Validate already accepted; re-parse to convert the raw CSV into
-	// []string. A failure here would mean the validator and parser
-	// disagree — fail loud rather than silently dropping it.
+	// A failure here means validator and parser disagree — fail loud
+	// rather than silently dropping it.
 	return parsePorts(raw)
 }
 
-// portsInput renders a free-text input for comma-separated docker-compose
-// short-form port mappings. Blank input is accepted (= no [ports] block;
-// the renderer emits the commented-out template hint instead). Non-empty
-// input is validated by portsInputValidator so init never accepts a string
-// that `cocoon gen` would later reject.
+// portsInput accepts blank input (renderer emits the commented template).
+// Non-empty input is validated by portsInputValidator so init never
+// accepts a string `cocoon gen` would later reject.
 func portsInput(cat *i18n.Catalog, target *string) *huh.Input {
 	return huh.NewInput().
 		Title(cat.Msg("init_prompt_ports")).
@@ -858,12 +815,9 @@ func portsInput(cat *i18n.Catalog, target *string) *huh.Input {
 		Value(target)
 }
 
-// portsInputValidator returns a per-keystroke validator for the ports
-// prompt. The message returned on rejection is localized via the catalog
-// — huh prints it verbatim in the form footer, so EN runs see English
-// and JA runs see Japanese. Kept separate from parsePorts so the flag
-// path (`--ports`) keeps its English usage error consistent with the
-// other init flag validators.
+// portsInputValidator localizes the rejection message via the catalog.
+// Separate from parsePorts so the `--ports` flag path keeps its English
+// usage error consistent with the other init flag validators.
 func portsInputValidator(cat *i18n.Catalog) func(string) error {
 	return func(s string) error {
 		for _, part := range strings.Split(s, ",") {
@@ -879,16 +833,10 @@ func portsInputValidator(cat *i18n.Catalog) func(string) error {
 	}
 }
 
-// pluginsMultiSelect renders the embedded plugin catalog as a single
-// multi-select. Options are sorted by id so the order is stable across
-// runs (LoadDir returns a map so iteration order is otherwise random).
-// The label format mirrors aptMultiSelect — "<Name> (<short description
-// or conflicts hint>)" — so both prompts feel like the same family.
-//
-// excludeID hides one plugin id (empty = no exclusion). Used to drop the
-// rust plugin from the picker when image = "rust" is already chosen
-// (likewise for go), so the user cannot accidentally tick a plugin
-// validateImagePluginConflict would later reject.
+// pluginsMultiSelect sorts options by id so the order is stable across runs
+// (LoadDir returns a map). excludeID hides one plugin id (empty = none) and
+// is used to keep validateImagePluginConflict-tripping picks out of the
+// picker entirely.
 func pluginsMultiSelect(cat *i18n.Catalog, plugins map[string]*plugin.Plugin,
 	excludeID string, target *[]string,
 ) *huh.MultiSelect[string] {
@@ -907,9 +855,8 @@ func pluginsMultiSelect(cat *i18n.Catalog, plugins map[string]*plugin.Plugin,
 		Value(target)
 }
 
-// formatPluginLabel collapses Name + short hint into a single display
-// line. The "conflicts" hint surfaces incompatibilities up front so the
-// user does not have to dig into plugin.toml.
+// formatPluginLabel shows conflicts up front so the user does not have to
+// dig into plugin.toml.
 func formatPluginLabel(id string, p *plugin.Plugin) string {
 	name := p.Metadata.Name
 	if name == "" {
@@ -917,9 +864,8 @@ func formatPluginLabel(id string, p *plugin.Plugin) string {
 	}
 	hint := p.Metadata.Description
 	if len(p.Metadata.Conflicts) > 0 {
-		// Conflicts is the user-actionable signal here; description is
-		// nice to have but the conflict warning is the thing that
-		// changes their pick. Trim description if both are present.
+		// Conflicts is the actionable signal; drop description if both
+		// are set so the warning is what the user sees.
 		hint = "conflicts: " + strings.Join(p.Metadata.Conflicts, ", ")
 	}
 	if hint == "" {
@@ -928,14 +874,10 @@ func formatPluginLabel(id string, p *plugin.Plugin) string {
 	return fmt.Sprintf("%s (%s)", name, hint)
 }
 
-// makeStrictValidator rejects empty input and bad characters. Used by
-// the standalone Inputs in promptForMissing. Showing the regex itself
-// to end users is useless; this surfaces a human sentence instead.
-//
-// Strict-on-empty is safe here only because each strict Input runs in
-// its own standalone huh.Form — there is no previous group to
-// navigate back to, so the validator cannot trap the user inside a
-// blurred-with-error field.
+// makeStrictValidator surfaces a localized sentence instead of the raw
+// regex. Strict-on-empty is safe only because each Input is a standalone
+// huh.Form with no previous group, so the validator cannot trap the user
+// in a blurred-with-error field.
 func makeStrictValidator(pattern *regexp.Regexp, charsKey string, cat *i18n.Catalog) func(string) error {
 	return func(s string) error {
 		if s == "" {
@@ -948,9 +890,7 @@ func makeStrictValidator(pattern *regexp.Regexp, charsKey string, cat *i18n.Cata
 	}
 }
 
-// parseAptCategories splits a comma-separated category id list and
-// returns the parsed ids, rejecting any unknown entry. Used by the
-// --apt-categories flag path.
+// parseAptCategories rejects unknown ids. Used by --apt-categories.
 func parseAptCategories(raw string) ([]string, error) {
 	var ids []string
 	for _, part := range strings.Split(raw, ",") {
@@ -967,19 +907,10 @@ func parseAptCategories(raw string) ([]string, error) {
 	return ids, nil
 }
 
-// parsePorts splits a comma-separated short-form port list and validates
-// each entry via config.ValidateShortForm so init accepts the same set
-// `cocoon gen` does. Empty raw (or all-whitespace entries) returns
-// (nil, nil) — the renderer treats nil as "user opted out" and falls back
-// to the commented-out [ports] template.
-//
-// Callers: (1) applyFlags for the `--ports` flag path (the wrapped error
-// surfaces an English usage message, matching the other init flag
-// validators); (2) promptForPorts to convert the raw CSV string the
-// interactive prompt produced into the []string the renderer consumes.
-// The prompt's per-keystroke Validate hook intentionally bypasses
-// parsePorts and calls config.ValidateShortForm directly so its rejection
-// message can be localized via the i18n catalog (see portsInputValidator).
+// parsePorts validates entries through config.ValidateShortForm so init
+// accepts the same set `cocoon gen` does. (nil, nil) for blank input;
+// the renderer treats nil as "user opted out" and emits the commented
+// [ports] template.
 func parsePorts(raw string) ([]string, error) {
 	var ports []string
 	for _, part := range strings.Split(raw, ",") {
@@ -995,9 +926,7 @@ func parsePorts(raw string) ([]string, error) {
 	return ports, nil
 }
 
-// parseAliasBundles splits a comma-separated alias-bundle id list and
-// validates each against the AliasBundles catalog. Used by the
-// --alias-bundles flag path.
+// parseAliasBundles rejects unknown ids. Used by --alias-bundles.
 func parseAliasBundles(raw string) ([]string, error) {
 	var ids []string
 	for _, part := range strings.Split(raw, ",") {
@@ -1013,10 +942,8 @@ func parseAliasBundles(raw string) ([]string, error) {
 	return ids, nil
 }
 
-// parsePlugins splits a comma-separated plugin id list and validates each
-// against the loaded embedded catalog. The conflict check is left to
-// validatePluginConflicts so the same logic covers both flag and prompt
-// paths.
+// parsePlugins leaves the conflict check to validatePluginConflicts so the
+// same logic covers both flag and prompt paths.
 func parsePlugins(raw string, plugins map[string]*plugin.Plugin) ([]string, error) {
 	var ids []string
 	for _, part := range strings.Split(raw, ",") {
@@ -1048,9 +975,8 @@ func parsePluginVersions(raw string, plugins map[string]*plugin.Plugin, enabled 
 		if token == "" {
 			continue
 		}
-		// Require exactly one '=' so typos like "go==1.23" surface as ErrUsage
-		// instead of silently feeding "=1.23" as the pin ref. Real-world pin
-		// refs (version strings, semver, git tags) never contain '='.
+		// Reject typos like "go==1.23" instead of silently using "=1.23"
+		// as the pin ref. Real pin refs never contain '='.
 		if strings.Count(token, "=") != 1 {
 			return nil, fmt.Errorf(
 				"%w: --plugin-versions token %q must be <id>=<ref>", ErrUsage, token)
@@ -1133,8 +1059,7 @@ func defaultPluginIDs(plugins map[string]*plugin.Plugin) []string {
 	return ids
 }
 
-// sortedPluginIDs returns every id in plugins in sorted order. Pulled out
-// so the prompt builder and other callers stay readable.
+// sortedPluginIDs returns ids in lexical order.
 func sortedPluginIDs(plugins map[string]*plugin.Plugin) []string {
 	ids := make([]string, 0, len(plugins))
 	for id := range plugins {
@@ -1175,11 +1100,8 @@ func loadEmbeddedPlugins() (map[string]*plugin.Plugin, error) {
 	return out, nil
 }
 
-// defaultImageVersion returns the first listed version for the image,
-// which SupportedImageVersions orders newest-first. ubuntu therefore
-// defaults to 26.04, debian to 13, node to 26-bookworm-slim, python to
-// 3.14-slim-bookworm, golang to 1.26.3-bookworm, rust to
-// 1.95-bookworm, and denoland/deno to debian-2.7.14.
+// defaultImageVersion returns SupportedImageVersions[image][0], which is
+// ordered newest-first.
 func defaultImageVersion(image string) string {
 	versions := config.SupportedImageVersions[image]
 	if len(versions) == 0 {

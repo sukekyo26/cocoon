@@ -11,17 +11,13 @@ import (
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
 
-// ErrWorkspaceNotFound is returned by projectPluginsDir when no workspace.toml
-// is reachable from cwd (the user is outside a cocoon project). System
-// failures during discovery (e.g. os.Getwd, filesystem stat errors) return a
-// wrapped error instead, so callers can map "not found" to ErrUsage and other
-// failures to ErrFailure.
+// ErrWorkspaceNotFound lets callers map "outside a cocoon project" to
+// ErrUsage and genuine system failures to ErrFailure.
 var ErrWorkspaceNotFound = errors.New("workspace.toml not found in tree")
 
-// resolveLayered builds the layered plugin FS from the embedded catalog plus
-// the project (.cocoon/plugins under the discovered workspace.toml) and user
-// (~/.cocoon/plugins) overlays. The project layer is best-effort: if no
-// workspace.toml is discoverable, just the embedded + user view is returned.
+// resolveLayered drops the project layer silently when no workspace.toml
+// is discoverable (read-only views like list/show still work from
+// embedded + user alone).
 func resolveLayered() (*plugin.LayeredFS, error) {
 	embedded, err := plugin.CatalogFS()
 	if err != nil {
@@ -34,20 +30,16 @@ func resolveLayered() (*plugin.LayeredFS, error) {
 	projectDir, projErr := projectPluginsDir()
 	switch {
 	case errors.Is(projErr, ErrWorkspaceNotFound):
-		// Running outside a cocoon project is expected for read-only views
-		// (`cocoon plugin list / show`); the user/embedded layers still
-		// satisfy the request. Drop the project layer silently.
 		projectDir = ""
 	case projErr != nil:
-		// A genuine system failure during discovery (Getwd / stat) should
-		// not be hidden — surface it instead of pretending no project layer
-		// exists.
+		// Surface system errors (Getwd / stat); don't pretend the layer
+		// is just absent.
 		return nil, fmt.Errorf("%w: project plugins dir: %w", ErrFailure, projErr)
 	}
 	return plugin.NewLayeredFS(embedded, userDir, projectDir), nil
 }
 
-// userPluginsDir is the user-scope LayeredFS layer root: ~/.cocoon/plugins.
+// userPluginsDir is the user-scope LayeredFS root (~/.cocoon/plugins).
 func userPluginsDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -56,18 +48,9 @@ func userPluginsDir() (string, error) {
 	return filepath.Join(home, ".cocoon", "plugins"), nil
 }
 
-// projectPluginsDir locates the project-scope layer root by discovering
-// workspace.toml from cwd and joining .cocoon/plugins next to it.
-//
-// Error semantics:
-//   - (path, nil)                   on success
-//   - ("", ErrWorkspaceNotFound)   when discovery walks all the way up
-//     without finding workspace.toml (= caller is outside a cocoon project)
-//   - ("", wrapped err)             on filesystem-level failures (Getwd or
-//     Discover errored)
-//
-// Callers map ErrWorkspaceNotFound to ErrUsage with an actionable message,
-// and other errors to ErrFailure with the underlying context preserved.
+// projectPluginsDir returns ErrWorkspaceNotFound when discovery walks all
+// the way up without finding workspace.toml (caller is outside a cocoon
+// project), and a wrapped error for genuine system failures.
 func projectPluginsDir() (string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -83,8 +66,7 @@ func projectPluginsDir() (string, error) {
 	return filepath.Join(filepath.Dir(wsPath), ".cocoon", "plugins"), nil
 }
 
-// loadPluginFromLayer reads <id>/plugin.toml from layered for parsing /
-// inspection. Returns fs.ErrNotExist (wrapped) when the id is unknown.
+// loadPluginFromLayer returns fs.ErrNotExist (wrapped) for unknown ids.
 func loadPluginFromLayer(layered fs.FS, id string) (*plugin.Plugin, error) {
 	body, err := fs.ReadFile(layered, id+"/plugin.toml")
 	if err != nil {

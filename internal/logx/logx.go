@@ -1,19 +1,10 @@
-// Package logx provides thin io.Writer-based output helpers used by the
-// CLI subcommands. Direct use of fmt.Print* / panic / the standard log
-// package is forbidden by the forbidigo + depguard linters elsewhere in the
-// tree; route user-facing output through Logger so the print seam stays
-// centralised and CI can keep forbidigo enabled.
+// Package logx is a thin io.Writer wrapper used by the CLI subcommands.
+// forbidigo+depguard ban fmt.Print*/log elsewhere in the tree; routing
+// through Logger keeps the print seam centralised.
 //
-// Logger does not buffer, level-filter, or format structured fields. It is a
-// deliberately small wrapper around io.Writer because the CLI's output is
-// localised human-readable text (via internal/i18n), not structured logs —
-// adding slog handlers, key/value attrs, or sloglint-friendly static
-// messages would conflict with i18n's dynamic message strings.
-//
-// Logger paints messages with ANSI color (red/yellow/green/cyan, plus bold
-// and dim decorators) when its sink is a TTY and the environment permits
-// (see [ColorMode] and [shouldColor]). Color decisions are made once at
-// construction; pass [ColorNever] in tests that compare exact byte output.
+// No buffering, no level filtering, no structured fields — output is
+// localised i18n text, not structured logs. Color is decided once at
+// construction (pass [ColorNever] in tests that compare exact output).
 package logx
 
 import (
@@ -31,15 +22,14 @@ type Logger struct {
 	stderrDim, stderrReset                          string
 }
 
-// New constructs a Logger that writes Info output to stdout and
-// Error/Warn/Notice output to stderr, auto-detecting color support per
-// sink (see [ColorAuto]).
+// New writes Info to stdout and Error/Warn/Notice to stderr, auto-detecting
+// color support per sink.
 func New(stdout, stderr io.Writer) *Logger {
 	return NewWithMode(stdout, stderr, ColorAuto)
 }
 
-// NewWithMode constructs a Logger with the given ColorMode applied to both
-// sinks. Tests that compare exact byte output should pass [ColorNever].
+// NewWithMode applies the given ColorMode to both sinks. Pass [ColorNever]
+// in tests that compare exact byte output.
 func NewWithMode(stdout, stderr io.Writer, mode ColorMode) *Logger {
 	l := &Logger{ //nolint:exhaustruct // ANSI fields below are conditionally populated.
 		stdout: stdout,
@@ -62,71 +52,66 @@ func NewWithMode(stdout, stderr io.Writer, mode ColorMode) *Logger {
 	return l
 }
 
-// Info writes msg followed by a newline to stdout (no color).
+// Info writes to stdout (no color).
 func (l *Logger) Info(msg string) { _, _ = fmt.Fprintln(l.stdout, msg) }
 
-// Infof writes the formatted message followed by a newline to stdout.
+// Infof is the formatted variant of Info.
 func (l *Logger) Infof(format string, args ...any) {
 	_, _ = fmt.Fprintf(l.stdout, format+"\n", args...)
 }
 
-// Success writes msg to stdout in green — for confirmations of successful
-// operations (file written, version upgraded, etc.).
+// Success writes to stdout in green.
 func (l *Logger) Success(msg string) {
 	_, _ = fmt.Fprintf(l.stdout, "%s%s%s\n", l.stdoutGreen, msg, l.stdoutReset)
 }
 
-// Successf writes the formatted message to stdout in green.
+// Successf is the formatted variant of Success.
 func (l *Logger) Successf(format string, args ...any) {
 	l.Success(fmt.Sprintf(format, args...))
 }
 
-// Warn writes msg to stderr in yellow — for non-fatal warnings.
+// Warn writes to stderr in yellow.
 func (l *Logger) Warn(msg string) {
 	_, _ = fmt.Fprintf(l.stderr, "%s%s%s\n", l.stderrYellow, msg, l.stderrReset)
 }
 
-// Warnf writes the formatted message to stderr in yellow.
+// Warnf is the formatted variant of Warn.
 func (l *Logger) Warnf(format string, args ...any) {
 	l.Warn(fmt.Sprintf(format, args...))
 }
 
-// Error writes msg to stderr in red.
+// Error writes to stderr in red.
 func (l *Logger) Error(msg string) {
 	_, _ = fmt.Fprintf(l.stderr, "%s%s%s\n", l.stderrRed, msg, l.stderrReset)
 }
 
-// Errorf writes the formatted message to stderr in red.
+// Errorf is the formatted variant of Error.
 func (l *Logger) Errorf(format string, args ...any) {
 	l.Error(fmt.Sprintf(format, args...))
 }
 
-// Notice writes msg to stderr in cyan — for informational announcements
-// that are neither errors nor warnings (e.g. an available update).
+// Notice writes to stderr in cyan (informational, e.g. update available).
 func (l *Logger) Notice(msg string) {
 	_, _ = fmt.Fprintf(l.stderr, "%s%s%s\n", l.stderrCyan, msg, l.stderrReset)
 }
 
-// Noticef writes the formatted message to stderr in cyan.
+// Noticef is the formatted variant of Notice.
 func (l *Logger) Noticef(format string, args ...any) {
 	l.Notice(fmt.Sprintf(format, args...))
 }
 
-// Progress writes msg to stderr in dim — for transient progress lines
-// (download spinners, "doing X ..." steps) that should not pollute
-// stdout so scripts parsing stdout see only stable info / success
-// output.
+// Progress writes to stderr in dim — transient lines that should not
+// pollute stdout (download spinners, "doing X..." steps).
 func (l *Logger) Progress(msg string) {
 	_, _ = fmt.Fprintf(l.stderr, "%s%s%s\n", l.stderrDim, msg, l.stderrReset)
 }
 
-// Progressf writes the formatted message to stderr in dim.
+// Progressf is the formatted variant of Progress.
 func (l *Logger) Progressf(format string, args ...any) {
 	l.Progress(fmt.Sprintf(format, args...))
 }
 
-// Bold returns s wrapped in ANSI bold sequences when the stdout sink
-// supports color. Used to emphasise labels and headers inline.
+// Bold wraps s in ANSI bold for the stdout sink.
 func (l *Logger) Bold(s string) string {
 	if l.stdoutBold == "" {
 		return s
@@ -134,8 +119,7 @@ func (l *Logger) Bold(s string) string {
 	return l.stdoutBold + s + l.stdoutReset
 }
 
-// Dim returns s wrapped in ANSI dim sequences when the stdout sink
-// supports color. Used for progress / less-important lines.
+// Dim wraps s in ANSI dim for the stdout sink.
 func (l *Logger) Dim(s string) string {
 	if l.stdoutDim == "" {
 		return s

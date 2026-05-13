@@ -5,15 +5,11 @@ import (
 	"fmt"
 )
 
-// ErrConflict is returned by CheckConflicts when two enabled plugins
-// declare each other in metadata.conflicts. Callers can compare with
-// errors.Is to detect the category.
+// ErrConflict lets callers detect the category via errors.Is.
 var ErrConflict = errors.New("plugin conflict")
 
 // CheckConflicts returns an error when any enabled plugin declares one of
-// the other enabled plugins in its metadata.conflicts list. The message
-// format mirrors the Python sys.exit(1) branch so existing CLI output stays
-// stable.
+// the other enabled plugins in its metadata.conflicts list.
 func CheckConflicts(plugins map[string]*Plugin) error {
 	for id, p := range plugins {
 		for _, conflictID := range p.Metadata.Conflicts {

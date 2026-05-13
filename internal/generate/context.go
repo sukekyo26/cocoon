@@ -11,34 +11,25 @@ import (
 )
 
 // WorkspaceContext is a normalized read-only view over a workspace.toml that
-// generator subpackages consume. It wraps a typed *config.Workspace (already
-// validated upstream) and the per-workspace plugin file source so
-// generators can read install scripts and plugin assets directly without
-// staging them on the host filesystem first.
+// generator subpackages consume.
 type WorkspaceContext struct {
 	WS *config.Workspace
-	// PluginsFS is the layered file source rooted at the plugin catalog
-	// (each id is a top-level entry). dockerfile/plugins.go reads
-	// install.sh / install_user.sh through this so the catalog can be
-	// embedded, on-disk, or LayeredFS-merged transparently.
+	// PluginsFS lets generators read install scripts directly so the catalog
+	// can be embedded, on-disk, or LayeredFS-merged transparently.
 	PluginsFS fs.FS
-	// ProjectDir is the directory holding workspace.toml. envfile uses its
-	// basename as COMPOSE_PROJECT_NAME so the docker-compose namespace
-	// matches the project root the user invoked `cocoon gen` against,
-	// rather than aliasing it to container.service_name. May be empty for
-	// older callers; envfile falls back to ServiceName in that case.
+	// ProjectDir holds the directory containing workspace.toml. envfile uses
+	// its basename as COMPOSE_PROJECT_NAME so the namespace matches the root
+	// the user invoked `cocoon gen` against. May be empty for older callers;
+	// envfile falls back to ServiceName in that case.
 	ProjectDir string
-	// Plugins maps plugin id -> loaded plugin definition. Iteration order is
-	// fixed to WS.Plugins.Enable so generators emit deterministic output.
+	// Plugins is iterated in WS.Plugins.Enable order so generators emit
+	// deterministic output.
 	Plugins map[string]*plugin.Plugin
-	// Warnings receives non-fatal messages (e.g. TZ override) at construction
-	// time. When nil, warnings are dropped. Generator wrappers that want
-	// stderr behaviour identical to the Python implementation should pass
-	// os.Stderr.
+	// Warnings receives non-fatal messages (e.g. TZ override). Nil drops them.
 	Warnings io.Writer
 }
 
-// EnabledPlugins returns the configured enable list (never nil).
+// EnabledPlugins returns the enable list, never nil.
 func (c *WorkspaceContext) EnabledPlugins() []string {
 	if c.WS == nil || c.WS.Plugins.Enable == nil {
 		return []string{}
@@ -46,7 +37,7 @@ func (c *WorkspaceContext) EnabledPlugins() []string {
 	return c.WS.Plugins.Enable
 }
 
-// ServiceName returns container.service_name with the Python default ("dev").
+// ServiceName defaults to "dev" when unset.
 func (c *WorkspaceContext) ServiceName() string {
 	if c.WS == nil || c.WS.Container.ServiceName == "" {
 		return "dev"
@@ -54,7 +45,7 @@ func (c *WorkspaceContext) ServiceName() string {
 	return c.WS.Container.ServiceName
 }
 
-// Username returns container.username with the Python default ("developer").
+// Username defaults to "developer" when unset.
 func (c *WorkspaceContext) Username() string {
 	if c.WS == nil || c.WS.Container.Username == "" {
 		return "developer"
@@ -62,8 +53,7 @@ func (c *WorkspaceContext) Username() string {
 	return c.WS.Container.Username
 }
 
-// ComposeForwardPorts returns the [ports].forward entries normalized for
-// docker-compose YAML emission. Empty when [ports] is absent or empty.
+// ComposeForwardPorts returns nil when [ports] is absent or empty.
 func (c *WorkspaceContext) ComposeForwardPorts() []config.ComposePort {
 	if c.WS == nil || c.WS.Ports == nil {
 		return nil
@@ -71,13 +61,11 @@ func (c *WorkspaceContext) ComposeForwardPorts() []config.ComposePort {
 	return config.ComposePortEntries(c.WS.Ports.Forward)
 }
 
-// DevcontainerForwardPorts returns published-port integers usable by
-// devcontainer.json's `forwardPorts`. Returns nil when [ports] is absent so
-// the generator can omit the key entirely rather than baking in a default
-// 3000 the user never asked for; the IDE then forwards only what the
-// workspace declares. Entries that cannot be reduced to a single TCP
-// integer (port ranges, mode=host, protocol=udp) are skipped, with one
-// warning per skip emitted to c.Warnings.
+// DevcontainerForwardPorts returns nil when [ports] is absent so the
+// generator can omit the key entirely rather than baking in a default the
+// user never asked for. Entries that cannot reduce to a single TCP integer
+// (ranges, mode=host, protocol=udp) are skipped with one warning per skip
+// to c.Warnings.
 func (c *WorkspaceContext) DevcontainerForwardPorts() []int {
 	if c.WS == nil || c.WS.Ports == nil {
 		return nil
@@ -85,7 +73,7 @@ func (c *WorkspaceContext) DevcontainerForwardPorts() []int {
 	return config.DevcontainerPortEntries(c.WS.Ports.Forward, c.Warnings)
 }
 
-// Resources returns [container.resources] (nil when absent).
+// Resources returns nil when [container.resources] is absent.
 func (c *WorkspaceContext) Resources() *config.Resources {
 	if c.WS == nil {
 		return nil
@@ -93,8 +81,7 @@ func (c *WorkspaceContext) Resources() *config.Resources {
 	return c.WS.Container.Resources
 }
 
-// LoginShell returns the configured login shell ("bash" | "zsh" | "fish"),
-// defaulting to "bash" when [container.shell].default is unset or empty.
+// LoginShell defaults to "bash" when [container.shell].default is unset.
 func (c *WorkspaceContext) LoginShell() string {
 	if c.WS == nil || c.WS.Container.Shell == nil || c.WS.Container.Shell.Default == nil {
 		return "bash"
@@ -117,10 +104,9 @@ func (c *WorkspaceContext) LoginShellPath() string {
 	}
 }
 
-// LoginShellAptPackages returns apt packages required for the chosen login
-// shell. bash gets bash-completion; zsh gets the shell binary plus
-// zsh-autosuggestions; fish gets the shell binary (fish ships native
-// completions).
+// LoginShellAptPackages returns the apt packages required for the chosen
+// login shell. zsh adds zsh-autosuggestions; fish ships native completions
+// so only the shell binary is needed.
 func (c *WorkspaceContext) LoginShellAptPackages() []string {
 	switch c.LoginShell() {
 	case "zsh":
@@ -132,8 +118,7 @@ func (c *WorkspaceContext) LoginShellAptPackages() []string {
 	}
 }
 
-// RCFilePath returns the rc-file path for the chosen login shell, relative to
-// $HOME (no leading "~").
+// RCFilePath returns the rc-file path relative to $HOME (no leading "~").
 func (c *WorkspaceContext) RCFilePath() string {
 	switch c.LoginShell() {
 	case "fish":
@@ -145,14 +130,12 @@ func (c *WorkspaceContext) RCFilePath() string {
 	}
 }
 
-// RCFileAbs returns the rc-file path as a Dockerfile-friendly $HOME-rooted
-// absolute string ("$HOME/.bashrc" etc.).
+// RCFileAbs returns the rc-file path as a $HOME-rooted absolute string.
 func (c *WorkspaceContext) RCFileAbs() string {
 	return "$HOME/" + c.RCFilePath()
 }
 
-// RCSyntax indicates which alias/export dialect the rc-file expects.
-// "posix" covers bash + zsh; "fish" is its own dialect.
+// RCSyntax is "posix" for bash + zsh, "fish" otherwise.
 func (c *WorkspaceContext) RCSyntax() string {
 	if c.LoginShell() == "fish" {
 		return "fish"
@@ -160,7 +143,7 @@ func (c *WorkspaceContext) RCSyntax() string {
 	return "posix"
 }
 
-// ShellAliases returns [container.shell].aliases (never nil).
+// ShellAliases never returns nil.
 func (c *WorkspaceContext) ShellAliases() map[string]string {
 	if c.WS == nil || c.WS.Container.Shell == nil {
 		return map[string]string{}
@@ -168,7 +151,7 @@ func (c *WorkspaceContext) ShellAliases() map[string]string {
 	return c.WS.Container.Shell.Aliases
 }
 
-// ShellEnv returns [container.shell].env (never nil).
+// ShellEnv never returns nil.
 func (c *WorkspaceContext) ShellEnv() map[string]string {
 	if c.WS == nil || c.WS.Container.Shell == nil {
 		return map[string]string{}
@@ -176,7 +159,7 @@ func (c *WorkspaceContext) ShellEnv() map[string]string {
 	return c.WS.Container.Shell.Env
 }
 
-// ExtraHosts returns [container.hosts] (never nil).
+// ExtraHosts never returns nil.
 func (c *WorkspaceContext) ExtraHosts() map[string]string {
 	if c.WS == nil || c.WS.Container.Hosts == nil {
 		return map[string]string{}
@@ -184,7 +167,7 @@ func (c *WorkspaceContext) ExtraHosts() map[string]string {
 	return c.WS.Container.Hosts
 }
 
-// DNSServers returns [container.dns].servers (never nil).
+// DNSServers never returns nil.
 func (c *WorkspaceContext) DNSServers() []string {
 	if c.WS == nil || c.WS.Container.DNS == nil || c.WS.Container.DNS.Servers == nil {
 		return []string{}
@@ -192,7 +175,7 @@ func (c *WorkspaceContext) DNSServers() []string {
 	return c.WS.Container.DNS.Servers
 }
 
-// DNSSearch returns [container.dns].search (never nil).
+// DNSSearch never returns nil.
 func (c *WorkspaceContext) DNSSearch() []string {
 	if c.WS == nil || c.WS.Container.DNS == nil || c.WS.Container.DNS.Search == nil {
 		return []string{}
@@ -200,7 +183,7 @@ func (c *WorkspaceContext) DNSSearch() []string {
 	return c.WS.Container.DNS.Search
 }
 
-// Sysctls returns [container.sysctls] (never nil).
+// Sysctls never returns nil.
 func (c *WorkspaceContext) Sysctls() map[string]any {
 	if c.WS == nil || c.WS.Container.Sysctls == nil {
 		return map[string]any{}
@@ -208,7 +191,7 @@ func (c *WorkspaceContext) Sysctls() map[string]any {
 	return c.WS.Container.Sysctls
 }
 
-// CapAdd returns [container.capabilities].add (never nil).
+// CapAdd never returns nil.
 func (c *WorkspaceContext) CapAdd() []string {
 	if c.WS == nil || c.WS.Container.Capabilities == nil || c.WS.Container.Capabilities.Add == nil {
 		return []string{}
@@ -216,7 +199,7 @@ func (c *WorkspaceContext) CapAdd() []string {
 	return c.WS.Container.Capabilities.Add
 }
 
-// CapDrop returns [container.capabilities].drop (never nil).
+// CapDrop never returns nil.
 func (c *WorkspaceContext) CapDrop() []string {
 	if c.WS == nil || c.WS.Container.Capabilities == nil || c.WS.Container.Capabilities.Drop == nil {
 		return []string{}
@@ -224,7 +207,7 @@ func (c *WorkspaceContext) CapDrop() []string {
 	return c.WS.Container.Capabilities.Drop
 }
 
-// SkelEntries returns [[container.skel]] (never nil).
+// SkelEntries never returns nil.
 func (c *WorkspaceContext) SkelEntries() []config.SkelEntry {
 	if c.WS == nil || c.WS.Container.Skel == nil {
 		return []config.SkelEntry{}
@@ -232,10 +215,9 @@ func (c *WorkspaceContext) SkelEntries() []config.SkelEntry {
 	return c.WS.Container.Skel
 }
 
-// SecurityOptions assembles the Compose `security_opt:` list from
-// [container.security_opt]. Returns nil when the section is absent or empty.
-// Order is fixed (seccomp, apparmor, no-new-privileges) so generated YAML is
-// deterministic.
+// SecurityOptions emits Compose `security_opt:` entries in a fixed order
+// (seccomp, apparmor, no-new-privileges) so generated YAML is deterministic.
+// Returns nil when the section is absent or empty.
 func (c *WorkspaceContext) SecurityOptions() []string {
 	if c.WS == nil || c.WS.Container.SecurityOpt == nil {
 		return nil
@@ -274,7 +256,7 @@ func (c *WorkspaceContext) LocaleTimezone() string {
 }
 
 // ResolveLocale returns (gen_list, lang, language) used by the Dockerfile
-// generator. Mirrors WorkspaceContext.resolve_locale in Python.
+// generator.
 func (c *WorkspaceContext) ResolveLocale() (genList, lang, language string) {
 	l := c.LocaleLang()
 	if l == "" {
@@ -293,7 +275,7 @@ func (c *WorkspaceContext) ResolveLocale() (genList, lang, language string) {
 	return genList, l, language
 }
 
-// UserEnv returns the [env] map (never nil).
+// UserEnv never returns nil.
 func (c *WorkspaceContext) UserEnv() map[string]string {
 	if c.WS == nil || c.WS.Env == nil {
 		return map[string]string{}
@@ -301,8 +283,7 @@ func (c *WorkspaceContext) UserEnv() map[string]string {
 	return c.WS.Env
 }
 
-// BuildEnvironment builds the container environment list. Mirrors the Python
-// build_environment(): CONTAINER_SERVICE_NAME first, then TZ from
+// BuildEnvironment emits CONTAINER_SERVICE_NAME first, then TZ from
 // [locale].timezone (which overrides any [env].TZ with a stderr warning when
 // they differ), followed by remaining [env] entries in insertion order.
 func (c *WorkspaceContext) BuildEnvironment() []string {
@@ -336,9 +317,9 @@ func (c *WorkspaceContext) BuildEnvironment() []string {
 	return out
 }
 
-// envOrder returns the [env] keys in alphabetical order. pelletier/go-toml
-// decodes tables into Go maps which lose insertion order, so sorting is the
-// stable choice that yields deterministic output.
+// pelletier/go-toml decodes tables into Go maps which lose insertion order,
+// so sorting alphabetically is the stable choice that yields deterministic
+// output.
 func (c *WorkspaceContext) envOrder() []string {
 	m := c.UserEnv()
 	keys := make([]string, 0, len(m))
@@ -349,7 +330,7 @@ func (c *WorkspaceContext) envOrder() []string {
 	return keys
 }
 
-// Mounts returns the [[mounts]] entries (never nil).
+// Mounts never returns nil.
 func (c *WorkspaceContext) Mounts() []config.Mount {
 	if c.WS == nil || c.WS.Mounts == nil {
 		return []config.Mount{}
@@ -357,14 +338,12 @@ func (c *WorkspaceContext) Mounts() []config.Mount {
 	return c.WS.Mounts
 }
 
-// HasHomeFiles reports whether [home_files] declares at least one entry.
-// Used by gen to gate host-side touch + notice and by devcontainerjson to
-// decide whether to emit an initializeCommand.
+// HasHomeFiles gates the host-side touch + initializeCommand emission.
 func (c *WorkspaceContext) HasHomeFiles() bool {
 	return c.WS != nil && c.WS.HomeFiles != nil && len(c.WS.HomeFiles.Files) > 0
 }
 
-// HomeFilesEntries returns the configured [home_files].files list (never nil).
+// HomeFilesEntries never returns nil.
 func (c *WorkspaceContext) HomeFilesEntries() []string {
 	if !c.HasHomeFiles() {
 		return []string{}
@@ -372,13 +351,10 @@ func (c *WorkspaceContext) HomeFilesEntries() []string {
 	return c.WS.HomeFiles.Files
 }
 
-// HomeFileMounts synthesizes one config.Mount per [home_files].files entry,
-// each pointing at ${HOME:?…}/<rel> -> /home/${USERNAME}/<rel>. Source paths
-// stay as Compose interpolation so the generated docker-compose.yml works
-// when `cocoon gen` ran in one environment (e.g. inside a container) and
-// `docker compose up` runs in another (the Docker host). The actual host
-// touch is performed by `cocoon gen` and by devcontainer.json's
-// initializeCommand.
+// HomeFileMounts keeps Source paths as Compose interpolation
+// (${HOME:?…}/<rel>) so the generated docker-compose.yml works when
+// `cocoon gen` ran in one environment (e.g. inside a container) and
+// `docker compose up` runs in another (the Docker host).
 func (c *WorkspaceContext) HomeFileMounts() []config.Mount {
 	if !c.HasHomeFiles() {
 		return nil
@@ -394,7 +370,7 @@ func (c *WorkspaceContext) HomeFileMounts() []config.Mount {
 	return out
 }
 
-// CustomVolumes returns the [volumes] map (never nil).
+// CustomVolumes never returns nil.
 func (c *WorkspaceContext) CustomVolumes() map[string]string {
 	if c.WS == nil || c.WS.Volumes == nil {
 		return map[string]string{}
@@ -402,7 +378,7 @@ func (c *WorkspaceContext) CustomVolumes() map[string]string {
 	return c.WS.Volumes
 }
 
-// AptExtraPackages returns [apt].packages (never nil).
+// AptExtraPackages never returns nil.
 func (c *WorkspaceContext) AptExtraPackages() []string {
 	if c.WS == nil || c.WS.Apt == nil || c.WS.Apt.Packages == nil {
 		return []string{}
@@ -410,7 +386,7 @@ func (c *WorkspaceContext) AptExtraPackages() []string {
 	return c.WS.Apt.Packages
 }
 
-// AptMirrorURL returns [apt.mirror].url or "" when unset.
+// AptMirrorURL returns "" when unset.
 func (c *WorkspaceContext) AptMirrorURL() string {
 	if c.WS == nil || c.WS.Apt == nil || c.WS.Apt.Mirror == nil {
 		return ""
@@ -418,7 +394,7 @@ func (c *WorkspaceContext) AptMirrorURL() string {
 	return c.WS.Apt.Mirror.URL
 }
 
-// AptProxy returns [apt.proxy] (nil when unset).
+// AptProxy returns nil when unset.
 func (c *WorkspaceContext) AptProxy() *config.AptProxy {
 	if c.WS == nil || c.WS.Apt == nil {
 		return nil
@@ -426,7 +402,7 @@ func (c *WorkspaceContext) AptProxy() *config.AptProxy {
 	return c.WS.Apt.Proxy
 }
 
-// AptSources returns [[apt.sources]] (never nil).
+// AptSources never returns nil.
 func (c *WorkspaceContext) AptSources() []config.AptSource {
 	if c.WS == nil || c.WS.Apt == nil || c.WS.Apt.Sources == nil {
 		return []config.AptSource{}
@@ -434,8 +410,7 @@ func (c *WorkspaceContext) AptSources() []config.AptSource {
 	return c.WS.Apt.Sources
 }
 
-// CertificatesEnabled returns true iff `[certificates] enable = true`.
-// Generators branch on this to gate all cert-related output.
+// CertificatesEnabled gates all cert-related generator output.
 func (c *WorkspaceContext) CertificatesEnabled() bool {
 	if c == nil || c.WS == nil {
 		return false
@@ -443,7 +418,7 @@ func (c *WorkspaceContext) CertificatesEnabled() bool {
 	return c.WS.Certificates.EnableOrDefault()
 }
 
-// GitUserName returns [git].user_name or "".
+// GitUserName returns "" when unset.
 func (c *WorkspaceContext) GitUserName() string {
 	if c.WS == nil || c.WS.Git == nil || c.WS.Git.UserName == nil {
 		return ""
@@ -451,7 +426,7 @@ func (c *WorkspaceContext) GitUserName() string {
 	return *c.WS.Git.UserName
 }
 
-// GitUserEmail returns [git].user_email or "".
+// GitUserEmail returns "" when unset.
 func (c *WorkspaceContext) GitUserEmail() string {
 	if c.WS == nil || c.WS.Git == nil || c.WS.Git.UserEmail == nil {
 		return ""
@@ -459,7 +434,7 @@ func (c *WorkspaceContext) GitUserEmail() string {
 	return *c.WS.Git.UserEmail
 }
 
-// DockerfilePreUserSetup returns [dockerfile].pre_user_setup or "".
+// DockerfilePreUserSetup returns "" when unset.
 func (c *WorkspaceContext) DockerfilePreUserSetup() string {
 	if c.WS == nil || c.WS.Dockerfile == nil || c.WS.Dockerfile.PreUserSetup == nil {
 		return ""
@@ -467,7 +442,7 @@ func (c *WorkspaceContext) DockerfilePreUserSetup() string {
 	return *c.WS.Dockerfile.PreUserSetup
 }
 
-// DockerfilePostPlugins returns [dockerfile].post_plugins or "".
+// DockerfilePostPlugins returns "" when unset.
 func (c *WorkspaceContext) DockerfilePostPlugins() string {
 	if c.WS == nil || c.WS.Dockerfile == nil || c.WS.Dockerfile.PostPlugins == nil {
 		return ""
@@ -475,7 +450,7 @@ func (c *WorkspaceContext) DockerfilePostPlugins() string {
 	return *c.WS.Dockerfile.PostPlugins
 }
 
-// PluginVersionOverrides returns [plugins.versions] (never nil).
+// PluginVersionOverrides never returns nil.
 func (c *WorkspaceContext) PluginVersionOverrides() map[string]config.PluginVersionOverride {
 	if c.WS == nil {
 		return map[string]config.PluginVersionOverride{}
@@ -483,8 +458,7 @@ func (c *WorkspaceContext) PluginVersionOverrides() map[string]config.PluginVers
 	return c.WS.Plugins.Versions
 }
 
-// Sidecars returns the [services] map (never nil). The Python implementation
-// preserves TOML insertion order; consumers that need deterministic ordering
+// Sidecars never returns nil. Consumers that need deterministic ordering
 // should iterate via SidecarNames().
 func (c *WorkspaceContext) Sidecars() map[string]config.SidecarService {
 	if c.WS == nil || c.WS.Services == nil {
@@ -516,8 +490,8 @@ func (c *WorkspaceContext) DevcontainerOverrides() map[string]any {
 	return out
 }
 
-// sortStrings is split into its own helper so tests can assert lexicographic
-// ordering without importing sort across every generator subpackage.
+// sortStrings is split out so tests can assert lexicographic ordering
+// without importing sort across every generator subpackage.
 func sortStrings(s []string) {
 	for i := 1; i < len(s); i++ {
 		for j := i; j > 0 && s[j-1] > s[j]; j-- {
