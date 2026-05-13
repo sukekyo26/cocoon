@@ -1,6 +1,7 @@
 [metadata]
 name = "ShellCheck"
-description = "Shell script static analysis (https://github.com/koalaman/shellcheck)"
+description = "Shell script static analysis"
+url = "https://github.com/koalaman/shellcheck"
 default = false
 
 [apt]

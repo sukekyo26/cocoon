@@ -1,6 +1,7 @@
 [metadata]
 name = "Deno"
-description = "Deno JavaScript / TypeScript runtime (https://github.com/denoland/deno)"
+description = "Deno JavaScript / TypeScript runtime"
+url = "https://github.com/denoland/deno"
 default = false
 
 [apt]

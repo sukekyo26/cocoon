@@ -1,6 +1,7 @@
 [metadata]
 name = "shfmt"
-description = "Shell script formatter (https://github.com/mvdan/sh)"
+description = "Shell script formatter"
+url = "https://github.com/mvdan/sh"
 default = false
 
 [install]

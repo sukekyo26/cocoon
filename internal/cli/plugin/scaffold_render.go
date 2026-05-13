@@ -21,6 +21,7 @@ type scaffoldData struct {
 	ID             string
 	Name           string
 	Description    string
+	URL            string
 	Default        bool
 	RequiresRoot   bool
 	VersionCapable bool
@@ -31,6 +32,7 @@ type scaffoldData struct {
 var pluginTOMLTmpl = tmplx.MustParse("plugin.toml", `[metadata]
 name = "{{ .Name }}"
 description = "{{ .Description }}"
+url = "{{ .URL }}"
 default = {{ .Default }}
 
 [install]

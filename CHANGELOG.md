@@ -22,6 +22,7 @@ adheres to [Semantic Versioning](https://semver.org/).
 ### Changed
 
 - **BREAKING**: `cocoon init` and `cocoon plugin pin --write` now emit `[plugins.versions]` as one section header with one inline-table line per plugin (`go = { pin = "1.23.4" }`) instead of the previous `[plugins.versions.<id>]` subsection blocks. The TOML loader still accepts both forms, but `cocoon plugin pin --write` refuses to operate on a workspace.toml that still contains legacy subsection blocks; convert each block to an inline-table line under `[plugins.versions]` before invoking `--write`. Existing files keep loading; regenerating them via `cocoon init` or `cocoon plugin pin --write` migrates the format.
+- **BREAKING**: `plugin.toml` `[metadata]` gains a required `url` field, and the upstream URL is no longer embedded in `description` as `... (https://...)`. `cocoon init`'s per-plugin version picker now renders the upstream URL on its own line under the prompt description, so users can copy/paste it into a browser to look up valid version strings before pinning. `cocoon plugin show` adds a `url:` row and `cocoon plugin list` adds a `URL` column. `cocoon plugin scaffold` gains a `--url` flag (required under `--non-interactive`) and an interactive URL prompt; descriptions passed to `--description` no longer need to embed a URL in parentheses. User-authored plugins under `~/.cocoon/plugins/` or `<project>/.cocoon/plugins/` must add `url = "https://..."` under `[metadata]`; loading fails with `url must not be empty` otherwise.
 
 ### Removed
 

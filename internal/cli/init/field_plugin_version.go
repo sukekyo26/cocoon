@@ -28,7 +28,7 @@ func promptPluginVersionsForCapable(
 		if _, alreadyPinned := pins[id]; alreadyPinned {
 			continue
 		}
-		pin, err := promptOnePluginVersion(cat, id)
+		pin, err := promptOnePluginVersion(cat, id, p.Metadata.URL)
 		if err != nil {
 			return err
 		}
@@ -43,8 +43,10 @@ func promptPluginVersionsForCapable(
 // the plugin absent from pins, which writePluginVersions treats as LATEST.
 const pluginVersionLatestSentinel = "LATEST"
 
-// promptOnePluginVersion returns "" when the user kept LATEST.
-func promptOnePluginVersion(cat *i18n.Catalog, id string) (string, error) {
+// promptOnePluginVersion returns "" when the user kept LATEST. A non-empty
+// url is rendered under the description so the user can look up valid
+// version strings on the upstream release page before typing one.
+func promptOnePluginVersion(cat *i18n.Catalog, id, url string) (string, error) {
 	var picked string
 	field := newSelectOrInputField(
 		"plugin_version_"+id,
@@ -54,6 +56,7 @@ func promptOnePluginVersion(cat *i18n.Catalog, id string) (string, error) {
 	).
 		Title(fmt.Sprintf(cat.Msg("init_prompt_plugin_version"), id)).
 		Description(cat.Msg("init_desc_plugin_version")).
+		URLLine(url).
 		Validate(versionStringValidator(cat, "init_err_plugin_pin_fmt", pluginVersionLatestSentinel))
 	if err := runSingleFieldForm(field); err != nil {
 		return "", err

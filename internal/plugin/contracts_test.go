@@ -318,6 +318,45 @@ func TestPluginContracts(t *testing.T) {
 	}
 }
 
+// TestCatalogMetadataURL pins down the new `[metadata].url` invariant for
+// every plugin under internal/plugin/catalog/: it must be non-empty, start
+// with "https://", and must NOT be re-embedded in description (regression
+// guard for the migration that split URL out of description).
+func TestCatalogMetadataURL(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := repoRoot(t)
+	pluginsDir := filepath.Join(repoRoot, "internal", "plugin", "catalog")
+	entries, err := filepath.Glob(filepath.Join(pluginsDir, "*", "plugin.toml"))
+	if err != nil {
+		t.Fatalf("glob plugins: %v", err)
+	}
+	if len(entries) == 0 {
+		t.Fatalf("no catalog plugin.toml files found under %s", pluginsDir)
+	}
+	for _, e := range entries {
+		e := e
+		id := filepath.Base(filepath.Dir(e))
+		t.Run(id, func(t *testing.T) {
+			t.Parallel()
+			p, err := plugin.Load(e)
+			if err != nil {
+				t.Fatalf("load %s: %v", e, err)
+			}
+			if p.Metadata.URL == "" {
+				t.Errorf("metadata.url is empty for plugin %q", id)
+			}
+			if !strings.HasPrefix(p.Metadata.URL, "https://") {
+				t.Errorf("metadata.url = %q for plugin %q, want https:// prefix", p.Metadata.URL, id)
+			}
+			if strings.Contains(p.Metadata.Description, "(http") {
+				t.Errorf("plugin %q description still embeds a legacy URL: %q",
+					id, p.Metadata.Description)
+			}
+		})
+	}
+}
+
 func repoRoot(t *testing.T) string {
 	t.Helper()
 	wd, err := os.Getwd()

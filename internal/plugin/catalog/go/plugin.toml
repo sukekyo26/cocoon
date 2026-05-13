@@ -1,6 +1,7 @@
 [metadata]
 name = "Go"
-description = "Go programming language (https://github.com/golang/go)"
+description = "Go programming language"
+url = "https://github.com/golang/go"
 default = false
 
 [apt]

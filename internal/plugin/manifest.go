@@ -15,6 +15,7 @@ type Plugin struct {
 type Metadata struct {
 	Name        string   `toml:"name"`
 	Description string   `toml:"description"`
+	URL         string   `toml:"url"`
 	Default     bool     `toml:"default"`
 	Conflicts   []string `toml:"conflicts,omitempty"`
 }

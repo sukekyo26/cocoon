@@ -22,6 +22,7 @@ cocoon の主要な変更を記録します。フォーマットは
 ### 変更
 
 - **BREAKING**: `cocoon init` および `cocoon plugin pin --write` の `[plugins.versions]` 出力形式を **インラインテーブル形式** (`[plugins.versions]` 1 つ + `go = { pin = "1.23.4" }` 形式の行) に変更しました。読み込みは subsection 形式 (`[plugins.versions.<id>]`) と inline 形式の両方を受理しますが、`cocoon plugin pin --write` は legacy subsection が残っている workspace.toml に対しては実行を拒否します (`<id> = { pin = "..." }` 形式に書き換えてから再実行してください)。既存ファイルは引き続きロードされ、`cocoon init` または `cocoon plugin pin --write` で再生成するとマイグレーションされます。
+- **BREAKING**: `plugin.toml` の `[metadata]` に必須フィールド `url` を追加し、description から `... (https://...)` 形式の URL 埋め込みを廃止しました。`cocoon init` の version_capable プラグイン向けバージョン入力プロンプトは、各プラグインの上流 URL を説明文の直下に独立した行で表示するようになり、ユーザーは入力前にその URL を開いて有効なバージョン文字列を確認できます。`cocoon plugin show` には `url:` 行が追加され、`cocoon plugin list` には `URL` 列が追加されます。`cocoon plugin scaffold` には `--url` フラグ (`--non-interactive` 時は必須) と対話式 URL 入力プロンプトが追加され、`--description` に URL を括弧で含める必要はなくなりました。`~/.cocoon/plugins/` または `<project>/.cocoon/plugins/` の自作プラグインは `[metadata]` に `url = "https://..."` を追加する必要があります (未設定だと `url must not be empty` で読み込み失敗)。
 
 ### 削除
 

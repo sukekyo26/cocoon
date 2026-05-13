@@ -1,6 +1,7 @@
 [metadata]
 name = "Helm"
-description = "Kubernetes package manager (https://github.com/helm/helm)"
+description = "Kubernetes package manager"
+url = "https://github.com/helm/helm"
 default = false
 
 [install]

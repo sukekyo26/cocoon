@@ -1,6 +1,7 @@
 [metadata]
 name = "Zig"
-description = "Zig programming language, required for cargo-lambda cross-compilation (https://github.com/ziglang/zig)"
+description = "Zig programming language, required for cargo-lambda cross-compilation"
+url = "https://github.com/ziglang/zig"
 default = false
 
 [apt]

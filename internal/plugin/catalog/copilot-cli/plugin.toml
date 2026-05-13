@@ -1,6 +1,7 @@
 [metadata]
 name = "GitHub Copilot CLI"
-description = "GitHub Copilot in the CLI — AI-powered command-line assistant (https://github.com/github/copilot-cli)"
+description = "GitHub Copilot in the CLI — AI-powered command-line assistant"
+url = "https://github.com/github/copilot-cli"
 default = false
 
 [install]

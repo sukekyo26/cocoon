@@ -84,6 +84,7 @@ func newScaffoldCmd(stdout, stderr io.Writer) *cobra.Command {
 			// to decide which fields to prompt for.
 			opts.setName = cmd.Flags().Changed("name")
 			opts.setDescription = cmd.Flags().Changed("description")
+			opts.setURL = cmd.Flags().Changed("url")
 			opts.setDefaultEnabled = cmd.Flags().Changed("default")
 			opts.setRequiresRoot = cmd.Flags().Changed("requires-root")
 			opts.setVersionCapable = cmd.Flags().Changed("version-capable")
@@ -95,8 +96,8 @@ func newScaffoldCmd(stdout, stderr io.Writer) *cobra.Command {
 	cmd.Flags().StringVar(&opts.pluginsDir, "plugins-dir", "",
 		"output directory (default: <workspace>/.cocoon/plugins, auto-discovered from workspace.toml)")
 	cmd.Flags().StringVar(&opts.name, "name", "", "display name (e.g. \"GitHub CLI\")")
-	cmd.Flags().StringVar(&opts.description, "description", "",
-		"short description; URL must be embedded as \"(...)\"")
+	cmd.Flags().StringVar(&opts.description, "description", "", "short description (no URL)")
+	cmd.Flags().StringVar(&opts.url, "url", "", "upstream URL (e.g. https://github.com/owner/repo)")
 	cmd.Flags().BoolVar(&opts.defaultEnabled, "default", false, "mark plugin enabled by default")
 	cmd.Flags().BoolVar(&opts.requiresRoot, "requires-root", false, "install.sh runs as root")
 	cmd.Flags().BoolVar(&opts.versionCapable, "version-capable", false, "generate $PIN / $CHECKSUM_* boilerplate")

@@ -61,7 +61,7 @@ func runList(stdout, _ io.Writer, sourceFilter string) error {
 	sort.Strings(ids)
 
 	tw := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "ID\tSOURCE\tDEFAULT\tDESCRIPTION")
+	fmt.Fprintln(tw, "ID\tSOURCE\tDEFAULT\tDESCRIPTION\tURL")
 	for _, id := range ids {
 		src := sources[id]
 		if sourceFilter != "" && src != sourceFilter {
@@ -69,14 +69,14 @@ func runList(stdout, _ io.Writer, sourceFilter string) error {
 		}
 		p, lerr := loadPluginFromLayer(layered, id)
 		if lerr != nil {
-			fmt.Fprintf(tw, "%s\t%s\t?\t<load failed: %v>\n", id, src, lerr)
+			fmt.Fprintf(tw, "%s\t%s\t?\t<load failed: %v>\t\n", id, src, lerr)
 			continue
 		}
 		def := "no"
 		if p.Metadata.Default {
 			def = "yes"
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", id, src, def, p.Metadata.Description)
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", id, src, def, p.Metadata.Description, p.Metadata.URL)
 	}
 	if err := tw.Flush(); err != nil {
 		return fmt.Errorf("flush list: %w", err)
