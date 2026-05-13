@@ -12,7 +12,7 @@ import (
 
 var updateGolden = flag.Bool("update-golden", false, "update mutator golden files")
 
-func TestUpsertPinBlock(t *testing.T) {
+func TestUpsertPinLine(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name     string
@@ -42,8 +42,8 @@ func TestUpsertPinBlock(t *testing.T) {
 			if writeErr := os.WriteFile(tmp, before, 0o600); writeErr != nil { //nolint:gosec // tmp path under t.TempDir
 				t.Fatalf("seed: %v", writeErr)
 			}
-			if upErr := plugin.UpsertPinBlock(tmp, tc.id, tc.ref, tc.amd64Sum, tc.arm64Sum); upErr != nil {
-				t.Fatalf("UpsertPinBlock: %v", upErr)
+			if upErr := plugin.UpsertPinLine(tmp, tc.id, tc.ref, tc.amd64Sum, tc.arm64Sum); upErr != nil {
+				t.Fatalf("UpsertPinLine: %v", upErr)
 			}
 			got, err := os.ReadFile(tmp) //nolint:gosec // tmp
 			if err != nil {
@@ -67,18 +67,18 @@ func TestUpsertPinBlock(t *testing.T) {
 	}
 }
 
-func TestUpsertPinBlockRejectsEmptyArgs(t *testing.T) {
+func TestUpsertPinLineRejectsEmptyArgs(t *testing.T) {
 	t.Parallel()
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "ws.toml")
 	if err := os.WriteFile(path, []byte(""), 0o600); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	if err := plugin.UpsertPinBlock(path, "", "1.0", "", ""); !errors.Is(err, plugin.ErrPinBlockEmptyID) {
-		t.Errorf("empty id: got %v, want ErrPinBlockEmptyID", err)
+	if err := plugin.UpsertPinLine(path, "", "1.0", "", ""); !errors.Is(err, plugin.ErrPinLineEmptyID) {
+		t.Errorf("empty id: got %v, want ErrPinLineEmptyID", err)
 	}
-	if err := plugin.UpsertPinBlock(path, "go", "", "", ""); !errors.Is(err, plugin.ErrPinBlockEmptyRef) {
-		t.Errorf("empty ref: got %v, want ErrPinBlockEmptyRef", err)
+	if err := plugin.UpsertPinLine(path, "go", "", "", ""); !errors.Is(err, plugin.ErrPinLineEmptyRef) {
+		t.Errorf("empty ref: got %v, want ErrPinLineEmptyRef", err)
 	}
 }
 
@@ -86,7 +86,7 @@ func TestUpsertPinBlockRejectsEmptyArgs(t *testing.T) {
 // inline-table line and the next section must round-trip verbatim through
 // the replace path. The renderLines re-emit must preserve the exact
 // blank-line whitespace, not normalize to empty strings.
-func TestUpsertPinBlockReplacePreservesWhitespaceBlankLines(t *testing.T) {
+func TestUpsertPinLineReplacePreservesWhitespaceBlankLines(t *testing.T) {
 	t.Parallel()
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "ws.toml")
@@ -95,8 +95,8 @@ func TestUpsertPinBlockReplacePreservesWhitespaceBlankLines(t *testing.T) {
 	if err := os.WriteFile(path, body, 0o600); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	if err := plugin.UpsertPinBlock(path, "go", "1.23.4", "", ""); err != nil {
-		t.Fatalf("UpsertPinBlock: %v", err)
+	if err := plugin.UpsertPinLine(path, "go", "1.23.4", "", ""); err != nil {
+		t.Fatalf("UpsertPinLine: %v", err)
 	}
 	got, err := os.ReadFile(path) //nolint:gosec // tmp path under t.TempDir
 	if err != nil {
@@ -110,7 +110,7 @@ func TestUpsertPinBlockReplacePreservesWhitespaceBlankLines(t *testing.T) {
 
 // Trailing blank lines outside the modified section must be preserved
 // verbatim. The append-new-section path must not strip them.
-func TestUpsertPinBlockPreservesTrailingBlankLines(t *testing.T) {
+func TestUpsertPinLinePreservesTrailingBlankLines(t *testing.T) {
 	t.Parallel()
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "ws.toml")
@@ -118,8 +118,8 @@ func TestUpsertPinBlockPreservesTrailingBlankLines(t *testing.T) {
 	if err := os.WriteFile(path, body, 0o600); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	if err := plugin.UpsertPinBlock(path, "go", "1.23.4", "", ""); err != nil {
-		t.Fatalf("UpsertPinBlock: %v", err)
+	if err := plugin.UpsertPinLine(path, "go", "1.23.4", "", ""); err != nil {
+		t.Fatalf("UpsertPinLine: %v", err)
 	}
 	got, err := os.ReadFile(path) //nolint:gosec // tmp path under t.TempDir
 	if err != nil {
@@ -133,7 +133,7 @@ func TestUpsertPinBlockPreservesTrailingBlankLines(t *testing.T) {
 
 // A workspace.toml that came in without a trailing newline must come back
 // without one. Regression guard for the renderLines newline convention.
-func TestUpsertPinBlockPreservesNoTrailingNewline(t *testing.T) {
+func TestUpsertPinLinePreservesNoTrailingNewline(t *testing.T) {
 	t.Parallel()
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "ws.toml")
@@ -142,8 +142,8 @@ enable = ["go"]`) // no trailing \n
 	if err := os.WriteFile(path, body, 0o600); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	if err := plugin.UpsertPinBlock(path, "go", "1.23.4", "", ""); err != nil {
-		t.Fatalf("UpsertPinBlock: %v", err)
+	if err := plugin.UpsertPinLine(path, "go", "1.23.4", "", ""); err != nil {
+		t.Fatalf("UpsertPinLine: %v", err)
 	}
 	got, err := os.ReadFile(path) //nolint:gosec // tmp path under t.TempDir
 	if err != nil {
@@ -154,16 +154,16 @@ enable = ["go"]`) // no trailing \n
 	}
 }
 
-// UpsertPinBlock must not silently relax workspace.toml's permissions.
-func TestUpsertPinBlockPreservesFileMode(t *testing.T) {
+// UpsertPinLine must not silently relax workspace.toml's permissions.
+func TestUpsertPinLinePreservesFileMode(t *testing.T) {
 	t.Parallel()
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "ws.toml")
 	if err := os.WriteFile(path, []byte("[plugins]\nenable = []\n"), 0o600); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	if err := plugin.UpsertPinBlock(path, "go", "1.23.4", "", ""); err != nil {
-		t.Fatalf("UpsertPinBlock: %v", err)
+	if err := plugin.UpsertPinLine(path, "go", "1.23.4", "", ""); err != nil {
+		t.Fatalf("UpsertPinLine: %v", err)
 	}
 	info, err := os.Stat(path)
 	if err != nil {
@@ -177,7 +177,7 @@ func TestUpsertPinBlockPreservesFileMode(t *testing.T) {
 // Legacy `[plugins.versions.<id>]` subsection blocks (cocoon's previous
 // emission form) collide with the new inline-table layout. The mutator
 // must refuse so the user explicitly migrates the file.
-func TestUpsertPinBlockRejectsLegacySubsection(t *testing.T) {
+func TestUpsertPinLineRejectsLegacySubsection(t *testing.T) {
 	t.Parallel()
 	body := `[plugins]
 enable = ["go"]
@@ -190,9 +190,9 @@ pin = "1.22.5"
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	err := plugin.UpsertPinBlock(path, "go", "1.23.4", "", "")
-	if !errors.Is(err, plugin.ErrPinBlockSubsection) {
-		t.Errorf("got %v, want ErrPinBlockSubsection", err)
+	err := plugin.UpsertPinLine(path, "go", "1.23.4", "", "")
+	if !errors.Is(err, plugin.ErrLegacyPinSubsection) {
+		t.Errorf("got %v, want ErrLegacyPinSubsection", err)
 	}
 	got, rerr := os.ReadFile(path) //nolint:gosec // tmp path under t.TempDir
 	if rerr != nil {

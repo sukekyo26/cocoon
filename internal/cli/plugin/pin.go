@@ -14,12 +14,13 @@ import (
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
 
-const pinLong = `cocoon plugin pin — emit a [plugins.versions.<id>] block
+const pinLong = `cocoon plugin pin — emit an inline-table line for [plugins.versions]
 
-By default the block is printed to stdout for you to paste under the
-[plugins.versions] table in workspace.toml. With --write the block is
-inserted (or replaced) in place; comments and blank lines outside the
-target block are preserved verbatim.
+By default the line is printed to stdout for you to paste under the
+[plugins.versions] section in workspace.toml. With --write the line
+is upserted in place (inserted, or the existing <id> = { ... } line
+is replaced); comments and blank lines outside the target line are
+preserved verbatim.
 
 Use the --amd64-checksum / --arm64-checksum flags when the upstream
 release ships per-arch SHA256 sums you want install.sh to verify.`
@@ -32,7 +33,7 @@ func newPinCmd(stdout, stderr io.Writer) *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:           "pin <id> <ref>",
-		Short:         "Emit a workspace.toml [plugins.versions.<id>] block (stdout, or in-place with --write)",
+		Short:         "Emit an inline-table line for workspace.toml [plugins.versions] (stdout, or in-place with --write)",
 		Long:          pinLong,
 		Args:          cobra.ExactArgs(2),
 		SilenceUsage:  true,
@@ -44,7 +45,7 @@ func newPinCmd(stdout, stderr io.Writer) *cobra.Command {
 	cmd.Flags().StringVar(&amd64Checksum, "amd64-checksum", "", "sha256 of the amd64 artifact (optional)")
 	cmd.Flags().StringVar(&arm64Checksum, "arm64-checksum", "", "sha256 of the arm64 artifact (optional)")
 	cmd.Flags().BoolVar(&write, "write", false,
-		"insert (or replace) the block in workspace.toml (auto-discovered from cwd)")
+		"upsert the inline-table line in workspace.toml (auto-discovered from cwd)")
 	return cmd
 }
 
@@ -74,8 +75,8 @@ func runPin(stdout, stderr io.Writer, id, ref, amd64sum, arm64sum string, write 
 				"%w: --write needs a discoverable workspace.toml (run inside a cocoon project)",
 				ErrUsage)
 		}
-		if uErr := plugin.UpsertPinBlock(wsPath, id, ref, amd64sum, arm64sum); uErr != nil {
-			if errors.Is(uErr, plugin.ErrPinBlockSubsection) {
+		if uErr := plugin.UpsertPinLine(wsPath, id, ref, amd64sum, arm64sum); uErr != nil {
+			if errors.Is(uErr, plugin.ErrLegacyPinSubsection) {
 				return fmt.Errorf("%w: %w (in %s)", ErrUsage, uErr, wsPath)
 			}
 			return fmt.Errorf("%w: %w", ErrFailure, uErr)

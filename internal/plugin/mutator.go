@@ -12,27 +12,27 @@ import (
 	"github.com/sukekyo26/cocoon/internal/fsx"
 )
 
-// ErrPinBlockEmptyID is returned by UpsertPinBlock when called with an empty id.
-var ErrPinBlockEmptyID = errors.New("UpsertPinBlock: empty id")
+// ErrPinLineEmptyID is returned by UpsertPinLine when called with an empty id.
+var ErrPinLineEmptyID = errors.New("UpsertPinLine: empty id")
 
-// ErrPinBlockEmptyRef is returned by UpsertPinBlock when called with an empty ref.
-var ErrPinBlockEmptyRef = errors.New("UpsertPinBlock: empty ref")
+// ErrPinLineEmptyRef is returned by UpsertPinLine when called with an empty ref.
+var ErrPinLineEmptyRef = errors.New("UpsertPinLine: empty ref")
 
 // sectionHeaderRE matches a TOML table header: `[name.space]` with optional
 // surrounding whitespace and a trailing comment.
 var sectionHeaderRE = regexp.MustCompile(`^\s*\[([A-Za-z0-9_.-]+)\]\s*(#.*)?$`)
 
-// ErrPinBlockSubsection is returned when workspace.toml carries a legacy
+// ErrLegacyPinSubsection is returned when workspace.toml carries a legacy
 // `[plugins.versions.<id>]` subsection block. cocoon emits inline tables under
 // a single `[plugins.versions]` section; mixing the two forms would produce
 // duplicate-key TOML, so the mutator refuses until the user converts.
-var ErrPinBlockSubsection = errors.New(
+var ErrLegacyPinSubsection = errors.New(
 	"workspace.toml has legacy `[plugins.versions.<id>]` subsection block(s); " +
 		"cocoon now emits inline tables under a single `[plugins.versions]` section. " +
 		"Convert each block to `<id> = { pin = \"...\" }` under `[plugins.versions]` " +
 		"before invoking --write")
 
-// UpsertPinBlock atomically inserts or replaces an inline-table assignment
+// UpsertPinLine atomically inserts or replaces an inline-table assignment
 // `<id> = { pin = "<ref>", ... }` under the [plugins.versions] section of
 // workspace.toml at path. Comments and blank lines outside the modified line
 // are preserved verbatim.
@@ -40,15 +40,16 @@ var ErrPinBlockSubsection = errors.New(
 //   - existing inline line for <id>: replaced in place.
 //   - [plugins.versions] section present, <id> new: line appended at the
 //     section's last non-blank position so it sits adjacent to existing pins.
-//   - section absent: a fresh `[plugins.versions]\n<id> = { ... }\n` block is
-//     appended at EOF, separated from the previous non-blank line by one
-//     blank.
-func UpsertPinBlock(path, id, ref, amd64Sum, arm64Sum string) error {
+//   - section absent: a fresh `[plugins.versions]\n<id> = { ... }\n` section
+//     is appended at EOF, separated from the previous non-blank line by at
+//     least one blank line (existing trailing blanks are preserved verbatim,
+//     so the separation may be more than one).
+func UpsertPinLine(path, id, ref, amd64Sum, arm64Sum string) error {
 	if id == "" {
-		return ErrPinBlockEmptyID
+		return ErrPinLineEmptyID
 	}
 	if ref == "" {
-		return ErrPinBlockEmptyRef
+		return ErrPinLineEmptyRef
 	}
 	info, err := os.Stat(path)
 	if err != nil {
@@ -79,7 +80,7 @@ func upsertPinLineBytes(input []byte, id, ref, amd64Sum, arm64Sum string) ([]byt
 	}
 
 	if hasLegacySubsection(lines) {
-		return nil, ErrPinBlockSubsection
+		return nil, ErrLegacyPinSubsection
 	}
 
 	newLine := strings.TrimSuffix(FormatPinLine(id, ref, amd64Sum, arm64Sum), "\n")
