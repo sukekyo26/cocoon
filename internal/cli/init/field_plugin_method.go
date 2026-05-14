@@ -13,10 +13,12 @@ import (
 // promptPluginMethodsForMulti shows one method picker per enabled plugin that
 // declares two or more [install.methods.<name>] entries. Plugins with zero or
 // one declared method are silently skipped — there is no real choice and the
-// extra prompt would just add friction. Plugins already pinned via
-// --plugin-methods are skipped so flag values win in non-interactive flows.
-// The chosen method is recorded in picks; absent entries leave the plugin on
-// its DefaultMethod at install time.
+// extra prompt would just add friction. Plugins whose pick is already present
+// in picks (typically pre-filled from --plugin-methods on the same interactive
+// run) are skipped so the flag wins and the user is not re-prompted. The
+// non-interactive (--yes) path bypasses this function entirely via
+// applyDefaults. The chosen method is recorded in picks; absent entries leave
+// the plugin on its DefaultMethod at install time.
 func promptPluginMethodsForMulti(
 	cat *i18n.Catalog,
 	plugins map[string]*plugin.Plugin,

@@ -112,8 +112,11 @@ func TestParsePluginMethods_Errors(t *testing.T) {
 }
 
 // TestApplyFlags_PluginMethods pins the cobra flag → applyFlags wiring:
-// the parsed map lands on initAnswers and PluginMethodsSet is true so the
-// later prompt loop short-circuits.
+// the parsed map lands on initAnswers and PluginMethodsSet is true. Skip
+// of the matching prompt is per-plugin (promptPluginMethodsForMulti
+// short-circuits when picks[id] is already populated), not loop-level —
+// promptForMissing always calls promptPluginMethodsForMulti once for the
+// whole enabled list and lets the helper decide which ids to ask about.
 func TestApplyFlags_PluginMethods(t *testing.T) {
 	t.Parallel()
 	plugins := methodFixturePlugins()
