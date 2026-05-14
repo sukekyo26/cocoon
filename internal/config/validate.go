@@ -10,14 +10,15 @@ import (
 )
 
 var (
-	rxServiceName = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
-	rxUsername    = regexp.MustCompile(`^[a-z_][a-z0-9_-]*$`)
-	rxPluginID    = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
-	rxSha256      = regexp.MustCompile(`^[a-f0-9]{64}$`)
-	rxEnvKey      = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
-	rxShellEnvKey = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`)
-	rxAliasKey    = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_-]*$`)
-	rxRepoPath    = regexp.MustCompile(`^[A-Za-z0-9_-][A-Za-z0-9_./-]*$`)
+	rxServiceName  = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
+	rxUsername     = regexp.MustCompile(`^[a-z_][a-z0-9_-]*$`)
+	rxPluginID     = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
+	rxPluginMethod = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
+	rxSha256       = regexp.MustCompile(`^[a-f0-9]{64}$`)
+	rxEnvKey       = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+	rxShellEnvKey  = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`)
+	rxAliasKey     = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_-]*$`)
+	rxRepoPath     = regexp.MustCompile(`^[A-Za-z0-9_-][A-Za-z0-9_./-]*$`)
 	// rxHomeFilesSegment: each path segment of a [home_files].files entry
 	// must consist only of POSIX portable filename chars (letters,
 	// digits, dot, hyphen, underscore). home_files paths flow into the
@@ -446,6 +447,14 @@ func (p *PluginsSpec) validate(a *errAccumulator) {
 		}
 		if ov.ChecksumArm64 != nil && !rxSha256.MatchString(*ov.ChecksumArm64) {
 			a.add("checksum_arm64 must be 64 lowercase hex chars", "versions", name, "checksum_arm64")
+		}
+	}
+	for id, method := range p.Methods {
+		if !rxPluginID.MatchString(id) {
+			a.add("plugin id does not match "+rxPluginID.String(), "methods", id)
+		}
+		if !rxPluginMethod.MatchString(method) {
+			a.add("method name does not match "+rxPluginMethod.String(), "methods", id)
 		}
 	}
 }

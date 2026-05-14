@@ -12,9 +12,10 @@ var ErrNilPlugin = errors.New("plugin: nil plugin pointer")
 
 // ErrUnknownMethod is returned by ResolveMethod when workspace.toml's
 // [plugins.methods] map names an install method that the plugin does
-// not declare in [install.methods]. The package returns only the
-// method name in its message; callers add their own plugin-id context
-// to avoid duplicate-id wrapping.
+// not declare in [install.methods]. The wrapped message includes the
+// method name but omits the plugin id; callers add their own plugin-id
+// context (e.g. via fmt.Errorf("plugin %q: %w", id, err)) to avoid
+// duplicate-id wrapping.
 var ErrUnknownMethod = errors.New("unknown install method")
 
 // ResolveMethod selects which install.<name>.sh to use for the plugin
