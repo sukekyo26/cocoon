@@ -52,7 +52,8 @@ func TestScaffoldGoldenCurlPipe(t *testing.T) {
 		"--template", "curl-pipe",
 		"--version-capable",
 		"--name", "Demo",
-		"--description", "Demo plugin (https://example.com)",
+		"--description", "Demo plugin",
+		"--url", "https://example.com",
 		"--non-interactive",
 	)
 	if err != nil {
@@ -78,7 +79,8 @@ func TestScaffoldGoldenTarball(t *testing.T) {
 		"--requires-root",
 		"--with-install-user",
 		"--name", "Demo Tar",
-		"--description", "Demo tarball plugin (https://example.com/tar)",
+		"--description", "Demo tarball plugin",
+		"--url", "https://example.com/tar",
 		"--non-interactive",
 	)
 	if err != nil {
@@ -99,7 +101,8 @@ func TestScaffoldGoldenGeneric(t *testing.T) {
 		"--plugins-dir", dir,
 		"--template", "generic",
 		"--name", "Demo Generic",
-		"--description", "Demo generic plugin (https://example.com/g)",
+		"--description", "Demo generic plugin",
+		"--url", "https://example.com/g",
 		"--non-interactive",
 	)
 	if err != nil {
@@ -118,7 +121,8 @@ func TestScaffoldRejectsInvalidID(t *testing.T) {
 		"--plugins-dir", dir,
 		"--non-interactive",
 		"--name", "x",
-		"--description", "x (https://x)",
+		"--description", "x",
+		"--url", "https://x.example.com",
 	)
 	if !errors.Is(err, plugincli.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage", err)
@@ -146,7 +150,8 @@ func TestScaffoldAutoDiscoversWorkspace(t *testing.T) {
 		"scaffold", "demo",
 		"--non-interactive",
 		"--name", "Demo",
-		"--description", "Demo (https://example.com)",
+		"--description", "Demo",
+		"--url", "https://example.com",
 		"--template", "generic",
 	)
 	if err != nil {
@@ -174,7 +179,8 @@ func TestScaffoldRequiresPluginsDirOrWorkspace(t *testing.T) {
 		"scaffold", "demo",
 		"--non-interactive",
 		"--name", "Demo",
-		"--description", "Demo (https://example.com)",
+		"--description", "Demo",
+		"--url", "https://example.com",
 	)
 	if !errors.Is(err, plugincli.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage", err)
@@ -211,7 +217,8 @@ func TestScaffoldRequiresForceOnExistingDir(t *testing.T) {
 		"--plugins-dir", dir,
 		"--non-interactive",
 		"--name", "Demo",
-		"--description", "Demo (https://example.com)",
+		"--description", "Demo",
+		"--url", "https://example.com",
 	)
 	if !errors.Is(err, plugincli.ErrFailure) {
 		t.Fatalf("err = %v, want ErrFailure", err)
@@ -238,7 +245,8 @@ func TestScaffoldOverwritesWithForce(t *testing.T) {
 		"--non-interactive",
 		"--force",
 		"--name", "Demo",
-		"--description", "Demo (https://example.com)",
+		"--description", "Demo",
+		"--url", "https://example.com",
 	)
 	if err != nil {
 		t.Fatalf("Run err=%v stderr=%s", err, stderr)
@@ -258,7 +266,8 @@ func TestScaffoldRejectsTarballWithoutVersionCapable(t *testing.T) {
 		"--template", "tarball",
 		"--non-interactive",
 		"--name", "Demo",
-		"--description", "Demo (https://example.com)",
+		"--description", "Demo",
+		"--url", "https://example.com",
 	)
 	if !errors.Is(err, plugincli.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage", err)
@@ -277,7 +286,8 @@ func TestScaffoldRejectsUnknownTemplate(t *testing.T) {
 		"--template", "wat",
 		"--non-interactive",
 		"--name", "Demo",
-		"--description", "Demo (https://example.com)",
+		"--description", "Demo",
+		"--url", "https://example.com",
 	)
 	if !errors.Is(err, plugincli.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage", err)
@@ -291,7 +301,8 @@ func TestScaffoldRequiresName(t *testing.T) {
 		"scaffold", "demo",
 		"--plugins-dir", dir,
 		"--non-interactive",
-		"--description", "Demo (https://example.com)",
+		"--description", "Demo",
+		"--url", "https://example.com",
 	)
 	if !errors.Is(err, plugincli.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage", err)
@@ -349,7 +360,8 @@ func TestScaffoldRejectsExistingFileTarget(t *testing.T) {
 		"--plugins-dir", dir,
 		"--non-interactive",
 		"--name", "Demo",
-		"--description", "Demo (https://example.com)",
+		"--description", "Demo",
+		"--url", "https://example.com",
 		"--template", "generic",
 	)
 	if !errors.Is(err, plugincli.ErrFailure) {
@@ -387,7 +399,8 @@ func TestScaffoldNonInteractiveRejectsWhitespaceName(t *testing.T) {
 		"--plugins-dir", dir,
 		"--non-interactive",
 		"--name", "   ",
-		"--description", "Demo (https://example.com)",
+		"--description", "Demo",
+		"--url", "https://example.com",
 	)
 	if !errors.Is(err, plugincli.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage", err)
@@ -397,9 +410,9 @@ func TestScaffoldNonInteractiveRejectsWhitespaceName(t *testing.T) {
 	}
 }
 
-// TestScaffoldNonInteractiveRejectsURLLessDescription asserts that a --description
-// without an embedded URL is rejected in non-interactive mode.
-func TestScaffoldNonInteractiveRejectsURLLessDescription(t *testing.T) {
+// TestScaffoldNonInteractiveRejectsMissingURL asserts that omitting --url in
+// non-interactive mode is rejected with ErrUsage that names --url.
+func TestScaffoldNonInteractiveRejectsMissingURL(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	_, stderr, err := runCmd(t,
@@ -407,13 +420,35 @@ func TestScaffoldNonInteractiveRejectsURLLessDescription(t *testing.T) {
 		"--plugins-dir", dir,
 		"--non-interactive",
 		"--name", "Demo",
-		"--description", "Demo without URL",
+		"--description", "Demo",
+		// no --url
 	)
 	if !errors.Is(err, plugincli.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage", err)
 	}
-	if !strings.Contains(stderr, "--description") {
-		t.Errorf("stderr should mention --description: %q", stderr)
+	if !strings.Contains(stderr, "--url") {
+		t.Errorf("stderr should mention --url: %q", stderr)
+	}
+}
+
+// TestScaffoldNonInteractiveRejectsMalformedURL asserts that a non-https or
+// whitespace-containing --url is rejected in non-interactive mode.
+func TestScaffoldNonInteractiveRejectsMalformedURL(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	_, stderr, err := runCmd(t,
+		"scaffold", "demo",
+		"--plugins-dir", dir,
+		"--non-interactive",
+		"--name", "Demo",
+		"--description", "Demo",
+		"--url", "http://insecure.example.com",
+	)
+	if !errors.Is(err, plugincli.ErrUsage) {
+		t.Fatalf("err = %v, want ErrUsage", err)
+	}
+	if !strings.Contains(stderr, "--url") {
+		t.Errorf("stderr should mention --url: %q", stderr)
 	}
 }
 
@@ -428,6 +463,7 @@ func TestScaffoldNonInteractiveRejectsWhitespaceDescription(t *testing.T) {
 		"--non-interactive",
 		"--name", "Demo",
 		"--description", "   ",
+		"--url", "https://example.com",
 	)
 	if !errors.Is(err, plugincli.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage", err)

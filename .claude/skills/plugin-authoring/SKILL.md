@@ -23,7 +23,8 @@ cocoon plugin scaffold my-tool
 cocoon plugin scaffold my-tool \
   --template tarball --version-capable --requires-root \
   --name "My Tool" \
-  --description "Short description (https://github.com/owner/repo)" \
+  --description "Short description" \
+  --url "https://github.com/owner/repo" \
   --non-interactive
 ```
 

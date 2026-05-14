@@ -1,6 +1,7 @@
 [metadata]
 name = "proto"
-description = "Multi-language version manager (https://github.com/moonrepo/proto)"
+description = "Multi-language version manager"
+url = "https://github.com/moonrepo/proto"
 default = false
 
 [apt]

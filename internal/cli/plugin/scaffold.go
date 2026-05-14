@@ -18,9 +18,9 @@ import (
 )
 
 var (
-	errInputRequired    = errors.New("required")
-	errURLInDescription = errors.New("include URL in parentheses, e.g. \"(https://...)\"")
-	errPathNotADir      = errors.New("not a directory")
+	errInputRequired = errors.New("required")
+	errInvalidURL    = errors.New("must start with https:// and contain no whitespace")
+	errPathNotADir   = errors.New("not a directory")
 )
 
 // scaffoldOpts collects all values that drive code generation; holes the
@@ -31,6 +31,7 @@ type scaffoldOpts struct {
 	pluginsDir      string
 	name            string
 	description     string
+	url             string
 	defaultEnabled  bool
 	requiresRoot    bool
 	versionCapable  bool
@@ -43,6 +44,7 @@ type scaffoldOpts struct {
 	// "user did not pass --default".
 	setName            bool
 	setDescription     bool
+	setURL             bool
 	setDefaultEnabled  bool
 	setRequiresRoot    bool
 	setVersionCapable  bool
@@ -71,13 +73,24 @@ func validateNameInput(s string) error {
 	return nil
 }
 
-// validateDescriptionInput requires both a non-empty value and an embedded URL.
+// validateDescriptionInput rejects empty/whitespace-only descriptions.
+// The upstream URL travels in a separate `url` field now.
 func validateDescriptionInput(s string) error {
 	if strings.TrimSpace(s) == "" {
 		return errInputRequired
 	}
-	if !strings.Contains(s, "(http") {
-		return errURLInDescription
+	return nil
+}
+
+// validateURLInput rejects empty values and anything that is not a plain
+// https:// URL. Whitespace anywhere in the value is rejected so it can be
+// embedded verbatim in plugin.toml.
+func validateURLInput(s string) error {
+	if strings.TrimSpace(s) == "" {
+		return errInputRequired
+	}
+	if !strings.HasPrefix(s, "https://") || strings.ContainsAny(s, " \t\r\n") {
+		return errInvalidURL
 	}
 	return nil
 }
@@ -135,6 +148,14 @@ func promptMissing(opts *scaffoldOpts, cat *i18n.Catalog, p prompter) error {
 				Title(cat.Msg("plugin_scaffold_prompt_desc")).
 				Value(&opts.description).
 				Validate(validateDescriptionInput),
+		))
+	}
+	if !opts.setURL {
+		groups = append(groups, huh.NewGroup(
+			huh.NewInput().
+				Title(cat.Msg("plugin_scaffold_prompt_url")).
+				Value(&opts.url).
+				Validate(validateURLInput),
 		))
 	}
 	if !opts.setDefaultEnabled {
@@ -210,18 +231,23 @@ func finalizeOpts(opts *scaffoldOpts, cat *i18n.Catalog, stderr io.Writer) error
 			log.Error("ERROR: " + cat.Msg("plugin_scaffold_missing_flag", "description"))
 			return ErrUsage
 		}
+		if opts.url == "" {
+			log.Error("ERROR: " + cat.Msg("plugin_scaffold_missing_flag", "url"))
+			return ErrUsage
+		}
 		if err := validateNameInput(opts.name); err != nil {
 			log.Error("ERROR: " + cat.Msg("plugin_scaffold_blank_name"))
 			return ErrUsage
 		}
 		if err := validateDescriptionInput(opts.description); err != nil {
-			switch {
-			case errors.Is(err, errInputRequired):
-				log.Error("ERROR: " + cat.Msg("plugin_scaffold_blank_description"))
-			case errors.Is(err, errURLInDescription):
-				log.Error("ERROR: " + cat.Msg("plugin_scaffold_desc_missing_url"))
-			default:
-				log.Error("ERROR: " + cat.Msg("plugin_scaffold_desc_invalid"))
+			log.Error("ERROR: " + cat.Msg("plugin_scaffold_blank_description"))
+			return ErrUsage
+		}
+		if err := validateURLInput(opts.url); err != nil {
+			if errors.Is(err, errInputRequired) {
+				log.Error("ERROR: " + cat.Msg("plugin_scaffold_blank_url"))
+			} else {
+				log.Error("ERROR: " + cat.Msg("plugin_scaffold_invalid_url"))
 			}
 			return ErrUsage
 		}
@@ -296,6 +322,7 @@ func runScaffold(opts scaffoldOpts, cat *i18n.Catalog, stdout, stderr io.Writer)
 		ID:             opts.id,
 		Name:           opts.name,
 		Description:    opts.description,
+		URL:            opts.url,
 		Default:        opts.defaultEnabled,
 		RequiresRoot:   opts.requiresRoot,
 		VersionCapable: opts.versionCapable,

@@ -1,6 +1,7 @@
 [metadata]
 name = "GitHub CLI"
-description = "GitHub command line tool (https://github.com/cli/cli)"
+description = "GitHub command line tool"
+url = "https://github.com/cli/cli"
 default = false
 
 [install]

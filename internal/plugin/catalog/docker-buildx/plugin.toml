@@ -1,6 +1,7 @@
 [metadata]
 name = "Docker Buildx"
-description = "BuildKit-based builds and multi-platform images for the docker CLI; pair with docker-cli or a docker-bundled image (https://github.com/docker/buildx)"
+description = "BuildKit-based builds and multi-platform images for the docker CLI; pair with docker-cli or a docker-bundled image"
+url = "https://github.com/docker/buildx"
 default = false
 
 [install]

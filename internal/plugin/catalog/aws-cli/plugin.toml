@@ -1,6 +1,7 @@
 [metadata]
 name = "AWS CLI v2"
-description = "AWS Command Line Interface (https://github.com/aws/aws-cli)"
+description = "AWS Command Line Interface"
+url = "https://github.com/aws/aws-cli"
 default = false
 
 [install]

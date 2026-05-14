@@ -23,6 +23,7 @@ type selectOrInputField struct {
 	key         string
 	title       string
 	description string
+	urlLine     string
 	suggestions []string
 	otherLabel  string
 
@@ -54,6 +55,7 @@ func newSelectOrInputField(
 		key:         key,
 		title:       "",
 		description: "",
+		urlLine:     "",
 		suggestions: suggestions,
 		otherLabel:  otherLabel,
 		target:      target,
@@ -94,6 +96,14 @@ func (f *selectOrInputField) Title(s string) *selectOrInputField { f.title = s; 
 // Description sets the secondary line shown under the title.
 func (f *selectOrInputField) Description(s string) *selectOrInputField {
 	f.description = s
+	return f
+}
+
+// URLLine sets an optional URL displayed under the description. The
+// plugin-version prompt uses it to surface the upstream release page so
+// the user can confirm a pin value before typing one.
+func (f *selectOrInputField) URLLine(s string) *selectOrInputField {
+	f.urlLine = s
 	return f
 }
 
@@ -219,6 +229,13 @@ func (f *selectOrInputField) View() string {
 	if f.description != "" {
 		sb.WriteString(styles.Description.Render(f.description))
 		sb.WriteString("\n")
+	}
+	if f.urlLine != "" {
+		urlStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.AdaptiveColor{Light: "#0066CC", Dark: "#7FDBFF"}).
+			Underline(true)
+		sb.WriteString(urlStyle.Render(f.urlLine))
+		sb.WriteString("\n\n")
 	}
 
 	cursorIndicator := styles.SelectSelector.String()
@@ -380,6 +397,10 @@ func (f *selectOrInputField) printAccessibleHeader(w io.Writer) {
 	}
 	if f.description != "" {
 		fmt.Fprintln(w, f.description)
+	}
+	if f.urlLine != "" {
+		fmt.Fprintln(w, f.urlLine)
+		fmt.Fprintln(w)
 	}
 	for i, s := range f.suggestions {
 		fmt.Fprintf(w, "%d. %s\n", i+1, s)

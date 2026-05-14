@@ -45,10 +45,8 @@ func TestValidateDescriptionInput(t *testing.T) {
 	}{
 		{"empty", "", errInputRequired},
 		{"whitespace_only", "   ", errInputRequired},
-		{"missing_url", "Just a description", errURLInDescription},
-		{"missing_paren_only", "https://example.com", errURLInDescription},
-		{"with_url", "GitHub CLI (https://cli.github.com)", nil},
-		{"with_http_url", "Local server (http://localhost)", nil},
+		{"plain_text", "Just a description", nil},
+		{"with_url_still_ok", "GitHub CLI (https://cli.github.com)", nil},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -56,6 +54,33 @@ func TestValidateDescriptionInput(t *testing.T) {
 			got := validateDescriptionInput(tc.in)
 			if !errors.Is(got, tc.wantErr) {
 				t.Errorf("validateDescriptionInput(%q) = %v, want %v", tc.in, got, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateURLInput(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		in      string
+		wantErr error
+	}{
+		{"empty", "", errInputRequired},
+		{"whitespace_only", "   ", errInputRequired},
+		{"missing_scheme", "github.com/cli/cli", errInvalidURL},
+		{"http_not_https", "http://example.com", errInvalidURL},
+		{"contains_space", "https://example.com /a", errInvalidURL},
+		{"contains_newline", "https://example.com\n", errInvalidURL},
+		{"valid_https", "https://github.com/owner/repo", nil},
+		{"valid_with_path", "https://www.google.com/chrome/", nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := validateURLInput(tc.in)
+			if !errors.Is(got, tc.wantErr) {
+				t.Errorf("validateURLInput(%q) = %v, want %v", tc.in, got, tc.wantErr)
 			}
 		})
 	}
@@ -100,6 +125,7 @@ func TestPromptMissing_AllSetSkipsForm(t *testing.T) {
 	opts := &scaffoldOpts{
 		setName:            true,
 		setDescription:     true,
+		setURL:             true,
 		setDefaultEnabled:  true,
 		setRequiresRoot:    true,
 		setVersionCapable:  true,
@@ -129,9 +155,9 @@ func TestPromptMissing_NoneSetBuildsAllGroups(t *testing.T) {
 	if err := promptMissing(opts, cat, p); err != nil {
 		t.Fatalf("err = %v, want nil", err)
 	}
-	const wantGroups = 7
+	const wantGroups = 8
 	if p.groupCnt != wantGroups {
-		t.Errorf("groupCnt = %d, want %d (name, desc, default, requires-root, version-capable, template, with-install-user)",
+		t.Errorf("groupCnt = %d, want %d (name, desc, url, default, requires-root, version-capable, template, with-install-user)",
 			p.groupCnt, wantGroups)
 	}
 }

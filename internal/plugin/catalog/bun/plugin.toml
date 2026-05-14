@@ -1,6 +1,7 @@
 [metadata]
 name = "bun"
-description = "All-in-one JavaScript runtime & toolkit (https://github.com/oven-sh/bun)"
+description = "All-in-one JavaScript runtime & toolkit"
+url = "https://github.com/oven-sh/bun"
 default = false
 
 [apt]

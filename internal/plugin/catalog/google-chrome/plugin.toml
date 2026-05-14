@@ -1,6 +1,7 @@
 [metadata]
 name = "Google Chrome"
-description = "Google Chrome stable browser for headless testing with Playwright/Puppeteer (https://www.google.com/chrome/)"
+description = "Google Chrome stable browser for headless testing with Playwright/Puppeteer"
+url = "https://www.google.com/chrome/"
 default = false
 
 [install]

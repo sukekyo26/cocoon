@@ -1,6 +1,7 @@
 [metadata]
 name = "mise"
-description = "Polyglot runtime version manager (https://github.com/jdx/mise)"
+description = "Polyglot runtime version manager"
+url = "https://github.com/jdx/mise"
 default = false
 
 [install]

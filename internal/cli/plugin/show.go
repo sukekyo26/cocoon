@@ -54,6 +54,7 @@ func runShow(stdout, stderr io.Writer, id string) error {
 	row("source:       ", src)
 	row("name:         ", p.Metadata.Name)
 	row("description:  ", p.Metadata.Description)
+	row("url:          ", p.Metadata.URL)
 	row("default:      ", fmt.Sprintf("%t", p.Metadata.Default))
 	if len(p.Metadata.Conflicts) > 0 {
 		row("conflicts:    ", strings.Join(p.Metadata.Conflicts, ", "))

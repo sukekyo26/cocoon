@@ -1,6 +1,7 @@
 [metadata]
 name = "Node.js"
-description = "Node.js JavaScript runtime (https://github.com/nodejs/node)"
+description = "Node.js JavaScript runtime"
+url = "https://github.com/nodejs/node"
 default = false
 
 [apt]

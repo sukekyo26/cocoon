@@ -1,6 +1,7 @@
 [metadata]
 name = "Rust"
-description = "Rust toolchain via rustup — cargo, clippy, rustfmt (https://github.com/rust-lang/rustup)"
+description = "Rust toolchain via rustup — cargo, clippy, rustfmt"
+url = "https://github.com/rust-lang/rustup"
 default = false
 
 [install]

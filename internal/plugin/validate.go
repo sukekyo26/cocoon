@@ -11,6 +11,7 @@ var (
 	rxEnvKey       = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 	rxBuildArg     = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`)
 	rxPluginVolume = regexp.MustCompile(`^/home/\$\{USERNAME\}/[^/]+$`)
+	rxPluginURL    = regexp.MustCompile(`^https://[^\s]+$`)
 )
 
 // accumulator is a trimmed copy of internal/config's errAccumulator so
@@ -61,6 +62,11 @@ func (m *Metadata) validate(a *accumulator) {
 	}
 	if m.Description == "" {
 		a.add("description must not be empty", "description")
+	}
+	if m.URL == "" {
+		a.add("url must not be empty", "url")
+	} else if !rxPluginURL.MatchString(m.URL) {
+		a.add("url must start with https:// and contain no whitespace", "url")
 	}
 	if hasDuplicates(m.Conflicts) {
 		a.add("metadata.conflicts contains duplicate entries", "conflicts")

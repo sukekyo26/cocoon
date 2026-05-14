@@ -1,6 +1,7 @@
 [metadata]
 name = "Starship"
-description = "Cross-shell prompt (https://github.com/starship/starship)"
+description = "Cross-shell prompt"
+url = "https://github.com/starship/starship"
 default = false
 
 [install]

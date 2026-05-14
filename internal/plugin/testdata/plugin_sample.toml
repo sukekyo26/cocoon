@@ -1,6 +1,7 @@
 [metadata]
 name = "Sample"
 description = "Sample plugin"
+url = "https://example.com/sample"
 default = false
 
 [install]

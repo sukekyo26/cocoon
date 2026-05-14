@@ -1,6 +1,7 @@
 [metadata]
 name = "OpenTofu"
-description = "Open-source Infrastructure as Code, Terraform fork (https://github.com/opentofu/opentofu)"
+description = "Open-source Infrastructure as Code, Terraform fork"
+url = "https://github.com/opentofu/opentofu"
 default = false
 
 [install]

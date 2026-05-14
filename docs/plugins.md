@@ -89,7 +89,8 @@ of the install phase and the named-volume declaration in
 | Section | Field | Type | Default | Required | Meaning |
 |---|---|---|---|---|---|
 | `[metadata]` | `name`            | string             | —     | ✓ | Human-readable display name. |
-| `[metadata]` | `description`     | string             | —     | ✓ | Short description. By convention, embed the upstream URL in parentheses (e.g. `"… (https://example.com)"`); `cocoon plugin scaffold` enforces this for new plugins, the runtime loader does not. |
+| `[metadata]` | `description`     | string             | —     | ✓ | Short description. Should not embed the upstream URL — use the dedicated `url` field instead. |
+| `[metadata]` | `url`             | string             | —     | ✓ | Upstream project URL (`https://...`, no whitespace). Surfaced by `cocoon init`'s per-plugin version picker, `cocoon plugin show` (`url:` row), and `cocoon plugin list` (`URL` column). |
 | `[metadata]` | `default`         | bool               | `false` |   | If true, `cocoon init`'s default plugin set includes this id. |
 | `[metadata]` | `conflicts`       | list of strings    | `[]`  |   | Plugin ids that must not be enabled at the same time. |
 | `[apt]`      | `packages`        | list of strings    | `[]`  |   | Apt packages installed before `install.sh` runs. |

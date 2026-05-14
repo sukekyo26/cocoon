@@ -1,6 +1,7 @@
 [metadata]
 name = "uv"
-description = "Fast Python package and project manager by Astral (https://github.com/astral-sh/uv)"
+description = "Fast Python package and project manager by Astral"
+url = "https://github.com/astral-sh/uv"
 default = false
 
 [install]
