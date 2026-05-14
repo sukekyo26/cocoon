@@ -56,8 +56,10 @@ func newPinCmd(stdout, stderr io.Writer) *cobra.Command {
 	cmd.Flags().StringVar(&amd64Checksum, "amd64-checksum", "", "sha256 of the amd64 artifact (optional)")
 	cmd.Flags().StringVar(&arm64Checksum, "arm64-checksum", "", "sha256 of the arm64 artifact (optional)")
 	cmd.Flags().StringVar(&method, "method", "",
-		"install method name (required when the plugin declares two or more [install.methods]; "+
-			"pins both [plugins.methods] and [plugins.versions])")
+		"install method name; only meaningful for plugins that declare [install.methods]. "+
+			"When set, the command pins both [plugins.methods] and [plugins.versions] in a "+
+			"single workspace.toml read-write. When omitted, only [plugins.versions] is updated "+
+			"(the existing [plugins.methods] entry — or the plugin's default_method — stays in effect).")
 	cmd.Flags().BoolVar(&write, "write", false,
 		"upsert the inline-table line in workspace.toml (auto-discovered from cwd)")
 	return cmd
@@ -86,11 +88,11 @@ func runPin(stdout, stderr io.Writer, id, ref, amd64sum, arm64sum, method string
 	return nil
 }
 
-// runPinWrite discovers workspace.toml and upserts the pin line (always)
-// and the method line (when method is non-empty). Both upserts are
-// sequenced: a methods-write failure after a successful pin-write leaves
-// the partial pin in place, which is fine because both lines are
-// idempotent — re-running the same command finishes the work.
+// runPinWrite discovers workspace.toml and upserts both the pin line
+// (always) and the method line (when method != "") in a single
+// read-modify-write cycle via plugin.UpsertPinAndMethod. The single-write
+// path means a transient I/O failure cannot persist the pin without the
+// matching method or vice-versa — either both land or neither does.
 func runPinWrite(stdout, stderr io.Writer, id, ref, amd64sum, arm64sum, method string) error {
 	cwd, cwdErr := os.Getwd()
 	if cwdErr != nil {
@@ -105,7 +107,7 @@ func runPinWrite(stdout, stderr io.Writer, id, ref, amd64sum, arm64sum, method s
 			"%w: --write needs a discoverable workspace.toml (run inside a cocoon project)",
 			ErrUsage)
 	}
-	if uErr := plugin.UpsertPinLine(wsPath, id, ref, amd64sum, arm64sum); uErr != nil {
+	if uErr := plugin.UpsertPinAndMethod(wsPath, id, ref, amd64sum, arm64sum, method); uErr != nil {
 		if errors.Is(uErr, plugin.ErrLegacyPinSubsection) {
 			return fmt.Errorf("%w: %w (in %s)", ErrUsage, uErr, wsPath)
 		}
@@ -113,13 +115,9 @@ func runPinWrite(stdout, stderr io.Writer, id, ref, amd64sum, arm64sum, method s
 	}
 	log := logx.New(stdout, stderr)
 	log.Successf("Updated %s: [plugins.versions] %s", wsPath, id)
-	if method == "" {
-		return nil
+	if method != "" {
+		log.Successf("Updated %s: [plugins.methods] %s = %q", wsPath, id, method)
 	}
-	if mErr := plugin.UpsertMethodLine(wsPath, id, method); mErr != nil {
-		return fmt.Errorf("%w: %w", ErrFailure, mErr)
-	}
-	log.Successf("Updated %s: [plugins.methods] %s = %q", wsPath, id, method)
 	return nil
 }
 

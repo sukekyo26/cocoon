@@ -324,6 +324,137 @@ func TestFormatMethodLine(t *testing.T) {
 	}
 }
 
+// TestUpsertPinAndMethod pins the combined mutator's promises:
+//
+//   - method == "" reduces to "pin only", matching UpsertPinLine output
+//     byte-for-byte so the new function is a safe drop-in for callers that
+//     never need to touch [plugins.methods].
+//   - method != "" produces a single read-write cycle that lands both
+//     sections together; the disk state never holds a pin without its
+//     matching method (the regression this combined function exists to
+//     prevent).
+//   - empty id / ref → existing sentinel errors (ErrPinLineEmptyID /
+//     ErrPinLineEmptyRef). Empty method is the "pin only" path, not an
+//     error, so it must NOT trigger ErrMethodLineEmptyMethod.
+func TestUpsertPinAndMethod(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name               string
+		seed, want         string
+		id, ref, method    string
+		amd64Sum, arm64Sum string
+		wantPinOnly        bool // when true, also assert UpsertPinLine alone produces the same bytes
+	}{
+		{
+			name: "pin_and_method_on_empty_file",
+			seed: "",
+			id:   "copilot-cli", ref: "1.0.47", method: "binary",
+			want: "[plugins.versions]\ncopilot-cli = { pin = \"1.0.47\" }\n\n[plugins.methods]\ncopilot-cli = \"binary\"",
+		},
+		{
+			name: "pin_only_when_method_empty",
+			seed: "",
+			id:   "go", ref: "1.23.4", method: "",
+			want:        "[plugins.versions]\ngo = { pin = \"1.23.4\" }",
+			wantPinOnly: true,
+		},
+		{
+			name: "replace_both_existing",
+			seed: "[plugins.versions]\ncopilot-cli = { pin = \"1.0.46\" }\n\n[plugins.methods]\ncopilot-cli = \"gh-cli\"\n",
+			id:   "copilot-cli", ref: "1.0.47", method: "binary",
+			want: "[plugins.versions]\ncopilot-cli = { pin = \"1.0.47\" }\n\n[plugins.methods]\ncopilot-cli = \"binary\"\n",
+		},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			tmp := t.TempDir()
+			path := filepath.Join(tmp, "ws.toml")
+			if err := os.WriteFile(path, []byte(tc.seed), 0o600); err != nil {
+				t.Fatalf("seed: %v", err)
+			}
+			if err := plugin.UpsertPinAndMethod(path, tc.id, tc.ref, tc.amd64Sum, tc.arm64Sum, tc.method); err != nil {
+				t.Fatalf("UpsertPinAndMethod: %v", err)
+			}
+			got, err := os.ReadFile(path) //nolint:gosec // tmp path under t.TempDir
+			if err != nil {
+				t.Fatalf("read: %v", err)
+			}
+			if string(got) != tc.want {
+				t.Errorf("mismatch\n--- got ---\n%q\n--- want ---\n%q", got, tc.want)
+			}
+			// Drop-in equivalence: when method == "" the combined writer must
+			// produce the exact same bytes as the standalone UpsertPinLine.
+			if tc.wantPinOnly {
+				path2 := filepath.Join(tmp, "ws-pinonly.toml")
+				if err := os.WriteFile(path2, []byte(tc.seed), 0o600); err != nil {
+					t.Fatalf("seed pinonly: %v", err)
+				}
+				if err := plugin.UpsertPinLine(path2, tc.id, tc.ref, tc.amd64Sum, tc.arm64Sum); err != nil {
+					t.Fatalf("UpsertPinLine: %v", err)
+				}
+				got2, gerr := os.ReadFile(path2) //nolint:gosec // tmp path under t.TempDir
+				if gerr != nil {
+					t.Fatalf("read pinonly: %v", gerr)
+				}
+				if string(got2) != string(got) {
+					t.Errorf("pin-only path diverged from UpsertPinLine:\n--- combined ---\n%q\n--- standalone ---\n%q", got, got2)
+				}
+			}
+		})
+	}
+}
+
+func TestUpsertPinAndMethodRejectsEmptyArgs(t *testing.T) {
+	t.Parallel()
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "ws.toml")
+	if err := os.WriteFile(path, []byte(""), 0o600); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if err := plugin.UpsertPinAndMethod(path, "", "1.0", "", "", "binary"); !errors.Is(err, plugin.ErrPinLineEmptyID) {
+		t.Errorf("empty id: got %v, want ErrPinLineEmptyID", err)
+	}
+	if err := plugin.UpsertPinAndMethod(path, "go", "", "", "", "binary"); !errors.Is(err, plugin.ErrPinLineEmptyRef) {
+		t.Errorf("empty ref: got %v, want ErrPinLineEmptyRef", err)
+	}
+	// Empty method is the "pin only" path; must succeed, not error.
+	if err := plugin.UpsertPinAndMethod(path, "go", "1.0", "", "", ""); err != nil {
+		t.Errorf("empty method should be the pin-only path, got error: %v", err)
+	}
+}
+
+// TestUpsertPinAndMethodRejectsLegacySubsection guards the legacy-shape
+// migration prompt across the combined writer too: a workspace.toml with
+// `[plugins.versions.<id>]` must be rejected before any in-place edit so
+// the user is not surprised by a partial-shape file.
+func TestUpsertPinAndMethodRejectsLegacySubsection(t *testing.T) {
+	t.Parallel()
+	body := `[plugins]
+enable = ["copilot-cli"]
+
+[plugins.versions.copilot-cli]
+pin = "1.0.46"
+`
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "ws.toml")
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	err := plugin.UpsertPinAndMethod(path, "copilot-cli", "1.0.47", "", "", "binary")
+	if !errors.Is(err, plugin.ErrLegacyPinSubsection) {
+		t.Errorf("got %v, want ErrLegacyPinSubsection", err)
+	}
+	got, rerr := os.ReadFile(path) //nolint:gosec // tmp path under t.TempDir
+	if rerr != nil {
+		t.Fatalf("read after refusal: %v", rerr)
+	}
+	if string(got) != body {
+		t.Errorf("workspace.toml was modified despite refusal:\n--- got ---\n%s", got)
+	}
+}
+
 // Legacy `[plugins.versions.<id>]` subsection blocks (cocoon's previous
 // emission form) collide with the new inline-table layout. The mutator
 // must refuse so the user explicitly migrates the file.

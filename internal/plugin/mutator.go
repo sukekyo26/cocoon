@@ -132,6 +132,50 @@ func upsertMethodLineBytes(input []byte, id, method string) ([]byte, error) {
 	return renderLines(updated, hadTrailingNewline)
 }
 
+// UpsertPinAndMethod atomically upserts the [plugins.versions] inline-table
+// pin line for id, and (when method != "") the [plugins.methods]
+// `<id> = "<method>"` line. Both upserts share a single read-modify-write
+// cycle so a transient I/O failure cannot leave workspace.toml in a half-
+// updated state (a separate UpsertPinLine + UpsertMethodLine sequence would
+// be non-transactional: a failure between them would persist the pin without
+// the matching method). Pass method = "" to upsert the pin alone — the
+// behaviour is then equivalent to UpsertPinLine.
+//
+// Returns ErrLegacyPinSubsection (same as UpsertPinLine) when the file
+// carries the legacy [plugins.versions.<id>] shape; the file is not
+// modified in that case.
+func UpsertPinAndMethod(path, id, ref, amd64Sum, arm64Sum, method string) error {
+	if id == "" {
+		return ErrPinLineEmptyID
+	}
+	if ref == "" {
+		return ErrPinLineEmptyRef
+	}
+	// method == "" is the "pin only" path; do not reject it.
+	info, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("stat %s: %w", path, err)
+	}
+	body, err := os.ReadFile(path) //nolint:gosec // caller-provided workspace path
+	if err != nil {
+		return fmt.Errorf("read %s: %w", path, err)
+	}
+	out, err := upsertPinLineBytes(body, id, ref, amd64Sum, arm64Sum)
+	if err != nil {
+		return err
+	}
+	if method != "" {
+		out, err = upsertMethodLineBytes(out, id, method)
+		if err != nil {
+			return err
+		}
+	}
+	if err := fsx.AtomicWriteFile(path, out, info.Mode().Perm()); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	return nil
+}
+
 // splitToLines splits input on newlines and treats a single empty trailing
 // element as "no content" so callers can append a fresh section without
 // inheriting a phantom blank first line.
