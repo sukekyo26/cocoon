@@ -104,11 +104,24 @@ func validateMethodScripts(label string, p *Plugin, fsys fs.FS, scriptDir string
 			a.add("install."+name+".sh must be a regular file (got a directory)", "install", "methods", name)
 		}
 	}
-	if _, err := fs.Stat(fsys, path.Join(scriptDir, "install.sh")); err == nil {
+	// A stat failure that is not fs.ErrNotExist (e.g. permission denied,
+	// I/O error) must also block the plugin — otherwise a legacy
+	// install.sh could slip through whenever its directory entry can't be
+	// stat'd, silently rendering a Dockerfile that runs forbidden
+	// content. Treat anything other than "definitively absent" as a
+	// validation failure.
+	switch _, err := fs.Stat(fsys, path.Join(scriptDir, "install.sh")); {
+	case err == nil:
 		a.add("install.sh is no longer supported; rename it to install.<category>.sh "+
 			"(binary / installer / apt / archive) and declare a matching [install.methods.<category>] "+
 			"entry in plugin.toml. See docs/plugins.md for the category convention.",
 			"install")
+	case !errors.Is(err, fs.ErrNotExist):
+		a.add(fmt.Sprintf(
+			"install.sh: cannot rule out a legacy file (%v); "+
+				"resolve the stat failure before retrying — the loader rejects "+
+				"install.sh as a plugin script, so a missed check would let it run silently",
+			err), "install")
 	}
 	if len(*a.errs) == 0 {
 		return nil
