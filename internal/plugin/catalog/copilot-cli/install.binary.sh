@@ -65,25 +65,16 @@ else
   printf '%sWARNING: SHA256 verification skipped for Copilot CLI (no checksum for copilot-cli in [plugins.versions])%s\n' "$C_YEL" "$C_RST" >&2
 fi
 
-# The release tarball ships the launcher + supporting JS under a top-level
-# `copilot/` directory. Extract the tree under $HOME/.local/share so the
-# relative resource paths the launcher resolves still work, then symlink
-# the `copilot` entry point onto $HOME/.local/bin (which install.env adds
-# to PATH).
-DEST="$HOME/.local/share/copilot-cli"
-mkdir -p "$DEST" "$HOME/.local/bin"
-# Clean previous extract so re-running this script under a different
-# PIN does not leave stale files behind. The launcher symlink is
-# replaced unconditionally by `ln -sf` further down.
-rm -rf "$DEST"
-mkdir -p "$DEST"
-tar -C "$DEST" --strip-components=1 -xzf "/tmp/${TARBALL}"
-COPILOT_BIN=$(find "$DEST" -name copilot -type f -print -quit)
-if [ -z "$COPILOT_BIN" ]; then
-  echo "copilot binary not found inside ${TARBALL}" >&2
-  exit 1
-fi
-chmod +x "$COPILOT_BIN"
-ln -sf "$COPILOT_BIN" "$HOME/.local/bin/copilot"
+# The release tarball is a single self-contained ELF binary at the
+# archive root (no leading directory), so a straight `tar -xzf` into
+# ~/.local/bin lands the launcher directly on PATH (install.env adds
+# ~/.local/bin to PATH). NB: do NOT add --strip-components=1 — that
+# would silently skip the file because there is no leading path
+# component to strip.
+mkdir -p "$HOME/.local/bin"
+tar -C "$HOME/.local/bin" -xzf "/tmp/${TARBALL}"
+# Tarball entry already ships mode 0755, but re-assert it in case a
+# future release ships a more permissive umask-dependent mode.
+chmod 0755 "$HOME/.local/bin/copilot"
 
 rm "/tmp/${TARBALL}"

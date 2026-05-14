@@ -106,17 +106,16 @@ enable = [
     "shfmt",
 ]
 
-# [plugins.methods] — for plugins that declare multiple [install.methods],
-#   pick which install path to use. Plugins with a single method (or none)
-#   ignore this section.
-# [plugins.methods]
-# <plugin-id> = "<method-name>"
+# [plugins.methods] — install method picked for plugins that declare multiple methods.
+#   Plugins with a single declared method (or none) ignore this section.
+[plugins.methods]
+copilot-cli = "binary"
 
 # [plugins.versions] — pinned versions for the enabled plugins above.
 #   Add checksum_amd64 / checksum_arm64 (64 lowercase hex chars) per entry to verify install tarballs.
 [plugins.versions]
 bun = { pin = "1.3.3" }
-copilot-cli = { pin = "0.0.369" }
+copilot-cli = { pin = "1.0.47" }
 deno = { pin = "2.7.14" }
 docker-buildx = { pin = "0.24.0" }
 go = { pin = "1.23.4" }
