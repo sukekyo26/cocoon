@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-05-15
+
 ### Added
 
 - `cocoon init` now prompts for an install method when an enabled plugin declares two or more entries under `[install.methods]` in its `plugin.toml`. Each option lists the method name and its description; the plugin's `default_method` is pre-selected so pressing Enter accepts the recommendation. Plugins with a single declared method are silently skipped — no prompt churn for the common case. The choice is written to a new `[plugins.methods]` table in the generated `workspace.toml` (`<plugin-id> = "<method-name>"` per line); plugins absent from the table fall back to `default_method` at install time. Method prompts run **before** version prompts so the per-method upstream URL surfaces correctly under the version picker description.
@@ -133,7 +135,9 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Add `COMPOSE_PROJECT_NAME` derivation from the project directory basename so docker compose namespacing matches the host directory.
 - Add i18n catalog (English / Japanese) covering every CLI prompt, error message, and inline `workspace.toml` comment, switched via `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG`.
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/sukekyo26/cocoon/compare/v0.3.1...v0.4.0
+[0.3.1]: https://github.com/sukekyo26/cocoon/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/sukekyo26/cocoon/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/sukekyo26/cocoon/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/sukekyo26/cocoon/releases/tag/v0.1.0

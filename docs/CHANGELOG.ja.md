@@ -6,6 +6,8 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-05-15
+
 ### 追加
 
 - `cocoon init` の対話モードで、`plugin.toml` の `[install.methods]` に 2 つ以上のエントリを宣言したプラグインに対して「インストール方式」のピッカーを表示するようにしました。各選択肢には method 名と description を併記し、プラグインの `default_method` を初期選択にしているので、推奨どおりで良ければそのまま Enter で確定できます。method を 1 つしか持たないプラグインはサイレントにスキップ — 一般プラグインに余計なプロンプトが増えることはありません。選択結果は生成される `workspace.toml` の新セクション `[plugins.methods]` (1 行 1 プラグインの `<id> = "<method>"` 形式) に書き出され、ここに現れないプラグインはインストール時に `default_method` にフォールバックします。method プロンプトは version プロンプトの **前** に走るので、選んだ method 固有の上流 URL が version ピッカーの説明欄に正しく出ます。
@@ -133,7 +135,9 @@ cocoon の主要な変更を記録します。フォーマットは
 - `COMPOSE_PROJECT_NAME` をプロジェクトディレクトリの basename から導出するように変更。docker compose の namespace がホストディレクトリと一致する。
 - 国際化 (英語 / 日本語) カタログを追加。CLI プロンプト・エラーメッセージ・`workspace.toml` インラインコメントすべてを `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` で切替可能。
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/sukekyo26/cocoon/compare/v0.3.1...v0.4.0
+[0.3.1]: https://github.com/sukekyo26/cocoon/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/sukekyo26/cocoon/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/sukekyo26/cocoon/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/sukekyo26/cocoon/releases/tag/v0.1.0
