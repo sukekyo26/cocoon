@@ -26,11 +26,30 @@ type Apt struct {
 }
 
 // Install mirrors plugin.toml [install].
+//
+// Methods and DefaultMethod are required for any plugin loaded via the
+// public Load / LoadEnabled[FromFS] entry points: the loader's
+// validateMethodScripts rejects an empty Methods map and a literal
+// install.sh file. Each declared method must have a matching
+// install.<name>.sh on disk. The in-memory Validate() method, by
+// contrast, tolerates an empty Methods so test code can build *Plugin
+// literals without filling in Methods just to exercise an unrelated
+// field. The active method is selected at install time via
+// workspace.toml's [plugins.methods] map; absent overrides fall back
+// to DefaultMethod.
 type Install struct {
-	RequiresRoot bool              `toml:"requires_root"`
-	BuildArgs    []string          `toml:"build_args,omitempty"`
-	Env          map[string]string `toml:"env,omitempty"`
-	Volumes      []string          `toml:"volumes,omitempty"`
+	RequiresRoot  bool                     `toml:"requires_root"`
+	BuildArgs     []string                 `toml:"build_args,omitempty"`
+	Env           map[string]string        `toml:"env,omitempty"`
+	Volumes       []string                 `toml:"volumes,omitempty"`
+	DefaultMethod string                   `toml:"default_method,omitempty"`
+	Methods       map[string]InstallMethod `toml:"methods,omitempty"`
+}
+
+// InstallMethod mirrors plugin.toml [install.methods.<name>]. The
+// script file lives at <plugin-dir>/install.<name>.sh.
+type InstallMethod struct {
+	Description string `toml:"description"`
 }
 
 // Version mirrors plugin.toml [version].

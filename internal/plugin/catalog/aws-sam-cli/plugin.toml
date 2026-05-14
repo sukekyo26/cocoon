@@ -6,6 +6,10 @@ default = false
 
 [install]
 requires_root = false
+default_method = "archive"
+
+[install.methods.archive]
+description = "Extract vendored AWS SAM CLI zip and run sam-installation/install"
 
 [version]
 version_capable = false

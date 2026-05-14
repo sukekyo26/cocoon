@@ -110,17 +110,41 @@ type shellEnv struct {
 	loginShell string
 }
 
+// resolveMethodScript picks install.<method>.sh for plugins that pass
+// the loader's validateMethodScripts (every loaded plugin declares at
+// least one [install.methods] entry). The install.sh fallback below is
+// only reachable when ResolveMethod returns "" for *Plugin literals
+// built directly in tests — install.sh itself is rejected by the
+// loader for plugins read from disk. Returns a wrapped
+// ErrUnknownMethod when the workspace names a method the plugin does
+// not declare.
+func resolveMethodScript(p *plugin.Plugin, id string, methods map[string]string) (script, method string, err error) {
+	m, err := plugin.ResolveMethod(p, id, methods)
+	if err != nil {
+		return "", "", fmt.Errorf("plugin %q: %w", id, err)
+	}
+	if m == "" {
+		return "install.sh", "", nil
+	}
+	return "install." + m + ".sh", m, nil
+}
+
 func buildPluginSnippets(
 	id string,
 	p *plugin.Plugin,
 	pluginsFS fs.FS,
 	overrides map[string]config.PluginVersionOverride,
+	methods map[string]string,
 	sh shellEnv,
 ) (pluginSnippets, bool, error) {
 	install := p.Install
 	override, hasOverride := resolveOverride(id, p.Version.VersionCapable, overrides)
 
-	installPath := path.Join(id, "install.sh")
+	installScript, method, err := resolveMethodScript(p, id, methods)
+	if err != nil {
+		return pluginSnippets{}, false, err
+	}
+	installPath := path.Join(id, installScript)
 	userPath := path.Join(id, "install_user.sh")
 	hasInstall, err := fileExistsInFS(pluginsFS, installPath)
 	if err != nil {
@@ -157,6 +181,7 @@ func buildPluginSnippets(
 		hasOverride:    hasOverride,
 		override:       override,
 		buildArgs:      install.BuildArgs,
+		method:         method,
 		sh:             sh,
 	}
 
@@ -182,7 +207,9 @@ func buildPluginSnippets(
 }
 
 // runSpec bundles the per-plugin context so buildPluginSnippets does not
-// have to thread a dozen positional args through each helper.
+// have to thread a dozen positional args through each helper. method is
+// "" for legacy single-install.sh plugins; non-empty when the plugin
+// declared [install.methods] and a winner was resolved.
 type runSpec struct {
 	id             string
 	comment        string
@@ -193,6 +220,7 @@ type runSpec struct {
 	hasOverride    bool
 	override       config.PluginVersionOverride
 	buildArgs      []string
+	method         string
 	sh             shellEnv
 }
 
@@ -223,7 +251,7 @@ func renderInstallSnippet(rs runSpec, hasInstall bool, installPath string) (stri
 			return "", err
 		}
 		snippet := renderInstallRun(rs.id, "# Install "+rs.comment, rs.argLines, body,
-			rs.versionCapable, rs.hasOverride, rs.override, rs.buildArgs, rs.sh)
+			rs.versionCapable, rs.hasOverride, rs.override, rs.buildArgs, rs.method, rs.sh)
 		if rs.envBlock != "" {
 			snippet = snippet + "\n" + rs.envBlock
 		}
@@ -248,7 +276,7 @@ func renderUserInstallSnippet(rs runSpec, userPath string, argLines []string) (s
 		return "", err
 	}
 	return renderInstallRun(rs.id, "# Configure "+rs.comment+" (user)", argLines, body,
-		rs.versionCapable, rs.hasOverride, rs.override, rs.buildArgs, rs.sh), nil
+		rs.versionCapable, rs.hasOverride, rs.override, rs.buildArgs, rs.method, rs.sh), nil
 }
 
 func renderEnvBlock(env map[string]string, pluginsFS fs.FS, id string) (string, error) {
@@ -295,6 +323,7 @@ func collectPluginSnippets(
 	enabled []string,
 	pluginsFS fs.FS,
 	overrides map[string]config.PluginVersionOverride,
+	methods map[string]string,
 	sh shellEnv,
 ) (snippetGroups, error) {
 	g := snippetGroups{root: nil, nonRoot: nil, userPost: nil}
@@ -303,7 +332,7 @@ func collectPluginSnippets(
 		if !ok {
 			continue
 		}
-		snips, emit, err := buildPluginSnippets(id, p, pluginsFS, overrides, sh)
+		snips, emit, err := buildPluginSnippets(id, p, pluginsFS, overrides, methods, sh)
 		if err != nil {
 			return snippetGroups{root: nil, nonRoot: nil, userPost: nil}, err
 		}
@@ -330,6 +359,7 @@ func generatePluginInstalls(
 	pluginsFS fs.FS,
 	extraUserDirs []string,
 	overrides map[string]config.PluginVersionOverride,
+	methods map[string]string,
 	warnings io.Writer,
 	sh shellEnv,
 ) (string, error) {
@@ -351,7 +381,7 @@ func generatePluginInstalls(
 	}
 
 	dirBlock := generateUserDirsBlock(collectAllUserDirs(plugins, enabled, extraUserDirs))
-	g, err := collectPluginSnippets(plugins, enabled, pluginsFS, overrides, sh)
+	g, err := collectPluginSnippets(plugins, enabled, pluginsFS, overrides, methods, sh)
 	if err != nil {
 		return "", err
 	}
@@ -391,16 +421,26 @@ type installRunData struct {
 // installRunTmpl inlines the install body via a quoted heredoc. The
 // single-quoted 'COCOON_PLUGIN_EOF' suppresses parameter/command
 // substitution so the script lands verbatim, and per-RUN env vars
-// (PIN / RC_FILE / etc.) stay scoped to that step.
+// (PIN / RC_FILE / etc.) stay scoped to that step. The apt cache
+// mounts mirror the apt-related RUN blocks elsewhere in the generator
+// so install.apt.sh plugins (and any other plugin that touches apt
+// internally) reuse /var/cache/apt + /var/lib/apt across builds —
+// without them, `apt-get update` re-fetches the index each build and
+// the lists land in the image layer.
 var installRunTmpl = tmplx.MustParse("dockerfile-plugin-install", `{{ .Comment }}
 {{- range .ArgLines }}
 {{ . }}
 {{- end }}
-RUN {{ range .EnvPairs }}{{ . }} {{ end }}bash <<'COCOON_PLUGIN_EOF'
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    {{ range .EnvPairs }}{{ . }} {{ end }}bash <<'COCOON_PLUGIN_EOF'
 {{ .ScriptBody }}COCOON_PLUGIN_EOF`, nil)
 
 // renderInstallRun normalises the trailing newline so the closing delim
-// lands on its own line regardless of input shape.
+// lands on its own line regardless of input shape. method is the
+// selected install method name (empty for legacy single-install.sh
+// plugins); when non-empty it surfaces as the COCOON_INSTALL_METHOD
+// per-RUN env var so the script can branch on it.
 func renderInstallRun(
 	pluginID, comment string,
 	argLines []string,
@@ -408,10 +448,11 @@ func renderInstallRun(
 	versionCapable, hasOverride bool,
 	override config.PluginVersionOverride,
 	buildArgs []string,
+	method string,
 	sh shellEnv,
 ) string {
 	_ = pluginID
-	envPairs := buildInstallEnvPairs(versionCapable, hasOverride, override, buildArgs, sh)
+	envPairs := buildInstallEnvPairs(versionCapable, hasOverride, override, buildArgs, method, sh)
 	body := string(scriptBody)
 	if !strings.HasSuffix(body, "\n") {
 		body += "\n"
@@ -433,6 +474,7 @@ func buildInstallEnvPairs(
 	versionCapable, hasOverride bool,
 	override config.PluginVersionOverride,
 	buildArgs []string,
+	method string,
 	sh shellEnv,
 ) []string {
 	// RC_FILE / RC_SYNTAX / LOGIN_SHELL are passed unconditionally so plugin
@@ -442,6 +484,9 @@ func buildInstallEnvPairs(
 		fmt.Sprintf(`RC_FILE="%s"`, sh.rcFileAbs),
 		fmt.Sprintf(`RC_SYNTAX="%s"`, sh.rcSyntax),
 		fmt.Sprintf(`LOGIN_SHELL="%s"`, sh.loginShell),
+	}
+	if method != "" {
+		pairs = append(pairs, fmt.Sprintf(`COCOON_INSTALL_METHOD="%s"`, method))
 	}
 	if versionCapable {
 		pin := ""

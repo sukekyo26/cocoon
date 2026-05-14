@@ -7,6 +7,10 @@ default = false
 [install]
 requires_root = true
 volumes = ["/home/${USERNAME}/.config"]
+default_method = "apt"
+
+[install.methods.apt]
+description = "Official GitHub CLI apt repository (cli.github.com)"
 
 [version]
 version_capable = false

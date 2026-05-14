@@ -43,13 +43,13 @@ func assertGoldenDir(t *testing.T, gotDir, wantDir string, files []string) {
 	}
 }
 
-func TestScaffoldGoldenCurlPipe(t *testing.T) {
+func TestScaffoldGoldenInstaller(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	stdout, stderr, err := runCmd(t,
 		"scaffold", "demo",
 		"--plugins-dir", dir,
-		"--template", "curl-pipe",
+		"--template", "installer",
 		"--version-capable",
 		"--name", "Demo",
 		"--description", "Demo plugin",
@@ -63,54 +63,34 @@ func TestScaffoldGoldenCurlPipe(t *testing.T) {
 		t.Errorf("stdout missing OK marker: %q", stdout)
 	}
 	assertGoldenDir(t, filepath.Join(dir, "demo"),
-		"testdata/scaffold-curl-pipe",
-		[]string{"plugin.toml", "install.sh"})
-	assertExecutable(t, filepath.Join(dir, "demo", "install.sh"))
+		"testdata/scaffold-installer",
+		[]string{"plugin.toml", "install.installer.sh"})
+	assertExecutable(t, filepath.Join(dir, "demo", "install.installer.sh"))
 }
 
-func TestScaffoldGoldenTarball(t *testing.T) {
+func TestScaffoldGoldenBinary(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	_, stderr, err := runCmd(t,
 		"scaffold", "demo",
 		"--plugins-dir", dir,
-		"--template", "tarball",
+		"--template", "binary",
 		"--version-capable",
 		"--requires-root",
 		"--with-install-user",
-		"--name", "Demo Tar",
-		"--description", "Demo tarball plugin",
-		"--url", "https://example.com/tar",
+		"--name", "Demo Bin",
+		"--description", "Demo binary plugin",
+		"--url", "https://example.com/bin",
 		"--non-interactive",
 	)
 	if err != nil {
 		t.Fatalf("Run err=%v stderr=%s", err, stderr)
 	}
 	assertGoldenDir(t, filepath.Join(dir, "demo"),
-		"testdata/scaffold-tarball",
-		[]string{"plugin.toml", "install.sh", "install_user.sh"})
-	assertExecutable(t, filepath.Join(dir, "demo", "install.sh"))
+		"testdata/scaffold-binary",
+		[]string{"plugin.toml", "install.binary.sh", "install_user.sh"})
+	assertExecutable(t, filepath.Join(dir, "demo", "install.binary.sh"))
 	assertExecutable(t, filepath.Join(dir, "demo", "install_user.sh"))
-}
-
-func TestScaffoldGoldenGeneric(t *testing.T) {
-	t.Parallel()
-	dir := t.TempDir()
-	_, stderr, err := runCmd(t,
-		"scaffold", "demo",
-		"--plugins-dir", dir,
-		"--template", "generic",
-		"--name", "Demo Generic",
-		"--description", "Demo generic plugin",
-		"--url", "https://example.com/g",
-		"--non-interactive",
-	)
-	if err != nil {
-		t.Fatalf("Run err=%v stderr=%s", err, stderr)
-	}
-	assertGoldenDir(t, filepath.Join(dir, "demo"),
-		"testdata/scaffold-generic",
-		[]string{"plugin.toml", "install.sh"})
 }
 
 func TestScaffoldRejectsInvalidID(t *testing.T) {
@@ -152,7 +132,7 @@ func TestScaffoldAutoDiscoversWorkspace(t *testing.T) {
 		"--name", "Demo",
 		"--description", "Demo",
 		"--url", "https://example.com",
-		"--template", "generic",
+		"--template", "apt",
 	)
 	if err != nil {
 		t.Fatalf("scaffold: err=%v stderr=%s", err, stderr)
@@ -161,8 +141,8 @@ func TestScaffoldAutoDiscoversWorkspace(t *testing.T) {
 	if _, statErr := os.Stat(filepath.Join(wantDir, "plugin.toml")); statErr != nil {
 		t.Errorf("expected plugin.toml at %s: %v", wantDir, statErr)
 	}
-	if _, statErr := os.Stat(filepath.Join(wantDir, "install.sh")); statErr != nil {
-		t.Errorf("expected install.sh at %s: %v", wantDir, statErr)
+	if _, statErr := os.Stat(filepath.Join(wantDir, "install.apt.sh")); statErr != nil {
+		t.Errorf("expected install.apt.sh at %s: %v", wantDir, statErr)
 	}
 }
 
@@ -257,13 +237,13 @@ func TestScaffoldOverwritesWithForce(t *testing.T) {
 	}
 }
 
-func TestScaffoldRejectsTarballWithoutVersionCapable(t *testing.T) {
+func TestScaffoldRejectsBinaryWithoutVersionCapable(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	_, stderr, err := runCmd(t,
 		"scaffold", "demo",
 		"--plugins-dir", dir,
-		"--template", "tarball",
+		"--template", "binary",
 		"--non-interactive",
 		"--name", "Demo",
 		"--description", "Demo",
@@ -272,8 +252,8 @@ func TestScaffoldRejectsTarballWithoutVersionCapable(t *testing.T) {
 	if !errors.Is(err, plugincli.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage", err)
 	}
-	if !strings.Contains(stderr, "tarball") {
-		t.Errorf("stderr should mention tarball: %q", stderr)
+	if !strings.Contains(stderr, "binary") {
+		t.Errorf("stderr should mention binary: %q", stderr)
 	}
 }
 
@@ -362,7 +342,7 @@ func TestScaffoldRejectsExistingFileTarget(t *testing.T) {
 		"--name", "Demo",
 		"--description", "Demo",
 		"--url", "https://example.com",
-		"--template", "generic",
+		"--template", "apt",
 	)
 	if !errors.Is(err, plugincli.ErrFailure) {
 		t.Fatalf("err = %v, want ErrFailure", err)

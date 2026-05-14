@@ -1151,6 +1151,49 @@ func TestValidate_PluginVersionPinEmpty(t *testing.T) {
 	require.Contains(t, err.Error(), "pin must not be empty")
 }
 
+// TestValidate_PluginsMethodsAccepted pins the happy path: a
+// well-formed [plugins.methods] table passes validation.
+func TestValidate_PluginsMethodsAccepted(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[plugins.methods]\ncopilot-cli = \"binary\"\ngithub-cli = \"apt\"\n"
+	require.NoError(t, loadWS(t, body))
+}
+
+// TestValidate_PluginsMethodsBadPluginID pins that a key in
+// [plugins.methods] is validated against the plugin id regex.
+func TestValidate_PluginsMethodsBadPluginID(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[plugins.methods]\n\"BAD_ID\" = \"binary\"\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "plugin id does not match")
+}
+
+// TestValidate_PluginsMethodsBadMethodName pins that a value in
+// [plugins.methods] is validated against the method name regex.
+func TestValidate_PluginsMethodsBadMethodName(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[plugins.methods]\ncopilot-cli = \"BAD.METHOD\"\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "method name does not match")
+}
+
+// TestValidate_PluginsMethodsEmptyValueRejected pins that empty
+// strings are rejected rather than silently treated as "no override":
+// the user almost certainly meant to remove the entry.
+func TestValidate_PluginsMethodsEmptyValueRejected(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[plugins.methods]\ncopilot-cli = \"\"\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "method name does not match")
+}
+
 func TestValidate_PluginVersionBadChecksum(t *testing.T) {
 	t.Parallel()
 	body := minimalWorkspace() +

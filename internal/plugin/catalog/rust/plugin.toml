@@ -7,6 +7,10 @@ default = false
 [install]
 requires_root = false
 volumes = ["/home/${USERNAME}/.cargo", "/home/${USERNAME}/.rustup"]
+default_method = "installer"
+
+[install.methods.installer]
+description = "rustup installer from sh.rustup.rs"
 
 [install.env]
 PATH = "/home/${USERNAME}/.cargo/bin:$PATH"

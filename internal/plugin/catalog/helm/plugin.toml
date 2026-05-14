@@ -6,6 +6,10 @@ default = false
 
 [install]
 requires_root = true
+default_method = "binary"
+
+[install.methods.binary]
+description = "Single helm binary extracted from a get.helm.sh tarball"
 
 [version]
 version_capable = true

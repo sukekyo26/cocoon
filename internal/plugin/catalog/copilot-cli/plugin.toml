@@ -7,6 +7,13 @@ default = false
 [install]
 requires_root = false
 volumes = ["/home/${USERNAME}/.copilot"]
+default_method = "installer"
+
+[install.methods.installer]
+description = "Install via the upstream gh.io install script (default)"
+
+[install.methods.binary]
+description = "Direct binary tarball from GitHub Releases — required in environments where gh.io / npm registries are blocked (e.g. Zscaler) or where curl|sh is forbidden by policy"
 
 [install.env]
 PATH = "/home/${USERNAME}/.local/bin:$PATH"

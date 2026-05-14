@@ -9,6 +9,10 @@ packages = ["unzip"]
 
 [install]
 requires_root = true
+default_method = "binary"
+
+[install.methods.binary]
+description = "Single terraform binary extracted from a releases.hashicorp.com zip"
 
 [version]
 version_capable = true

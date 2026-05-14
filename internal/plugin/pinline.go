@@ -53,3 +53,13 @@ func FormatPinSection(pins []PinLine) string {
 	}
 	return b.String()
 }
+
+// FormatMethodLine returns one assignment line for [plugins.methods]:
+//
+//	<id> = "<method>"
+//
+// The output ends with exactly one newline. This is the per-id body emitted
+// under the shared `[plugins.methods]` section header.
+func FormatMethodLine(id, method string) string {
+	return fmt.Sprintf("%s = %q\n", id, method)
+}

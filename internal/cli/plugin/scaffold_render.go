@@ -6,17 +6,41 @@ import (
 	"github.com/sukekyo26/cocoon/internal/generate/tmplx"
 )
 
-// templateKind selects which install.sh body is generated.
+// templateKind selects which install.<category>.sh body is generated AND
+// determines the file's category suffix. The four kinds correspond 1:1 to
+// the catalog method-name vocabulary (see docs/plugins.md):
+//
+//	binary    — single ELF binary placed on PATH
+//	installer — vendor `curl ... | bash` installer script
+//	apt       — apt repository / .deb package
+//	archive   — multi-file tar/zip extracted to a tree (or unzip+run-installer)
 type templateKind string
 
 const (
-	tmplCurlPipe templateKind = "curl-pipe"
-	tmplTarball  templateKind = "tarball"
-	tmplGeneric  templateKind = "generic"
+	tmplInstaller templateKind = "installer"
+	tmplBinary    templateKind = "binary"
+	tmplApt       templateKind = "apt"
+	tmplArchive   templateKind = "archive"
 )
 
-// scaffoldData drives all three render templates (plugin.toml, install.sh,
-// install_user.sh).
+// methodDescriptions seeds the one-line label written into
+// [install.methods.<name>].description by the scaffolder. Authors are
+// expected to refine the text after the file is generated; the default
+// gives just enough context for `cocoon plugin show` to display
+// something useful immediately.
+//
+//nolint:gochecknoglobals // tabular default, read-only.
+var methodDescriptions = map[templateKind]string{
+	tmplInstaller: "Upstream installer script piped to bash",
+	tmplBinary:    "Single binary download",
+	tmplApt:       "Apt repository / .deb package",
+	tmplArchive:   "Multi-file archive extracted to a directory tree",
+}
+
+// scaffoldData drives all three render templates (plugin.toml,
+// install.<category>.sh, install_user.sh). MethodDesc is derived from
+// Template via methodDescription() so callers populate Template only and
+// the constructor fills MethodDesc.
 type scaffoldData struct {
 	ID             string
 	Name           string
@@ -26,7 +50,25 @@ type scaffoldData struct {
 	RequiresRoot   bool
 	VersionCapable bool
 	Template       templateKind
+	MethodDesc     string
 	WithUserHook   bool
+}
+
+// installScriptName returns the catalog-conforming file name for the
+// install script of the chosen template (e.g. "install.binary.sh"). Kept
+// as a helper so scaffold.go has a single source of truth for the
+// install.<category>.sh naming rule.
+func installScriptName(t templateKind) string {
+	return "install." + string(t) + ".sh"
+}
+
+// methodDescription returns the seed description text for the chosen
+// template's [install.methods.<name>] entry.
+func methodDescription(t templateKind) string {
+	if d, ok := methodDescriptions[t]; ok {
+		return d
+	}
+	return string(t)
 }
 
 var pluginTOMLTmpl = tmplx.MustParse("plugin.toml", `[metadata]
@@ -37,13 +79,18 @@ default = {{ .Default }}
 
 [install]
 requires_root = {{ .RequiresRoot }}
+default_method = "{{ .Template }}"
+
+[install.methods.{{ .Template }}]
+description = "{{ .MethodDesc }}"
 
 [version]
 version_capable = {{ .VersionCapable }}
 `, nil)
 
-var installCurlPipeTmpl = tmplx.MustParse("install.sh.curl-pipe", `#!/usr/bin/env bash
-# Install {{ .Name }}
+var installInstallerTmpl = tmplx.MustParse("install.installer.sh", `#!/usr/bin/env bash
+# Install {{ .Name }} via the upstream installer script.
+# Method category: installer — pipes the vendor's curl-to-bash script.
 {{- if .VersionCapable }}
 #
 # Inputs (env):
@@ -66,13 +113,15 @@ curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-erro
 {{- end }}
 `, nil)
 
-var installTarballTmpl = tmplx.MustParse("install.sh.tarball", `#!/usr/bin/env bash
-# Install {{ .Name }}
+var installBinaryTmpl = tmplx.MustParse("install.binary.sh", `#!/usr/bin/env bash
+# Install {{ .Name }} from a GitHub Release binary asset.
+# Method category: binary — downloads a single binary (or extracts one
+#                  from a tarball) and places it on PATH.
 #
 # Inputs (env):
 #   PIN              : version (without leading "v"); empty = latest
-#   CHECKSUM_AMD64   : sha256 of amd64 tarball; empty to skip verification
-#   CHECKSUM_ARM64   : sha256 of arm64 tarball; empty to skip verification
+#   CHECKSUM_AMD64   : sha256 of amd64 asset; empty to skip verification
+#   CHECKSUM_ARM64   : sha256 of arm64 asset; empty to skip verification
 set -euo pipefail
 
 ARCH="$(dpkg --print-architecture)"
@@ -101,39 +150,75 @@ else
 fi
 
 curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
-  "https://github.com/OWNER/REPO/releases/download/v${VERSION}/REPO-${DOWNLOAD_ARCH}-unknown-linux-musl.tar.gz" \
-  -o /tmp/{{ .ID }}.tar.gz
+  "https://github.com/OWNER/REPO/releases/download/v${VERSION}/REPO-${DOWNLOAD_ARCH}-unknown-linux-musl" \
+  -o /usr/local/bin/{{ .ID }}
 
 if [ -n "$CHECKSUM" ]; then
-  echo "${CHECKSUM}  /tmp/{{ .ID }}.tar.gz" | sha256sum -c -
+  echo "${CHECKSUM}  /usr/local/bin/{{ .ID }}" | sha256sum -c -
 else
   echo "WARNING: SHA256 verification skipped for {{ .Name }} (no checksum for {{ .ID }} in [plugins.versions])" >&2
 fi
 
-# TODO: extract to the right destination.
-tar -xzf /tmp/{{ .ID }}.tar.gz -C /usr/local/bin
-rm /tmp/{{ .ID }}.tar.gz
+chmod 0755 /usr/local/bin/{{ .ID }}
 `, nil)
 
-var installGenericTmpl = tmplx.MustParse("install.sh.generic", `#!/usr/bin/env bash
-# Install {{ .Name }}
-{{- if .VersionCapable }}
-#
-# Inputs (env):
-#   PIN              : version to install; empty = latest
-#   CHECKSUM_AMD64   : sha256 (optional); empty to skip verification
-#   CHECKSUM_ARM64   : sha256 (optional); empty to skip verification
-{{- end }}
+var installAptTmpl = tmplx.MustParse("install.apt.sh", `#!/usr/bin/env bash
+# Install {{ .Name }} via apt.
+# Method category: apt — registers an upstream apt repository (or fetches
+#                  a .deb directly) and runs apt-get install.
 set -euo pipefail
 
-# TODO: implement the install steps. Common patterns:
-#   - apt-get update && apt-get install -y <pkg> \
-#       && apt-get clean && rm -rf /var/lib/apt/lists/*
-#   - dpkg -i <package>.deb
-#   - cargo install / go install / npm install -g
+# TODO: pick ONE of the patterns below and remove the others.
 #
-# Architecture detection (uncomment if needed):
-# ARCH="$(dpkg --print-architecture)"   # amd64 | arm64
+# Pattern A — third-party apt repository:
+#   install -d -m 0755 /etc/apt/keyrings
+#   curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+#     https://example.com/keyring.asc | gpg --dearmor -o /etc/apt/keyrings/{{ .ID }}.gpg
+#   echo "deb [signed-by=/etc/apt/keyrings/{{ .ID }}.gpg] https://example.com/repo stable main" \
+#     > /etc/apt/sources.list.d/{{ .ID }}.list
+#   apt-get update
+#   DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends {{ .ID }}
+#
+# Pattern B — direct .deb:
+#   curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+#     https://example.com/{{ .ID }}.deb -o /tmp/{{ .ID }}.deb
+#   DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends /tmp/{{ .ID }}.deb
+#   rm /tmp/{{ .ID }}.deb
+`, nil)
+
+var installArchiveTmpl = tmplx.MustParse("install.archive.sh", `#!/usr/bin/env bash
+# Install {{ .Name }} from a multi-file archive.
+# Method category: archive — extracts a tar/zip with several files
+#                  (bin + lib + share, or vendor-bundled installer) into
+#                  a directory tree rather than dropping a single binary.
+#
+# Inputs (env):
+{{- if .VersionCapable }}
+#   PIN              : version to install; empty = latest
+{{- end }}
+#   CHECKSUM_AMD64   : sha256 of amd64 archive (optional)
+#   CHECKSUM_ARM64   : sha256 of arm64 archive (optional)
+set -euo pipefail
+
+ARCH="$(dpkg --print-architecture)"
+case "$ARCH" in
+  amd64) DOWNLOAD_ARCH="x86_64"; CHECKSUM="$CHECKSUM_AMD64" ;;
+  arm64) DOWNLOAD_ARCH="aarch64"; CHECKSUM="$CHECKSUM_ARM64" ;;
+  *)     DOWNLOAD_ARCH="x86_64"; CHECKSUM="$CHECKSUM_AMD64" ;;
+esac
+
+# TODO: replace the URL pattern and destination directory.
+{{ if .VersionCapable -}}
+if [ -n "$PIN" ]; then VERSION="$PIN"; else VERSION="LATEST"; fi
+{{- end }}
+curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+  "https://example.com/{{ .ID }}-${DOWNLOAD_ARCH}.tar.gz" -o /tmp/{{ .ID }}.tar.gz
+if [ -n "$CHECKSUM" ]; then
+  echo "${CHECKSUM}  /tmp/{{ .ID }}.tar.gz" | sha256sum -c -
+fi
+mkdir -p /usr/local/{{ .ID }}
+tar -C /usr/local/{{ .ID }} --strip-components=1 -xzf /tmp/{{ .ID }}.tar.gz
+rm /tmp/{{ .ID }}.tar.gz
 `, nil)
 
 var installUserTmpl = tmplx.MustParse("install_user.sh", `#!/usr/bin/env bash
@@ -158,24 +243,29 @@ func renderPluginTOML(d scaffoldData) (string, error) {
 	return out, nil
 }
 
-// renderInstallSh returns the rendered install.sh body for the chosen template.
+// renderInstallSh returns the rendered install.<category>.sh body for the
+// chosen template. Unknown templates fall through to the installer body
+// (cheapest stub), but the finalizeOpts switch in scaffold.go is the real
+// gatekeeper and would reject unknowns before this is called.
 func renderInstallSh(d scaffoldData) (string, error) {
 	var (
 		body string
 		err  error
 	)
 	switch d.Template {
-	case tmplCurlPipe:
-		body, err = tmplx.Render(installCurlPipeTmpl, d)
-	case tmplTarball:
-		body, err = tmplx.Render(installTarballTmpl, d)
-	case tmplGeneric:
-		body, err = tmplx.Render(installGenericTmpl, d)
+	case tmplInstaller:
+		body, err = tmplx.Render(installInstallerTmpl, d)
+	case tmplBinary:
+		body, err = tmplx.Render(installBinaryTmpl, d)
+	case tmplApt:
+		body, err = tmplx.Render(installAptTmpl, d)
+	case tmplArchive:
+		body, err = tmplx.Render(installArchiveTmpl, d)
 	default:
-		body, err = tmplx.Render(installGenericTmpl, d)
+		body, err = tmplx.Render(installInstallerTmpl, d)
 	}
 	if err != nil {
-		return "", fmt.Errorf("render install.sh (%s): %w", d.Template, err)
+		return "", fmt.Errorf("render %s (%s): %w", installScriptName(d.Template), d.Template, err)
 	}
 	return body, nil
 }

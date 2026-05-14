@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Install Demo
+# Install Demo via the upstream installer script.
+# Method category: installer — pipes the vendor's curl-to-bash script.
 #
 # Inputs (env):
 #   PIN : Demo version to install; empty = latest

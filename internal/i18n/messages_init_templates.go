@@ -49,7 +49,16 @@ var messagesEN_initTemplates = map[string]string{
 		"# source = \".cocoon/skel/example.bashrc\"\n" +
 		"# target = \".bashrc\"",
 
-	// [plugins.versions] (rendered immediately after [plugins]).
+	// [plugins.methods] (rendered immediately after [plugins], before
+	// [plugins.versions] because picking a method may change the upstream
+	// URL used to pick a version).
+	"init_toml_template_plugins_methods": "# [plugins.methods] — for plugins that declare multiple [install.methods],\n" +
+		"#   pick which install path to use. Plugins with a single declared method\n" +
+		"#   ignore this section.\n" +
+		"# [plugins.methods]\n" +
+		"# <plugin-id> = \"<method-name>\"",
+
+	// [plugins.versions] (rendered immediately after [plugins.methods]).
 	"init_toml_template_plugins_versions": "# [plugins.versions] — pin specific versions for version_capable plugins.\n" +
 		"#   Optional checksum_amd64 / checksum_arm64 (64 lowercase hex chars) verify install tarballs.\n" +
 		"# [plugins.versions]\n" +
@@ -173,6 +182,13 @@ var messagesJA_initTemplates = map[string]string{
 		"# [[container.skel]]\n" +
 		"# source = \".cocoon/skel/example.bashrc\"\n" +
 		"# target = \".bashrc\"",
+
+	// [plugins.methods]（[plugins] の直後、[plugins.versions] の前に出力。
+	// method の切替で上流 URL が変わる場合があるため、version より先に置く）。
+	"init_toml_template_plugins_methods": "# [plugins.methods] — 複数の [install.methods] を持つプラグインで、どの方式を使うか指定。\n" +
+		"#   方式を 1 つしか持たないプラグインはこのセクションを無視。\n" +
+		"# [plugins.methods]\n" +
+		"# <plugin-id> = \"<method-name>\"",
 
 	// [plugins.versions]
 	"init_toml_template_plugins_versions": "# [plugins.versions] — version_capable プラグインのバージョン固定。\n" +

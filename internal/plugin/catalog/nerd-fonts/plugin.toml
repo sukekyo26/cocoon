@@ -10,6 +10,10 @@ packages = ["fontconfig"]
 [install]
 requires_root = false
 volumes = ["/home/${USERNAME}/.fonts"]
+default_method = "archive"
+
+[install.methods.archive]
+description = "Multi-file font archive from the GitHub Release"
 
 [version]
 version_capable = false

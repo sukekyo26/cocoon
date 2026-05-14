@@ -6,6 +6,10 @@ default = false
 
 [install]
 requires_root = true
+default_method = "binary"
+
+[install.methods.binary]
+description = "Single shfmt binary direct from the GitHub Release"
 
 [version]
 version_capable = true

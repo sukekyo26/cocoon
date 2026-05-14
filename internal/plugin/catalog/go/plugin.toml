@@ -10,6 +10,10 @@ packages = ["build-essential"]
 [install]
 requires_root = true
 volumes = ["/home/${USERNAME}/go"]
+default_method = "archive"
+
+[install.methods.archive]
+description = "Multi-file Go toolchain tarball from go.dev"
 
 [install.env]
 GOPATH = "/home/${USERNAME}/go"

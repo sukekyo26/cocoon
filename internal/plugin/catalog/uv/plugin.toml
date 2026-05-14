@@ -6,6 +6,10 @@ default = false
 
 [install]
 requires_root = false
+default_method = "installer"
+
+[install.methods.installer]
+description = "Upstream astral.sh/uv installer script piped to bash"
 
 [install.env]
 PATH = "/home/${USERNAME}/.local/bin:$PATH"

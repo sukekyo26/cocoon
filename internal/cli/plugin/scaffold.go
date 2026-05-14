@@ -184,9 +184,10 @@ func promptMissing(opts *scaffoldOpts, cat *i18n.Catalog, p prompter) error {
 			huh.NewSelect[string]().
 				Title(cat.Msg("plugin_scaffold_prompt_template")).
 				Options(
-					huh.NewOption("generic — apt / .deb / freeform", string(tmplGeneric)),
-					huh.NewOption("curl-pipe — `curl ... | bash` (uv, proto)", string(tmplCurlPipe)),
-					huh.NewOption("tarball — GitHub Release tarball + sha256 (starship, go)", string(tmplTarball)),
+					huh.NewOption("installer — vendor curl|bash installer (bun, uv, rust)", string(tmplInstaller)),
+					huh.NewOption("binary    — single binary from GitHub Release (kubectl, helm)", string(tmplBinary)),
+					huh.NewOption("apt       — apt repo or .deb install (docker-cli, google-chrome)", string(tmplApt)),
+					huh.NewOption("archive   — multi-file tar/zip extract (go, node, zig)", string(tmplArchive)),
 				).
 				Value(&pickedTemplate),
 		))
@@ -212,7 +213,7 @@ func promptMissing(opts *scaffoldOpts, cat *i18n.Catalog, p prompter) error {
 func finalizeOpts(opts *scaffoldOpts, cat *i18n.Catalog, stderr io.Writer) error {
 	log := logx.New(io.Discard, stderr)
 	switch opts.template {
-	case tmplCurlPipe, tmplTarball, tmplGeneric:
+	case tmplInstaller, tmplBinary, tmplApt, tmplArchive:
 		// ok
 	default:
 		log.Error("ERROR: " + cat.Msg("plugin_scaffold_unknown_template", string(opts.template)))
@@ -253,8 +254,8 @@ func finalizeOpts(opts *scaffoldOpts, cat *i18n.Catalog, stderr io.Writer) error
 		}
 	}
 
-	if opts.template == tmplTarball && !opts.versionCapable {
-		log.Error("ERROR: " + cat.Msg("plugin_scaffold_tarball_needs_ver"))
+	if opts.template == tmplBinary && !opts.versionCapable {
+		log.Error("ERROR: " + cat.Msg("plugin_scaffold_binary_needs_ver"))
 		return ErrUsage
 	}
 	return nil
@@ -327,6 +328,7 @@ func runScaffold(opts scaffoldOpts, cat *i18n.Catalog, stdout, stderr io.Writer)
 		RequiresRoot:   opts.requiresRoot,
 		VersionCapable: opts.versionCapable,
 		Template:       opts.template,
+		MethodDesc:     methodDescription(opts.template),
 		WithUserHook:   opts.withInstallUser,
 	} //nolint:exhaustruct // every field is populated above
 
@@ -347,7 +349,7 @@ func runScaffold(opts scaffoldOpts, cat *i18n.Catalog, stdout, stderr io.Writer)
 	}
 	written = append(written, tomlPath)
 
-	installPath, ierr := renderAndWrite(dir, "install.sh", 0o755,
+	installPath, ierr := renderAndWrite(dir, installScriptName(opts.template), 0o755,
 		func() (string, error) { return renderInstallSh(data) }, log, cleanup)
 	if ierr != nil {
 		return ierr
