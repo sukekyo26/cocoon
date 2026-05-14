@@ -46,6 +46,7 @@ func TestGeneratePluginInstalls_NoRedundantUserToggle(t *testing.T) {
 		plugins, enabled, os.DirFS(pluginsDir),
 		[]string{"/home/${USERNAME}/.cache/needs-root"},
 		map[string]config.PluginVersionOverride{},
+		nil,
 		&bytes.Buffer{},
 		shellEnv{rcFileAbs: "/home/${USERNAME}/.bashrc", rcSyntax: "posix", loginShell: "bash"},
 	)
@@ -111,6 +112,7 @@ func TestRenderInstallRun_InlineHeredoc(t *testing.T) {
 				"my-plugin", "# Install Stuff", nil, tc.script,
 				false, false, config.PluginVersionOverride{},
 				nil,
+				"",
 				shellEnv{
 					rcFileAbs:  "/home/${USERNAME}/.bashrc",
 					rcSyntax:   "posix",
@@ -176,6 +178,7 @@ func TestGeneratePluginInstalls_EnvOnlyPluginEmitsEnv(t *testing.T) {
 	out, err := generatePluginInstalls(
 		plugins, enabled, os.DirFS(pluginsDir), nil,
 		map[string]config.PluginVersionOverride{},
+		nil,
 		&bytes.Buffer{},
 		shellEnv{rcFileAbs: "/home/${USERNAME}/.bashrc", rcSyntax: "posix", loginShell: "bash"},
 	)
@@ -239,6 +242,7 @@ func TestGeneratePluginInstalls_BuildArgsWithoutInstallSh(t *testing.T) {
 	out, err := generatePluginInstalls(
 		plugins, enabled, os.DirFS(pluginsDir), nil,
 		map[string]config.PluginVersionOverride{},
+		nil,
 		&bytes.Buffer{},
 		shellEnv{rcFileAbs: "/home/${USERNAME}/.bashrc", rcSyntax: "posix", loginShell: "bash"},
 	)
@@ -294,6 +298,7 @@ func TestGeneratePluginInstalls_BuildArgsDeclaredOnce(t *testing.T) {
 	out, err := generatePluginInstalls(
 		plugins, enabled, os.DirFS(pluginsDir), nil,
 		map[string]config.PluginVersionOverride{},
+		nil,
 		&bytes.Buffer{},
 		shellEnv{rcFileAbs: "/home/${USERNAME}/.bashrc", rcSyntax: "posix", loginShell: "bash"},
 	)
@@ -374,6 +379,7 @@ func TestGeneratePluginInstalls_NilPluginsFSFailsFast(t *testing.T) {
 			_, err := generatePluginInstalls(
 				tc.plugins, tc.enabled, nil, nil,
 				map[string]config.PluginVersionOverride{},
+				nil,
 				&bytes.Buffer{},
 				shellEnv{rcFileAbs: "/home/${USERNAME}/.bashrc", rcSyntax: "posix", loginShell: "bash"},
 			)
@@ -484,6 +490,7 @@ func TestBuildPluginSnippets_HeredocCollisionFails(t *testing.T) {
 			_, err := generatePluginInstalls(
 				plugins, []string{"colliding"}, os.DirFS(pluginsDir), nil,
 				map[string]config.PluginVersionOverride{},
+				nil,
 				&bytes.Buffer{},
 				shellEnv{rcFileAbs: "/home/${USERNAME}/.bashrc", rcSyntax: "posix", loginShell: "bash"},
 			)
@@ -537,5 +544,141 @@ func seedEnvOnlyPlugin(t *testing.T, pluginsDir, id string) {
 		"PYPATH = \"/opt/env-only/lib\"\n"
 	if err := os.WriteFile(filepath.Join(dir, "plugin.toml"), []byte(body), 0o600); err != nil {
 		t.Fatalf("write plugin.toml: %v", err)
+	}
+}
+
+// TestGeneratePluginInstalls_MethodOverride pins that workspace.toml's
+// [plugins.methods] map selects which install.<method>.sh is embedded
+// and injects the COCOON_INSTALL_METHOD env var into the RUN step.
+func TestGeneratePluginInstalls_MethodOverride(t *testing.T) {
+	t.Parallel()
+	p := &plugin.Plugin{
+		Metadata: plugin.Metadata{Name: "tester", URL: "https://example.com/x"},
+		Install: plugin.Install{
+			RequiresRoot:  false,
+			DefaultMethod: "official",
+			Methods: map[string]plugin.InstallMethod{
+				"official": {Description: "Official"},
+				"binary":   {Description: "Binary"},
+			},
+		},
+	}
+	plugins := map[string]*plugin.Plugin{"tester": p}
+	enabled := []string{"tester"}
+	pluginsDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(pluginsDir, "tester"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(pluginsDir, "tester", "install.official.sh"), []byte("echo OFFICIAL\n"), 0o600); err != nil {
+		t.Fatalf("write official: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(pluginsDir, "tester", "install.binary.sh"), []byte("echo BINARY\n"), 0o600); err != nil {
+		t.Fatalf("write binary: %v", err)
+	}
+
+	cases := []struct {
+		name          string
+		methods       map[string]string
+		wantContains  string
+		wantEnvMethod string
+	}{
+		{"no_override_uses_default", nil, "echo OFFICIAL", "official"},
+		{"override_to_binary", map[string]string{"tester": "binary"}, "echo BINARY", "binary"},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			out, err := generatePluginInstalls(
+				plugins, enabled, os.DirFS(pluginsDir), nil,
+				map[string]config.PluginVersionOverride{},
+				tc.methods,
+				&bytes.Buffer{},
+				shellEnv{rcFileAbs: "/home/${USERNAME}/.bashrc", rcSyntax: "posix", loginShell: "bash"},
+			)
+			if err != nil {
+				t.Fatalf("generatePluginInstalls: %v", err)
+			}
+			if !strings.Contains(out, tc.wantContains) {
+				t.Errorf("output missing %q:\n%s", tc.wantContains, out)
+			}
+			wantEnv := `COCOON_INSTALL_METHOD="` + tc.wantEnvMethod + `"`
+			if !strings.Contains(out, wantEnv) {
+				t.Errorf("output missing %q:\n%s", wantEnv, out)
+			}
+		})
+	}
+}
+
+// TestGeneratePluginInstalls_LegacyPluginNoMethodEnv pins backward
+// compatibility: a plugin without [install.methods] does not get a
+// COCOON_INSTALL_METHOD env var (keeps existing-plugin golden output
+// byte-identical).
+func TestGeneratePluginInstalls_LegacyPluginNoMethodEnv(t *testing.T) {
+	t.Parallel()
+	p := &plugin.Plugin{
+		Metadata: plugin.Metadata{Name: "legacy", URL: "https://example.com/x"},
+		Install:  plugin.Install{RequiresRoot: false},
+	}
+	plugins := map[string]*plugin.Plugin{"legacy": p}
+	enabled := []string{"legacy"}
+	pluginsDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(pluginsDir, "legacy"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(pluginsDir, "legacy", "install.sh"), []byte("echo LEGACY\n"), 0o600); err != nil {
+		t.Fatalf("write install.sh: %v", err)
+	}
+
+	out, err := generatePluginInstalls(
+		plugins, enabled, os.DirFS(pluginsDir), nil,
+		map[string]config.PluginVersionOverride{},
+		nil,
+		&bytes.Buffer{},
+		shellEnv{rcFileAbs: "/home/${USERNAME}/.bashrc", rcSyntax: "posix", loginShell: "bash"},
+	)
+	if err != nil {
+		t.Fatalf("generatePluginInstalls: %v", err)
+	}
+	if !strings.Contains(out, "echo LEGACY") {
+		t.Errorf("output missing legacy install body:\n%s", out)
+	}
+	if strings.Contains(out, "COCOON_INSTALL_METHOD") {
+		t.Errorf("legacy plugin must not carry COCOON_INSTALL_METHOD env:\n%s", out)
+	}
+}
+
+// TestGeneratePluginInstalls_UnknownMethodFails pins that a workspace
+// override naming an undeclared method surfaces ErrUnknownMethod (not
+// a silently dropped plugin).
+func TestGeneratePluginInstalls_UnknownMethodFails(t *testing.T) {
+	t.Parallel()
+	p := &plugin.Plugin{
+		Metadata: plugin.Metadata{Name: "tester", URL: "https://example.com/x"},
+		Install: plugin.Install{
+			DefaultMethod: "official",
+			Methods: map[string]plugin.InstallMethod{
+				"official": {Description: "Official"},
+			},
+		},
+	}
+	plugins := map[string]*plugin.Plugin{"tester": p}
+	pluginsDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(pluginsDir, "tester"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(pluginsDir, "tester", "install.official.sh"), []byte("echo OFFICIAL\n"), 0o600); err != nil {
+		t.Fatalf("write official: %v", err)
+	}
+
+	_, err := generatePluginInstalls(
+		plugins, []string{"tester"}, os.DirFS(pluginsDir), nil,
+		map[string]config.PluginVersionOverride{},
+		map[string]string{"tester": "ghost"},
+		&bytes.Buffer{},
+		shellEnv{rcFileAbs: "/home/${USERNAME}/.bashrc", rcSyntax: "posix", loginShell: "bash"},
+	)
+	if !errors.Is(err, plugin.ErrUnknownMethod) {
+		t.Fatalf("err = %v, want errors.Is(.., plugin.ErrUnknownMethod)", err)
 	}
 }

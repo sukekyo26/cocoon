@@ -242,10 +242,14 @@ type Resources struct {
 	NofileHard      *int     `toml:"nofile_hard,omitempty"`
 }
 
-// PluginsSpec models [plugins].
+// PluginsSpec models [plugins]. Methods maps a plugin id to the
+// user-selected install method name (a key in that plugin's
+// [install.methods] section); absent entries fall back to the plugin's
+// default_method.
 type PluginsSpec struct {
 	Enable   []string                         `toml:"enable"`
 	Versions map[string]PluginVersionOverride `toml:"versions,omitempty"`
+	Methods  map[string]string                `toml:"methods,omitempty"`
 }
 
 // PluginVersionOverride models one entry under [plugins.versions].

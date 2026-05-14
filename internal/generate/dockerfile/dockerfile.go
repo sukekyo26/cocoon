@@ -231,7 +231,7 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 	enabled := ctx.EnabledPlugins()
 
 	pluginInstalls, err := generatePluginInstalls(
-		opts.Plugins, enabled, ctx.PluginsFS, customVolPaths, overrides, opts.Warnings,
+		opts.Plugins, enabled, ctx.PluginsFS, customVolPaths, overrides, ctx.PluginMethods(), opts.Warnings,
 		shellEnv{
 			rcFileAbs:  ctx.RCFileAbs(),
 			rcSyntax:   ctx.RCSyntax(),
