@@ -221,9 +221,15 @@ The chosen script receives every standard env var (`$PIN`,
 |---|---|
 | `$COCOON_INSTALL_METHOD` | Selected method name (e.g. `"binary"`). Always set since every plugin declares `[install.methods]`. |
 
-The script should fail-fast when the env is missing (`: "${COCOON_INSTALL_METHOD:?missing}"`)
-and reject mismatched values so a renamed script catches a stale
-`workspace.toml` reference before it pulls down the wrong artifact.
+**Multi-method plugins** should fail-fast when the env is missing
+(`: "${COCOON_INSTALL_METHOD:?missing}"`) and reject mismatched values
+so a stale `workspace.toml` reference is caught before the script pulls
+down the wrong artifact after a rename. **Single-method plugins** can
+skip this check — the loader's `[install.methods]` enforcement
+guarantees `$COCOON_INSTALL_METHOD` is set, and there is no sibling
+script to mistake it for. See
+`internal/plugin/catalog/copilot-cli/install.installer.sh` and
+`install.binary.sh` for the pattern.
 
 **Pin/checksum scope.** Pins live under `[plugins.versions]` and are
 **workspace-scoped, not method-scoped** — the catalog deliberately keeps
@@ -311,19 +317,23 @@ the pin entry has no effect at `gen` time for those.
 
 Use these embedded plugins as templates when writing your own:
 
-- **`go`** — `tarball` template, `[install.env]` heavy. Good
-  reference for `$PIN` + `$CHECKSUM_*` + arch switch.
-- **`docker-cli`** — only catalog plugin using `[install].build_args`
-  to receive `DOCKER_GID`. Read this when you need to thread a
-  host-derived value into `install.sh`.
-- **`proto`** — `curl-pipe` template; minimal `install.sh` because
+- **`go`** — `archive` method, `[install.env]` heavy. Good reference
+  for `$PIN` + `$CHECKSUM_*` + arch switch.
+- **`docker-cli`** — `apt` method and the only catalog plugin using
+  `[install].build_args` to receive `DOCKER_GID`. Read this when you
+  need to thread a host-derived value into the install script.
+- **`proto`** — `installer` method; minimal install script because
   the upstream installer does the work, but with a `$PIN`-respecting
   version selection.
-- **`starship`** — the only plugin in the catalog with
-  `install_user.sh`. Read both files together to understand the
+- **`starship`** — `binary` method and the only plugin in the catalog
+  with `install_user.sh`. Read both files together to understand the
   root → user split.
-- **`lazygit`** — `tarball` template, no `[install.env]`. Smallest
+- **`lazygit`** — `binary` method, no `[install.env]`. Smallest
   versioned plugin in the catalog.
+- **`copilot-cli`** — the only catalog plugin shipping two methods
+  (`installer` + `binary`). Read both `install.installer.sh` and
+  `install.binary.sh` to see the multi-method `$COCOON_INSTALL_METHOD`
+  fail-fast pattern in action.
 
 ## Troubleshooting
 

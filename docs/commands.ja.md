@@ -176,7 +176,7 @@ volumes: [/home/${USERNAME}/go]
 
 ### `cocoon plugin pin <id> <ref>`
 
-**目的:** `version_capable` プラグイン用に上流バージョン (任意で per-arch チェックサム) を `workspace.toml` の `[plugins.versions]` 配下に記録する。エントリは 1 行の inline-table — `<id> = { pin = "<ref>", checksum_amd64 = "...", checksum_arm64 = "..." }` — として出力され、`install.sh` が `$PIN` / `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` から読む。
+**目的:** `version_capable` プラグイン用に上流バージョン (任意で per-arch チェックサム) を `workspace.toml` の `[plugins.versions]` 配下に記録する。エントリは 1 行の inline-table — `<id> = { pin = "<ref>", checksum_amd64 = "...", checksum_arm64 = "..." }` — として出力され、プラグインの install スクリプトが `$PIN` / `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` から読む。
 
 **例 (デフォルト — stdout, 手動貼り付け):**
 
@@ -207,20 +207,20 @@ Updated /home/alice/proj/workspace.toml: [plugins.versions] go
 **落とし穴:**
 
 - `pin` は `[version].version_capable = true` のプラグインでのみ意味を持つ。それ以外では `gen` 時に無視される。
-- チェックサムフラグは `install.sh` が実際に `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` を読む場合 (= `tarball` テンプレート由来) のみ意味を持つ。`curl-pipe` / `generic` では無視される。
+- チェックサムフラグは install スクリプトが実際に `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` を読む場合 — 典型的には `binary` / `archive` メソッドの artifact 検証 — のみ意味を持つ。`installer` / `apt` メソッドでは vendor 側に検証を委ねるため無視される。
 - `--write` は cwd から `workspace.toml` を発見できる必要がある。`--write` 無しなら id 検証用に LayeredFS を解決するだけなので、どこからでも動く。
 - `--write` は inline-table 形式 (`[plugins.versions]` セクション直下の `<id> = { pin = "..." }` 行) のみを編集する。legacy の `[plugins.versions.<id>]` subsection ブロックが残っているファイルに対しては、重複追加を避けるため `--write` は usage error で停止する。各ブロックを inline-table 行へ変換するか、`workspace.toml` を手動編集する。
 
 ### `cocoon plugin scaffold <id>`
 
-**目的:** 3 種類のテンプレートから `plugin.toml` + `install.sh` 雛形を含む新規 `<id>/` ディレクトリを生成する。新規 project / user スコーププラグインの初期化用。
+**目的:** 4 種類のテンプレート (catalog method 名語彙) から `plugin.toml` + `install.<category>.sh` 雛形を含む新規 `<id>/` ディレクトリを生成する。新規 project / user スコーププラグインの初期化用。
 
 **例:**
 
 ```console
 $ cd ~/projects/myapp
 $ cocoon plugin scaffold gh-cli \
-    --template curl-pipe --version-capable \
+    --template installer --version-capable \
     --name "GitHub CLI" --description "GitHub CLI" \
     --url "https://cli.github.com" \
     --non-interactive
@@ -231,9 +231,10 @@ OK: scaffolded /home/alice/projects/myapp/.cocoon/plugins/gh-cli (2 files)
 
 | テンプレート | 用途 | 雛形 |
 |---|---|---|
-| `curl-pipe` | 上流が `curl ... \| bash` 形式 (uv, proto) | `$PIN` バージョン制御。チェックサム検証なし |
-| `tarball` | 上流が GitHub Release tarball (starship, go) | `$PIN` + `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` + `dpkg --print-architecture` 分岐 (`--version-capable` 強制) |
-| `generic` | apt パッケージ or freeform | 最小雛形、`$PIN` 配線なし |
+| `installer` | 上流が `curl ... \| bash` 形式 (uv, proto, mise) | `$PIN` バージョン制御。チェックサム検証なし |
+| `binary` | 上流が単一バイナリを PATH 配置 (helm, kubectl, terraform) | `$PIN` + `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` + `dpkg --print-architecture` 分岐 |
+| `apt` | apt リポジトリ or `.deb` パッケージ (docker-cli, github-cli, google-chrome) | apt keyring + sources.list 雛形、`$PIN` 配線なし |
+| `archive` | 上流がマルチファイル tar/zip をディレクトリツリーに展開 (go, node, zig) | `$PIN` + `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` + `tar --strip-components=1` |
 
 **フラグ:**
 
@@ -244,9 +245,9 @@ OK: scaffolded /home/alice/projects/myapp/.cocoon/plugins/gh-cli (2 files)
 | `--description <text>` | 短い説明。上流 URL を埋め込まず、`--url` で渡すこと。 |
 | `--url <url>` | 上流プロジェクト URL (`https://...`、空白不可)。`--non-interactive` 時は必須。 |
 | `--default` | デフォルト有効化フラグを立てる。 |
-| `--requires-root` | `install.sh` を root 実行に。 |
+| `--requires-root` | install スクリプトを root 実行に。 |
 | `--version-capable` | `$PIN` / `$CHECKSUM_*` の雛形を生成。 |
-| `--template <kind>` | `curl-pipe` \| `tarball` \| `generic`。 |
+| `--template <kind>` | `installer` \| `binary` \| `apt` \| `archive`。 |
 | `--with-install-user` | `install_user.sh` も生成 (`install.sh` の後に非特権ユーザーで走る)。 |
 | `--non-interactive` | プロンプトをスキップ (上記すべて要指定)。 |
 | `--force` | `<plugins-dir>/<id>/` が既存なら上書き。 |

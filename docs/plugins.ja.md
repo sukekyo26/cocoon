@@ -208,10 +208,15 @@ build-arg 経由の値) に加えて、次の値が渡される:
 |---|---|
 | `$COCOON_INSTALL_METHOD` | 選ばれた method 名（例: `"binary"`）。全プラグインが `[install.methods]` を宣言するため常にセットされる |
 
-スクリプト側は `: "${COCOON_INSTALL_METHOD:?missing}"` で fail-fast し、
-さらに自分の期待値と一致しなければ即 exit する作りにしておくと、
-スクリプトを rename した後に `workspace.toml` 側の旧参照が残っていても
-誤ったアーティファクトを引っ張る前に検出できる。
+**複数 method を持つプラグイン**のスクリプトは
+`: "${COCOON_INSTALL_METHOD:?missing}"` で fail-fast し、さらに自分の期待値と
+一致しなければ即 exit する作りにしておくと、スクリプトを rename した後に
+`workspace.toml` 側の旧参照が残っていても誤ったアーティファクトを引っ張る前
+に検出できる。**シングル method プラグイン**はこのチェック不要 — loader の
+`[install.methods]` 必須化により `$COCOON_INSTALL_METHOD` は必ずセットされ、
+間違える対象の sibling スクリプトも存在しない。実装例は
+`internal/plugin/catalog/copilot-cli/install.installer.sh` と
+`install.binary.sh`。
 
 **pin / checksum のスコープ。** pin は `[plugins.versions]` 配下に
 書かれ、**プラグイン単位（method 別ではない）** で保持される — catalog
@@ -294,16 +299,21 @@ pin エントリを書いても `gen` 時に意味を持たない。
 
 自作プラグインの参考にできる embedded プラグイン:
 
-- **`go`** — `tarball` テンプレート + `[install.env]` 多用。
+- **`go`** — `archive` メソッド + `[install.env]` 多用。
   `$PIN` + `$CHECKSUM_*` + アーキ分岐の典型。
-- **`docker-cli`** — `[install].build_args` を使う唯一の catalog プラグイン
-  （`DOCKER_GID` をホストから受ける）。host 由来の値を渡す参考に。
-- **`proto`** — `curl-pipe` テンプレート。upstream installer に任せる
+- **`docker-cli`** — `apt` メソッド、かつ `[install].build_args` を使う
+  唯一の catalog プラグイン（`DOCKER_GID` をホストから受ける）。host 由来の値
+  を install スクリプトへ渡す参考に。
+- **`proto`** — `installer` メソッド。upstream installer に任せる
   最小構成だが `$PIN` で版指定はする。
-- **`starship`** — catalog 内で唯一 `install_user.sh` を持つ。root → user
-  境界の見本として両ファイルを併読する。
-- **`lazygit`** — `tarball` テンプレート、`[install.env]` 無し。
+- **`starship`** — `binary` メソッド、かつ catalog 内で唯一
+  `install_user.sh` を持つ。root → user 境界の見本として両ファイルを併読する。
+- **`lazygit`** — `binary` メソッド、`[install.env]` 無し。
   versioned プラグインの最小構成。
+- **`copilot-cli`** — 2 メソッド (`installer` + `binary`) を持つ唯一の
+  catalog プラグイン。`install.installer.sh` / `install.binary.sh` を
+  併読すると、multi-method 専用の `$COCOON_INSTALL_METHOD` fail-fast
+  パターンが見られる。
 
 ## トラブルシューティング
 
