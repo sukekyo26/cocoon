@@ -53,7 +53,7 @@ var messagesEN_initTemplates = map[string]string{
 	// [plugins.versions] because picking a method may change the upstream
 	// URL used to pick a version).
 	"init_toml_template_plugins_methods": "# [plugins.methods] — for plugins that declare multiple [install.methods],\n" +
-		"#   pick which install path to use. Plugins with a single method (or none)\n" +
+		"#   pick which install path to use. Plugins with a single declared method\n" +
 		"#   ignore this section.\n" +
 		"# [plugins.methods]\n" +
 		"# <plugin-id> = \"<method-name>\"",
@@ -186,7 +186,7 @@ var messagesJA_initTemplates = map[string]string{
 	// [plugins.methods]（[plugins] の直後、[plugins.versions] の前に出力。
 	// method の切替で上流 URL が変わる場合があるため、version より先に置く）。
 	"init_toml_template_plugins_methods": "# [plugins.methods] — 複数の [install.methods] を持つプラグインで、どの方式を使うか指定。\n" +
-		"#   方式を 1 つしか持たない（または定義していない）プラグインはこのセクションを無視。\n" +
+		"#   方式を 1 つしか持たないプラグインはこのセクションを無視。\n" +
 		"# [plugins.methods]\n" +
 		"# <plugin-id> = \"<method-name>\"",
 

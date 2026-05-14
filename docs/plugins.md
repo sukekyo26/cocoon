@@ -90,11 +90,11 @@ declaration is only emitted alongside a hook, so a plugin built around
 ## Method name categories
 
 Method names (the `<name>` in `[install.methods.<name>]` and the
-corresponding `install.<name>.sh` filename) **must** follow the
-4-category vocabulary so the workspace.toml `[plugins.methods]` table
-reads the same way across the catalog. Plugin-specific names (e.g.
-`gh-cli`, `bun-sh`) make users look up plugin.toml to figure out what
-they picked.
+corresponding `install.<name>.sh` filename) follow a 4-category
+convention so the workspace.toml `[plugins.methods]` table reads the
+same way across the catalog. Plugin-specific names (e.g. `gh-cli`,
+`bun-sh`) make users look up plugin.toml to figure out what they
+picked.
 
 | Category | Pick when … |
 |:---|:---|
@@ -103,10 +103,13 @@ they picked.
 | `apt`       | The install registers an apt repository (or fetches a `.deb`) and runs `apt-get install`. (docker-cli, github-cli, google-chrome.) |
 | `archive`   | The install extracts a multi-file tar/zip into a directory tree (bin + lib + share + …) **or** runs a vendor installer that lives inside the archive. (go, node, zig, nerd-fonts, aws-cli.) |
 
-The validator's character set (`^[a-z][a-z0-9_-]*$`) technically allows
-other names for genuinely novel install paths, but **catalog plugins
-stick to these four**. Anything outside the vocabulary is an authoring
-mistake to be flagged in review.
+**Catalog plugins must use one of these four words.** Custom plugins
+under `~/.cocoon/plugins/<id>/` or `<workspace>/.cocoon/plugins/<id>/`
+may use any name matching the validator's pattern
+`^[a-z][a-z0-9_-]*$` when a genuinely novel install path doesn't fit,
+but the four-word vocabulary above is strongly recommended even for
+overlays — anything outside it is an authoring mistake to be flagged
+in review.
 
 Plugins that declare only `[install].volumes` (no install hook, no env)
 still affect the generated artifacts — `volumes` flows through a

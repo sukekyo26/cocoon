@@ -84,9 +84,9 @@ plugins/<id>/
 ## method 名のカテゴリ規約
 
 `[install.methods.<name>]` と対応する `install.<name>.sh` の `<name>`
-は、catalog 全体で **同じ 4 カテゴリ語彙** から選ぶ。plugin 固有の名前
-（例: `gh-cli`、`bun-sh`）は禁止 — workspace.toml の `[plugins.methods]`
-を読むユーザーが、毎回 plugin.toml を見に行く羽目になる。
+は、catalog 全体で **同じ 4 カテゴリ語彙** に揃える。plugin 固有の名前
+（例: `gh-cli`、`bun-sh`）は workspace.toml の `[plugins.methods]` を
+読むユーザーに毎回 plugin.toml を見せる手間を強いる。
 
 | カテゴリ | 選ぶ基準 |
 |:---|:---|
@@ -95,8 +95,11 @@ plugins/<id>/
 | `apt`       | apt repository 登録 or .deb 直 install (docker-cli, github-cli, google-chrome) |
 | `archive`   | 複数ファイルの tar/zip を展開してディレクトリツリーを作る (bin + lib + share)、または archive 内 installer 実行 (go, node, zig, nerd-fonts, aws-cli) |
 
-validator の文字種制約 (`^[a-z][a-z0-9_-]*$`) は他の name も技術的に
-許容するが、**catalog の plugin は必ずこの 4 つを使う**。それ以外は
+**catalog の plugin は必ずこの 4 つから選ぶ。** `~/.cocoon/plugins/<id>/`
+や `<workspace>/.cocoon/plugins/<id>/` のカスタムプラグインは、上記 4
+語彙に当てはまらない真に新しいインストール経路の場合に限り、validator
+の文字種制約 (`^[a-z][a-z0-9_-]*$`) を満たす他の名前も技術的には使える
+— ただしオーバーレイでも 4 語彙を優先することを強く推奨。それ以外は
 レビューで指摘する対象。
 
 `[install].volumes` のみを宣言したプラグイン（install hook も env も

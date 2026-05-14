@@ -101,7 +101,7 @@ enable = [
 ]
 
 # [plugins.methods] — for plugins that declare multiple [install.methods],
-#   pick which install path to use. Plugins with a single method (or none)
+#   pick which install path to use. Plugins with a single declared method
 #   ignore this section.
 # [plugins.methods]
 # <plugin-id> = "<method-name>"

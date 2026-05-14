@@ -107,7 +107,7 @@ enable = [
 ]
 
 # [plugins.methods] — install method picked for plugins that declare multiple methods.
-#   Plugins with a single declared method (or none) ignore this section.
+#   Plugins with a single declared method ignore this section.
 [plugins.methods]
 copilot-cli = "binary"
 
