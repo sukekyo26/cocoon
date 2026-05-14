@@ -106,6 +106,12 @@ enable = [
     "shfmt",
 ]
 
+# [plugins.methods] — for plugins that declare multiple [install.methods],
+#   pick which install path to use. Plugins with a single method (or none)
+#   ignore this section.
+# [plugins.methods]
+# <plugin-id> = "<method-name>"
+
 # [plugins.versions] — pinned versions for the enabled plugins above.
 #   Add checksum_amd64 / checksum_arm64 (64 lowercase hex chars) per entry to verify install tarballs.
 [plugins.versions]

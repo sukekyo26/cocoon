@@ -6,6 +6,13 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+### 追加
+
+- `cocoon init` の対話モードで、`plugin.toml` の `[install.methods]` に 2 つ以上のエントリを宣言したプラグイン（PR #39 で導入された新スキーマ）に対して「インストール方式」のピッカーを表示するようにしました。各選択肢には method 名と description を併記し、プラグインの `default_method` を初期選択にしているので、推奨どおりで良ければそのまま Enter で確定できます。method を 1 つしか持たない（または宣言していない）プラグインはサイレントにスキップ — 一般プラグインに余計なプロンプトが増えることはありません。選択結果は生成される `workspace.toml` の新セクション `[plugins.methods]` (1 行 1 プラグインの `<id> = "<method>"` 形式) に書き出され、ここに現れないプラグインはインストール時に `default_method` にフォールバックします。method プロンプトは version プロンプトの **前** に走るので、選んだ method 固有の上流 URL が version ピッカーの説明欄に正しく出ます。
+- 新フラグ `cocoon init --plugin-methods` を追加: `--plugin-versions` フラグと同じ形式 (`--plugin-methods="<id>=<method>,<id>=<method>"`) で、指定されたプラグインの method プロンプトをスキップします (`<id>` は `--plugins` にも含まれている必要があり、`<method>` はそのプラグインの `[install.methods]` に宣言されたキーでなければなりません)。`--yes` と組み合わせれば method 選択も含めて CI で完全に non-interactive 実行できます。
+- `cocoon plugin pin` に `--method <name>` フラグを追加: プラグインが `[install.methods]` に 2 つ以上のエントリを宣言しているとき、pin は `[plugins.versions]` のインラインテーブル行に加えて `[plugins.methods]` 側の `<id> = "<method>"` 行も出力（`--write` 時は in-place で upsert）します。指定された method がプラグインの `plugin.toml` に宣言されているか検証し、未宣言だった場合は宣言済み method 名一覧をエラーに含めて出すので typo は即座に直せます。checksum (`--amd64-checksum` / `--arm64-checksum`) はワークスペーススコープのまま (method 別ではない) なので、method を切り替えるときは新しいアーティファクトに合う SHA256 を渡し直してください。`[install.methods]` を宣言していないプラグインに対しては `--method` 自体を reject (フラグを外すように案内するエラーが出ます)。
+- `copilot-cli` プラグインに 2 つ目のインストール方式 **`binary`** を追加（既定は引き続き `gh-cli`）。`binary` は `github/copilot-cli` の GitHub Release から `copilot-linux-${arch}.tar.gz` を直接ダウンロードし、`~/.local/share/copilot-cli/` 配下に展開、`~/.local/bin/copilot` をシンボリックリンクとして配置します。`gh.io` が遮断されている（Zscaler 等）環境や `curl|sh` を社内ポリシーが禁止する環境で利用します。`cocoon init --plugin-methods="copilot-cli=binary"`（または対話ピッカー）で切替可能 — 切替後は新しいアーティファクトに合う `checksum_amd64` / `checksum_arm64` を `[plugins.versions]` 側で更新してください（install スクリプトの `sha256sum -c -` 検証が走るため）。
+
 ## [0.3.1] - 2026-05-14
 
 ### 追加
