@@ -110,10 +110,14 @@ type shellEnv struct {
 	loginShell string
 }
 
-// resolveMethodScript picks install.<method>.sh for plugins with
-// [install.methods] declared, or the legacy install.sh path otherwise.
-// Returns ("", "") with a wrapped ErrUnknownMethod when the workspace
-// names a method the plugin does not declare.
+// resolveMethodScript picks install.<method>.sh for plugins that pass
+// the loader's validateMethodScripts (every loaded plugin declares at
+// least one [install.methods] entry). The install.sh fallback below is
+// only reachable when ResolveMethod returns "" for *Plugin literals
+// built directly in tests — install.sh itself is rejected by the
+// loader for plugins read from disk. Returns a wrapped
+// ErrUnknownMethod when the workspace names a method the plugin does
+// not declare.
 func resolveMethodScript(p *plugin.Plugin, id string, methods map[string]string) (script, method string, err error) {
 	m, err := plugin.ResolveMethod(p, id, methods)
 	if err != nil {

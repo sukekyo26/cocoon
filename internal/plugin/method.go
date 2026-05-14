@@ -21,9 +21,14 @@ var ErrUnknownMethod = errors.New("unknown install method")
 // ResolveMethod selects which install.<name>.sh to use for the plugin
 // identified by id. methods is the workspace.toml [plugins.methods]
 // map (may be nil or empty). The returned name is:
-//   - "" when p has no [install.methods] section (legacy install.sh path)
 //   - methods[id] when it names a declared method
 //   - p.Install.DefaultMethod when no workspace override is provided
+//   - "" when p has no [install.methods] entries at all — this is not a
+//     valid loaded-plugin state (the loader's validateMethodScripts
+//     rejects empty Methods), so callers should treat "" as a
+//     pre-validation / test-data shape rather than a "legacy install.sh"
+//     runtime path. The branch is kept so unit tests can build *Plugin
+//     literals without filling in Methods.
 //
 // Returns ErrNilPlugin when p is nil and ErrUnknownMethod when
 // methods[id] points at an undeclared method. Callers can distinguish
