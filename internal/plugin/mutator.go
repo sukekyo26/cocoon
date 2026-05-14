@@ -18,6 +18,12 @@ var ErrPinLineEmptyID = errors.New("UpsertPinLine: empty id")
 // ErrPinLineEmptyRef is returned by UpsertPinLine when called with an empty ref.
 var ErrPinLineEmptyRef = errors.New("UpsertPinLine: empty ref")
 
+// ErrMethodLineEmptyID is returned by UpsertMethodLine when called with an empty id.
+var ErrMethodLineEmptyID = errors.New("UpsertMethodLine: empty id")
+
+// ErrMethodLineEmptyMethod is returned by UpsertMethodLine when called with an empty method.
+var ErrMethodLineEmptyMethod = errors.New("UpsertMethodLine: empty method")
+
 // sectionHeaderRE matches a TOML table header: `[name.space]` with optional
 // surrounding whitespace and a trailing comment.
 var sectionHeaderRE = regexp.MustCompile(`^\s*\[([A-Za-z0-9_.-]+)\]\s*(#.*)?$`)
@@ -71,34 +77,89 @@ func UpsertPinLine(path, id, ref, amd64Sum, arm64Sum string) error {
 
 func upsertPinLineBytes(input []byte, id, ref, amd64Sum, arm64Sum string) ([]byte, error) {
 	hadTrailingNewline := bytes.HasSuffix(input, []byte("\n"))
-	raw := strings.TrimSuffix(string(input), "\n")
-	lines := strings.Split(raw, "\n")
-	if len(lines) == 1 && lines[0] == "" {
-		lines = nil
-	}
-
+	lines := splitToLines(input)
 	if hasLegacySubsection(lines) {
 		return nil, ErrLegacyPinSubsection
 	}
-
 	newLine := strings.TrimSuffix(FormatPinLine(id, ref, amd64Sum, arm64Sum), "\n")
+	updated := upsertIDLineInSection(lines, "plugins.versions", id, newLine)
+	return renderLines(updated, hadTrailingNewline)
+}
 
-	sectionStart, sectionEnd := findVersionsSection(lines)
-	if sectionStart < 0 {
-		lines = appendNewVersionsSection(lines, newLine)
-		return renderLines(lines, hadTrailingNewline)
+// UpsertMethodLine atomically inserts or replaces an assignment
+// `<id> = "<method>"` under the [plugins.methods] section of workspace.toml
+// at path. Comments and blank lines outside the modified line are preserved
+// verbatim, mirroring UpsertPinLine.
+//
+//   - existing line for <id>: replaced in place.
+//   - [plugins.methods] section present, <id> new: line appended at the
+//     section's last non-blank position so it sits adjacent to existing
+//     picks.
+//   - section absent: a fresh `[plugins.methods]\n<id> = "<method>"\n`
+//     section is appended at EOF, separated from the previous non-blank
+//     line by at least one blank line (existing trailing blanks are
+//     preserved verbatim).
+func UpsertMethodLine(path, id, method string) error {
+	if id == "" {
+		return ErrMethodLineEmptyID
 	}
+	if method == "" {
+		return ErrMethodLineEmptyMethod
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("stat %s: %w", path, err)
+	}
+	body, err := os.ReadFile(path) //nolint:gosec // caller-provided workspace path
+	if err != nil {
+		return fmt.Errorf("read %s: %w", path, err)
+	}
+	out, err := upsertMethodLineBytes(body, id, method)
+	if err != nil {
+		return err
+	}
+	if err := fsx.AtomicWriteFile(path, out, info.Mode().Perm()); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	return nil
+}
 
+func upsertMethodLineBytes(input []byte, id, method string) ([]byte, error) {
+	hadTrailingNewline := bytes.HasSuffix(input, []byte("\n"))
+	lines := splitToLines(input)
+	newLine := strings.TrimSuffix(FormatMethodLine(id, method), "\n")
+	updated := upsertIDLineInSection(lines, "plugins.methods", id, newLine)
+	return renderLines(updated, hadTrailingNewline)
+}
+
+// splitToLines splits input on newlines and treats a single empty trailing
+// element as "no content" so callers can append a fresh section without
+// inheriting a phantom blank first line.
+func splitToLines(input []byte) []string {
+	raw := strings.TrimSuffix(string(input), "\n")
+	lines := strings.Split(raw, "\n")
+	if len(lines) == 1 && lines[0] == "" {
+		return nil
+	}
+	return lines
+}
+
+// upsertIDLineInSection inserts or replaces `<id> = ...` inside the named
+// TOML section. The returned slice may share storage with lines.
+func upsertIDLineInSection(lines []string, section, id, newLine string) []string {
+	sectionStart, sectionEnd := findSection(lines, section)
+	if sectionStart < 0 {
+		return appendNewSection(lines, section, newLine)
+	}
 	idAssignRE := regexp.MustCompile(`^\s*` + regexp.QuoteMeta(id) + `\s*=`)
 	for i := sectionStart + 1; i < sectionEnd; i++ {
 		if idAssignRE.MatchString(lines[i]) {
 			lines[i] = newLine
-			return renderLines(lines, hadTrailingNewline)
+			return lines
 		}
 	}
-
 	// Section exists, <id> is new — append at the last non-blank position
-	// within the section so the new line sits adjacent to existing pins
+	// within the section so the new line sits adjacent to existing entries
 	// instead of orphaned after the section's trailing blank lines.
 	insertAt := sectionEnd
 	for insertAt > sectionStart+1 && strings.TrimSpace(lines[insertAt-1]) == "" {
@@ -108,7 +169,7 @@ func upsertPinLineBytes(input []byte, id, ref, amd64Sum, arm64Sum string) ([]byt
 	out = append(out, lines[:insertAt]...)
 	out = append(out, newLine)
 	out = append(out, lines[insertAt:]...)
-	return renderLines(out, hadTrailingNewline)
+	return out
 }
 
 // hasLegacySubsection detects `[plugins.versions.<id>]` blocks, the format
@@ -127,12 +188,11 @@ func hasLegacySubsection(lines []string) bool {
 	return false
 }
 
-// findVersionsSection returns the [start, end) line indices of the
-// `[plugins.versions]` section. start is the header line; end is the next
-// section header or len(lines) when the section runs to EOF. Returns
-// (-1, len(lines)) when no `[plugins.versions]` header is present.
-func findVersionsSection(lines []string) (start, end int) {
-	const versionsSection = "plugins.versions"
+// findSection returns the [start, end) line indices of the named TOML
+// section. start is the header line; end is the next section header or
+// len(lines) when the section runs to EOF. Returns (-1, len(lines)) when
+// no matching header is present.
+func findSection(lines []string, name string) (start, end int) {
 	start = -1
 	end = len(lines)
 	for i, ln := range lines {
@@ -141,7 +201,7 @@ func findVersionsSection(lines []string) (start, end int) {
 			continue
 		}
 		if start < 0 {
-			if m[1] == versionsSection {
+			if m[1] == name {
 				start = i
 			}
 			continue
@@ -152,18 +212,18 @@ func findVersionsSection(lines []string) (start, end int) {
 	return start, end
 }
 
-// appendNewVersionsSection appends a fresh `[plugins.versions]` section
-// (header + one inline-table line) at end-of-file. Guarantees at least
-// one blank line of separation from the previous non-blank line: when
-// the file already ends in one or more blank lines those are preserved
-// verbatim (so the resulting separation may be >1), and when it ends
-// with content a single blank line is inserted.
-func appendNewVersionsSection(lines []string, inlineLine string) []string {
+// appendNewSection appends a fresh `[<name>]` section (header + one body
+// line) at end-of-file. Guarantees at least one blank line of separation
+// from the previous non-blank line: when the file already ends in one or
+// more blank lines those are preserved verbatim (so the resulting
+// separation may be >1), and when it ends with content a single blank
+// line is inserted.
+func appendNewSection(lines []string, name, bodyLine string) []string {
 	if len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) != "" {
 		lines = append(lines, "")
 	}
-	lines = append(lines, "[plugins.versions]")
-	lines = append(lines, inlineLine)
+	lines = append(lines, "["+name+"]")
+	lines = append(lines, bodyLine)
 	return lines
 }
 
