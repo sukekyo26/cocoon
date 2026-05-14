@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-05-14
+
 ### Added
 
 - New `node` plugin: installs Node.js from the official nodejs.org tarball into `/usr/local/node` with SHA256 verification (`linux-x64` / `linux-arm64`). When `node = { pin = "..." }` is omitted from `[plugins.versions]` the install script resolves the latest LTS automatically by parsing `https://nodejs.org/dist/index.tab`. `NPM_CONFIG_PREFIX` is set to `/home/${USERNAME}/.npm-global` so `npm install -g` writes to a named volume under the user's home instead of `/usr/local`, and both `~/.npm` (cache) and `~/.npm-global` are persisted across rebuilds.

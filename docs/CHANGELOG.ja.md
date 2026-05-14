@@ -6,6 +6,8 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-05-14
+
 ### 追加
 
 - 新しい `node` プラグイン: nodejs.org 公式 tarball から Node.js を `/usr/local/node` にインストールし、SHA256 で検証します (`linux-x64` / `linux-arm64`)。`[plugins.versions]` 配下の `node = { pin = "..." }` を省略するとインストールスクリプトが `https://nodejs.org/dist/index.tab` をパースして最新 LTS を自動解決します。`NPM_CONFIG_PREFIX=/home/${USERNAME}/.npm-global` を設定し、`npm install -g` の書き込み先を `/usr/local` ではなくユーザーホーム配下の named volume に逃すので、`~/.npm` (キャッシュ) と `~/.npm-global` (グローバルインストール先) は再ビルドを跨いで永続化されます。
