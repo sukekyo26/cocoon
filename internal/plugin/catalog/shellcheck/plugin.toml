@@ -1,0 +1,14 @@
+[metadata]
+name = "ShellCheck"
+description = "Shell script static analysis"
+url = "https://github.com/koalaman/shellcheck"
+default = false
+
+[apt]
+packages = ["xz-utils"]
+
+[install]
+requires_root = true
+
+[version]
+version_capable = true

@@ -1,17 +1,10 @@
-// Package config loads, validates and re-emits workspace.toml and plugin.toml
-// files for the wsd binary.
+// Package config loads, validates and re-emits workspace.toml and plugin.toml.
 //
-// The structures defined here mirror the Pydantic models in src/wsd/config so
-// the Go implementation can be swapped in for the Python CLI without changing
-// the shell consumers in lib/*.sh.
-//
-// All struct field names are kept aligned with the legacy implementation so
-// JSON/TOML round-trips remain byte-compatible. Optional sections are modelled
-// as pointers so a missing section can be distinguished from an empty one
-// (Pydantic's None vs. {}).
+// Optional sections are modelled as pointers so a missing section can be
+// distinguished from an empty one.
 package config
 
-// Workspace mirrors src/wsd/config.Workspace.
+// Workspace mirrors workspace.toml.
 type Workspace struct {
 	Workspace    *WorkspaceSpec            `toml:"workspace,omitempty"`
 	Container    ContainerSpec             `toml:"container"`
@@ -34,12 +27,10 @@ type Workspace struct {
 // HasDevcontainer reports whether a [devcontainer] table was present.
 func (w *Workspace) HasDevcontainer() bool { return len(w.Devcontainer) > 0 }
 
-// WorkspaceSpec configures cocoon-level knobs that affect how artifacts
-// are generated and where they live. The whole section is optional; when
-// it is missing or fields are zero, the defaults below apply.
+// WorkspaceSpec models the optional [workspace] section. Defaults apply when
+// the section is missing or fields are zero.
 type WorkspaceSpec struct {
-	// MountRoot selects which host directory is bind-mounted into the
-	// container at /workspace.
+	// MountRoot selects which host directory is bind-mounted at /workspace.
 	//
 	//   "."  — mount the project directory itself (default).
 	//   ".." — mount the parent directory so sibling repos are visible.
@@ -49,13 +40,12 @@ type WorkspaceSpec struct {
 	MountRoot string `toml:"mount_root,omitempty"`
 
 	// DevContainer toggles emission of .devcontainer/devcontainer.json.
-	// nil ⇒ default (true). Pointer so the loader can distinguish
-	// "field omitted" from an explicit `devcontainer = false`.
+	// Pointer so the loader can distinguish "field omitted" (defaults true)
+	// from an explicit `devcontainer = false`.
 	DevContainer *bool `toml:"devcontainer,omitempty"`
 }
 
-// MountRootOrDefault returns the configured mount range, falling back to
-// "." when [workspace] is omitted or mount_root is empty.
+// MountRootOrDefault falls back to "." when [workspace] is omitted or empty.
 func (w *WorkspaceSpec) MountRootOrDefault() string {
 	if w == nil || w.MountRoot == "" {
 		return "."
@@ -63,8 +53,7 @@ func (w *WorkspaceSpec) MountRootOrDefault() string {
 	return w.MountRoot
 }
 
-// DevContainerOrDefault returns true unless the user explicitly set
-// `devcontainer = false`.
+// DevContainerOrDefault is true unless explicitly set false.
 func (w *WorkspaceSpec) DevContainerOrDefault() bool {
 	if w == nil || w.DevContainer == nil {
 		return true
@@ -72,17 +61,12 @@ func (w *WorkspaceSpec) DevContainerOrDefault() bool {
 	return *w.DevContainer
 }
 
-// ContainerSpec mirrors src/wsd/config.ContainerSpec. Image is the
-// canonical DockerHub image name pulled verbatim into the FROM line:
-// "ubuntu" / "debian" / "node" / "python" / "golang" / "rust" /
-// "denoland/deno". ImageVersion is the image-specific tag ("26.04" for
-// Ubuntu, "13" for Debian, "26-bookworm-slim" for Node,
-// "3.14-slim-bookworm" for Python, "1.26.3-bookworm" for Golang,
-// "1.95-bookworm" for Rust, "debian-2.7.14" for denoland/deno). The
-// closed image set lives in SupportedImages; per-image suggestions in
-// SupportedImageVersions. Using canonical names means a reader can
-// recreate the FROM line from workspace.toml alone — no alias
-// resolution required.
+// ContainerSpec models the [container] section. Image is the canonical
+// DockerHub image name pulled verbatim into the FROM line; ImageVersion is
+// the image-specific tag. The closed image set lives in SupportedImages;
+// per-image suggestions in SupportedImageVersions. Using canonical names
+// means a reader can recreate the FROM line from workspace.toml alone — no
+// alias resolution required.
 type ContainerSpec struct {
 	ServiceName  string `toml:"service_name"`
 	Username     string `toml:"username"`
@@ -109,18 +93,15 @@ type ContainerSpec struct {
 	SecurityOpt  *SecurityOptSpec    `toml:"security_opt,omitempty"`
 	Skel         []SkelEntry         `toml:"skel,omitempty"`
 
-	// DockerSocket opts in to bind-mounting /var/run/docker.sock into the
-	// container so docker-in-docker workflows can reach the host daemon.
-	// nil ⇒ default (false). Pointer so that the loader can distinguish
-	// "field omitted" from an explicit `docker_socket = false`.
-	//
-	// When true the generators add the bind mount and a `group_add:
-	// ${DOCKER_GID}` entry so the container's user can talk to the socket.
+	// DockerSocket opts in to bind-mounting /var/run/docker.sock so DinD
+	// workflows can reach the host daemon. When true the generators add the
+	// bind mount and `group_add: ${DOCKER_GID}` so the container user can
+	// talk to the socket. Pointer so the loader can distinguish "field
+	// omitted" (default false) from an explicit `docker_socket = false`.
 	DockerSocket *bool `toml:"docker_socket,omitempty"`
 }
 
-// DockerSocketEnabled returns true when the user opted in to mounting
-// /var/run/docker.sock. False is the secure default.
+// DockerSocketEnabled defaults to the secure value (false).
 func (c *ContainerSpec) DockerSocketEnabled() bool {
 	return c.DockerSocket != nil && *c.DockerSocket
 }
@@ -194,68 +175,63 @@ var SupportedImageVersions = map[string][]string{
 //     prepends the user-local cargo dir ahead of the base image's
 //     /usr/local/cargo/bin, so the base toolchain is shadowed and never
 //     used.
+//   - "node" → "node": the node plugin extracts the official tarball into
+//     /usr/local/node and prepends /usr/local/node/bin to PATH, so the
+//     base image's /usr/local/bin/node is shadowed and never used.
+//   - "denoland/deno" → "deno": the deno plugin unzips the binary directly
+//     over /usr/local/bin/deno, overwriting the one the base image ships.
 //
-// Other supported images (ubuntu, debian, node, python, denoland/deno)
-// have no matching plugin in the catalog and therefore no conflict to
-// declare here.
+// Other supported images (ubuntu, debian, python) have no matching plugin
+// in the catalog and therefore no conflict to declare here.
 //
 //nolint:gochecknoglobals // tabular configuration data, file-scoped by design.
 var ImageProvidesPlugin = map[string]string{
-	"golang": "go",
-	"rust":   "rust",
+	"golang":        "go",
+	"rust":          "rust",
+	"node":          "node",
+	"denoland/deno": "deno",
 }
 
-// SkelEntry mirrors one [[container.skel]] entry. Source is a path relative
-// to the workspace root (the docker build context); Target is a path relative
-// to /etc/skel (which useradd -m copies into the new user's home). Use this
-// to seed dotfiles like .editorconfig / .gitignore_global / .tmux.conf into
-// the dev container's home directory declaratively.
+// SkelEntry seeds a file from the build context into /etc/skel so useradd -m
+// copies it into the new user's home (e.g. .editorconfig / .gitignore_global
+// / .tmux.conf).
 type SkelEntry struct {
 	Source string `toml:"source"`
 	Target string `toml:"target"`
 }
 
-// SecurityOptSpec mirrors the [container.security_opt] table. Each field maps
-// to one Compose `security_opt:` list entry. Set Seccomp / AppArmor to
-// "unconfined" (or a profile name) to relax sandboxing; set NoNewPrivileges
-// to true to harden the container by blocking setuid privilege escalation.
+// SecurityOptSpec mirrors [container.security_opt]. Each field becomes one
+// Compose `security_opt:` list entry.
 type SecurityOptSpec struct {
 	Seccomp         *string `toml:"seccomp,omitempty"`
 	AppArmor        *string `toml:"apparmor,omitempty"`
 	NoNewPrivileges *bool   `toml:"no_new_privileges,omitempty"`
 }
 
-// CapabilitiesSpec mirrors the [container.capabilities] table. Add and Drop
-// each become a Compose `cap_add:` / `cap_drop:` list entry verbatim. Values
-// are bare capability names without the `CAP_` prefix (e.g. "SYS_PTRACE").
+// CapabilitiesSpec mirrors [container.capabilities]. Values are bare names
+// without the `CAP_` prefix (e.g. "SYS_PTRACE").
 type CapabilitiesSpec struct {
 	Add  []string `toml:"add,omitempty"`
 	Drop []string `toml:"drop,omitempty"`
 }
 
-// DNSSpec mirrors the [container.dns] table. Servers populate Compose's `dns:`
-// key (one IP per entry); Search populates `dns_search:` (TLD-style suffixes
-// applied to short names).
+// DNSSpec mirrors [container.dns].
 type DNSSpec struct {
 	Servers []string `toml:"servers,omitempty"`
 	Search  []string `toml:"search,omitempty"`
 }
 
-// ContainerShellSpec mirrors the [container.shell] table.
-//
-// Default selects the login shell ("bash" | "zsh" | "fish"); unset/empty falls
-// back to "bash". Aliases and Env are appended directly into the chosen
-// login shell's rc file inside the container at image build time using
-// shell-appropriate syntax (bash/zsh: `export K=V` / `alias k='v'`;
-// fish: `set -gx K V` / `alias k 'v'`). No host-side companion file is
-// written — see internal/generate/shellrc.
+// ContainerShellSpec mirrors [container.shell]. Aliases and Env are written
+// into the rc-file at image build time using shell-appropriate syntax
+// (bash/zsh: `export K=V` / `alias k='v'`; fish: `set -gx K V` /
+// `alias k 'v'`). No host-side companion file is written.
 type ContainerShellSpec struct {
 	Default *string           `toml:"default,omitempty"`
 	Aliases map[string]string `toml:"aliases,omitempty"`
 	Env     map[string]string `toml:"env,omitempty"`
 }
 
-// Resources mirrors src/wsd/config.Resources.
+// Resources models [container.resources].
 type Resources struct {
 	ShmSize         *string  `toml:"shm_size,omitempty"`
 	PidsLimit       *int     `toml:"pids_limit,omitempty"`
@@ -266,21 +242,21 @@ type Resources struct {
 	NofileHard      *int     `toml:"nofile_hard,omitempty"`
 }
 
-// PluginsSpec mirrors src/wsd/config.PluginsSpec.
+// PluginsSpec models [plugins].
 type PluginsSpec struct {
 	Enable   []string                         `toml:"enable"`
 	Versions map[string]PluginVersionOverride `toml:"versions,omitempty"`
 }
 
-// PluginVersionOverride mirrors src/wsd/config.PluginVersionOverride.
+// PluginVersionOverride models one entry under [plugins.versions].
 type PluginVersionOverride struct {
 	Pin           string  `toml:"pin"`
 	ChecksumAmd64 *string `toml:"checksum_amd64,omitempty"`
 	ChecksumArm64 *string `toml:"checksum_arm64,omitempty"`
 }
 
-// PortsSpec mirrors src/wsd/config.PortsSpec. Each Forward entry is either a
-// docker-compose short-form string ("3000:3000", "127.0.0.1:5432:5432/tcp",
+// PortsSpec models [ports]. Each Forward entry is either a docker-compose
+// short-form string ("3000:3000", "127.0.0.1:5432:5432/tcp",
 // "3000-3005:3000-3005") or a long-form table with the keys target,
 // published, host_ip, protocol, mode. See ComposePortEntries for the
 // normalized representation consumed by generators.
@@ -288,7 +264,7 @@ type PortsSpec struct {
 	Forward []any `toml:"forward"`
 }
 
-// AptSpec mirrors src/wsd/config.AptSpec.
+// AptSpec models [apt].
 type AptSpec struct {
 	Packages []string    `toml:"packages,omitempty"`
 	Mirror   *AptMirror  `toml:"mirror,omitempty"`
@@ -296,22 +272,21 @@ type AptSpec struct {
 	Sources  []AptSource `toml:"sources,omitempty"`
 }
 
-// AptMirror swaps the default Ubuntu archive URLs out for a regional or
-// internal mirror. The generator rewrites archive.ubuntu.com,
-// security.ubuntu.com, and ports.ubuntu.com to URL.
+// AptMirror rewrites archive.ubuntu.com, security.ubuntu.com, and
+// ports.ubuntu.com to URL.
 type AptMirror struct {
 	URL string `toml:"url"`
 }
 
-// AptProxy sets HTTP/HTTPS proxies for apt by writing
-// /etc/apt/apt.conf.d/95proxy at build time. Either field may be omitted.
+// AptProxy writes /etc/apt/apt.conf.d/95proxy at build time. Either field
+// may be omitted.
 type AptProxy struct {
 	HTTP  *string `toml:"http,omitempty"`
 	HTTPS *string `toml:"https,omitempty"`
 }
 
-// AptSource declares one third-party apt repository, including its GPG key.
-// The generator places the key under /etc/apt/keyrings/<Name>.gpg and writes
+// AptSource declares one third-party apt repository. The generator places
+// the GPG key under /etc/apt/keyrings/<Name>.gpg and writes
 // /etc/apt/sources.list.d/<Name>.list referring to it via signed-by, before
 // the main apt-get update so the repository is visible during install.
 type AptSource struct {
@@ -323,28 +298,27 @@ type AptSource struct {
 	Arch       *string  `toml:"arch,omitempty"`
 }
 
-// LocaleSpec mirrors src/wsd/config.LocaleSpec.
+// LocaleSpec models [locale].
 type LocaleSpec struct {
 	Timezone *string `toml:"timezone,omitempty"`
 	Lang     *string `toml:"lang,omitempty"`
 }
 
-// GitIdentitySpec mirrors src/wsd/config.GitIdentitySpec.
+// GitIdentitySpec models [git].
 type GitIdentitySpec struct {
 	UserName  *string `toml:"user_name,omitempty"`
 	UserEmail *string `toml:"user_email,omitempty"`
 }
 
-// CertificatesSpec gates TLS certificate auto-bake from
-// ~/.cocoon/certs/. See docs/configuration.md `[certificates]`.
+// CertificatesSpec gates TLS certificate auto-bake from ~/.cocoon/certs/.
+// See docs/configuration.md `[certificates]`.
 type CertificatesSpec struct {
-	// nil ⇒ default false (pointer distinguishes "field omitted" from
-	// explicit `enable = false`).
+	// Pointer distinguishes "field omitted" (default false) from explicit
+	// `enable = false`.
 	Enable *bool `toml:"enable,omitempty"`
 }
 
-// EnableOrDefault returns false unless explicitly set true. Safe on a
-// nil receiver.
+// EnableOrDefault is safe on a nil receiver and defaults to false.
 func (c *CertificatesSpec) EnableOrDefault() bool {
 	if c == nil || c.Enable == nil {
 		return false
@@ -352,40 +326,35 @@ func (c *CertificatesSpec) EnableOrDefault() bool {
 	return *c.Enable
 }
 
-// DockerfileSpec mirrors src/wsd/config.DockerfileSpec.
+// DockerfileSpec models [dockerfile].
 type DockerfileSpec struct {
 	PreUserSetup *string `toml:"pre_user_setup,omitempty"`
 	PostPlugins  *string `toml:"post_plugins,omitempty"`
 }
 
-// Mount mirrors src/wsd/config.Mount.
+// Mount models one [[mounts]] entry.
 type Mount struct {
 	Source   string `toml:"source"`
 	Target   string `toml:"target"`
 	Readonly bool   `toml:"readonly"`
 }
 
-// HomeFilesSpec declares single files under the host user's home directory
-// to persist across container rebuilds. Each entry is a path relative to ~/
-// on both host and container; per-segment characters are restricted to
-// [A-Za-z0-9._-] because the path flows verbatim into the generated
-// initializeCommand shell snippet (cocoon gen / VS Code run it under
-// /bin/sh), so anything shell-special — $, backticks, ; & | < > * ? !,
-// quotes, backslashes, whitespace — would let a repo-provided
-// workspace.toml inject commands into the host shell. `cocoon gen`
-// touches missing host files (0o600, idempotent) on first run, and the
-// generated devcontainer.json's initializeCommand performs the same touch
-// so VS Code Reopen-in-Container users do not need to invoke `cocoon
-// gen`. Both safeguards prevent Docker from auto-creating the bind
-// source as a directory when the file is absent at `docker compose up`
-// time. Use [volumes] for whole directories and [[mounts]] for arbitrary
-// host paths; [home_files] is the narrow case of single files in $HOME
-// that must outlive the container's writable layer.
+// HomeFilesSpec declares single files under $HOME to persist across container
+// rebuilds. Per-segment characters are restricted to [A-Za-z0-9._-] because
+// the path flows verbatim into the generated initializeCommand shell snippet
+// (run under /bin/sh), so anything shell-special — $, backticks, ; & | < > * ? !,
+// quotes, backslashes, whitespace — would let a repo-provided workspace.toml
+// inject commands into the host shell. `cocoon gen` and the generated
+// devcontainer.json's initializeCommand both touch missing host files
+// (0o600, idempotent) so Docker does not auto-create the bind source as a
+// directory at `docker compose up` time. Use [volumes] for directories and
+// [[mounts]] for arbitrary host paths; [home_files] is for single files
+// in $HOME that must outlive the container's writable layer.
 type HomeFilesSpec struct {
 	Files []string `toml:"files"`
 }
 
-// SidecarMount mirrors src/wsd/config.SidecarMount.
+// SidecarMount models one [[services.<name>.mounts]] entry.
 type SidecarMount struct {
 	Source   string `toml:"source"`
 	Target   string `toml:"target"`
@@ -395,7 +364,7 @@ type SidecarMount struct {
 // SidecarRestart enumerates the allowed values for SidecarService.Restart.
 type SidecarRestart string
 
-// Sidecar restart policy values (mirrors compose v3 spec subset).
+// Sidecar restart policy values (compose v3 subset).
 const (
 	RestartNo            SidecarRestart = "no"
 	RestartAlways        SidecarRestart = "always"
@@ -403,10 +372,11 @@ const (
 	RestartUnlessStopped SidecarRestart = "unless-stopped"
 )
 
-// HealthcheckSpec mirrors src/wsd/config.HealthcheckSpec which allows extras.
+// HealthcheckSpec models [services.<name>.healthcheck]. Extra keys are
+// preserved verbatim.
 type HealthcheckSpec map[string]any
 
-// SidecarService mirrors src/wsd/config.SidecarService.
+// SidecarService models one [services.<name>] table.
 type SidecarService struct {
 	Image       string            `toml:"image"`
 	Ports       []any             `toml:"ports,omitempty"`
@@ -419,7 +389,7 @@ type SidecarService struct {
 	Restart     *SidecarRestart   `toml:"restart,omitempty"`
 }
 
-// RepositoryClone mirrors src/wsd/config.RepositoryClone.
+// RepositoryClone models one [[repositories.clone]] entry.
 type RepositoryClone struct {
 	URL               string  `toml:"url"`
 	Path              *string `toml:"path,omitempty"`
@@ -428,12 +398,10 @@ type RepositoryClone struct {
 	RecurseSubmodules *bool   `toml:"recurse_submodules,omitempty"`
 }
 
-// RepositoriesSpec mirrors src/wsd/config.RepositoriesSpec.
+// RepositoriesSpec models [repositories].
 type RepositoriesSpec struct {
 	Clone []RepositoryClone `toml:"clone"`
 }
 
-// Devcontainer mirrors src/wsd/config.Devcontainer (extra=allow). All known
-// fields fall through into the map and the dump-devcontainer subcommand emits
-// the entries verbatim.
+// Devcontainer is a passthrough map: dump-devcontainer emits entries verbatim.
 type Devcontainer map[string]any

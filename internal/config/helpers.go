@@ -3,8 +3,7 @@ package config
 import "strings"
 
 // BasenameFromGitURL derives the default clone target directory name from a
-// git URL. It mirrors src/wsd/cli/config._basename_from_git_url so output is
-// byte-identical to the Python implementation.
+// git URL.
 func BasenameFromGitURL(url string) string {
 	s := strings.TrimRight(strings.TrimSpace(url), "/")
 	if s == "" {
@@ -33,8 +32,7 @@ func BasenameFromGitURL(url string) string {
 }
 
 // ResolveRepoPath resolves the final clone target path for a [repositories]
-// .clone entry. It mirrors src/wsd/cli/config._resolve_repo_path so output is
-// byte-identical to the Python implementation.
+// .clone entry.
 func ResolveRepoPath(pathField, url string) string {
 	if pathField == "" {
 		return BasenameFromGitURL(url)

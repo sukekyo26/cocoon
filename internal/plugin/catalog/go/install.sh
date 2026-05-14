@@ -40,7 +40,7 @@ curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-erro
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/go.tar.gz" | sha256sum -c -
 else
-  printf '%sWARNING: SHA256 verification skipped for Go (no checksum provided in [plugins.versions.go])%s\n' "$C_YEL" "$C_RST" >&2
+  printf '%sWARNING: SHA256 verification skipped for Go (no checksum for go in [plugins.versions])%s\n' "$C_YEL" "$C_RST" >&2
 fi
 
 tar -C /usr/local -xzf /tmp/go.tar.gz

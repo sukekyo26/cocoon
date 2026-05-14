@@ -1,6 +1,7 @@
 [metadata]
 name = "lazygit"
-description = "Terminal UI for git commands (https://github.com/jesseduffield/lazygit)"
+description = "Terminal UI for git commands"
+url = "https://github.com/jesseduffield/lazygit"
 default = false
 
 [install]

@@ -13,7 +13,7 @@ Reference for every command exposed by the `cocoon` binary.
 | `cocoon gen` | Generate `.devcontainer/` artifacts |
 | `cocoon plugin list` | List every available plugin (embedded + overlays) |
 | `cocoon plugin show <id>` | Print the resolved manifest for one plugin |
-| `cocoon plugin pin <id> <ref>` | Emit a `[plugins.versions.<id>]` block (stdout, or in-place with `--write`) |
+| `cocoon plugin pin <id> <ref>` | Emit an inline-table line for `[plugins.versions]` (stdout, or in-place with `--write`) |
 | `cocoon plugin scaffold <id>` | Create a new `<id>/` directory from a template |
 | `cocoon self-update` | Replace this binary with the latest GitHub release |
 | `cocoon version` | Print binary version |
@@ -135,10 +135,10 @@ Overlays are read at `gen` time only; placing files in `~/.cocoon/plugins/<id>/`
 
 ```console
 $ cocoon plugin list
-ID            SOURCE    DEFAULT  DESCRIPTION
-claude-code   embedded  false    Claude Code — AI-powered coding assistant ...
-go            embedded  false    Go programming language ...
-my-internal   user      true     internal CLI ...
+ID            SOURCE    DEFAULT  DESCRIPTION                                  URL
+claude-code   embedded  false    Claude Code — AI-powered coding assistant... https://github.com/anthropics/claude-code
+go            embedded  false    Go programming language ...                  https://github.com/golang/go
+my-internal   user      true     internal CLI ...                             https://git.example.com/team/internal-cli
 ```
 
 **Flags:**
@@ -161,6 +161,7 @@ id: go
 source: embedded
 name: Go
 description: Go programming language ...
+url: https://github.com/golang/go
 default: false
 requires_root: true
 version_capable: true
@@ -175,28 +176,25 @@ volumes: [/home/${USERNAME}/go]
 
 ### `cocoon plugin pin <id> <ref>`
 
-**Purpose:** record an upstream version (and optional per-arch checksums) for a `version_capable` plugin in `workspace.toml` under `[plugins.versions.<id>]`. The block declares `pin = "<ref>"` plus optional `checksum_amd64` / `checksum_arm64` lines that `install.sh` reads via `$PIN` and `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64`.
+**Purpose:** record an upstream version (and optional per-arch checksums) for a `version_capable` plugin in `workspace.toml` under `[plugins.versions]`. The entry is emitted as a single inline-table line — `<id> = { pin = "<ref>", checksum_amd64 = "...", checksum_arm64 = "..." }` — that `install.sh` reads via `$PIN` and `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64`.
 
 **Example (default — stdout, manual paste):**
 
 ```console
 $ cocoon plugin pin go 1.23.4 --amd64-checksum abc123 --arm64-checksum def456
-# Append the following block to workspace.toml under [plugins.versions]:
+# Add the following line under [plugins.versions] in workspace.toml:
 
-[plugins.versions.go]
-pin = "1.23.4"
-checksum_amd64 = "abc123"
-checksum_arm64 = "def456"
+go = { pin = "1.23.4", checksum_amd64 = "abc123", checksum_arm64 = "def456" }
 ```
 
 **Example (`--write` — in-place mutation):**
 
 ```console
 $ cocoon plugin pin go 1.23.4 --write
-Updated /home/alice/proj/workspace.toml: [plugins.versions.go]
+Updated /home/alice/proj/workspace.toml: [plugins.versions] go
 ```
 
-`--write` parses `workspace.toml` line-by-line and replaces the existing block (if any) or appends a new one after the last `[plugins.versions.*]` block. Comments and blank lines outside the target block are preserved.
+`--write` parses `workspace.toml` line-by-line, replaces the existing `<id> = { ... }` line under `[plugins.versions]` (if any) or appends a new one to that section. Comments and blank lines outside the target line are preserved.
 
 **Flags:**
 
@@ -204,14 +202,14 @@ Updated /home/alice/proj/workspace.toml: [plugins.versions.go]
 |---|---|
 | `--amd64-checksum <sha256>` | SHA256 of the amd64 artifact. |
 | `--arm64-checksum <sha256>` | SHA256 of the arm64 artifact. |
-| `--write` | Insert (or replace) the block in `workspace.toml` (auto-discovered from cwd). |
+| `--write` | Insert (or replace) the inline-table line in `workspace.toml` (auto-discovered from cwd). |
 
 **Gotchas:**
 
-- `pin` only makes sense for plugins whose `[version].version_capable = true`. The pin block is ignored at `gen` time for non-version-capable plugins.
+- `pin` only makes sense for plugins whose `[version].version_capable = true`. The pin entry is ignored at `gen` time for non-version-capable plugins.
 - Checksum flags only matter when the plugin's `install.sh` actually reads `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` (i.e. `tarball` template plugins). They are silently inert for `curl-pipe` / `generic` templates.
 - `--write` requires a discoverable `workspace.toml` from cwd; without `--write`, the command works from anywhere because it only resolves the layered FS for id validation.
-- `--write` only edits the multi-line `[plugins.versions.<id>]` form. If `workspace.toml` has any per-id key assignment directly under `[plugins.versions]` — `<id> = "1.23.4"`, `<id> = [..]`, or the inline-table `<id> = { pin = "..." }` style the `init` template suggests in commented-out lines — `--write` refuses with a usage error rather than appending a duplicate block. Convert each entry to a `[plugins.versions.<id>]` block first, or edit `workspace.toml` manually.
+- `--write` only edits the inline-table form (`<id> = { pin = "..." }` lines under a single `[plugins.versions]` section). If `workspace.toml` still contains legacy `[plugins.versions.<id>]` subsection blocks, `--write` refuses with a usage error rather than appending a duplicate entry. Convert each legacy block to an inline-table line under `[plugins.versions]` first, or edit `workspace.toml` manually.
 
 ### `cocoon plugin scaffold <id>`
 
@@ -223,7 +221,8 @@ Updated /home/alice/proj/workspace.toml: [plugins.versions.go]
 $ cd ~/projects/myapp
 $ cocoon plugin scaffold gh-cli \
     --template curl-pipe --version-capable \
-    --name "GitHub CLI" --description "GitHub CLI (https://cli.github.com)" \
+    --name "GitHub CLI" --description "GitHub CLI" \
+    --url "https://cli.github.com" \
     --non-interactive
 OK: scaffolded /home/alice/projects/myapp/.cocoon/plugins/gh-cli (2 files)
 ```
@@ -242,7 +241,8 @@ OK: scaffolded /home/alice/projects/myapp/.cocoon/plugins/gh-cli (2 files)
 |---|---|
 | `--plugins-dir <path>` | Output directory. Default: `<workspace>/.cocoon/plugins` (auto-discovered from `workspace.toml`). |
 | `--name <name>` | Display name (e.g. `"GitHub CLI"`). |
-| `--description <text>` | Short description. Must embed an upstream URL in parentheses. |
+| `--description <text>` | Short description. Do not embed the upstream URL — pass it via `--url`. |
+| `--url <url>` | Upstream project URL (`https://...`, no whitespace). Required under `--non-interactive`. |
 | `--default` | Mark plugin enabled by default. |
 | `--requires-root` | `install.sh` runs as root. |
 | `--version-capable` | Generate `$PIN` / `$CHECKSUM_*` boilerplate. |
@@ -255,7 +255,7 @@ OK: scaffolded /home/alice/projects/myapp/.cocoon/plugins/gh-cli (2 files)
 
 - Without `--plugins-dir` and outside a cocoon project (no discoverable `workspace.toml`), scaffold refuses with an actionable error rather than silently writing to `./plugins/<id>/`.
 - `--template tarball` implies `--version-capable`; the scaffold rejects the combination of `tarball` without `--version-capable`.
-- After scaffolding, the generated `plugin.toml` is reloaded under the same strict validator the runtime uses; if it fails (bad name, missing URL in description, etc.), the directory is rolled back.
+- After scaffolding, the generated `plugin.toml` is reloaded under the same strict validator the runtime uses; if it fails (bad name, missing or malformed `url`, etc.), the directory is rolled back.
 - Like overlays from `add`, a scaffolded plugin still needs to be listed in `[plugins].enable` to take effect at `gen` time.
 
 ---

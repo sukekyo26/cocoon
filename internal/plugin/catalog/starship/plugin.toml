@@ -1,8 +1,8 @@
 [metadata]
 name = "Starship"
-description = "Cross-shell prompt, alternative to custom-ps1 (https://github.com/starship/starship)"
+description = "Cross-shell prompt"
+url = "https://github.com/starship/starship"
 default = false
-conflicts = ["custom-ps1"]
 
 [install]
 requires_root = true

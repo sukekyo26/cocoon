@@ -17,26 +17,21 @@ import (
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
 
-// errInputRequired is returned by huh input validators when the user submits
-// an empty value.
-var errInputRequired = errors.New("required")
+var (
+	errInputRequired = errors.New("required")
+	errInvalidURL    = errors.New("must start with https:// and contain no whitespace")
+	errPathNotADir   = errors.New("not a directory")
+)
 
-// errURLInDescription is returned by the description-input validator when the
-// user submits a description that does not embed an upstream URL.
-var errURLInDescription = errors.New("include URL in parentheses, e.g. \"(https://...)\"")
-
-// errPathNotADir is returned by dirExists when the candidate path exists but
-// points at a non-directory entry.
-var errPathNotADir = errors.New("not a directory")
-
-// scaffoldOpts collects all values that drive code generation. The CLI flag
-// parser fills in whatever the user supplied; remaining holes are filled by
-// the interactive form (unless --non-interactive was passed).
+// scaffoldOpts collects all values that drive code generation; holes the
+// user did not pass via flags are filled by the interactive form (unless
+// --non-interactive).
 type scaffoldOpts struct {
 	id              string
 	pluginsDir      string
 	name            string
 	description     string
+	url             string
 	defaultEnabled  bool
 	requiresRoot    bool
 	versionCapable  bool
@@ -45,10 +40,11 @@ type scaffoldOpts struct {
 	nonInteractive  bool
 	force           bool
 
-	// Track which flags were explicitly set so the interactive form can
-	// distinguish "user passed --default=false" from "user did not pass --default".
+	// set* lets the form distinguish "user passed --default=false" from
+	// "user did not pass --default".
 	setName            bool
 	setDescription     bool
+	setURL             bool
 	setDefaultEnabled  bool
 	setRequiresRoot    bool
 	setVersionCapable  bool
@@ -77,40 +73,45 @@ func validateNameInput(s string) error {
 	return nil
 }
 
-// validateDescriptionInput requires both a non-empty value and an embedded URL.
+// validateDescriptionInput rejects empty/whitespace-only descriptions.
+// The upstream URL travels in a separate `url` field now.
 func validateDescriptionInput(s string) error {
 	if strings.TrimSpace(s) == "" {
 		return errInputRequired
 	}
-	if !strings.Contains(s, "(http") {
-		return errURLInDescription
+	return nil
+}
+
+// validateURLInput rejects empty values and anything that is not a plain
+// https:// URL. Whitespace anywhere in the value is rejected so it can be
+// embedded verbatim in plugin.toml.
+func validateURLInput(s string) error {
+	if strings.TrimSpace(s) == "" {
+		return errInputRequired
+	}
+	if !strings.HasPrefix(s, "https://") || strings.ContainsAny(s, " \t\r\n") {
+		return errInvalidURL
 	}
 	return nil
 }
 
-// applyPickedTemplate transfers a non-empty template selection from the form
-// closure into opts. Extracted from the inline defer so the assignment is
-// reachable from unit tests without invoking the huh form.
+// applyPickedTemplate transfers a non-empty template selection into opts.
 func applyPickedTemplate(opts *scaffoldOpts, picked string) {
 	if picked != "" {
 		opts.template = templateKind(picked)
 	}
 }
 
-// prompter abstracts the interactive form runner so tests can substitute a
-// deterministic fake for the huh.Form. The interface is unexported because
-// the only production implementation is huhPrompter and callers outside the
-// package have no business swapping it.
+// prompter abstracts the interactive form so tests can substitute a fake.
 type prompter interface {
 	Run(groups []*huh.Group) error
 }
 
-// huhPrompter is the production prompter backed by charmbracelet/huh.
+// huhPrompter is the charmbracelet/huh backed prompter.
 type huhPrompter struct{}
 
-// Run implements [prompter] by assembling a huh.Form from the supplied groups
-// and invoking form.Run. Empty groups short-circuit to nil so callers can
-// safely pass an unconditional slice.
+// Run short-circuits to nil on empty groups so callers can pass an
+// unconditional slice.
 func (huhPrompter) Run(groups []*huh.Group) error {
 	if len(groups) == 0 {
 		return nil
@@ -147,6 +148,14 @@ func promptMissing(opts *scaffoldOpts, cat *i18n.Catalog, p prompter) error {
 				Title(cat.Msg("plugin_scaffold_prompt_desc")).
 				Value(&opts.description).
 				Validate(validateDescriptionInput),
+		))
+	}
+	if !opts.setURL {
+		groups = append(groups, huh.NewGroup(
+			huh.NewInput().
+				Title(cat.Msg("plugin_scaffold_prompt_url")).
+				Value(&opts.url).
+				Validate(validateURLInput),
 		))
 	}
 	if !opts.setDefaultEnabled {
@@ -198,8 +207,8 @@ func promptMissing(opts *scaffoldOpts, cat *i18n.Catalog, p prompter) error {
 	return nil
 }
 
-// finalizeOpts performs the cross-field validation that applies to both
-// interactive and non-interactive modes (e.g. tarball implies version_capable).
+// finalizeOpts runs the cross-field rules shared by both interactive and
+// non-interactive modes (e.g. tarball implies version_capable).
 func finalizeOpts(opts *scaffoldOpts, cat *i18n.Catalog, stderr io.Writer) error {
 	log := logx.New(io.Discard, stderr)
 	switch opts.template {
@@ -211,11 +220,9 @@ func finalizeOpts(opts *scaffoldOpts, cat *i18n.Catalog, stderr io.Writer) error
 	}
 
 	if opts.nonInteractive {
-		// Truly-missing flags (empty string / not provided) keep the existing
-		// `plugin_scaffold_missing_flag` actionable message that names the
-		// missing flag explicitly. Only non-empty inputs reach the shared
-		// validators, whose sentinel errors are mapped to localized keys so
-		// raw English from err.Error() never leaks into ja output.
+		// Only non-empty inputs reach the shared validators so the localized
+		// `plugin_scaffold_missing_flag` actionable message wins over the
+		// English sentinel for the "missing" case.
 		if opts.name == "" {
 			log.Error("ERROR: " + cat.Msg("plugin_scaffold_missing_flag", "name"))
 			return ErrUsage
@@ -224,21 +231,23 @@ func finalizeOpts(opts *scaffoldOpts, cat *i18n.Catalog, stderr io.Writer) error
 			log.Error("ERROR: " + cat.Msg("plugin_scaffold_missing_flag", "description"))
 			return ErrUsage
 		}
+		if opts.url == "" {
+			log.Error("ERROR: " + cat.Msg("plugin_scaffold_missing_flag", "url"))
+			return ErrUsage
+		}
 		if err := validateNameInput(opts.name); err != nil {
 			log.Error("ERROR: " + cat.Msg("plugin_scaffold_blank_name"))
 			return ErrUsage
 		}
 		if err := validateDescriptionInput(opts.description); err != nil {
-			switch {
-			case errors.Is(err, errInputRequired):
-				log.Error("ERROR: " + cat.Msg("plugin_scaffold_blank_description"))
-			case errors.Is(err, errURLInDescription):
-				log.Error("ERROR: " + cat.Msg("plugin_scaffold_desc_missing_url"))
-			default:
-				// Defensive fallback for future sentinels not yet in this
-				// switch; emit a localized generic message so non-ja text
-				// never reaches output.
-				log.Error("ERROR: " + cat.Msg("plugin_scaffold_desc_invalid"))
+			log.Error("ERROR: " + cat.Msg("plugin_scaffold_blank_description"))
+			return ErrUsage
+		}
+		if err := validateURLInput(opts.url); err != nil {
+			if errors.Is(err, errInputRequired) {
+				log.Error("ERROR: " + cat.Msg("plugin_scaffold_blank_url"))
+			} else {
+				log.Error("ERROR: " + cat.Msg("plugin_scaffold_invalid_url"))
 			}
 			return ErrUsage
 		}
@@ -251,15 +260,8 @@ func finalizeOpts(opts *scaffoldOpts, cat *i18n.Catalog, stderr io.Writer) error
 	return nil
 }
 
-// resolvePluginsDir returns opts.pluginsDir verbatim when set, or
-// auto-discovers <workspace>/.cocoon/plugins from cwd.
-//
-// Error semantics mirror projectPluginsDir:
-//   - (path, nil)                   when --plugins-dir was set or discovery succeeded
-//   - ("", ErrWorkspaceNotFound)   when running outside a cocoon project — the
-//     caller turns this into an actionable ErrUsage with a localized message
-//   - ("", wrapped err)             on filesystem-level failures, mapped to
-//     ErrFailure by the caller so context is preserved
+// resolvePluginsDir auto-discovers <workspace>/.cocoon/plugins when
+// --plugins-dir is unset. Error semantics mirror projectPluginsDir.
 func resolvePluginsDir(opts scaffoldOpts) (string, error) {
 	if opts.pluginsDir != "" {
 		return opts.pluginsDir, nil
@@ -267,9 +269,8 @@ func resolvePluginsDir(opts scaffoldOpts) (string, error) {
 	return projectPluginsDir()
 }
 
-// renderAndWrite renders a single scaffold file via render and writes it under
-// dir/name with the given mode. On failure it logs and triggers cleanup.
-// Returns the path written on success — relative if dir was relative.
+// renderAndWrite triggers cleanup() on any failure. Returns the path
+// written (relative iff dir was relative).
 func renderAndWrite(
 	dir, name string, mode os.FileMode,
 	render func() (string, error),
@@ -321,6 +322,7 @@ func runScaffold(opts scaffoldOpts, cat *i18n.Catalog, stdout, stderr io.Writer)
 		ID:             opts.id,
 		Name:           opts.name,
 		Description:    opts.description,
+		URL:            opts.url,
 		Default:        opts.defaultEnabled,
 		RequiresRoot:   opts.requiresRoot,
 		VersionCapable: opts.versionCapable,

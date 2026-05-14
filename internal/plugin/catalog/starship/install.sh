@@ -51,7 +51,7 @@ curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-erro
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/starship.tar.gz" | sha256sum -c -
 else
-  printf '%sWARNING: SHA256 verification skipped for Starship (no checksum provided in [plugins.versions.starship])%s\n' "$C_YEL" "$C_RST" >&2
+  printf '%sWARNING: SHA256 verification skipped for Starship (no checksum for starship in [plugins.versions])%s\n' "$C_YEL" "$C_RST" >&2
 fi
 
 tar -xzf /tmp/starship.tar.gz -C /usr/local/bin starship

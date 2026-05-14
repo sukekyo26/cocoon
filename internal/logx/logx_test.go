@@ -19,9 +19,9 @@ func TestInfoAndInfof(t *testing.T) {
 	t.Parallel()
 	l, stdout, stderr := newLogger(t)
 	l.Info("hello")
-	l.Infof("count=%d name=%s", 3, "wsd")
+	l.Infof("count=%d name=%s", 3, "cocoon")
 
-	if got, want := stdout.String(), "hello\ncount=3 name=wsd\n"; got != want {
+	if got, want := stdout.String(), "hello\ncount=3 name=cocoon\n"; got != want {
 		t.Fatalf("stdout = %q, want %q", got, want)
 	}
 	if stderr.Len() != 0 {

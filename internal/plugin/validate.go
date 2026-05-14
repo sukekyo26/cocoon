@@ -11,11 +11,11 @@ var (
 	rxEnvKey       = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 	rxBuildArg     = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`)
 	rxPluginVolume = regexp.MustCompile(`^/home/\$\{USERNAME\}/[^/]+$`)
+	rxPluginURL    = regexp.MustCompile(`^https://[^\s]+$`)
 )
 
-// accumulator collects field errors scoped under a base path. It is a
-// trimmed copy of internal/config's errAccumulator so the plugin package
-// can stay self-contained without exporting that type.
+// accumulator is a trimmed copy of internal/config's errAccumulator so
+// the plugin package stays self-contained without exporting that type.
 type accumulator struct {
 	base []string
 	errs *[]config.FieldError
@@ -40,9 +40,8 @@ func (a *accumulator) add(msg string, seg ...string) {
 	*a.errs = append(*a.errs, config.FieldError{Loc: loc, Message: msg})
 }
 
-// Validate runs every cross-field check on a plugin manifest. On failure
-// the returned error is a *config.ValidationError with Path = path so the
-// CLI's error renderer treats it identically to a workspace.toml failure.
+// Validate returns a *config.ValidationError on failure so the CLI's error
+// renderer treats it identically to a workspace.toml failure.
 func (p *Plugin) Validate(path string) error {
 	a := newAccumulator()
 	p.runValidate(a)
@@ -63,6 +62,11 @@ func (m *Metadata) validate(a *accumulator) {
 	}
 	if m.Description == "" {
 		a.add("description must not be empty", "description")
+	}
+	if m.URL == "" {
+		a.add("url must not be empty", "url")
+	} else if !rxPluginURL.MatchString(m.URL) {
+		a.add("url must start with https:// and contain no whitespace", "url")
 	}
 	if hasDuplicates(m.Conflicts) {
 		a.add("metadata.conflicts contains duplicate entries", "conflicts")

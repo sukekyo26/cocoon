@@ -19,12 +19,8 @@ import (
 	"github.com/sukekyo26/cocoon/internal/updatecheck"
 )
 
-// updateCheckTimeout caps the synchronous network call the notifier makes
-// before every subcommand. The check runs in PersistentPreRun, so an
-// unbounded budget (release.DefaultTimeout = 30s) would stall every
-// invocation when GitHub is unreachable. 2s comfortably covers a healthy
-// API roundtrip while keeping the worst-case user-perceived delay below
-// the threshold where impatience kicks in.
+// updateCheckTimeout caps the network call in PersistentPreRun so an
+// unreachable GitHub does not stall every invocation for release.DefaultTimeout (30s).
 const updateCheckTimeout = 2 * time.Second
 
 const rootLong = `cocoon — project-aware container workspace generator
@@ -47,9 +43,8 @@ Flags:
 Run 'cocoon <command> --help' for command-specific usage.
 `
 
-// newRootCommand constructs the cobra root command tree. It is stateless
-// across calls — each invocation builds a fresh tree wired to the supplied
-// writers, so concurrent uses (tests in parallel) are safe.
+// newRootCommand builds a fresh tree per call so concurrent uses (parallel
+// tests) are safe.
 func newRootCommand(version string, stdout, stderr io.Writer) *cobra.Command {
 	root := &cobra.Command{
 		Use:           "cocoon",
@@ -74,14 +69,9 @@ func newRootCommand(version string, stdout, stderr io.Writer) *cobra.Command {
 	root.SetVersionTemplate("{{.Version}}\n")
 	root.SetHelpTemplate(rootHelpTemplate)
 	root.AddCommand(
-		// Generator commands. `init` writes a fresh workspace.toml; `gen`
-		// reads it and emits .devcontainer/{Dockerfile, docker-compose.yml,
-		// devcontainer.json}. Container start-up is left to docker compose
-		// or VS Code's Reopen in Container — cocoon does not wrap them.
 		initcli.NewCommand(stdout, stderr),
 		gencli.NewCommand(stdout, stderr),
 		selfupdatecli.NewCommand(stdout, stderr),
-		// Noun groups
 		plugincli.NewCommand(stdout, stderr),
 		newVersionSubcommand(version, stdout),
 	)
@@ -89,10 +79,9 @@ func newRootCommand(version string, stdout, stderr io.Writer) *cobra.Command {
 	return root
 }
 
-// addLeafHelpAlias walks the tree decorating every leaf command with a
-// hidden ` + "`help`" + ` subcommand (via [clihelpers.AttachHelpAlias]). Subcommand
-// constructors typically call AttachHelpAlias themselves, but this catch-all
-// pass guarantees coverage even if a future addition forgets.
+// addLeafHelpAlias is a catch-all pass that decorates every leaf command
+// with a hidden `help` subcommand, in case a future addition forgets to
+// call AttachHelpAlias itself.
 func addLeafHelpAlias(c *cobra.Command) {
 	for _, child := range c.Commands() {
 		if child.Name() == "help" || child.Hidden {
@@ -106,17 +95,10 @@ func addLeafHelpAlias(c *cobra.Command) {
 	}
 }
 
-// maybeNotifyUpdate runs the once-per-day update check unless an opt-out
-// applies. Failures (network down, malformed cache, missing $HOME) are
-// silent so the notifier never interferes with the user's invocation.
-//
-// currentVersion is the same string newRootCommand was constructed with
-// (the value cobra prints for `--version` / `cocoon version`); reusing
-// it keeps the notice consistent with the running binary in embedded
-// or test contexts where a custom version is injected via cli.New.
-//
-// The fetch is bounded by updateCheckTimeout so a stalled GitHub API
-// cannot delay every subcommand by release.DefaultTimeout (30s).
+// maybeNotifyUpdate is silent on failure so the notifier never interferes
+// with the user's invocation. currentVersion is the same string passed to
+// newRootCommand so the notice matches the running binary in embedded /
+// test contexts where a custom version is injected.
 func maybeNotifyUpdate(cmd *cobra.Command, currentVersion string, stderr io.Writer) {
 	if shouldSkipUpdateCheck(cmd, stderr) {
 		return
@@ -142,16 +124,13 @@ func shouldSkipUpdateCheck(cmd *cobra.Command, stderr io.Writer) bool {
 	case "version", "self-update", "help":
 		return true
 	}
-	// `cocoon --version` / `-v` runs the root command (cmd.Name() ==
-	// "cocoon"), so the subcommand switch above misses it. Cobra
-	// auto-registers the `version` flag on any command with a non-empty
-	// Version field; check whether the user actually toggled it.
+	// `cocoon --version` runs the root command so the switch above misses
+	// it; cobra auto-registers `version` as a flag.
 	if vf := cmd.Flags().Lookup("version"); vf != nil && vf.Changed {
 		return true
 	}
-	// stderr must be an *os.File pointing at a terminal; otherwise the
-	// caller is piping output to a file/pipe/CI log and a notice would be
-	// noise. Buffers and io.Discard are not *os.File so they always skip.
+	// Skip when stderr is not a tty (pipe / file / CI log / Buffer) so the
+	// notice does not become noise.
 	f, ok := stderr.(*os.File)
 	if !ok {
 		return true
@@ -159,9 +138,8 @@ func shouldSkipUpdateCheck(cmd *cobra.Command, stderr io.Writer) bool {
 	return !isatty.IsTerminal(f.Fd())
 }
 
-// newVersionSubcommand mirrors the bare positional `cocoon version`
-// invocation. Cobra's built-in `--version` / `-v` covers the flag forms via
-// SetVersionTemplate.
+// newVersionSubcommand handles the positional `cocoon version` form;
+// `--version` / `-v` flag forms are wired via SetVersionTemplate.
 func newVersionSubcommand(version string, stdout io.Writer) *cobra.Command {
 	return &cobra.Command{
 		Use:           "version",

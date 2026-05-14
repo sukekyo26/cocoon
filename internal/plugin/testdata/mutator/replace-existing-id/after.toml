@@ -2,8 +2,8 @@
 enable = ["go"]
 
 # Keep checksum lines together with the pin for review.
-[plugins.versions.go]
-pin = "1.24.0"
+[plugins.versions]
+go = { pin = "1.24.0" }
 
 [mounts]
 host = "./src"

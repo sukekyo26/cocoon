@@ -54,7 +54,6 @@ key_url = "https://download.opensuse.org/repositories/shells:fish:release:3/xUbu
 
 [plugins]
 enable = [
-    "custom-ps1",
     "proto",
     "docker-cli",
     "aws-cli",

@@ -1,6 +1,7 @@
 [metadata]
 name = "Demo Tar"
-description = "Demo tarball plugin (https://example.com/tar)"
+description = "Demo tarball plugin"
+url = "https://example.com/tar"
 default = false
 
 [install]

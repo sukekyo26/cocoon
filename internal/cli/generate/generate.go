@@ -30,23 +30,16 @@ var ErrUsage = errors.New("usage error")
 // ErrFailure signals a runtime failure. Maps to exit code 1.
 var ErrFailure = errors.New("failure")
 
-// Artifact is one generated file produced by BuildArtifacts. Rel is the path
-// relative to the caller-supplied output directory; Body is its contents;
-// Mode is the file permission to write. A zero Mode falls back to 0o644 so
-// existing call sites that produce only text files do not need to set it.
+// Artifact is one generated file. A zero Mode falls back to 0o644.
 type Artifact struct {
 	Rel  string
 	Body string
 	Mode fs.FileMode
 }
 
-// LoadContext loads workspace.toml, the enabled plugins from
-// pluginsFS (a layered fs.FS rooted at the plugin catalog: each
-// top-level entry is a plugin id), and runs plugin conflict checks,
-// returning a WorkspaceContext ready for BuildArtifacts. Stderr
-// receives plugin-loader warnings. pluginsPathHint is used purely to
-// decorate "plugin not found" warnings with a human-readable path; pass
-// "" when the source has no on-disk anchor.
+// LoadContext returns a WorkspaceContext ready for BuildArtifacts after
+// running plugin conflict checks. pluginsPathHint decorates "plugin not
+// found" warnings; pass "" when the source has no on-disk anchor.
 func LoadContext(
 	wsPath string,
 	pluginsFS fs.FS,

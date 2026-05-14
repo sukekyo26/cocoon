@@ -24,7 +24,7 @@ labels: ["enhancement", "plugin"]
 
 
 ## Relation to existing plugins
-<!-- Note any conflicts (e.g. starship vs custom-ps1) -->
+<!-- Note any conflicts (e.g. plugins that install the same binary into /usr/local/bin, or overlap with a base image runtime) -->
 
 
 ## version_capable

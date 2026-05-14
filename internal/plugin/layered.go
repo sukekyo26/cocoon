@@ -207,29 +207,26 @@ func firstSegment(p string) string {
 	return p
 }
 
-// layeredRootFile is the synthetic directory file returned for ".". It keeps
-// the implementation in this file so we don't leak [io.EOF]-on-Read or the
-// rootInfo helper outside the layered FS.
+// layeredRootFile is the synthetic directory returned for ".".
 type layeredRootFile struct {
 	l       *LayeredFS
 	entries []fs.DirEntry
 	pos     int
 }
 
-// Stat satisfies [fs.File].
+// Stat returns the synthetic root info.
 func (*layeredRootFile) Stat() (fs.FileInfo, error) { return layeredRootInfo{}, nil }
 
-// Read satisfies [fs.File] but always reports "is a directory".
+// Read always reports "is a directory".
 func (*layeredRootFile) Read(_ []byte) (int, error) {
 	return 0, &fs.PathError{Op: "read", Path: ".", Err: errIsDirectory}
 }
 
-// Close satisfies [fs.File] (the synthetic root holds no resources).
+// Close is a no-op (no resources to release).
 func (*layeredRootFile) Close() error { return nil }
 
-// ReadDir implements [fs.ReadDirFile] so [fs.WalkDir] can walk the synthetic
-// root. n <= 0 returns every remaining entry (and a nil error); a positive n
-// returns up to n entries, with [io.EOF] when no more remain.
+// ReadDir implements [fs.ReadDirFile]. n <= 0 returns every remaining entry
+// (nil error); positive n returns up to n with [io.EOF] when no more remain.
 func (r *layeredRootFile) ReadDir(n int) ([]fs.DirEntry, error) {
 	if r.entries == nil {
 		ents, err := r.l.readRoot()
@@ -255,25 +252,25 @@ func (r *layeredRootFile) ReadDir(n int) ([]fs.DirEntry, error) {
 	return out, nil
 }
 
-// layeredRootInfo describes the synthetic "." directory. The name is
-// deliberately "." because [fs.WalkDir] uses Stat().Name() when reporting
-// the root; Mode includes [fs.ModeDir] so callers see a directory.
+// layeredRootInfo describes the synthetic "." directory. Name() returns "."
+// because [fs.WalkDir] reports the root via Stat().Name(); Mode carries
+// [fs.ModeDir] so callers see a directory.
 type layeredRootInfo struct{}
 
-// Name satisfies [fs.FileInfo].
+// Name returns ".".
 func (layeredRootInfo) Name() string { return "." }
 
-// Size satisfies [fs.FileInfo].
+// Size returns 0.
 func (layeredRootInfo) Size() int64 { return 0 }
 
-// Mode satisfies [fs.FileInfo].
+// Mode returns ModeDir | 0o555.
 func (layeredRootInfo) Mode() fs.FileMode { return fs.ModeDir | 0o555 }
 
-// ModTime satisfies [fs.FileInfo].
+// ModTime returns the zero time.
 func (layeredRootInfo) ModTime() time.Time { return time.Time{} }
 
-// IsDir satisfies [fs.FileInfo].
+// IsDir returns true.
 func (layeredRootInfo) IsDir() bool { return true }
 
-// Sys satisfies [fs.FileInfo].
+// Sys returns nil.
 func (layeredRootInfo) Sys() any { return nil }

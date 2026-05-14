@@ -57,9 +57,8 @@ func TestExpandAptCategoriesIgnoresUnknown(t *testing.T) {
 func TestExpandAptCategoriesNewCategories(t *testing.T) {
 	t.Parallel()
 
-	// vcs and utilities are new in the workspace-docker → cocoon migration.
-	// Pin their contents so future drift is caught at CI rather than at
-	// `apt-get install` time inside a built image.
+	// Pin the contents of vcs / utilities so future drift is caught at CI
+	// rather than at `apt-get install` time inside a built image.
 	got := aptcategories.ExpandAptCategories([]string{"vcs", "utilities"})
 	want := []string{
 		"git", "openssh-client", "gnupg",
@@ -67,5 +66,23 @@ func TestExpandAptCategoriesNewCategories(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("vcs+utilities packages: got %v, want %v", got, want)
+	}
+}
+
+func TestExpandAptCategoriesDevTools(t *testing.T) {
+	t.Parallel()
+
+	// dev-tools is default OFF; pin its package list so a silent reorder /
+	// addition is caught at CI rather than at `apt-get install` time.
+	got := aptcategories.ExpandAptCategories([]string{"dev-tools"})
+	want := []string{"git-lfs", "strace", "tmux"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("dev-tools packages: got %v, want %v", got, want)
+	}
+	// Sanity: dev-tools must NOT be in the default-on set.
+	for _, id := range aptcategories.DefaultAptCategoryIDs() {
+		if id == "dev-tools" {
+			t.Fatal("dev-tools is in DefaultAptCategoryIDs but must be default OFF")
+		}
 	}
 }

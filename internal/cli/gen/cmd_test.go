@@ -44,8 +44,7 @@ packages = []
 // artifacts land on disk and that the next-step message points the user
 // at docker compose.
 func TestGen_DefaultRun(t *testing.T) {
-	// t.Parallel() is intentionally omitted because t.Setenv below is
-	// incompatible with parallel execution.
+	// No t.Parallel(): t.Setenv blocks parallel execution.
 	work := t.TempDir()
 	home := filepath.Join(work, "home")
 	if err := os.MkdirAll(home, 0o755); err != nil {
@@ -106,8 +105,7 @@ enable = true
 // the section, gen never touches $HOME (covered by
 // TestGen_CertificatesDisabled_SkipsMkdirAndNotice).
 func TestGen_CreatesUserCertsDir(t *testing.T) {
-	// t.Parallel() is intentionally omitted because t.Setenv below is
-	// incompatible with parallel execution.
+	// No t.Parallel(): t.Setenv blocks parallel execution.
 	work := t.TempDir()
 	home := filepath.Join(work, "home")
 	if err := os.MkdirAll(home, 0o755); err != nil {
@@ -178,8 +176,7 @@ func TestGen_CreatesUserCertsDir(t *testing.T) {
 // notice block. This is the opt-out invariant: cert-free teams get
 // no host-side side effects and no cert wiring in their stdout.
 func TestGen_CertificatesDisabled_SkipsMkdirAndNotice(t *testing.T) {
-	// t.Parallel() is intentionally omitted because t.Setenv below is
-	// incompatible with parallel execution.
+	// No t.Parallel(): t.Setenv blocks parallel execution.
 	work := t.TempDir()
 	home := filepath.Join(work, "home")
 	if err := os.MkdirAll(home, 0o755); err != nil {
@@ -221,8 +218,7 @@ func TestGen_CertificatesDisabled_SkipsMkdirAndNotice(t *testing.T) {
 // written and the VS Code line is suppressed, but the docker compose
 // hint still appears.
 func TestGen_NoDevcontainerSuppressesVSCodeHint(t *testing.T) {
-	// t.Parallel() is intentionally omitted because t.Setenv below is
-	// incompatible with parallel execution.
+	// No t.Parallel(): t.Setenv blocks parallel execution.
 	work := t.TempDir()
 	home := filepath.Join(work, "home")
 	if err := os.MkdirAll(home, 0o755); err != nil {
@@ -260,8 +256,7 @@ func TestGen_NoDevcontainerSuppressesVSCodeHint(t *testing.T) {
 // --output redirect both inputs and outputs without relying on cwd
 // discovery.
 func TestGen_ExplicitWorkspaceAndOutput(t *testing.T) {
-	// t.Parallel() is intentionally omitted because t.Setenv below is
-	// incompatible with parallel execution.
+	// No t.Parallel(): t.Setenv blocks parallel execution.
 	work := t.TempDir()
 	home := filepath.Join(work, "home")
 	if err := os.MkdirAll(home, 0o755); err != nil {
@@ -307,8 +302,7 @@ files = [".claude.json", ".gemini/oauth_creds.json"]
 // parent dirs as needed), surfaces the per-file "created" line on the
 // first run only, and prints the host-files notice both runs.
 func TestGen_HomeFiles_TouchesAndPrintsNotice(t *testing.T) {
-	// t.Parallel() is intentionally omitted because t.Setenv below is
-	// incompatible with parallel execution.
+	// No t.Parallel(): t.Setenv blocks parallel execution.
 	work := t.TempDir()
 	home := filepath.Join(work, "home")
 	if err := os.MkdirAll(home, 0o755); err != nil {
@@ -376,8 +370,7 @@ func TestGen_HomeFiles_TouchesAndPrintsNotice(t *testing.T) {
 // untouched on subsequent gen runs. ensureHomeFiles must be idempotent
 // against existing files.
 func TestGen_HomeFiles_PreservesExistingFileMode(t *testing.T) {
-	// t.Parallel() is intentionally omitted because t.Setenv below is
-	// incompatible with parallel execution.
+	// No t.Parallel(): t.Setenv blocks parallel execution.
 	work := t.TempDir()
 	home := filepath.Join(work, "home")
 	if err := os.MkdirAll(home, 0o755); err != nil {
@@ -429,8 +422,7 @@ func TestGen_HomeFiles_PreservesExistingFileMode(t *testing.T) {
 // Docker auto-created it), `cocoon gen` fails with ErrFailure and the
 // stderr message points the user at the `rm -rf` recovery path.
 func TestGen_HomeFiles_RejectsExistingDirectory(t *testing.T) {
-	// t.Parallel() is intentionally omitted because t.Setenv below is
-	// incompatible with parallel execution.
+	// No t.Parallel(): t.Setenv blocks parallel execution.
 	work := t.TempDir()
 	home := filepath.Join(work, "home")
 	if err := os.MkdirAll(home, 0o755); err != nil {
@@ -467,8 +459,7 @@ func TestGen_HomeFiles_RejectsExistingDirectory(t *testing.T) {
 // workspace without [home_files] gets no host-files notice and no
 // host-side file creation.
 func TestGen_HomeFilesAbsent_NoNotice(t *testing.T) {
-	// t.Parallel() is intentionally omitted because t.Setenv below is
-	// incompatible with parallel execution.
+	// No t.Parallel(): t.Setenv blocks parallel execution.
 	work := t.TempDir()
 	home := filepath.Join(work, "home")
 	if err := os.MkdirAll(home, 0o755); err != nil {
@@ -502,8 +493,7 @@ func TestGen_HomeFilesAbsent_NoNotice(t *testing.T) {
 // TestGen_MissingWorkspaceReturnsUsage covers the discovery-miss path
 // when workspace.toml is absent and no --workspace flag is given.
 func TestGen_MissingWorkspaceReturnsUsage(t *testing.T) {
-	// t.Parallel() is intentionally omitted because t.Setenv below is
-	// incompatible with parallel execution.
+	// No t.Parallel(): t.Setenv blocks parallel execution.
 	work := t.TempDir()
 	home := filepath.Join(work, "home")
 	if err := os.MkdirAll(home, 0o755); err != nil {

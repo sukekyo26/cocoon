@@ -1,0 +1,11 @@
+[metadata]
+name = "shfmt"
+description = "Shell script formatter"
+url = "https://github.com/mvdan/sh"
+default = false
+
+[install]
+requires_root = true
+
+[version]
+version_capable = true

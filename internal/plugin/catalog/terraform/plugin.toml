@@ -1,6 +1,7 @@
 [metadata]
 name = "Terraform"
-description = "Infrastructure as Code by HashiCorp (https://github.com/hashicorp/terraform)"
+description = "Infrastructure as Code by HashiCorp"
+url = "https://github.com/hashicorp/terraform"
 default = false
 
 [apt]

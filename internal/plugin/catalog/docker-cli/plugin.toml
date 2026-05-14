@@ -1,6 +1,7 @@
 [metadata]
 name = "Docker CLI"
-description = "Docker CLI client for using host Docker daemon via socket mount (https://github.com/docker/cli)"
+description = "Docker CLI client for using host Docker daemon via socket mount"
+url = "https://github.com/docker/cli"
 default = true
 
 [install]

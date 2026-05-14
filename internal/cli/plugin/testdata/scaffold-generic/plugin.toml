@@ -1,6 +1,7 @@
 [metadata]
 name = "Demo Generic"
-description = "Demo generic plugin (https://example.com/g)"
+description = "Demo generic plugin"
+url = "https://example.com/g"
 default = false
 
 [install]

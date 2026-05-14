@@ -1,15 +1,5 @@
-// Package initcli implements the `cocoon init` lifecycle verb.
-//
-// `cocoon init` interactively creates a fresh workspace.toml in the current
-// directory. The user is asked for a mount range (cwd vs parent), whether to
-// generate .devcontainer/devcontainer.json, and which categories of common
-// apt packages to pre-populate. Each prompt has a non-interactive flag
-// counterpart so the command works under --yes for CI usage.
-//
-// The full `[workspace]` schema (mount_root, devcontainer keys) is wired
-// into config-loading in F3; for now this command produces the file but
-// `cocoon up` still relies on the legacy [container] block to drive the
-// generators.
+// Package initcli implements `cocoon init`, which creates a fresh
+// workspace.toml in the current directory.
 package initcli
 
 import "errors"

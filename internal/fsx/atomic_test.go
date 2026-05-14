@@ -154,7 +154,7 @@ func TestAtomicWriteDurability(t *testing.T) {
 
 // TestAtomicWriteOverwriteNoLingering verifies cleanup of intermediate temp
 // files when overwriting an existing file: only `out.txt` should be left
-// after the call (no `.wsd-tmp-*` siblings).
+// after the call (no `.cocoon-tmp-*` siblings).
 func TestAtomicWriteOverwriteNoLingering(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()

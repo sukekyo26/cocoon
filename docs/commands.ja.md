@@ -13,7 +13,7 @@
 | `cocoon gen` | `.devcontainer/` 配下の成果物を生成 |
 | `cocoon plugin list` | 利用可能な全プラグインを表示 (埋め込み + 上書き) |
 | `cocoon plugin show <id>` | 解決後の plugin マニフェストを表示 |
-| `cocoon plugin pin <id> <ref>` | `[plugins.versions.<id>]` ブロックを生成 (stdout / `--write` で in-place) |
+| `cocoon plugin pin <id> <ref>` | `[plugins.versions]` 配下の inline-table 行を生成 (stdout / `--write` で in-place) |
 | `cocoon plugin scaffold <id>` | テンプレートから新規 `<id>/` ディレクトリを作成 |
 | `cocoon self-update` | 最新 GitHub リリースで自分自身を置換 |
 | `cocoon version` | バイナリのバージョンを表示 |
@@ -43,7 +43,7 @@
 | `--no-certificates` | bool | `[certificates]` セクション省略を強制（デフォルト）。 |
 | `--apt-categories <ids>` | string | カンマ区切り apt カテゴリ ID (プロンプトをスキップ)。 |
 | `--plugins <ids>` | string | カンマ区切りで有効化するプラグイン ID。 |
-| `--plugin-versions <id>=<ref>,...` | string | カンマ区切りの `<id>=<ref>` でプラグインを pin する。各 `<id>` は `--plugins` にも含まれ、かつ `version_capable = true` である必要があり、重複は不可。`[plugins.versions]` ブロックを生成 `workspace.toml` に直接書き込む。 |
+| `--plugin-versions <id>=<ref>,...` | string | カンマ区切りの `<id>=<ref>` でプラグインを pin する。各 `<id>` は `--plugins` にも含まれ、かつ `version_capable = true` である必要があり、重複は不可。`[plugins.versions]` セクションに inline-table 行 (`<id> = { pin = "..." }`) を直接書き込む。 |
 | `--alias-bundles <ids>` | string | カンマ区切りエイリアスバンドル ID (例: `git,ls`)。 |
 | `--ports <values>` | string | カンマ区切りの docker-compose short-form ポートマッピング (例: `3000:3000,5432:5432`)。`[ports].forward` で扱う全形式を受理: コンテナ単独 `3000`、範囲 `3000-3005:3000-3005`、IPv4/IPv6 バインド `127.0.0.1:8001:8001` / `[::1]:80:80`、プロトコル `6060:6060/udp`。プロンプトをスキップ。空 / 未指定の場合はアクティブな `[ports]` ブロックを書かない（コメント雛形のみ残り、後から有効化できる）。 |
 | `--force` | bool | 既存 `workspace.toml` を上書き。 |
@@ -135,10 +135,10 @@ overlay は `gen` 時にのみ参照される。`~/.cocoon/plugins/<id>/` にフ
 
 ```console
 $ cocoon plugin list
-ID            SOURCE    DEFAULT  DESCRIPTION
-claude-code   embedded  false    Claude Code — AI-powered coding assistant ...
-go            embedded  false    Go programming language ...
-my-internal   user      true     internal CLI ...
+ID            SOURCE    DEFAULT  DESCRIPTION                                  URL
+claude-code   embedded  false    Claude Code — AI-powered coding assistant... https://github.com/anthropics/claude-code
+go            embedded  false    Go programming language ...                  https://github.com/golang/go
+my-internal   user      true     internal CLI ...                             https://git.example.com/team/internal-cli
 ```
 
 **フラグ:**
@@ -161,6 +161,7 @@ id: go
 source: embedded
 name: Go
 description: Go programming language ...
+url: https://github.com/golang/go
 default: false
 requires_root: true
 version_capable: true
@@ -175,28 +176,25 @@ volumes: [/home/${USERNAME}/go]
 
 ### `cocoon plugin pin <id> <ref>`
 
-**目的:** `version_capable` プラグイン用に上流バージョン (任意で per-arch チェックサム) を `workspace.toml` の `[plugins.versions.<id>]` に記録する。ブロックは `pin = "<ref>"` と任意の `checksum_amd64` / `checksum_arm64` 行を含み、`install.sh` が `$PIN` / `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` から読む。
+**目的:** `version_capable` プラグイン用に上流バージョン (任意で per-arch チェックサム) を `workspace.toml` の `[plugins.versions]` 配下に記録する。エントリは 1 行の inline-table — `<id> = { pin = "<ref>", checksum_amd64 = "...", checksum_arm64 = "..." }` — として出力され、`install.sh` が `$PIN` / `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` から読む。
 
 **例 (デフォルト — stdout, 手動貼り付け):**
 
 ```console
 $ cocoon plugin pin go 1.23.4 --amd64-checksum abc123 --arm64-checksum def456
-# Append the following block to workspace.toml under [plugins.versions]:
+# Add the following line under [plugins.versions] in workspace.toml:
 
-[plugins.versions.go]
-pin = "1.23.4"
-checksum_amd64 = "abc123"
-checksum_arm64 = "def456"
+go = { pin = "1.23.4", checksum_amd64 = "abc123", checksum_arm64 = "def456" }
 ```
 
 **例 (`--write` — in-place 編集):**
 
 ```console
 $ cocoon plugin pin go 1.23.4 --write
-Updated /home/alice/proj/workspace.toml: [plugins.versions.go]
+Updated /home/alice/proj/workspace.toml: [plugins.versions] go
 ```
 
-`--write` は `workspace.toml` を行ベースでパースし、既存 `[plugins.versions.<id>]` ブロックがあれば置換、無ければ最後の `[plugins.versions.*]` ブロックの直後に追加する。対象ブロック外のコメント・空行は保持される。
+`--write` は `workspace.toml` を行ベースでパースし、`[plugins.versions]` セクション内の既存 `<id> = { ... }` 行があれば置換、無ければそのセクションへ新しい行を追加する。対象行外のコメント・空行は保持される。
 
 **フラグ:**
 
@@ -204,14 +202,14 @@ Updated /home/alice/proj/workspace.toml: [plugins.versions.go]
 |---|---|
 | `--amd64-checksum <sha256>` | amd64 アーティファクトの SHA256。 |
 | `--arm64-checksum <sha256>` | arm64 アーティファクトの SHA256。 |
-| `--write` | `workspace.toml` (cwd から自動検出) に in-place 挿入・置換。 |
+| `--write` | `workspace.toml` (cwd から自動検出) に inline-table 行を in-place 挿入・置換。 |
 
 **落とし穴:**
 
 - `pin` は `[version].version_capable = true` のプラグインでのみ意味を持つ。それ以外では `gen` 時に無視される。
 - チェックサムフラグは `install.sh` が実際に `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` を読む場合 (= `tarball` テンプレート由来) のみ意味を持つ。`curl-pipe` / `generic` では無視される。
 - `--write` は cwd から `workspace.toml` を発見できる必要がある。`--write` 無しなら id 検証用に LayeredFS を解決するだけなので、どこからでも動く。
-- `--write` は multi-line `[plugins.versions.<id>]` 形式のみを編集する。`[plugins.versions]` 直下に任意の key 代入がある場合 — `<id> = "1.23.4"` / `<id> = [..]` / inline-table `<id> = { pin = "..." }` (`init` テンプレートがコメント行で示しているスタイル) のいずれも — `--write` は重複ブロックを追加せず usage error で停止する。各エントリを `[plugins.versions.<id>]` ブロックへ変換するか、`workspace.toml` を手動編集する。
+- `--write` は inline-table 形式 (`[plugins.versions]` セクション直下の `<id> = { pin = "..." }` 行) のみを編集する。legacy の `[plugins.versions.<id>]` subsection ブロックが残っているファイルに対しては、重複追加を避けるため `--write` は usage error で停止する。各ブロックを inline-table 行へ変換するか、`workspace.toml` を手動編集する。
 
 ### `cocoon plugin scaffold <id>`
 
@@ -223,7 +221,8 @@ Updated /home/alice/proj/workspace.toml: [plugins.versions.go]
 $ cd ~/projects/myapp
 $ cocoon plugin scaffold gh-cli \
     --template curl-pipe --version-capable \
-    --name "GitHub CLI" --description "GitHub CLI (https://cli.github.com)" \
+    --name "GitHub CLI" --description "GitHub CLI" \
+    --url "https://cli.github.com" \
     --non-interactive
 OK: scaffolded /home/alice/projects/myapp/.cocoon/plugins/gh-cli (2 files)
 ```
@@ -242,7 +241,8 @@ OK: scaffolded /home/alice/projects/myapp/.cocoon/plugins/gh-cli (2 files)
 |---|---|
 | `--plugins-dir <path>` | 出力ディレクトリ。デフォルト: `<workspace>/.cocoon/plugins` (`workspace.toml` から自動検出)。 |
 | `--name <name>` | 表示名 (例: `"GitHub CLI"`)。 |
-| `--description <text>` | 短い説明。括弧内に上流 URL を含める必要あり。 |
+| `--description <text>` | 短い説明。上流 URL を埋め込まず、`--url` で渡すこと。 |
+| `--url <url>` | 上流プロジェクト URL (`https://...`、空白不可)。`--non-interactive` 時は必須。 |
 | `--default` | デフォルト有効化フラグを立てる。 |
 | `--requires-root` | `install.sh` を root 実行に。 |
 | `--version-capable` | `$PIN` / `$CHECKSUM_*` の雛形を生成。 |
@@ -255,7 +255,7 @@ OK: scaffolded /home/alice/projects/myapp/.cocoon/plugins/gh-cli (2 files)
 
 - `--plugins-dir` を指定せず、cocoon プロジェクト外 (workspace.toml 未発見) で実行すると、`./plugins/<id>/` に黙って書く代わりに actionable error で停止する。
 - `--template tarball` は `--version-capable` を要求する。`tarball` 単体だと拒否される。
-- scaffold 後、生成された `plugin.toml` は runtime と同じ strict validator で再ロードされる。失敗 (不正な name、description に URL なし、等) すればディレクトリはロールバックされる。
+- scaffold 後、生成された `plugin.toml` は runtime と同じ strict validator で再ロードされる。失敗 (不正な name、`url` 欠落・形式不正、等) すればディレクトリはロールバックされる。
 - `add` 由来の overlay と同様、scaffold 直後でも `[plugins].enable` に `<id>` を追加しないと `gen` で反映されない。
 
 ---

@@ -21,6 +21,7 @@ type scaffoldData struct {
 	ID             string
 	Name           string
 	Description    string
+	URL            string
 	Default        bool
 	RequiresRoot   bool
 	VersionCapable bool
@@ -31,6 +32,7 @@ type scaffoldData struct {
 var pluginTOMLTmpl = tmplx.MustParse("plugin.toml", `[metadata]
 name = "{{ .Name }}"
 description = "{{ .Description }}"
+url = "{{ .URL }}"
 default = {{ .Default }}
 
 [install]
@@ -105,7 +107,7 @@ curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-erro
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/{{ .ID }}.tar.gz" | sha256sum -c -
 else
-  echo "WARNING: SHA256 verification skipped for {{ .Name }} (no checksum provided in [plugins.versions.{{ .ID }}])" >&2
+  echo "WARNING: SHA256 verification skipped for {{ .Name }} (no checksum for {{ .ID }} in [plugins.versions])" >&2
 fi
 
 # TODO: extract to the right destination.

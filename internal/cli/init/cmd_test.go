@@ -16,10 +16,6 @@ import (
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
 
-// loadPluginsForTest loads the embedded plugin catalog so tests can drive
-// applyFlags / applyDefaults / validatePluginConflicts against the same
-// data the production runInit path would see. t.Fatal on failure because
-// catalog loading is a pure compile-time / embed-time guarantee.
 func loadPluginsForTest(t *testing.T) map[string]*plugin.Plugin {
 	t.Helper()
 	plugins, err := loadEmbeddedPlugins()
@@ -29,8 +25,7 @@ func loadPluginsForTest(t *testing.T) map[string]*plugin.Plugin {
 	return plugins
 }
 
-// pinEnglish forces the i18n catalog to English so assertions stay
-// stable on hosts whose LANG starts with "ja".
+// pinEnglish stabilizes assertions on hosts whose LANG starts with "ja".
 func pinEnglish(t *testing.T) {
 	t.Helper()
 	for _, k := range []string{"WORKSPACE_LANG", "LC_ALL", "LC_MESSAGES", "LANG"} {
@@ -38,10 +33,6 @@ func pinEnglish(t *testing.T) {
 	}
 	t.Setenv("WORKSPACE_LANG", "en")
 }
-
-// ---------------------------------------------------------------------
-// makeStrictValidator: human messages, no regex leak, accepts valid input.
-// ---------------------------------------------------------------------
 
 func TestMakeStrictValidator_Empty(t *testing.T) {
 	t.Parallel()
@@ -123,10 +114,6 @@ func TestRegex_LeadingUnderscoreAsymmetry(t *testing.T) {
 		t.Error("username must accept leading _")
 	}
 }
-
-// ---------------------------------------------------------------------
-// applyFlags: each flag validated, *Set bookkeeping correct.
-// ---------------------------------------------------------------------
 
 func TestApplyFlags_AllValid(t *testing.T) {
 	t.Parallel()
@@ -217,10 +204,9 @@ func TestApplyFlags_ImageVersionWithoutImage(t *testing.T) {
 	}
 }
 
-// TestApplyFlags_ImageVersionBadFormat covers the format-only check that
-// replaces the old whitelist match. Tags with spaces, slashes, or colons
-// must be rejected at the flag layer so the user sees a clear error
-// before `cocoon gen` runs.
+// TestApplyFlags_ImageVersionBadFormat: spaces, slashes, colons must be
+// rejected at the flag layer so the user sees a clear error before
+// `cocoon gen` runs.
 func TestApplyFlags_ImageVersionBadFormat(t *testing.T) {
 	t.Parallel()
 	plugins := loadPluginsForTest(t)
@@ -235,15 +221,12 @@ func TestApplyFlags_ImageVersionBadFormat(t *testing.T) {
 	}
 }
 
-// TestApplyFlags_ImageVersionAcceptsOffWhitelist verifies the new behavior:
-// any tag matching rxImageVersionInput is accepted, even when not in
-// SupportedImageVersions. This lets users pin patch tags or new minors
-// (e.g. golang:1.26.4-bookworm) without waiting for a cocoon release.
+// TestApplyFlags_ImageVersionAcceptsOffWhitelist: any tag matching
+// rxImageVersionInput is accepted even when not in SupportedImageVersions.
+// This lets users pin patch tags or new minors without waiting for a release.
 func TestApplyFlags_ImageVersionAcceptsOffWhitelist(t *testing.T) {
 	t.Parallel()
 	plugins := loadPluginsForTest(t)
-	// Off-whitelist but well-formed: future Go patch and an oddly-cased
-	// suffix neither cocoon nor the registry necessarily ship today.
 	for _, tag := range []string{"1.26.4-bookworm", "26-bookworm-slim", "edge"} {
 		ans, err := applyFlags(&initFlags{Image: "golang", ImageVersion: tag}, plugins)
 		if err != nil {
@@ -280,8 +263,8 @@ func TestApplyFlags_InvalidMountRoot(t *testing.T) {
 func TestApplyFlags_DevcontainerExclusivity(t *testing.T) {
 	t.Parallel()
 	plugins := loadPluginsForTest(t)
-	// applyFlags itself does not detect this — runInit does. Confirm that
-	// each flag in isolation produces the matching boolean.
+	// applyFlags itself does not detect the mutual exclusivity — runInit
+	// does. Confirm each flag in isolation produces the matching boolean.
 	ans, err := applyFlags(&initFlags{Devcontainer: true}, plugins)
 	if err != nil || !ans.Devcontainer || !ans.DevcontainerSet {
 		t.Errorf("--devcontainer should set true: %v %+v", err, ans)
@@ -312,10 +295,6 @@ func TestApplyFlags_AptCategoriesWhitespace(t *testing.T) {
 		t.Errorf("got %v", ans.AptCategories)
 	}
 }
-
-// ---------------------------------------------------------------------
-// applyDefaults: required-with-yes; defaults respect *Set.
-// ---------------------------------------------------------------------
 
 func TestApplyDefaults_RequiresServiceName(t *testing.T) {
 	t.Parallel()
@@ -384,10 +363,6 @@ func TestApplyDefaults_PreservesExplicitSettings(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------
-// defaultImageVersion: returns the first (newest) entry per image.
-// ---------------------------------------------------------------------
-
 func TestDefaultImageVersion(t *testing.T) {
 	t.Parallel()
 	if got := defaultImageVersion("ubuntu"); got != "26.04" {
@@ -401,17 +376,8 @@ func TestDefaultImageVersion(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------
-// parseAptCategories: validation and whitespace handling.
-// ---------------------------------------------------------------------
-
-// TestFilterPluginIDs pins the helper that drops one id from a plugin
-// default list before the multi-select form is built. Empty excludeID
-// must pass the slice through unchanged; a present id must be removed
-// exactly once; an absent id must be a no-op. The picker relies on
-// these three shapes to keep image-vs-plugin combinations consistent
-// without surfacing the same id in two contradictory places (default
-// list and excluded list).
+// TestFilterPluginIDs pins the three shapes the picker relies on so the
+// same id never surfaces in both the default list and the excluded list.
 func TestFilterPluginIDs(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -442,19 +408,17 @@ func TestFilterPluginIDs(t *testing.T) {
 	}
 }
 
-// TestPluginsMultiSelect_BuildsForEveryExcludeID exercises the picker
-// constructor with each ImageProvidesPlugin value plus the no-exclude
-// case. The huh.MultiSelect's option list isn't readable through a
-// stable public API, so this is a smoke test: it confirms construction
-// never panics and the returned Field has the expected title/description
-// key — picker exclusion behavior itself is covered by TestFilterPluginIDs.
+// TestPluginsMultiSelect_BuildsForEveryExcludeID is a smoke test: huh's
+// option list isn't reachable through a stable API, so this only confirms
+// construction does not panic. Exclusion behavior itself is covered by
+// TestFilterPluginIDs.
 func TestPluginsMultiSelect_BuildsForEveryExcludeID(t *testing.T) {
 	t.Parallel()
 	plugins := loadPluginsForTest(t)
 	cat := i18n.New(i18n.LangEN)
 	var target []string
 
-	for _, excludeID := range []string{"", "rust", "go"} {
+	for _, excludeID := range []string{"", "rust", "go", "node", "deno"} {
 		excludeID := excludeID
 		t.Run("exclude="+excludeID, func(t *testing.T) {
 			t.Parallel()
@@ -484,10 +448,6 @@ func TestParseAptCategories(t *testing.T) {
 		t.Errorf("unknown category should be ErrUsage, got %v", err)
 	}
 }
-
-// ---------------------------------------------------------------------
-// renderWorkspaceToml: output shape pinned for both apt-empty and apt-set.
-// ---------------------------------------------------------------------
 
 func TestRenderWorkspaceToml_NoPackages(t *testing.T) {
 	t.Parallel()
@@ -655,10 +615,6 @@ func TestRenderWorkspaceToml_ContainerShellEnvCaveats(t *testing.T) {
 		}
 	}
 }
-
-// ---------------------------------------------------------------------
-// runInit (--yes path) end-to-end against a tempdir workspace.toml.
-// ---------------------------------------------------------------------
 
 // runInit tests cannot use t.Parallel() because t.Chdir mutates process
 // cwd; running them in parallel would race on os.Getwd inside runInit.
@@ -881,10 +837,6 @@ func TestRunInit_CertificatesFlag(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------
-// Plugin selection: --plugins flag, conflicts validation, defaults.
-// ---------------------------------------------------------------------
-
 func TestParsePlugins(t *testing.T) {
 	t.Parallel()
 	plugins := loadPluginsForTest(t)
@@ -908,21 +860,27 @@ func TestParsePlugins(t *testing.T) {
 
 func TestValidatePluginConflicts(t *testing.T) {
 	t.Parallel()
-	plugins := loadPluginsForTest(t)
+	// The embedded catalog currently ships no plugins with declared
+	// conflicts (custom-ps1 was the only one and has been removed). Build
+	// a synthetic pair in-memory so the validator's symmetric-detection
+	// logic still has a regression guard.
+	plugins := map[string]*plugin.Plugin{
+		"alpha": {Metadata: plugin.Metadata{Name: "Alpha", Conflicts: []string{"beta"}}},
+		"beta":  {Metadata: plugin.Metadata{Name: "Beta", Conflicts: []string{"alpha"}}},
+		"gamma": {Metadata: plugin.Metadata{Name: "Gamma"}},
+	}
 
-	// custom-ps1 ↔ starship is the canonical conflict pair shipped in the
-	// embedded catalog. Picking both must report a conflict.
-	err := validatePluginConflicts(plugins, []string{"custom-ps1", "starship"})
+	err := validatePluginConflicts(plugins, []string{"alpha", "beta"})
 	if !errors.Is(err, ErrUsage) {
-		t.Errorf("custom-ps1+starship should be ErrUsage, got %v", err)
+		t.Errorf("alpha+beta should be ErrUsage, got %v", err)
 	}
 
 	// Either alone is fine.
-	if err := validatePluginConflicts(plugins, []string{"custom-ps1"}); err != nil {
-		t.Errorf("custom-ps1 alone should be ok, got %v", err)
+	if err := validatePluginConflicts(plugins, []string{"alpha"}); err != nil {
+		t.Errorf("alpha alone should be ok, got %v", err)
 	}
-	if err := validatePluginConflicts(plugins, []string{"starship"}); err != nil {
-		t.Errorf("starship alone should be ok, got %v", err)
+	if err := validatePluginConflicts(plugins, []string{"beta"}); err != nil {
+		t.Errorf("beta alone should be ok, got %v", err)
 	}
 
 	// Empty list is trivially ok.
@@ -931,7 +889,7 @@ func TestValidatePluginConflicts(t *testing.T) {
 	}
 
 	// Disjoint plugins do not conflict.
-	if err := validatePluginConflicts(plugins, []string{"go", "uv", "github-cli"}); err != nil {
+	if err := validatePluginConflicts(plugins, []string{"alpha", "gamma"}); err != nil {
 		t.Errorf("disjoint plugins should be ok, got %v", err)
 	}
 }
@@ -995,22 +953,6 @@ func TestRunInit_PluginsFlagRejectsUnknown(t *testing.T) {
 }
 
 //nolint:paralleltest // t.Chdir
-func TestRunInit_PluginsFlagRejectsConflict(t *testing.T) {
-	pinEnglish(t)
-	work := t.TempDir()
-	t.Chdir(work)
-
-	cmd := NewCommand(io.Discard, io.Discard)
-	cmd.SetArgs([]string{
-		"--yes", "--service-name", "x", "--username", "y",
-		"--plugins", "custom-ps1,starship",
-	})
-	if err := cmd.Execute(); !errors.Is(err, ErrUsage) {
-		t.Errorf("conflicting plugins should be ErrUsage, got %v", err)
-	}
-}
-
-//nolint:paralleltest // t.Chdir
 func TestRunInit_YesDefaultsToDockerCli(t *testing.T) {
 	// `--yes` with no --plugins should fall back to defaultPluginIDs(),
 	// which currently means just docker-cli (the only `default = true`
@@ -1033,10 +975,6 @@ func TestRunInit_YesDefaultsToDockerCli(t *testing.T) {
 		t.Errorf("workspace.toml missing %q\n--- got ---\n%s", want, body)
 	}
 }
-
-// ---------------------------------------------------------------------
-// Plugin version pins: --plugin-versions flag, parser, render output.
-// ---------------------------------------------------------------------
 
 func TestParsePluginVersions(t *testing.T) {
 	t.Parallel()
@@ -1090,7 +1028,7 @@ func TestParsePluginVersions(t *testing.T) {
 }
 
 //nolint:paralleltest // t.Chdir
-func TestRunInit_PluginVersionsFlagWritesBlock(t *testing.T) {
+func TestRunInit_PluginVersionsFlagWritesInlineLines(t *testing.T) {
 	pinEnglish(t)
 	work := t.TempDir()
 	t.Chdir(work)
@@ -1108,15 +1046,15 @@ func TestRunInit_PluginVersionsFlagWritesBlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read workspace.toml: %v", err)
 	}
-	// Sorted by id: go before starship; each block is the canonical
-	// FormatPinBlock output (no checksums).
-	want := "[plugins.versions.go]\npin = \"1.23.4\"\n\n[plugins.versions.starship]\npin = \"1.21.1\"\n"
+	// Sorted by id: go before starship; one [plugins.versions] section header
+	// plus an inline-table line per pin (no checksums emitted from --plugin-versions).
+	want := "[plugins.versions]\ngo = { pin = \"1.23.4\" }\nstarship = { pin = \"1.21.1\" }\n"
 	if !strings.Contains(string(body), want) {
-		t.Errorf("workspace.toml missing pin blocks\n--- want ---\n%s\n--- got ---\n%s", want, body)
+		t.Errorf("workspace.toml missing pin lines\n--- want ---\n%s\n--- got ---\n%s", want, body)
 	}
 	// The commented-out example template must NOT appear when real pins
 	// were emitted — otherwise the user sees both the example and their own
-	// block. The template's leading comment is unique to the example.
+	// entries. The template's leading comment is unique to the example.
 	if strings.Contains(string(body), "pin specific versions for version_capable plugins") {
 		t.Errorf("commented [plugins.versions] template should not coexist with real pins\n--- got ---\n%s", body)
 	}
@@ -1169,10 +1107,6 @@ func TestRunInit_PluginVersionsRejectsMissingFromEnable(t *testing.T) {
 		t.Errorf("expected ErrUsage when pin is for a non-enabled plugin, got %v", err)
 	}
 }
-
-// ---------------------------------------------------------------------
-// Shell selection: --shell flag, validation, defaults, render output.
-// ---------------------------------------------------------------------
 
 func TestApplyFlags_ShellValid(t *testing.T) {
 	t.Parallel()
@@ -1260,10 +1194,6 @@ func TestRunInit_DefaultsShellToBash(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------
-// Alias bundles: --alias-bundles flag, parsing, render output.
-// ---------------------------------------------------------------------
-
 func TestParseAliasBundles(t *testing.T) {
 	t.Parallel()
 	out, err := parseAliasBundles("git,ls,docker")
@@ -1348,10 +1278,6 @@ func TestRunInit_AliasBundlesFlagRejectsUnknown(t *testing.T) {
 		t.Errorf("--alias-bundles k8s should be ErrUsage, got %v", err)
 	}
 }
-
-// ---------------------------------------------------------------------
-// --ports flag + parsePorts CSV helper
-// ---------------------------------------------------------------------
 
 func TestParsePorts(t *testing.T) {
 	t.Parallel()
@@ -1553,10 +1479,6 @@ func TestRunInit_PortsFlagRejectsInvalid(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------
-// Opt-in section templates (commented-out blocks for discoverability).
-// ---------------------------------------------------------------------
-
 // allTemplateSectionHeaders is the canonical list of `# [section]` literals
 // every renderWorkspaceToml output must contain. The literals are unchanged
 // across locales (TOML schema names are universal) — only the surrounding
@@ -1648,8 +1570,7 @@ func TestRenderWorkspaceToml_NoDeprecatedSections(t *testing.T) {
 
 // TestRenderWorkspaceToml_TemplateOrdering pins that container.* extras
 // land between the active [container] block and the active
-// [container.shell] block, matching workspace-docker's convention of
-// grouping sub-table extras under their parent.
+// [container.shell] block, grouping sub-table extras under their parent.
 func TestRenderWorkspaceToml_TemplateOrdering(t *testing.T) {
 	t.Parallel()
 	cat := i18n.New(i18n.LangEN)

@@ -14,20 +14,12 @@ import (
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
 
-// updateGolden, when set with `go test -update-golden`, rewrites the
-// testdata/*.expected files from the current generator output instead of
-// asserting against them. This is the cocoon-wide pattern for regen-ing
-// snapshots after intentional generator changes; only this package wires
-// it up today, but other generators that grow snapshot suites should
-// adopt the same flag name.
-//
 //nolint:gochecknoglobals // test-only flag scoped to dockerfile_test.
 var updateGolden = flag.Bool("update-golden", false, "rewrite testdata/*.expected from current generator output")
 
-// TestGenerate_Snapshot exercises the dockerfile generator against the
-// pinned fixture for each supported login shell so per-shell parameterization
-// (useradd -s, completion init, history setup, rc-loader, cert env exports,
-// plugin RC_FILE/RC_SYNTAX/LOGIN_SHELL) regresses visibly.
+// TestGenerate_Snapshot pins per-shell parameterization (useradd -s,
+// completion init, history setup, rc-loader, cert env exports, plugin
+// RC_FILE/RC_SYNTAX/LOGIN_SHELL) against the snapshot fixture.
 func TestGenerate_Snapshot(t *testing.T) {
 	t.Parallel()
 
@@ -96,18 +88,9 @@ func TestGenerate_Snapshot(t *testing.T) {
 	}
 }
 
-// TestGenerate_FromLineForEachImage walks every supported base image and
-// verifies the Dockerfile FROM line matches the expected registry path +
-// version pair. The point is to catch a future SupportedImages change
+// TestGenerate_FromLineForEachImage catches future SupportedImages drift
 // (new image, dropped image, renamed deno vendor namespace) that would
-// otherwise only surface as a runtime error during `docker build`.
-//
-// Each case picks the first whitelisted version per image (the same
-// default cocoon init writes) and asserts on the literal ARG IMAGE,
-// ARG IMAGE_VERSION and FROM lines the template emits. Image ids are
-// canonical DockerHub names, so the ARG IMAGE value round-trips
-// verbatim for every image — including denoland/deno's vendor
-// namespace and golang's library/ short name.
+// otherwise only surface as a `docker build` runtime error.
 //
 //nolint:paralleltest // mutates ws.Container in each iteration
 func TestGenerate_FromLineForEachImage(t *testing.T) {
@@ -125,14 +108,8 @@ func TestGenerate_FromLineForEachImage(t *testing.T) {
 			}
 			ws.Container.Image = image
 			ws.Container.ImageVersion = version
-			// snapshot.workspace.toml enables every plugin including
-			// "go" and "rust", which collide with image=golang / rust
-			// under the v0.3 mutually exclusive rule. Drop the conflict
-			// plugin (and its version override, since the generator
-			// rejects orphan version pins) per image so the test never
-			// exercises an invalid workspace state — keeps the test
-			// honest in case generators ever start asserting validated
-			// inputs.
+			// Drop image-conflict plugins (and their orphan version pins)
+			// so the test never feeds an invalid workspace into Generate.
 			if conflict, hit := config.ImageProvidesPlugin[image]; hit {
 				filtered := ws.Plugins.Enable[:0]
 				for _, id := range ws.Plugins.Enable {
@@ -158,8 +135,6 @@ func TestGenerate_FromLineForEachImage(t *testing.T) {
 			if err != nil {
 				t.Fatalf("generate: %v", err)
 			}
-			// Canonical image names mean the FROM line is image:version
-			// verbatim — no registry mapping.
 			wantArgImage := "ARG IMAGE=" + image
 			wantArgVersion := "ARG IMAGE_VERSION=" + version
 			wantFrom := "FROM ${IMAGE}:${IMAGE_VERSION}"
@@ -173,8 +148,7 @@ func TestGenerate_FromLineForEachImage(t *testing.T) {
 	}
 }
 
-// headLines returns the first n lines of s, suitable for compact error
-// output that does not dump 300 lines of generated Dockerfile.
+// headLines returns the first n lines, keeping error output compact.
 func headLines(s string, n int) string {
 	lines := strings.SplitN(s, "\n", n+1)
 	if len(lines) > n {
@@ -397,14 +371,11 @@ func generateWithMirrorURL(t *testing.T, mirrorURL string) string {
 	return generateWithMirrorURLAndSources(t, mirrorURL, keepExistingSources)
 }
 
-// keepExistingSources is a sentinel passed to
-// generateWithMirrorURLAndSources to indicate the caller wants the
-// fixture's [[apt.sources]] left untouched.
+// keepExistingSources is a sentinel signalling "leave fixture sources alone".
 var keepExistingSources = []config.AptSource{{Name: "__keep__"}}
 
-// generateWithMirrorURLAndSources loads the snapshot fixture, overrides
-// [apt.mirror].url, replaces [[apt.sources]] (nil clears, keepExistingSources
-// preserves the fixture's entries), and returns the generated Dockerfile.
+// generateWithMirrorURLAndSources overrides [apt.mirror].url; nil sources
+// clears, keepExistingSources preserves the fixture's entries.
 func generateWithMirrorURLAndSources(t *testing.T, mirrorURL string, sources []config.AptSource) string {
 	t.Helper()
 
@@ -449,24 +420,16 @@ func repoRoot(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
 	}
-	// internal/generate/dockerfile -> repo root
 	return filepath.Clean(filepath.Join(wd, "..", "..", ".."))
 }
 
-// certInstallHeader is the comment that opens the always-emitted cert
-// install RUN block. Tests use it to anchor ordering assertions instead
-// of pinning the inner shell-conditional body, which would couple them
-// to incidental formatting tweaks.
+// certInstallHeader anchors ordering assertions against a stable line
+// instead of the shell-conditional body that drifts with formatting tweaks.
 const certInstallHeader = "# Install custom CA certificates from ~/.cocoon/certs/"
 
-// TestGenerate_CertInstallBeforeAptInstall verifies that on the
-// enabled cert path (the snapshot fixture sets [certificates]
-// enable = true), the cert install RUN block lands before the main
-// apt install RUN. This is the core CERT-01 regression guard: HTTPS
-// apt operations performed by the main install must see any user-
-// provided corporate CAs already in the trust store. The disabled
-// branch is covered separately by
-// TestGenerate_CertInstallSuppressedWhenDisabled.
+// TestGenerate_CertInstallBeforeAptInstall is the CERT-01 regression guard:
+// HTTPS apt operations in the main install must see user CAs already in the
+// trust store.
 func TestGenerate_CertInstallBeforeAptInstall(t *testing.T) {
 	t.Parallel()
 
@@ -487,13 +450,7 @@ func TestGenerate_CertInstallBeforeAptInstall(t *testing.T) {
 		t.Errorf("cert install must precede apt install (certIdx=%d aptIdx=%d)", certIdx, aptIdx)
 	}
 
-	// Env declarations live on the post-USER stage so they apply to
-	// the unprivileged user's shells. On the enabled path the four
-	// ENV exports always land regardless of whether the host actually
-	// has *.crt files in ~/.cocoon/certs/ (the bundle they reference
-	// is the merged system bundle, which exists either way). On the
-	// disabled path they are suppressed entirely — covered by
-	// TestGenerate_CertInstallSuppressedWhenDisabled.
+	// ENV exports must land post-USER so they apply to the unprivileged shell.
 	envIdx := strings.Index(got, "ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt")
 	userSwitchIdx := strings.Index(got, "USER ${USERNAME}\nWORKDIR")
 	if envIdx < 0 || userSwitchIdx < 0 || envIdx < userSwitchIdx {
@@ -548,11 +505,8 @@ func TestGenerate_CertInstallSuppressedWhenDisabled(t *testing.T) {
 	}
 }
 
-// generateWithCertificatesDisabled loads the snapshot fixture, drops
-// any [certificates] section so the default-off path applies, and
-// returns the generated Dockerfile. Mirrors generateInStagingRoot's
-// shape but does not seed a staging root since the disabled branch
-// does not depend on host-side cert state.
+// generateWithCertificatesDisabled drops [certificates] so the default-off
+// path applies.
 func generateWithCertificatesDisabled(t *testing.T) string {
 	t.Helper()
 	root := stagingRoot(t)

@@ -9,30 +9,12 @@ import (
 	"testing"
 )
 
-// updateGolden, when set via `go test ./internal/cli/init -update-golden`,
-// rewrites the testdata/init/*.workspace.toml golden files from the live
-// `cocoon init` writer instead of asserting against them. Mirrors the
-// dockerfile generator's `-update-golden` flag (internal/generate/dockerfile/
-// dockerfile_test.go) so the cocoon-wide regen workflow stays consistent.
-//
 //nolint:gochecknoglobals // test-only flag scoped to this test file.
 var updateGolden = flag.Bool("update-golden", false, "rewrite testdata/init/*.workspace.toml from current init output")
 
-// TestRunInit_Snapshot exercises representative `cocoon init --yes` flag
-// combinations end-to-end and pins the generated workspace.toml as a golden
-// file. The matrix covers:
-//
-//   - default      : the e2e.yml minimal case (no --plugins).
-//   - plugins-amd64-full : every plugin enabled (custom-ps1 dropped against
-//     the starship conflict) with all version_capable plugins pinned.
-//   - plugins-arm64-full : the subset whose install.sh works on arm64
-//     (custom-ps1 retained since starship is dropped); pins are limited
-//     to plugins whose install.sh has explicit arm64 support.
-//   - plugins-versions-minimal : a focused 2-plugin pin sample.
-//
-// Adding/removing plugins, changing the writer, or tweaking i18n templates
-// will all surface here as a deliberate diff. Re-run with `-update-golden`
-// after intentional changes and review the diff before committing.
+// TestRunInit_Snapshot pins `cocoon init --yes` output across a matrix of
+// flag combinations. Re-run with `-update-golden` after intentional writer
+// or i18n changes and review the diff before committing.
 //
 //nolint:paralleltest // each subtest uses t.Chdir, which mutates process cwd
 func TestRunInit_Snapshot(t *testing.T) {
@@ -73,13 +55,15 @@ func TestRunInit_Snapshot(t *testing.T) {
 				"--mount-root", ".", "--no-devcontainer",
 				"--apt-categories", "text-editors,vcs,utilities,compression,build",
 				"--plugins",
-				"docker-cli,aws-cli,aws-sam-cli,github-cli,claude-code,copilot-cli," +
-					"proto,mise,uv,bun,zig,rust,go,lazygit,starship,nerd-fonts," +
-					"google-chrome,terraform,opentofu",
+				"docker-cli,docker-buildx,aws-cli,aws-sam-cli,github-cli,claude-code,copilot-cli," +
+					"proto,mise,uv,bun,node,deno,zig,rust,go,lazygit,starship," +
+					"nerd-fonts,google-chrome,terraform,opentofu," +
+					"kubectl,helm,shellcheck,shfmt",
 				"--plugin-versions",
-				"bun=1.3.3,copilot-cli=0.0.369,go=1.23.4,lazygit=0.44.1," +
-					"mise=2025.12.0,opentofu=1.9.0,proto=0.46.1,starship=1.21.1," +
-					"terraform=1.10.5,uv=0.5.7,zig=0.13.0",
+				"bun=1.3.3,copilot-cli=0.0.369,deno=2.7.14,docker-buildx=0.24.0,go=1.23.4," +
+					"helm=3.16.0,kubectl=1.31.0,lazygit=0.44.1,mise=2025.12.0,node=24.15.0," +
+					"opentofu=1.9.0,proto=0.46.1,shellcheck=0.10.0,shfmt=3.10.0," +
+					"starship=1.21.1,terraform=1.10.5,uv=0.5.7,zig=0.13.0",
 			},
 		},
 		{
@@ -91,11 +75,13 @@ func TestRunInit_Snapshot(t *testing.T) {
 				"--mount-root", ".", "--no-devcontainer",
 				"--apt-categories", "text-editors,vcs,utilities,compression,build",
 				"--plugins",
-				"docker-cli,github-cli,claude-code,copilot-cli,proto,mise,uv," +
-					"bun,rust,go,custom-ps1,nerd-fonts,terraform,opentofu",
+				"docker-cli,docker-buildx,github-cli,claude-code,copilot-cli,proto,mise,uv," +
+					"bun,node,deno,rust,go,nerd-fonts,terraform,opentofu," +
+					"kubectl,helm,shellcheck,shfmt",
 				"--plugin-versions",
-				"bun=1.3.3,copilot-cli=0.0.369,go=1.23.4,mise=2025.12.0," +
-					"opentofu=1.9.0,proto=0.46.1,terraform=1.10.5,uv=0.5.7",
+				"bun=1.3.3,copilot-cli=0.0.369,deno=2.7.14,docker-buildx=0.24.0,go=1.23.4," +
+					"helm=3.16.0,kubectl=1.31.0,mise=2025.12.0,node=24.15.0,opentofu=1.9.0," +
+					"proto=0.46.1,shellcheck=0.10.0,shfmt=3.10.0,terraform=1.10.5,uv=0.5.7",
 			},
 		},
 		{

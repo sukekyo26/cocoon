@@ -1,6 +1,7 @@
 [metadata]
 name = "Claude Code"
-description = "Claude Code — AI-powered coding assistant by Anthropic (https://github.com/anthropics/claude-code)"
+description = "Claude Code — AI-powered coding assistant by Anthropic"
+url = "https://github.com/anthropics/claude-code"
 default = false
 
 [install]

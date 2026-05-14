@@ -6,6 +6,30 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-05-14
+
+### 追加
+
+- 新しい `node` プラグイン: nodejs.org 公式 tarball から Node.js を `/usr/local/node` にインストールし、SHA256 で検証します (`linux-x64` / `linux-arm64`)。`[plugins.versions]` 配下の `node = { pin = "..." }` を省略するとインストールスクリプトが `https://nodejs.org/dist/index.tab` をパースして最新 LTS を自動解決します。`NPM_CONFIG_PREFIX=/home/${USERNAME}/.npm-global` を設定し、`npm install -g` の書き込み先を `/usr/local` ではなくユーザーホーム配下の named volume に逃すので、`~/.npm` (キャッシュ) と `~/.npm-global` (グローバルインストール先) は再ビルドを跨いで永続化されます。
+- 新しい `deno` プラグイン: GitHub Release の `deno-*-unknown-linux-gnu.zip` から Deno を `/usr/local/bin/deno` にインストールし、SHA256 で検証します (`x86_64` / `aarch64`)。`[plugins.versions]` 配下の `deno = { pin = "..." }` を省略するとインストールスクリプトが `releases/latest` のリダイレクトから最新 stable タグを取得します。`DENO_DIR=/home/${USERNAME}/.deno` を named volume として永続化します。
+- `image = "node"` と `[plugins].enable = ["node"]` の併用、および `image = "denoland/deno"` と `[plugins].enable = ["deno"]` の併用を validation エラーで reject するようにしました。あわせて `cocoon init` のピッカーでも対応する base image を選んだとき該当プラグインを選択肢から非表示にします。どちらの組み合わせも node プラグインが `/usr/local/node/bin` を PATH 先頭に挿してベース (`/usr/local/bin/node`) を死蔵させ、deno プラグインは `/usr/local/bin/deno` を直接上書きするため、両方有効にすると docker-build 時間を浪費するだけで実行時の挙動は変わりません (`golang` ↔ `go` / `rust` ↔ `rust` の既存挙動と統一)。
+- `cocoon init` の対話モードで、有効化した version_capable プラグイン 1 つずつに「LATEST / その他 (手動入力)」の 2 行のピッカーを表示するようにしました (イメージバージョンの選択 UI と同じ形式)。`Enter` で LATEST を確定、もしくはカーソルを 1 行下げて自由入力に切り替えてからバージョンを入力します。入力されたバージョンが上流に実在するかどうかの検証は行いません — プロンプトの説明文で上流のリリースページを参照するよう案内し、TOML が壊れない文字集合のみ regex で検査します (`image_version` と同じ規則)。`--plugin-versions` フラグで pin 済みの id は picker をスキップ (フラグ優先)。LATEST は `[plugins.versions]` から該当エントリを省く形で表現され、install.sh の PIN 空時の latest 解決ロジックが発動します。
+- 新しい `kubectl` プラグイン: `https://dl.k8s.io/release/v${VERSION}/bin/linux/${ARCH}/kubectl` から Kubernetes CLI を `/usr/local/bin/kubectl` にインストールし、SHA256 で検証します (amd64 / arm64)。`[plugins.versions]` 配下の `kubectl = { pin = "..." }` を省略するとインストールスクリプトが `https://dl.k8s.io/release/stable.txt` を読んで最新 stable バージョンを自動解決します。
+- 新しい `helm` プラグイン: 公式の `https://get.helm.sh/helm-v${VERSION}-linux-${ARCH}.tar.gz` から Kubernetes パッケージマネージャを `/usr/local/bin/helm` にインストールし、SHA256 で検証します (amd64 / arm64)。`[plugins.versions]` 配下の `helm = { pin = "..." }` を省略するとインストールスクリプトが GitHub の `helm/helm` リポジトリで `releases/latest` のリダイレクトを辿って最新 stable タグを取得します。
+- 新しい `shellcheck` プラグイン: GitHub Release の `shellcheck-v${VERSION}.linux.${DOWNLOAD_ARCH}.tar.xz` から shell スクリプト静的解析ツールを `/usr/local/bin/shellcheck` にインストールし、SHA256 で検証します (`x86_64` / `aarch64`)。`[plugins.versions]` 配下の `shellcheck = { pin = "..." }` を省略するとインストールスクリプトが `koalaman/shellcheck` の `releases/latest` リダイレクトから最新タグを取得します。最小ベースイメージで tar.xz を展開できるよう、`xz-utils` を apt 依存として宣言しています。
+- 新しい `shfmt` プラグイン: GitHub Release の `shfmt_v${VERSION}_linux_${ARCH}` (Go 製の static binary) を `/usr/local/bin/shfmt` にインストールし、SHA256 で検証します (amd64 / arm64)。`[plugins.versions]` 配下の `shfmt = { pin = "..." }` を省略するとインストールスクリプトが `mvdan/sh` の `releases/latest` リダイレクトから最新タグを取得します。
+- 新しい `dev-tools` apt カテゴリ (デフォルト OFF): `git-lfs` (ML モデル / メディア / 大容量バイナリ asset 用)、`strace` (コンテナ内で固まったプロセスのシステムコール追跡)、`tmux` (端末多重化。`docker exec` で長時間 build / training を仕掛けて切断しても継続) を一括で導入します。
+- 新しい `docker-buildx` プラグイン: BuildKit ベースの `docker buildx` CLI プラグイン (単体バイナリ) を `docker/buildx` の GitHub Release から `/usr/libexec/docker/cli-plugins/docker-buildx` にインストールし、SHA256 で検証します (amd64 / arm64)。`docker-cli` プラグイン (または docker 同梱のベースイメージ) と組み合わせると、cocoon e2e ワークフロー側の `docker buildx bake` と同等の操作 (`docker buildx version` / `buildx build --cache-from=type=gha` / マルチプラットフォーム build) がコンテナ内から直接行えるようになります。`[plugins.versions]` 配下の `docker-buildx = { pin = "..." }` を省略するとインストールスクリプトが `docker/buildx` の `releases/latest` リダイレクトから最新タグを取得します。
+
+### 変更
+
+- **BREAKING**: `cocoon init` および `cocoon plugin pin --write` の `[plugins.versions]` 出力形式を **インラインテーブル形式** (`[plugins.versions]` 1 つ + `go = { pin = "1.23.4" }` 形式の行) に変更しました。読み込みは subsection 形式 (`[plugins.versions.<id>]`) と inline 形式の両方を受理しますが、`cocoon plugin pin --write` は legacy subsection が残っている workspace.toml に対しては実行を拒否します (`<id> = { pin = "..." }` 形式に書き換えてから再実行してください)。既存ファイルは引き続きロードされ、`cocoon init` または `cocoon plugin pin --write` で再生成するとマイグレーションされます。
+- **BREAKING**: `plugin.toml` の `[metadata]` に必須フィールド `url` を追加し、description から `... (https://...)` 形式の URL 埋め込みを廃止しました。`cocoon init` の version_capable プラグイン向けバージョン入力プロンプトは、各プラグインの上流 URL を説明文の直下に独立した行で表示するようになり、ユーザーは入力前にその URL を開いて有効なバージョン文字列を確認できます。`cocoon plugin show` には `url:` 行が追加され、`cocoon plugin list` には `URL` 列が追加されます。`cocoon plugin scaffold` には `--url` フラグ (`--non-interactive` 時は必須) と対話式 URL 入力プロンプトが追加され、`--description` に URL を括弧で含める必要はなくなりました。`~/.cocoon/plugins/` または `<project>/.cocoon/plugins/` の自作プラグインは `[metadata]` に `url = "https://..."` を追加する必要があります (未設定だと `url must not be empty` で読み込み失敗)。
+
+### 削除
+
+- **BREAKING**: `custom-ps1` プラグインを撤去しました。`starship` が bash / zsh / fish すべてで `custom-ps1` 相当のプロンプト機能を 1 つの宣言的設定でカバーするため (bash 専用だった `custom-ps1` を維持する理由が無くなった)。`[plugins].enable = ["custom-ps1"]` を残したワークスペースは `unknown plugin` で validation エラーになります。`"starship"` に置き換える (または該当エントリを削除する) して `cocoon gen` を再実行してください。
+
 ## [0.3.0] - 2026-05-13
 
 ### 追加

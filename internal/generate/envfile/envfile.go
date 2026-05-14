@@ -24,24 +24,19 @@ import (
 // It matches the conventional Debian/Ubuntu docker package's group id.
 const dockerGIDFallback = 999
 
-// Sentinel errors for callers that want to distinguish failure modes; the
-// linter (err113) requires these to be static rather than created inline.
 var (
 	// ErrNilContext is returned when Generate is called with a nil context.
 	ErrNilContext = errors.New("envfile: nil workspace context")
-	// ErrStatUnavailable is returned when os.Stat returns a FileInfo whose
-	// underlying *syscall.Stat_t is not accessible (non-Unix host or test
-	// fake). The detector falls back to /etc/group in that case.
+	// ErrStatUnavailable signals the FileInfo had no accessible *syscall.Stat_t
+	// (non-Unix host or test fake); the detector falls back to /etc/group.
 	ErrStatUnavailable = errors.New("envfile: stat_t unavailable")
-	// ErrDockerGroupAbsent is returned by dockerGroupGIDFromFile when no
-	// "docker" line is present in /etc/group.
+	// ErrDockerGroupAbsent indicates no "docker" line in /etc/group.
 	ErrDockerGroupAbsent = errors.New("envfile: docker group not found")
 )
 
-// Generate returns the .env body for the given workspace context. UID/GID
-// come from os.Getuid/Getgid; DOCKER_GID is detected from the docker socket
-// or /etc/group, falling back to dockerGIDFallback when both are absent
-// (e.g. cocoon gen running on a host with no docker installed yet).
+// Generate sources UID/GID from os.Getuid/Getgid and resolves DOCKER_GID
+// via the docker socket, /etc/group, then dockerGIDFallback in that order
+// so .env always parses even on a host with no docker installed yet.
 func Generate(ctx *generate.WorkspaceContext) (string, error) {
 	if ctx == nil || ctx.WS == nil {
 		return "", ErrNilContext
@@ -65,18 +60,11 @@ func Generate(ctx *generate.WorkspaceContext) (string, error) {
 	return b.String(), nil
 }
 
-// composeProjectName returns COMPOSE_PROJECT_NAME — the docker-compose
-// namespace prefix. Derived from the directory holding workspace.toml so
-// it matches docker-compose's own default ("cwd basename") rather than
-// the container service name. ProjectDir may be empty for callers that
-// haven't been migrated yet (e.g. older test setups); fall back to the
-// service name so `.env` always parses.
-//
-// Compose project names must be lowercase; uppercase letters in the
-// project directory are folded so an `/Users/me/MyProject` cwd produces
-// `myproject` instead of failing at compose parse time. Anything more
-// exotic (whitespace, punctuation) is left alone — docker compose will
-// surface the error itself rather than cocoon silently rewriting paths.
+// composeProjectName mirrors docker-compose's "cwd basename" default by
+// using ProjectDir, folded to lowercase (compose requires lowercase).
+// Exotic chars (whitespace, punctuation) are left alone — docker compose
+// surfaces those itself rather than letting cocoon silently rewrite paths.
+// Falls back to ServiceName so `.env` always parses.
 func composeProjectName(ctx *generate.WorkspaceContext) string {
 	if ctx.ProjectDir != "" {
 		base := filepath.Base(ctx.ProjectDir)
@@ -87,9 +75,9 @@ func composeProjectName(ctx *generate.WorkspaceContext) string {
 	return ctx.WS.Container.ServiceName
 }
 
-// detectDockerGID resolves the docker GID by stat'ing the live socket first
-// (the most accurate signal) and falling back to /etc/group's "docker" line.
-// Returns dockerGIDFallback when both fail so .env always parses.
+// detectDockerGID stat'ing the live socket is the most accurate signal,
+// /etc/group's "docker" line is the fallback, and dockerGIDFallback keeps
+// .env parseable when both fail.
 func detectDockerGID() int {
 	for _, p := range dockersock.CandidatePaths() {
 		if gid, err := socketFileGID(p); err == nil {

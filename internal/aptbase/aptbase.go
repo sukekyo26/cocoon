@@ -15,10 +15,6 @@ package aptbase
 //   - sudo:            many plugins drop privileges with `sudo -u`,
 //     and `cocoon exec` also relies on it for the container user.
 //
-// The wider set of utility packages workspace-docker shipped in
-// config/apt-base-packages.conf (vim, jq, fzf, ripgrep, ...) is
-// deliberately not included; users opt in via [apt] packages.
-//
 //nolint:gochecknoglobals // tabular configuration data, file-scoped by design.
 var MinimalBasePackages = []string{
 	"ca-certificates",

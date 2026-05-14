@@ -1,6 +1,7 @@
 [metadata]
 name = "Nerd Fonts"
-description = "Nerd Fonts for terminal icon display, used with Starship, Powerline, etc. (https://github.com/ryanoasis/nerd-fonts)"
+description = "Nerd Fonts for terminal icon display, used with Starship, Powerline, etc."
+url = "https://github.com/ryanoasis/nerd-fonts"
 default = false
 
 [apt]

@@ -89,7 +89,8 @@ of the install phase and the named-volume declaration in
 | Section | Field | Type | Default | Required | Meaning |
 |---|---|---|---|---|---|
 | `[metadata]` | `name`            | string             | —     | ✓ | Human-readable display name. |
-| `[metadata]` | `description`     | string             | —     | ✓ | Short description. By convention, embed the upstream URL in parentheses (e.g. `"… (https://example.com)"`); `cocoon plugin scaffold` enforces this for new plugins, the runtime loader does not. |
+| `[metadata]` | `description`     | string             | —     | ✓ | Short description. Should not embed the upstream URL — use the dedicated `url` field instead. |
+| `[metadata]` | `url`             | string             | —     | ✓ | Upstream project URL (`https://...`, no whitespace). Surfaced by `cocoon init`'s per-plugin version picker, `cocoon plugin show` (`url:` row), and `cocoon plugin list` (`URL` column). |
 | `[metadata]` | `default`         | bool               | `false` |   | If true, `cocoon init`'s default plugin set includes this id. |
 | `[metadata]` | `conflicts`       | list of strings    | `[]`  |   | Plugin ids that must not be enabled at the same time. |
 | `[apt]`      | `packages`        | list of strings    | `[]`  |   | Apt packages installed before `install.sh` runs. |
@@ -170,7 +171,7 @@ bash's environment for that step is composed from two sources:
 | `LOGIN_SHELL`    | per-RUN env, always | `bash`, `zsh`, or `fish`. |
 | `USERNAME`       | Dockerfile `ARG`, always | The unprivileged container user name (declared via `ARG USERNAME` near the top of the generated Dockerfile and promoted to env by BuildKit). |
 | `UID` / `GID`    | Dockerfile `ARG`, always | Numeric UID and GID of the unprivileged user (same `ARG` mechanism as `USERNAME`). |
-| `PIN`            | per-RUN env, only when `[version].version_capable = true` | Version string from `[plugins.versions.<id>].pin` in `workspace.toml`. Empty means "use upstream latest". |
+| `PIN`            | per-RUN env, only when `[version].version_capable = true` | Version string from `[plugins.versions]`'s `<id> = { pin = "..." }` entry in `workspace.toml`. Empty means "use upstream latest". |
 | `CHECKSUM_AMD64` | per-RUN env, only when `[version].version_capable = true` | `sha256` of the amd64 artifact, or empty (script must skip verification with a warning). |
 | `CHECKSUM_ARM64` | same as above | `sha256` of the arm64 artifact. |
 | `<BUILD_ARG>`    | per-RUN env (also declared as `ARG`), only when listed in `[install].build_args` | The generator emits one `ARG <name>` line per plugin (next to whichever hook runs first) and threads `<name>="${<name>}"` into the per-RUN prefix of every hook. The Dockerfile substitutes the value on each prefix line at build time. Example: `docker-cli` reads `DOCKER_GID`. |
@@ -196,21 +197,19 @@ A versioned plugin agrees to:
 - Use `dpkg --print-architecture` (or equivalent) to choose the
   right artifact and the right checksum variable.
 
-Users record pins in `workspace.toml` under `[plugins.versions.<id>]`:
+Users record pins in `workspace.toml` under a single
+`[plugins.versions]` section, one inline-table line per plugin:
 
 ```toml
-[plugins.versions.go]
-pin            = "1.23.4"
-checksum_amd64 = "abc..."
-checksum_arm64 = "def..."
+[plugins.versions]
+go = { pin = "1.23.4", checksum_amd64 = "abc...", checksum_arm64 = "def..." }
 ```
 
-`cocoon plugin pin <id> <ref> --write` generates this block and
-inserts (or replaces) it for you. See `docs/commands.md` for the
-full flag list.
+`cocoon plugin pin <id> <ref> --write` upserts this line for you.
+See `docs/commands.md` for the full flag list.
 
 Plugins where `version_capable = false` ignore `$PIN` entirely;
-the pin block has no effect at `gen` time for those.
+the pin entry has no effect at `gen` time for those.
 
 ## Catalog tour
 

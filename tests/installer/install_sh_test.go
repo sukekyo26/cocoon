@@ -194,11 +194,8 @@ func runInstallSh(t *testing.T, env map[string]string) (stderr string, exit int)
 	return "", -1
 }
 
-// mergedEnv returns a child-process env where keys in `overrides` deterministically
-// win over any matching entry inherited from the parent. Just appending after
-// os.Environ() leaves duplicates; libc getenv() typically returns the FIRST
-// match, so the parent's value would silently shadow the test's override
-// whenever the CI runner / dev shell happens to have COCOON_* already set.
+// mergedEnv deduplicates so the parent process's COCOON_* env cannot
+// silently shadow a test override via libc getenv()'s first-match rule.
 func mergedEnv(overrides map[string]string) []string {
 	merged := make(map[string]string, len(os.Environ())+len(overrides))
 	for _, kv := range os.Environ() {
@@ -221,10 +218,6 @@ func mergedEnv(overrides map[string]string) []string {
 // directly. Trailing-slash and path-prefix variants are exercised by
 // dedicated test cases below.
 func (m *mockServer) baseURL() string { return m.srv.URL }
-
-// ---------------------------------------------------------------------------
-// Test cases (5-axis coverage per .claude/rules/testing.md)
-// ---------------------------------------------------------------------------
 
 func TestInstallSh_LatestHappyPath(t *testing.T) {
 	t.Parallel()

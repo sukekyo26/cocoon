@@ -77,12 +77,6 @@ func TestPluginContracts(t *testing.T) {
 			mustNotContain: []string{"{{FETCH}}", "{{VERSION}}"},
 		},
 		{
-			id: "custom-ps1", name: "Custom PS1",
-			requiresRoot:   false,
-			mustContain:    []string{"PS1=", "GIT_PS1_SHOWDIRTYSTATE", "__git_ps1", `"$RC_FILE"`, "LOGIN_SHELL"},
-			mustNotContain: []string{`>> ~/.bashrc`},
-		},
-		{
 			id: "docker-cli", name: "Docker CLI",
 			requiresRoot: true,
 			mustContain:  []string{"Docker", "retry 3"},
@@ -123,6 +117,24 @@ func TestPluginContracts(t *testing.T) {
 			mustContain: []string{"Meslo", "retry 3", "fc-cache", "tlsv1.2", ".fonts"},
 		},
 		{
+			id: "node", name: "Node.js",
+			requiresRoot: true, versionCapable: true, firstVolume: "npm",
+			mustContain: []string{
+				"nodejs.org/dist", "NODE_ARCH", "sha256sum -c -",
+				"tlsv1.2", "retry 3", "dpkg --print-architecture", "tar",
+			},
+			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
+		},
+		{
+			id: "deno", name: "Deno",
+			requiresRoot: true, versionCapable: true, firstVolume: "deno",
+			mustContain: []string{
+				"deno", "DENO_ARCH", "github.com/denoland/deno", "sha256sum -c -",
+				"tlsv1.2", "retry 3", "dpkg --print-architecture", "unzip",
+			},
+			mustNotContain: append(append([]string{}, noPlaceholders...), "api.github.com", "| jq "),
+		},
+		{
 			id: "opentofu", name: "OpenTofu",
 			requiresRoot: true, versionCapable: true,
 			mustContain: []string{
@@ -149,6 +161,52 @@ func TestPluginContracts(t *testing.T) {
 				`"$RC_FILE"`, "RC_SYNTAX", "env.fish",
 			},
 			mustNotContain: []string{`>> ~/.bashrc`},
+		},
+		{
+			id: "kubectl", name: "kubectl",
+			requiresRoot: true, versionCapable: true,
+			mustContain: []string{
+				"kubectl", "dl.k8s.io", "sha256sum -c -",
+				"tlsv1.2", "retry 3", "dpkg --print-architecture",
+			},
+			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
+		},
+		{
+			id: "helm", name: "Helm",
+			requiresRoot: true, versionCapable: true,
+			mustContain: []string{
+				"helm", "get.helm.sh", "sha256sum -c -",
+				"tlsv1.2", "retry 3", "dpkg --print-architecture", "tar",
+			},
+			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
+		},
+		{
+			id: "shellcheck", name: "ShellCheck",
+			requiresRoot: true, versionCapable: true,
+			mustContain: []string{
+				"shellcheck", "github.com/koalaman/shellcheck", "sha256sum -c -",
+				"tlsv1.2", "retry 3", "dpkg --print-architecture", "tar -xJ",
+			},
+			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
+		},
+		{
+			id: "shfmt", name: "shfmt",
+			requiresRoot: true, versionCapable: true,
+			mustContain: []string{
+				"shfmt", "github.com/mvdan/sh", "sha256sum -c -",
+				"tlsv1.2", "retry 3", "dpkg --print-architecture",
+			},
+			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
+		},
+		{
+			id: "docker-buildx", name: "Docker Buildx",
+			requiresRoot: true, versionCapable: true,
+			mustContain: []string{
+				"buildx", "github.com/docker/buildx", "sha256sum -c -",
+				"tlsv1.2", "retry 3", "dpkg --print-architecture",
+				"/usr/libexec/docker/cli-plugins",
+			},
+			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
 		},
 		{
 			id: "terraform", name: "Terraform",
@@ -255,6 +313,45 @@ func TestPluginContracts(t *testing.T) {
 				if strings.Contains(content, bad) {
 					t.Errorf("plugin %s install scripts must not contain %q", s.id, bad)
 				}
+			}
+		})
+	}
+}
+
+// TestCatalogMetadataURL pins down the new `[metadata].url` invariant for
+// every plugin under internal/plugin/catalog/: it must be non-empty, start
+// with "https://", and must NOT be re-embedded in description (regression
+// guard for the migration that split URL out of description).
+func TestCatalogMetadataURL(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := repoRoot(t)
+	pluginsDir := filepath.Join(repoRoot, "internal", "plugin", "catalog")
+	entries, err := filepath.Glob(filepath.Join(pluginsDir, "*", "plugin.toml"))
+	if err != nil {
+		t.Fatalf("glob plugins: %v", err)
+	}
+	if len(entries) == 0 {
+		t.Fatalf("no catalog plugin.toml files found under %s", pluginsDir)
+	}
+	for _, e := range entries {
+		e := e
+		id := filepath.Base(filepath.Dir(e))
+		t.Run(id, func(t *testing.T) {
+			t.Parallel()
+			p, err := plugin.Load(e)
+			if err != nil {
+				t.Fatalf("load %s: %v", e, err)
+			}
+			if p.Metadata.URL == "" {
+				t.Errorf("metadata.url is empty for plugin %q", id)
+			}
+			if !strings.HasPrefix(p.Metadata.URL, "https://") {
+				t.Errorf("metadata.url = %q for plugin %q, want https:// prefix", p.Metadata.URL, id)
+			}
+			if strings.Contains(p.Metadata.Description, "(http") {
+				t.Errorf("plugin %q description still embeds a legacy URL: %q",
+					id, p.Metadata.Description)
 			}
 		})
 	}

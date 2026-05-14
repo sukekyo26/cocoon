@@ -6,20 +6,15 @@ package aliasbundles
 
 import "sort"
 
-// AliasBundle groups a small, opinionated set of shell aliases that share
-// a theme (git, ls, docker, ...). The ID is the cobra flag value and the
-// multi-select option key; Label is what the user sees in the picker;
-// Description shows the alias keys (not values) so the picker stays
-// scannable in one terminal width.
+// AliasBundle groups a themed set of shell aliases. Description shows the
+// alias keys (not values) so the picker stays scannable in one terminal width.
 type AliasBundle struct {
 	ID          string
 	Label       string
 	Description string
 	Aliases     map[string]string
-	// Default is true when the bundle should start with the box pre-checked
-	// in `cocoon init`'s multi-select. All bundles ship Default=false today
-	// because shell aliases are personal preference; opt-in is safer than
-	// baking opinions into a generated workspace.toml.
+	// Default pre-checks the box in `cocoon init`'s multi-select. All
+	// bundles ship false because shell aliases are personal preference.
 	Default bool
 }
 
@@ -68,8 +63,7 @@ var AliasBundles = []AliasBundle{
 	},
 }
 
-// AliasBundleByID returns the bundle with the given ID, or nil when the ID
-// is not in [AliasBundles].
+// AliasBundleByID returns nil when id is not in AliasBundles.
 func AliasBundleByID(id string) *AliasBundle {
 	for i := range AliasBundles {
 		if AliasBundles[i].ID == id {
@@ -79,9 +73,8 @@ func AliasBundleByID(id string) *AliasBundle {
 	return nil
 }
 
-// DefaultAliasBundleIDs returns the IDs of bundles whose Default flag is
-// true, preserving the catalog order. Currently empty: shell aliases are
-// personal preference and shouldn't be baked into a generated file.
+// DefaultAliasBundleIDs preserves catalog order. Currently empty (all
+// bundles ship Default=false).
 func DefaultAliasBundleIDs() []string {
 	var ids []string
 	for _, b := range AliasBundles {
@@ -92,15 +85,10 @@ func DefaultAliasBundleIDs() []string {
 	return ids
 }
 
-// ExpandAliasBundles returns the merged alias map for the given bundle IDs.
-// Unknown IDs are skipped. Bundles that share an alias key would resolve to
-// the last winner in iteration order; since the whole point of curating this
-// list is to avoid such collisions, [TestAliasBundlesNoKeyCollisions] guards
-// against future drift.
+// ExpandAliasBundles skips unknown IDs. TestAliasBundlesNoKeyCollisions
+// guards against future key collisions in the curated list.
 func ExpandAliasBundles(ids []string) map[string]string {
-	// Sort the input so callers get deterministic iteration when they
-	// combine the result with their own alias map (e.g. tests that pin
-	// the rendered TOML).
+	// Sort the input for deterministic merge order (tests pin the TOML).
 	sorted := make([]string, len(ids))
 	copy(sorted, ids)
 	sort.Strings(sorted)

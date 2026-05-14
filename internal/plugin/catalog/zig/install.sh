@@ -60,7 +60,7 @@ curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-erro
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/zig.tar.xz" | sha256sum -c -
 else
-  printf '%sWARNING: SHA256 verification skipped for Zig (no checksum provided in [plugins.versions.zig])%s\n' "$C_YEL" "$C_RST" >&2
+  printf '%sWARNING: SHA256 verification skipped for Zig (no checksum for zig in [plugins.versions])%s\n' "$C_YEL" "$C_RST" >&2
 fi
 
 mkdir -p /usr/local/zig

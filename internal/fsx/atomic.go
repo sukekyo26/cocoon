@@ -7,17 +7,16 @@ import (
 	"path/filepath"
 )
 
-// tempFile is the minimal subset of *os.File used by AtomicWriteFile.
-// Defined as an interface so fault-injection tests can swap createTempFn.
+// tempFile is the *os.File subset AtomicWriteFile needs; an interface so
+// fault-injection tests can swap createTempFn.
 type tempFile interface {
 	io.WriteCloser
 	Sync() error
 	Name() string
 }
 
-// Test seams. Defaulted to the stdlib equivalents; tests in package fsx
-// override these to inject failures into otherwise-untriggerable paths
-// (Sync/Close errors do not occur naturally on a healthy local fs).
+// Test seams for fault injection into Sync/Close paths that healthy local
+// filesystems never trigger.
 var (
 	createTempFn = func(dir, pattern string) (tempFile, error) {
 		return os.CreateTemp(dir, pattern)
@@ -26,14 +25,12 @@ var (
 	renameFn = os.Rename
 )
 
-// AtomicWriteFile writes data to path via a same-directory temp file and
-// os.Rename, so readers never observe a partially-written file. The temp
-// file is removed if any step fails before the final rename.
-//
-// The destination directory must exist; AtomicWriteFile does not create it.
+// AtomicWriteFile writes via a same-directory temp file + os.Rename so
+// readers never observe a partial write. The destination directory must
+// already exist.
 func AtomicWriteFile(path string, data []byte, perm os.FileMode) (retErr error) {
 	dir := filepath.Dir(path)
-	f, err := createTempFn(dir, ".wsd-tmp-*")
+	f, err := createTempFn(dir, ".cocoon-tmp-*")
 	if err != nil {
 		return fmt.Errorf("fsx: create temp: %w", err)
 	}
