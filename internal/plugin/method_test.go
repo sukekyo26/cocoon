@@ -71,7 +71,9 @@ func TestResolveMethod_DefaultsWhenNoOverride(t *testing.T) {
 
 // TestResolveMethod_UnknownMethodIsSentinel pins the error class: the
 // caller can distinguish "workspace points at a method the plugin
-// doesn't declare" from other failures via errors.Is.
+// doesn't declare" from other failures via errors.Is. The package
+// message intentionally omits the plugin id; callers add their own
+// id context to avoid duplicate wrapping.
 func TestResolveMethod_UnknownMethodIsSentinel(t *testing.T) {
 	t.Parallel()
 	p := &plugin.Plugin{
@@ -82,8 +84,17 @@ func TestResolveMethod_UnknownMethodIsSentinel(t *testing.T) {
 			},
 		},
 	}
-	_, err := plugin.ResolveMethod(p, "x", map[string]string{"x": "unknown"})
+	_, err := plugin.ResolveMethod(p, "x", map[string]string{"x": "ghost"})
 	require.ErrorIs(t, err, plugin.ErrUnknownMethod)
-	require.Contains(t, err.Error(), "unknown")
-	require.Contains(t, err.Error(), "x")
+	require.Contains(t, err.Error(), "ghost")
+}
+
+// TestResolveMethod_NilPluginIsSentinel pins fail-fast: a nil plugin
+// pointer surfaces ErrNilPlugin instead of panicking on the dereference
+// of p.Install.Methods.
+func TestResolveMethod_NilPluginIsSentinel(t *testing.T) {
+	t.Parallel()
+	_, err := plugin.ResolveMethod(nil, "x", map[string]string{"x": "binary"})
+	require.ErrorIs(t, err, plugin.ErrNilPlugin)
+	require.Contains(t, err.Error(), `"x"`)
 }

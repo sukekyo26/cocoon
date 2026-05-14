@@ -458,12 +458,13 @@ func (c *WorkspaceContext) PluginVersionOverrides() map[string]config.PluginVers
 	return c.WS.Plugins.Versions
 }
 
-// PluginMethods returns the user's [plugins.methods] map. Never nil.
-// Keys are plugin ids; values name a method declared in that plugin's
-// [install.methods] section. Absent entries fall back to the plugin's
-// default_method.
+// PluginMethods returns the user's [plugins.methods] map. Never nil
+// (returns an empty map when the workspace has no [plugins.methods]
+// table). Keys are plugin ids; values name a method declared in that
+// plugin's [install.methods] section. Absent entries fall back to the
+// plugin's default_method.
 func (c *WorkspaceContext) PluginMethods() map[string]string {
-	if c.WS == nil {
+	if c.WS == nil || c.WS.Plugins.Methods == nil {
 		return map[string]string{}
 	}
 	return c.WS.Plugins.Methods
