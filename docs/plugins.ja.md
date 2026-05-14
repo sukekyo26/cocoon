@@ -82,7 +82,8 @@ install snippet が出ないだけ。
 | Section | Field | Type | Default | 必須 | 意味 |
 |---|---|---|---|---|---|
 | `[metadata]` | `name`            | string             | —     | ✓ | 表示名 |
-| `[metadata]` | `description`     | string             | —     | ✓ | 説明文。慣習として上流 URL を括弧内に含める (例: `"… (https://example.com)"`)。`cocoon plugin scaffold` は新規生成時にこの慣習を強制するが、ランタイムローダーはチェックしない |
+| `[metadata]` | `description`     | string             | —     | ✓ | 短い説明文。上流 URL を埋め込まない — 専用フィールド `url` を使う |
+| `[metadata]` | `url`             | string             | —     | ✓ | 上流プロジェクト URL (`https://...`、空白不可)。`cocoon init` のバージョン入力プロンプト、`cocoon plugin show` の `url:` 行、`cocoon plugin list` の `URL` 列で表示される |
 | `[metadata]` | `default`         | bool               | `false` |   | true なら `cocoon init` のデフォルト選択肢に含まれる |
 | `[metadata]` | `conflicts`       | list of strings    | `[]`  |   | 同時に enable できない id 群 |
 | `[apt]`      | `packages`        | list of strings    | `[]`  |   | `install.sh` の前に apt-get install されるパッケージ |

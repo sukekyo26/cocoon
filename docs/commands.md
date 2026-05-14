@@ -135,10 +135,10 @@ Overlays are read at `gen` time only; placing files in `~/.cocoon/plugins/<id>/`
 
 ```console
 $ cocoon plugin list
-ID            SOURCE    DEFAULT  DESCRIPTION
-claude-code   embedded  false    Claude Code — AI-powered coding assistant ...
-go            embedded  false    Go programming language ...
-my-internal   user      true     internal CLI ...
+ID            SOURCE    DEFAULT  DESCRIPTION                                  URL
+claude-code   embedded  false    Claude Code — AI-powered coding assistant... https://github.com/anthropics/claude-code
+go            embedded  false    Go programming language ...                  https://github.com/golang/go
+my-internal   user      true     internal CLI ...                             https://git.example.com/team/internal-cli
 ```
 
 **Flags:**
@@ -161,6 +161,7 @@ id: go
 source: embedded
 name: Go
 description: Go programming language ...
+url: https://github.com/golang/go
 default: false
 requires_root: true
 version_capable: true
@@ -220,7 +221,8 @@ Updated /home/alice/proj/workspace.toml: [plugins.versions] go
 $ cd ~/projects/myapp
 $ cocoon plugin scaffold gh-cli \
     --template curl-pipe --version-capable \
-    --name "GitHub CLI" --description "GitHub CLI (https://cli.github.com)" \
+    --name "GitHub CLI" --description "GitHub CLI" \
+    --url "https://cli.github.com" \
     --non-interactive
 OK: scaffolded /home/alice/projects/myapp/.cocoon/plugins/gh-cli (2 files)
 ```
@@ -239,7 +241,8 @@ OK: scaffolded /home/alice/projects/myapp/.cocoon/plugins/gh-cli (2 files)
 |---|---|
 | `--plugins-dir <path>` | Output directory. Default: `<workspace>/.cocoon/plugins` (auto-discovered from `workspace.toml`). |
 | `--name <name>` | Display name (e.g. `"GitHub CLI"`). |
-| `--description <text>` | Short description. Must embed an upstream URL in parentheses. |
+| `--description <text>` | Short description. Do not embed the upstream URL — pass it via `--url`. |
+| `--url <url>` | Upstream project URL (`https://...`, no whitespace). Required under `--non-interactive`. |
 | `--default` | Mark plugin enabled by default. |
 | `--requires-root` | `install.sh` runs as root. |
 | `--version-capable` | Generate `$PIN` / `$CHECKSUM_*` boilerplate. |
@@ -252,7 +255,7 @@ OK: scaffolded /home/alice/projects/myapp/.cocoon/plugins/gh-cli (2 files)
 
 - Without `--plugins-dir` and outside a cocoon project (no discoverable `workspace.toml`), scaffold refuses with an actionable error rather than silently writing to `./plugins/<id>/`.
 - `--template tarball` implies `--version-capable`; the scaffold rejects the combination of `tarball` without `--version-capable`.
-- After scaffolding, the generated `plugin.toml` is reloaded under the same strict validator the runtime uses; if it fails (bad name, missing URL in description, etc.), the directory is rolled back.
+- After scaffolding, the generated `plugin.toml` is reloaded under the same strict validator the runtime uses; if it fails (bad name, missing or malformed `url`, etc.), the directory is rolled back.
 - Like overlays from `add`, a scaffolded plugin still needs to be listed in `[plugins].enable` to take effect at `gen` time.
 
 ---

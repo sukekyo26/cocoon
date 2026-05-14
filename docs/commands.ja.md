@@ -135,10 +135,10 @@ overlay は `gen` 時にのみ参照される。`~/.cocoon/plugins/<id>/` にフ
 
 ```console
 $ cocoon plugin list
-ID            SOURCE    DEFAULT  DESCRIPTION
-claude-code   embedded  false    Claude Code — AI-powered coding assistant ...
-go            embedded  false    Go programming language ...
-my-internal   user      true     internal CLI ...
+ID            SOURCE    DEFAULT  DESCRIPTION                                  URL
+claude-code   embedded  false    Claude Code — AI-powered coding assistant... https://github.com/anthropics/claude-code
+go            embedded  false    Go programming language ...                  https://github.com/golang/go
+my-internal   user      true     internal CLI ...                             https://git.example.com/team/internal-cli
 ```
 
 **フラグ:**
@@ -161,6 +161,7 @@ id: go
 source: embedded
 name: Go
 description: Go programming language ...
+url: https://github.com/golang/go
 default: false
 requires_root: true
 version_capable: true
@@ -220,7 +221,8 @@ Updated /home/alice/proj/workspace.toml: [plugins.versions] go
 $ cd ~/projects/myapp
 $ cocoon plugin scaffold gh-cli \
     --template curl-pipe --version-capable \
-    --name "GitHub CLI" --description "GitHub CLI (https://cli.github.com)" \
+    --name "GitHub CLI" --description "GitHub CLI" \
+    --url "https://cli.github.com" \
     --non-interactive
 OK: scaffolded /home/alice/projects/myapp/.cocoon/plugins/gh-cli (2 files)
 ```
@@ -239,7 +241,8 @@ OK: scaffolded /home/alice/projects/myapp/.cocoon/plugins/gh-cli (2 files)
 |---|---|
 | `--plugins-dir <path>` | 出力ディレクトリ。デフォルト: `<workspace>/.cocoon/plugins` (`workspace.toml` から自動検出)。 |
 | `--name <name>` | 表示名 (例: `"GitHub CLI"`)。 |
-| `--description <text>` | 短い説明。括弧内に上流 URL を含める必要あり。 |
+| `--description <text>` | 短い説明。上流 URL を埋め込まず、`--url` で渡すこと。 |
+| `--url <url>` | 上流プロジェクト URL (`https://...`、空白不可)。`--non-interactive` 時は必須。 |
 | `--default` | デフォルト有効化フラグを立てる。 |
 | `--requires-root` | `install.sh` を root 実行に。 |
 | `--version-capable` | `$PIN` / `$CHECKSUM_*` の雛形を生成。 |
@@ -252,7 +255,7 @@ OK: scaffolded /home/alice/projects/myapp/.cocoon/plugins/gh-cli (2 files)
 
 - `--plugins-dir` を指定せず、cocoon プロジェクト外 (workspace.toml 未発見) で実行すると、`./plugins/<id>/` に黙って書く代わりに actionable error で停止する。
 - `--template tarball` は `--version-capable` を要求する。`tarball` 単体だと拒否される。
-- scaffold 後、生成された `plugin.toml` は runtime と同じ strict validator で再ロードされる。失敗 (不正な name、description に URL なし、等) すればディレクトリはロールバックされる。
+- scaffold 後、生成された `plugin.toml` は runtime と同じ strict validator で再ロードされる。失敗 (不正な name、`url` 欠落・形式不正、等) すればディレクトリはロールバックされる。
 - `add` 由来の overlay と同様、scaffold 直後でも `[plugins].enable` に `<id>` を追加しないと `gen` で反映されない。
 
 ---
