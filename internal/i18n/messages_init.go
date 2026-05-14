@@ -50,6 +50,8 @@ var messagesEN_init = map[string]string{
 	"init_prompt_plugin_version":        "%s version",
 	"init_desc_plugin_version":          "LATEST = newest at build time. Pick Other to pin (e.g. 1.23.4). cocoon does NOT verify the pin exists — confirm via the URL below.",
 	"init_err_plugin_pin_fmt":           "must be a plain version pin — first character alnum or underscore; trailing characters may add `.` and `-`; no slash or colon",
+	"init_prompt_plugin_method":         "%s install method",
+	"init_desc_plugin_method":           "This plugin declares more than one install method (e.g. official installer vs. direct binary). Pick the one that fits your environment — the choice is saved to [plugins.methods] in workspace.toml.",
 	"init_prompt_alias_bundles":         "Select shell alias bundles",
 	"init_desc_alias_bundles":           "Pre-canned alias sets merged into [container.shell].aliases. All start unchecked — opt in only what you want.",
 	"init_err_alias_bundle_unknown_fmt": "unknown alias bundle %q",
@@ -79,6 +81,8 @@ var messagesEN_init = map[string]string{
 		"#   - PAGER=less / less -R needs the `utilities` apt category (less is not in cocoon's minimal base).",
 	"init_toml_section_plugins": "# [plugins] — enable cocoon plugins (run `cocoon plugin list` for the catalog).\n" +
 		"#   Pin versions in [plugins.versions] when you need reproducible builds.",
+	"init_toml_section_plugins_methods": "# [plugins.methods] — install method picked for plugins that declare multiple methods.\n" +
+		"#   Plugins with a single declared method ignore this section.",
 	"init_toml_section_plugins_versions": "# [plugins.versions] — pinned versions for the enabled plugins above.\n" +
 		"#   Add checksum_amd64 / checksum_arm64 (64 lowercase hex chars) per entry to verify install tarballs.",
 	"init_toml_section_apt": "# [apt] — extra apt packages installed on top of cocoon's minimal base + selected categories.\n" +
@@ -157,6 +161,8 @@ var messagesJA_init = map[string]string{
 	"init_prompt_plugin_version":        "%s のバージョン",
 	"init_desc_plugin_version":          "LATEST はビルド時に最新版を取得。固定するなら「その他 (手動入力)」で入力 (例: 1.23.4)。実在検証はしないので下記 URL で確認を。",
 	"init_err_plugin_pin_fmt":           "バージョン pin 形式である必要があります (先頭は英数字または `_`、2 文字目以降は `.` / `-` も可、スラッシュ・コロン禁止)",
+	"init_prompt_plugin_method":         "%s のインストール方式",
+	"init_desc_plugin_method":           "このプラグインは複数のインストール方式（例: 公式インストーラ / バイナリ直接ダウンロード）を提供しています。環境に合うものを 1 つ選択してください — 選択は workspace.toml の [plugins.methods] に保存されます。",
 	"init_prompt_alias_bundles":         "シェルエイリアスバンドルを選択",
 	"init_desc_alias_bundles":           "プリセットの alias セットを [container.shell].aliases にマージします。初期チェックは全部 OFF — 欲しいものだけ選んでください。",
 	"init_err_alias_bundle_unknown_fmt": "未知のエイリアスバンドル %q",
@@ -186,6 +192,8 @@ var messagesJA_init = map[string]string{
 		"#   - PAGER=less / less -R は apt カテゴリ `utilities` が前提（less は cocoon の最小ベースに含まれない）。",
 	"init_toml_section_plugins": "# [plugins] — cocoon プラグインの有効化（一覧は `cocoon plugin list`）。\n" +
 		"#   再現性が必要なら [plugins.versions] でバージョン固定。",
+	"init_toml_section_plugins_methods": "# [plugins.methods] — 複数のインストール方式を提供するプラグインに対する選択。\n" +
+		"#   方式を 1 つしか持たないプラグインはこのセクションを無視。",
 	"init_toml_section_plugins_versions": "# [plugins.versions] — 上で有効化したプラグインに対するバージョン固定。\n" +
 		"#   各エントリに checksum_amd64 / checksum_arm64（64 文字小文字 hex）を足すと install 時のハッシュ検証が有効になる。",
 	"init_toml_section_certificates": "# [certificates] — ホスト側 ~/.cocoon/certs/ の TLS 証明書をコンテナイメージに自動取り込み (opt-in)。\n" +

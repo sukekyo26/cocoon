@@ -3,11 +3,50 @@ package plugin_test
 import (
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
+
+// installScriptCorpus concatenates the plugin's install.<method>.sh files
+// together with plugin.toml, returning the joined blob the mustContain /
+// mustNotContain assertions search.
+//
+// `install_user.sh` is intentionally NOT folded in here — it is the only
+// auxiliary script TestPluginContracts handles separately (appended at the
+// call site), so keeping responsibility split means each script is read at
+// most once. The broader `install*.sh` glob would otherwise also pick up
+// `install_user.sh` and double-count it.
+//
+// The legacy `install.sh` shape is rejected by the loader (validateMethodScripts);
+// only the `install.<method>.sh` form is valid in the catalog. The glob
+// `install.*.sh` matches it directly without further branching.
+func installScriptCorpus(t *testing.T, dir, id string) string {
+	t.Helper()
+	matches, err := filepath.Glob(filepath.Join(dir, "install.*.sh"))
+	if err != nil {
+		t.Fatalf("glob method scripts: %v", err)
+	}
+	if len(matches) == 0 {
+		t.Fatalf("plugin %q ships no install.<method>.sh script", id)
+	}
+	sort.Strings(matches)
+	var b strings.Builder
+	for _, m := range matches {
+		body, rerr := os.ReadFile(m) //nolint:gosec // catalog file
+		if rerr != nil {
+			t.Fatalf("read %s: %v", m, rerr)
+		}
+		b.Write(body)
+		b.WriteString("\n")
+	}
+	if extra, rerr := os.ReadFile(filepath.Join(dir, "plugin.toml")); rerr == nil {
+		b.Write(extra)
+	}
+	return b.String()
+}
 
 // TestPluginContracts replaces the per-plugin Bash tests previously living
 // under tests/unit/plugins/. For every plugin in plugins/<id>/ it asserts:
@@ -71,10 +110,16 @@ func TestPluginContracts(t *testing.T) {
 			id: "copilot-cli", name: "GitHub Copilot CLI",
 			requiresRoot: false, versionCapable: true, firstVolume: "copilot",
 			mustContain: []string{
-				"Copilot", "curl -fsSL", "retry 3",
+				"Copilot", "curl -fsSL", "retry 3", "tlsv1.2",
+				// gh-cli method (install.gh-cli.sh)
 				"gh.io/copilot-install", `PREFIX="$HOME/.local"`,
+				// binary method (install.binary.sh)
+				"github.com/github/copilot-cli", "sha256sum -c -",
+				"dpkg --print-architecture",
+				// method-aware fail-fast
+				`COCOON_INSTALL_METHOD`,
 			},
-			mustNotContain: []string{"{{FETCH}}", "{{VERSION}}"},
+			mustNotContain: append(append([]string{}, noPlaceholders...), "api.github.com", "| jq "),
 		},
 		{
 			id: "docker-cli", name: "Docker CLI",
@@ -289,18 +334,12 @@ func TestPluginContracts(t *testing.T) {
 				}
 			}
 
-			installSh, err := os.ReadFile(filepath.Join(pluginsDir, s.id, "install.sh"))
-			if err != nil {
-				t.Fatalf("read install.sh: %v", err)
-			}
-			content := string(installSh)
+			content := installScriptCorpus(t, filepath.Join(pluginsDir, s.id), s.id)
 			// Some plugins also ship install_user.sh; concatenate so contract
-			// substrings can live in either file. plugin.toml is also folded
-			// in so checks like "PATH"/"GOPATH" set under [install.env] match.
+			// substrings can live in either file. (plugin.toml is already
+			// folded in by installScriptCorpus so [install.env]-scoped names
+			// like "PATH" / "GOPATH" match.)
 			if extra, err := os.ReadFile(filepath.Join(pluginsDir, s.id, "install_user.sh")); err == nil {
-				content += "\n" + string(extra)
-			}
-			if extra, err := os.ReadFile(pluginToml); err == nil {
 				content += "\n" + string(extra)
 			}
 
@@ -312,6 +351,73 @@ func TestPluginContracts(t *testing.T) {
 			for _, bad := range s.mustNotContain {
 				if strings.Contains(content, bad) {
 					t.Errorf("plugin %s install scripts must not contain %q", s.id, bad)
+				}
+			}
+		})
+	}
+}
+
+// TestInstallScriptsMatchDeclaredMethods enforces the bidirectional
+// invariant between [install.methods] declarations and install.<name>.sh
+// files on disk:
+//
+//   - every [install.methods.<name>] declaration in plugin.toml has a
+//     matching install.<name>.sh file on disk (loader checks this at
+//     runtime, but failing here surfaces it at PR-review time so the
+//     catalog never ships a broken release);
+//   - every install.<name>.sh file on disk is declared in [install.methods]
+//     (catches typos in filenames and orphaned scripts left behind by a
+//     rename — the loader cannot detect this without the inverse scan).
+//
+// Since [install.methods] is now mandatory (loader rejects an empty one),
+// the "no declared methods" branch is dead by design — `plugin.Load`
+// would fail before this test runs.
+func TestInstallScriptsMatchDeclaredMethods(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := repoRoot(t)
+	pluginsDir := filepath.Join(repoRoot, "internal", "plugin", "catalog")
+	entries, err := filepath.Glob(filepath.Join(pluginsDir, "*", "plugin.toml"))
+	if err != nil {
+		t.Fatalf("glob plugins: %v", err)
+	}
+	for _, e := range entries {
+		e := e
+		id := filepath.Base(filepath.Dir(e))
+		t.Run(id, func(t *testing.T) {
+			t.Parallel()
+			p, lerr := plugin.Load(e)
+			if lerr != nil {
+				t.Fatalf("load %s: %v", e, lerr)
+			}
+			dir := filepath.Dir(e)
+
+			methodScripts, gErr := filepath.Glob(filepath.Join(dir, "install.*.sh"))
+			if gErr != nil {
+				t.Fatalf("glob method scripts: %v", gErr)
+			}
+			gotMethods := make(map[string]struct{}, len(methodScripts))
+			for _, m := range methodScripts {
+				base := filepath.Base(m)
+				// install.<name>.sh → strip "install." prefix and ".sh"
+				// suffix. The glob ensures the prefix is present;
+				// TrimSuffix returns the raw input on mismatch so this
+				// never panics.
+				name := strings.TrimSuffix(strings.TrimPrefix(base, "install."), ".sh")
+				gotMethods[name] = struct{}{}
+			}
+
+			// Every declaration has a file, every file has a declaration.
+			// Both directions checked so a rename doesn't leave one or the
+			// other orphaned.
+			for name := range p.Install.Methods {
+				if _, ok := gotMethods[name]; !ok {
+					t.Errorf("plugin %q declares method %q but install.%s.sh is missing", id, name, name)
+				}
+			}
+			for name := range gotMethods {
+				if _, ok := p.Install.Methods[name]; !ok {
+					t.Errorf("plugin %q ships install.%s.sh but the method is not declared in [install.methods]", id, name)
 				}
 			}
 		})

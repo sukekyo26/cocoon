@@ -10,6 +10,10 @@ packages = ["unzip"]
 [install]
 requires_root = true
 volumes = ["/home/${USERNAME}/.deno"]
+default_method = "binary"
+
+[install.methods.binary]
+description = "Single ELF binary extracted from a GitHub Release zip"
 
 [install.env]
 DENO_DIR = "/home/${USERNAME}/.deno"

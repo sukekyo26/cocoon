@@ -6,6 +6,10 @@ default = false
 
 [install]
 requires_root = false
+default_method = "installer"
+
+[install.methods.installer]
+description = "Upstream installer script piped to bash"
 
 [version]
 version_capable = true

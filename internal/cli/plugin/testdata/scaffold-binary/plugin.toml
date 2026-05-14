@@ -1,0 +1,15 @@
+[metadata]
+name = "Demo Bin"
+description = "Demo binary plugin"
+url = "https://example.com/bin"
+default = false
+
+[install]
+requires_root = true
+default_method = "binary"
+
+[install.methods.binary]
+description = "Single binary download"
+
+[version]
+version_capable = true

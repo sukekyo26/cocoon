@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Configure Demo Tar for the user's bash shell.
+# Configure Demo Bin for the user's bash shell.
 #
 # TODO: append shell init lines to ~/.bashrc, e.g.:
 #   echo 'eval "$(yourtool init bash)"' >> ~/.bashrc

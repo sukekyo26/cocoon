@@ -10,6 +10,10 @@ packages = ["xz-utils"]
 [install]
 requires_root = true
 volumes = ["/home/${USERNAME}/.npm", "/home/${USERNAME}/.npm-global"]
+default_method = "archive"
+
+[install.methods.archive]
+description = "Multi-file Node.js distribution tarball from nodejs.org"
 
 [install.env]
 NPM_CONFIG_PREFIX = "/home/${USERNAME}/.npm-global"

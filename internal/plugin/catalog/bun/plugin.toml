@@ -10,6 +10,10 @@ packages = ["unzip"]
 [install]
 requires_root = false
 volumes = ["/home/${USERNAME}/.bun"]
+default_method = "installer"
+
+[install.methods.installer]
+description = "Upstream bun.sh / bun.com installer script piped to bash"
 
 [install.env]
 BUN_INSTALL = "/home/${USERNAME}/.bun"

@@ -81,6 +81,12 @@ enable = [
     "docker-cli",
 ]
 
+# [plugins.methods] — for plugins that declare multiple [install.methods],
+#   pick which install path to use. Plugins with a single declared method
+#   ignore this section.
+# [plugins.methods]
+# <plugin-id> = "<method-name>"
+
 # [plugins.versions] — pin specific versions for version_capable plugins.
 #   Optional checksum_amd64 / checksum_arm64 (64 lowercase hex chars) verify install tarballs.
 # [plugins.versions]

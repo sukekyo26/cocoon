@@ -7,6 +7,10 @@ default = true
 [install]
 requires_root = true
 build_args = ["DOCKER_GID"]
+default_method = "apt"
+
+[install.methods.apt]
+description = "Official Docker apt repository (download.docker.com)"
 
 [version]
 version_capable = false

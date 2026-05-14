@@ -9,6 +9,10 @@ packages = ["xz-utils"]
 
 [install]
 requires_root = true
+default_method = "binary"
+
+[install.methods.binary]
+description = "Single shellcheck binary extracted from a GitHub Release tarball"
 
 [version]
 version_capable = true

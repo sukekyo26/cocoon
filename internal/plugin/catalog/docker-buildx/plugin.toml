@@ -6,6 +6,10 @@ default = false
 
 [install]
 requires_root = true
+default_method = "binary"
+
+[install.methods.binary]
+description = "Single binary from the docker/buildx GitHub Release"
 
 [version]
 version_capable = true

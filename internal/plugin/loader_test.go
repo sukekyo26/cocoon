@@ -76,7 +76,10 @@ func TestLoadEnabled_WarnsOnMissingPlugin(t *testing.T) {
 func TestLoadEnabled_LoadsExistingPlugin(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	// Copy the sample plugin into the temp dir under id "sample".
+	// Copy the sample plugin into the temp dir under id "sample". The
+	// loader's validateMethodScripts requires install.<method>.sh for
+	// every declared method, so the install.installer.sh stub has to
+	// land in the temp plugin dir too.
 	src := filepath.Join("testdata", "plugin_sample.toml")
 	body, err := os.ReadFile(src)
 	require.NoError(t, err)
@@ -84,6 +87,11 @@ func TestLoadEnabled_LoadsExistingPlugin(t *testing.T) {
 	require.NoError(t, os.MkdirAll(pluginDir, 0o755))
 	//nolint:gosec // pluginDir is built from t.TempDir + literal "sample".
 	require.NoError(t, os.WriteFile(filepath.Join(pluginDir, "plugin.toml"), body, 0o600))
+	scriptSrc := filepath.Join("testdata", "install.installer.sh")
+	scriptBody, err := os.ReadFile(scriptSrc)
+	require.NoError(t, err)
+	//nolint:gosec // pluginDir is built from t.TempDir + literal "sample".
+	require.NoError(t, os.WriteFile(filepath.Join(pluginDir, "install.installer.sh"), scriptBody, 0o600))
 
 	out, err := plugin.LoadEnabled(dir, []string{"sample", "ghost"}, &bytes.Buffer{})
 	require.NoError(t, err)
@@ -126,4 +134,101 @@ func TestLoadEnabledFromFS_NilSrcReturnsSentinel(t *testing.T) {
 			}
 		})
 	}
+}
+
+const methodTOMLBody = `
+[metadata]
+name = "x"
+description = "y"
+url = "https://example.com/x"
+default = false
+
+[install]
+default_method = "official"
+
+[install.methods.official]
+description = "Official installer"
+
+[install.methods.binary]
+description = "Direct binary"
+
+[version]
+version_capable = false
+`
+
+// TestLoad_MethodScriptMissing pins that Load rejects a plugin declaring
+// [install.methods.<name>] when the matching install.<name>.sh file is
+// missing from the same directory.
+func TestLoad_MethodScriptMissing(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	tomlPath := filepath.Join(dir, "plugin.toml")
+	require.NoError(t, os.WriteFile(tomlPath, []byte(methodTOMLBody), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "install.official.sh"), []byte("#!/bin/sh\n"), 0o600))
+	// install.binary.sh intentionally absent.
+	_, err := plugin.Load(tomlPath)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "install.binary.sh does not exist")
+}
+
+// TestLoad_MethodScriptsPresent pins the happy path: all declared
+// methods have their install.<name>.sh and Load succeeds.
+func TestLoad_MethodScriptsPresent(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	tomlPath := filepath.Join(dir, "plugin.toml")
+	require.NoError(t, os.WriteFile(tomlPath, []byte(methodTOMLBody), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "install.official.sh"), []byte("#!/bin/sh\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "install.binary.sh"), []byte("#!/bin/sh\n"), 0o600))
+	p, err := plugin.Load(tomlPath)
+	require.NoError(t, err)
+	require.Equal(t, "official", p.Install.DefaultMethod)
+	require.Contains(t, p.Install.Methods, "official")
+	require.Contains(t, p.Install.Methods, "binary")
+}
+
+// TestLoad_InstallShAlwaysRejected pins the new invariant: a literal
+// install.sh is never accepted, regardless of whether [install.methods]
+// is declared. The error message points the author at the rename +
+// plugin.toml edit so they can migrate without reading the docs.
+func TestLoad_InstallShAlwaysRejected(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	tomlPath := filepath.Join(dir, "plugin.toml")
+	require.NoError(t, os.WriteFile(tomlPath, []byte(methodTOMLBody), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "install.official.sh"), []byte("#!/bin/sh\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "install.binary.sh"), []byte("#!/bin/sh\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "install.sh"), []byte("#!/bin/sh\n"), 0o600))
+	_, err := plugin.Load(tomlPath)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "install.sh is no longer supported")
+	require.Contains(t, err.Error(), "install.<category>.sh")
+}
+
+// TestLoad_RequiresInstallMethods pins the new mandatory invariant:
+// every plugin.toml must declare at least one [install.methods.<name>]
+// entry. Single-method plugins still need one entry; the legacy
+// "no [install.methods] → use install.sh" path is gone.
+func TestLoad_RequiresInstallMethods(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	tomlPath := filepath.Join(dir, "plugin.toml")
+	body := `
+[metadata]
+name = "x"
+description = "y"
+url = "https://example.com/x"
+default = false
+
+[install]
+requires_root = false
+
+[version]
+version_capable = false
+`
+	require.NoError(t, os.WriteFile(tomlPath, []byte(body), 0o600))
+	_, err := plugin.Load(tomlPath)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "[install.methods] must declare at least one entry")
+	require.Contains(t, err.Error(), "binary / installer / apt / archive")
 }

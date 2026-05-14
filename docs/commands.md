@@ -176,7 +176,7 @@ volumes: [/home/${USERNAME}/go]
 
 ### `cocoon plugin pin <id> <ref>`
 
-**Purpose:** record an upstream version (and optional per-arch checksums) for a `version_capable` plugin in `workspace.toml` under `[plugins.versions]`. The entry is emitted as a single inline-table line — `<id> = { pin = "<ref>", checksum_amd64 = "...", checksum_arm64 = "..." }` — that `install.sh` reads via `$PIN` and `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64`.
+**Purpose:** record an upstream version (and optional per-arch checksums) for a `version_capable` plugin in `workspace.toml` under `[plugins.versions]`. The entry is emitted as a single inline-table line — `<id> = { pin = "<ref>", checksum_amd64 = "...", checksum_arm64 = "..." }` — that the plugin's install script reads via `$PIN` and `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64`.
 
 **Example (default — stdout, manual paste):**
 
@@ -207,20 +207,20 @@ Updated /home/alice/proj/workspace.toml: [plugins.versions] go
 **Gotchas:**
 
 - `pin` only makes sense for plugins whose `[version].version_capable = true`. The pin entry is ignored at `gen` time for non-version-capable plugins.
-- Checksum flags only matter when the plugin's `install.sh` actually reads `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` (i.e. `tarball` template plugins). They are silently inert for `curl-pipe` / `generic` templates.
+- Checksum flags only matter when the plugin's install script actually reads `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` — typically the `binary` and `archive` methods that verify a downloaded artifact. They are silently inert for `installer` and `apt` methods that delegate integrity to the vendor.
 - `--write` requires a discoverable `workspace.toml` from cwd; without `--write`, the command works from anywhere because it only resolves the layered FS for id validation.
 - `--write` only edits the inline-table form (`<id> = { pin = "..." }` lines under a single `[plugins.versions]` section). If `workspace.toml` still contains legacy `[plugins.versions.<id>]` subsection blocks, `--write` refuses with a usage error rather than appending a duplicate entry. Convert each legacy block to an inline-table line under `[plugins.versions]` first, or edit `workspace.toml` manually.
 
 ### `cocoon plugin scaffold <id>`
 
-**Purpose:** create a new `<id>/` directory containing a `plugin.toml` and an `install.sh` skeleton from one of three templates. Use it to bootstrap a new project- or user-scope plugin without copying boilerplate by hand.
+**Purpose:** create a new `<id>/` directory containing a `plugin.toml` and an `install.<category>.sh` skeleton from one of four templates (catalog method-name vocabulary). Use it to bootstrap a new project- or user-scope plugin without copying boilerplate by hand.
 
 **Example:**
 
 ```console
 $ cd ~/projects/myapp
 $ cocoon plugin scaffold gh-cli \
-    --template curl-pipe --version-capable \
+    --template installer --version-capable \
     --name "GitHub CLI" --description "GitHub CLI" \
     --url "https://cli.github.com" \
     --non-interactive
@@ -231,9 +231,10 @@ OK: scaffolded /home/alice/projects/myapp/.cocoon/plugins/gh-cli (2 files)
 
 | Template | Use when | Boilerplate |
 |---|---|---|
-| `curl-pipe` | upstream ships `curl ... \| bash` (uv, proto) | `$PIN` env-var-driven version; no checksum verification |
-| `tarball` | upstream ships GitHub Release tarballs (starship, go) | `$PIN` + `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` + `dpkg --print-architecture` switch (forces `--version-capable`) |
-| `generic` | apt packages or freeform install | minimal skeleton, no `$PIN` plumbing |
+| `installer` | upstream ships `curl ... \| bash` (uv, proto, mise) | `$PIN` env-var-driven version; no checksum verification |
+| `binary` | upstream ships a single binary you drop on PATH (helm, kubectl, terraform) | `$PIN` + `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` + `dpkg --print-architecture` switch |
+| `apt` | apt repository or `.deb` package (docker-cli, github-cli, google-chrome) | apt keyring + sources.list scaffold; no `$PIN` plumbing |
+| `archive` | upstream ships multi-file tar/zip extracted to a tree (go, node, zig) | `$PIN` + `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` + `tar --strip-components=1` |
 
 **Flags:**
 
@@ -244,9 +245,9 @@ OK: scaffolded /home/alice/projects/myapp/.cocoon/plugins/gh-cli (2 files)
 | `--description <text>` | Short description. Do not embed the upstream URL — pass it via `--url`. |
 | `--url <url>` | Upstream project URL (`https://...`, no whitespace). Required under `--non-interactive`. |
 | `--default` | Mark plugin enabled by default. |
-| `--requires-root` | `install.sh` runs as root. |
+| `--requires-root` | The install script runs as root. |
 | `--version-capable` | Generate `$PIN` / `$CHECKSUM_*` boilerplate. |
-| `--template <kind>` | `curl-pipe` \| `tarball` \| `generic`. |
+| `--template <kind>` | `installer` \| `binary` \| `apt` \| `archive`. |
 | `--with-install-user` | Also generate `install_user.sh` (runs as the unprivileged user after `install.sh`). |
 | `--non-interactive` | Skip prompts; require all fields above. |
 | `--force` | Overwrite `<plugins-dir>/<id>/` if it already exists. |

@@ -65,7 +65,7 @@ func newScaffoldCmd(stdout, stderr io.Writer) *cobra.Command {
 	//nolint:exhaustruct // setX flags populated post-parse from cmd.Flags().Changed
 	opts := &scaffoldOpts{
 		pluginsDir: "",
-		template:   tmplGeneric,
+		template:   tmplInstaller,
 	}
 	cmd := &cobra.Command{
 		Use:           "scaffold <id>",
@@ -99,10 +99,10 @@ func newScaffoldCmd(stdout, stderr io.Writer) *cobra.Command {
 	cmd.Flags().StringVar(&opts.description, "description", "", "short description (no URL)")
 	cmd.Flags().StringVar(&opts.url, "url", "", "upstream URL (e.g. https://github.com/owner/repo)")
 	cmd.Flags().BoolVar(&opts.defaultEnabled, "default", false, "mark plugin enabled by default")
-	cmd.Flags().BoolVar(&opts.requiresRoot, "requires-root", false, "install.sh runs as root")
+	cmd.Flags().BoolVar(&opts.requiresRoot, "requires-root", false, "install script runs as root")
 	cmd.Flags().BoolVar(&opts.versionCapable, "version-capable", false, "generate $PIN / $CHECKSUM_* boilerplate")
 	cmd.Flags().Var(&templateFlag{kind: &opts.template}, "template",
-		"install.sh template: curl-pipe | tarball | generic")
+		"install method category: installer | binary | apt | archive (catalog-canonical names — see docs/plugins.md)")
 	cmd.Flags().BoolVar(&opts.withInstallUser, "with-install-user", false, "also generate install_user.sh")
 	cmd.Flags().BoolVar(&opts.nonInteractive, "non-interactive", false,
 		"skip interactive prompts; require all fields above")
@@ -119,9 +119,12 @@ By default the new directory is created under <workspace>/.cocoon/plugins/<id>/,
 auto-discovered from the nearest workspace.toml. Pass --plugins-dir <path> to
 override (the path is taken as-is, joined with <id>).
 
-The new directory contains a plugin.toml describing the plugin and an
-install.sh skeleton matching the chosen template (curl-pipe / tarball /
-generic). With --with-install-user a second install_user.sh hook is emitted.`
+The new directory contains a plugin.toml declaring a single
+[install.methods.<category>] entry and an install.<category>.sh skeleton
+matching the chosen template — installer (curl|bash), binary (single
+binary download), apt (apt repo / .deb), or archive (multi-file
+extract). With --with-install-user a second install_user.sh hook is
+emitted (kept plugin-scoped, not per-method).`
 
 func runScaffoldFlow(opts *scaffoldOpts, stdout, stderr io.Writer) error {
 	cat := i18n.New(i18n.Detect())
@@ -148,7 +151,7 @@ type templateFlag struct {
 // String renders the current template kind for `--help` output.
 func (t *templateFlag) String() string {
 	if t.kind == nil {
-		return string(tmplGeneric)
+		return string(tmplInstaller)
 	}
 	return string(*t.kind)
 }

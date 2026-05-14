@@ -60,23 +60,56 @@ archive).
 ```
 plugins/<id>/
 ├── plugin.toml         # required
-├── install.sh          # optional — see below
-└── install_user.sh     # optional (only when "install.sh vs install_user.sh" applies)
+├── install.<name>.sh   # required — one file per declared [install.methods.<name>] entry
+└── install_user.sh     # optional (plugin-scoped, runs after whichever install.<name>.sh ran)
 ```
+
+Every plugin declares one or more `[install.methods.<name>]` entries in
+`plugin.toml` and ships one `install.<name>.sh` per entry. **There is
+no `install.sh`** — the loader rejects a literal `install.sh` file with
+a migration hint pointing at the rename. Plugins with a single method
+still declare one `[install.methods.<name>]` entry; pick the category
+that matches your install style (see "Method name categories" below).
+
+The category vocabulary is also used by `cocoon plugin scaffold --template <name>`.
 
 A plugin's **install snippet** (the `# Install …` comment + RUN block in
 the generated Dockerfile) is emitted only when at least one of these is
 present:
 
-- `install.sh`
+- `install.<name>.sh` (at least one — required by the loader)
 - `install_user.sh`
 - `[install.env]`
 
 `[install.build_args]` on its own does **not** trigger output: the `ARG`
 declaration is only emitted alongside a hook, so a plugin built around
 `build_args` alone would carry an `ARG` name that nothing references.
-`build_args` is meaningful only when consumed by `install.sh` or
-`install_user.sh`.
+`build_args` is meaningful only when consumed by an
+`install.<name>.sh` or `install_user.sh`.
+
+## Method name categories
+
+Method names (the `<name>` in `[install.methods.<name>]` and the
+corresponding `install.<name>.sh` filename) follow a 4-category
+convention so the workspace.toml `[plugins.methods]` table reads the
+same way across the catalog. Plugin-specific names (e.g. `gh-cli`,
+`bun-sh`) make users look up plugin.toml to figure out what they
+picked.
+
+| Category | Pick when … |
+|:---|:---|
+| `binary`    | The install is "drop a single binary on PATH". Includes the case where you `tar` a single file out of an archive. (kubectl, helm, terraform, shellcheck.) |
+| `installer` | The install pipes a vendor-provided shell installer through `bash`/`sh`. Failure mode is "vendor domain blocked". (bun.sh, sh.rustup.rs, mise.run, astral.sh, gh.io.) |
+| `apt`       | The install registers an apt repository (or fetches a `.deb`) and runs `apt-get install`. (docker-cli, github-cli, google-chrome.) |
+| `archive`   | The install extracts a multi-file tar/zip into a directory tree (bin + lib + share + …) **or** runs a vendor installer that lives inside the archive. (go, node, zig, nerd-fonts, aws-cli.) |
+
+**Catalog plugins must use one of these four words.** Custom plugins
+under `~/.cocoon/plugins/<id>/` or `<workspace>/.cocoon/plugins/<id>/`
+may use any name matching the validator's pattern
+`^[a-z][a-z0-9_-]*$` when a genuinely novel install path doesn't fit,
+but the four-word vocabulary above is strongly recommended even for
+overlays — anything outside it is an authoring mistake to be flagged
+in review.
 
 Plugins that declare only `[install].volumes` (no install hook, no env)
 still affect the generated artifacts — `volumes` flows through a
@@ -93,12 +126,14 @@ of the install phase and the named-volume declaration in
 | `[metadata]` | `url`             | string             | —     | ✓ | Upstream project URL (`https://...`, no whitespace). Surfaced by `cocoon init`'s per-plugin version picker, `cocoon plugin show` (`url:` row), and `cocoon plugin list` (`URL` column). |
 | `[metadata]` | `default`         | bool               | `false` |   | If true, `cocoon init`'s default plugin set includes this id. |
 | `[metadata]` | `conflicts`       | list of strings    | `[]`  |   | Plugin ids that must not be enabled at the same time. |
-| `[apt]`      | `packages`        | list of strings    | `[]`  |   | Apt packages installed before `install.sh` runs. |
-| `[install]`  | `requires_root`   | bool               | —     | ✓ | If true, `install.sh` runs as root; otherwise as the unprivileged user. |
-| `[install]`  | `build_args`      | list of strings    | `[]`  |   | Names of build-time variables (e.g. `DOCKER_GID`) the plugin consumes. The generator emits matching `ARG <name>` lines once per plugin (next to whichever of `install.sh` / `install_user.sh` runs first) and threads `<name>="${<name>}"` into the per-RUN env prefix of every hook, so both `install.sh` and `install_user.sh` can read `$<name>` as a normal env var. ARG scope is stage-wide, so a single declaration covers both RUNs. Names match `^[A-Z_][A-Z0-9_]*$`. |
+| `[apt]`      | `packages`        | list of strings    | `[]`  |   | Apt packages installed before the install scripts run. |
+| `[install]`  | `requires_root`   | bool               | —     | ✓ | If true, the `install.<name>.sh` scripts run as root; otherwise as the unprivileged user. |
+| `[install]`  | `build_args`      | list of strings    | `[]`  |   | Names of build-time variables (e.g. `DOCKER_GID`) the plugin consumes. The generator emits matching `ARG <name>` lines once per plugin (next to whichever of the install scripts runs first) and threads `<name>="${<name>}"` into the per-RUN env prefix of every hook, so both `install.<name>.sh` and `install_user.sh` can read `$<name>` as a normal env var. ARG scope is stage-wide, so a single declaration covers both RUNs. Names match `^[A-Z_][A-Z0-9_]*$`. |
 | `[install]`  | `env`             | map<string,string> | `{}`  |   | `ENV` lines emitted after the install runs. Values can reference earlier `ENV`/`ARG` vars. |
 | `[install]`  | `volumes`         | list of strings    | `[]`  |   | Per-user paths under `/home/${USERNAME}/<dir>`; each one is `mkdir -p`'d, `chown`'d, and declared as a docker named volume so its contents persist across rebuilds. |
-| `[version]`  | `version_capable` | bool               | —     | ✓ | If true, `install.sh` accepts `$PIN` and optionally `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` (see "Versioned plugins" below). |
+| `[install]`  | `default_method`  | string             | —     | ✓ | Name of the method picked when `workspace.toml`'s `[plugins.methods]` does not pin one. Must be a key under `[install.methods]`. Required because `[install.methods]` is now mandatory (single-method plugins still declare one entry). |
+| `[install.methods.<name>]` | `description` | string | — | ✓ | One-line description shown in `cocoon init`'s method picker. `<name>` matches `^[a-z][a-z0-9_-]*$` and must have a matching `install.<name>.sh` file on disk. **At least one method entry is required** per plugin; the legacy `install.sh` shape is no longer supported. Pick `<name>` from the 4 category words (see "Method name categories"). |
+| `[version]`  | `version_capable` | bool               | —     | ✓ | If true, the install script accepts `$PIN` and optionally `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` (see "Versioned plugins" below). |
 
 Strict unmarshal: unknown top-level fields and unknown keys inside
 known sections are rejected loud. If you see `unknown field "foo"`
@@ -142,6 +177,73 @@ second hook keeps that boundary explicit and obvious.
 If there is no rc edit and no user-owned config to write, you don't
 need `install_user.sh`. The current catalog reflects this: starship
 is the only plugin that uses it.
+
+## Multiple install methods (`[install.methods]`)
+
+Every plugin declares at least one `[install.methods.<name>]` entry; a
+plugin offering multiple install paths simply declares more entries.
+Each declared `<name>` must have a matching `install.<name>.sh` file on
+disk (loader-enforced).
+
+```toml
+# plugin.toml — copilot-cli with two methods
+[install]
+requires_root = false
+default_method = "installer"
+
+[install.methods.installer]
+description = "Install via the upstream gh.io install script (default)"
+
+[install.methods.binary]
+description = "Direct binary from GitHub Releases (Zscaler-friendly)"
+```
+
+With the matching `install.installer.sh` and `install.binary.sh` files
+on disk, the plugin offers two install paths. The selection flows
+through `workspace.toml`:
+
+```toml
+[plugins.methods]
+copilot-cli = "binary"  # plugins absent here use their default_method
+```
+
+`cocoon init` shows a per-plugin method picker **only** when the plugin
+declares two or more methods (single-method plugins skip the prompt
+silently — there is no real choice). The picker's pre-selected row is
+the plugin's `default_method`, so accepting the recommendation is just
+Enter.
+
+The chosen script receives every standard env var (`$PIN`,
+`$CHECKSUM_AMD64`, `$CHECKSUM_ARM64`, `$RC_FILE`, `$RC_SYNTAX`,
+`$LOGIN_SHELL`, build-arg variables) plus one additional value:
+
+| Var | Meaning |
+|---|---|
+| `$COCOON_INSTALL_METHOD` | Selected method name (e.g. `"binary"`). Always set since every plugin declares `[install.methods]`. |
+
+**Multi-method plugins** should fail-fast when the env is missing
+(`: "${COCOON_INSTALL_METHOD:?missing}"`) and reject mismatched values
+so a stale `workspace.toml` reference is caught before the script pulls
+down the wrong artifact after a rename. **Single-method plugins** can
+skip this check — the loader's `[install.methods]` enforcement
+guarantees `$COCOON_INSTALL_METHOD` is set, and there is no sibling
+script to mistake it for. See
+`internal/plugin/catalog/copilot-cli/install.installer.sh` and
+`install.binary.sh` for the pattern.
+
+**Pin/checksum scope.** Pins live under `[plugins.versions]` and are
+**workspace-scoped, not method-scoped** — the catalog deliberately keeps
+`plugin.toml` free of per-method checksums to bound the diff every
+upstream release produces. When switching methods, refresh
+`checksum_amd64` / `checksum_arm64` in `workspace.toml` (or use
+`cocoon plugin pin --method <name>` to do both at once) so the install
+script's `sha256sum -c -` still matches the new artifact.
+
+**3-layer overlay.** Method resolution is currently **same-layer only**:
+a plugin's `plugin.toml` and every declared `install.<name>.sh` must
+live in the same layer (embedded / user / project). Cross-layer
+distribution (e.g. one method script in the user layer and another in
+the project layer) is not supported yet.
 
 ## Environment variables passed to install scripts
 
@@ -215,19 +317,23 @@ the pin entry has no effect at `gen` time for those.
 
 Use these embedded plugins as templates when writing your own:
 
-- **`go`** — `tarball` template, `[install.env]` heavy. Good
-  reference for `$PIN` + `$CHECKSUM_*` + arch switch.
-- **`docker-cli`** — only catalog plugin using `[install].build_args`
-  to receive `DOCKER_GID`. Read this when you need to thread a
-  host-derived value into `install.sh`.
-- **`proto`** — `curl-pipe` template; minimal `install.sh` because
+- **`go`** — `archive` method, `[install.env]` heavy. Good reference
+  for `$PIN` + `$CHECKSUM_*` + arch switch.
+- **`docker-cli`** — `apt` method and the only catalog plugin using
+  `[install].build_args` to receive `DOCKER_GID`. Read this when you
+  need to thread a host-derived value into the install script.
+- **`proto`** — `installer` method; minimal install script because
   the upstream installer does the work, but with a `$PIN`-respecting
   version selection.
-- **`starship`** — the only plugin in the catalog with
-  `install_user.sh`. Read both files together to understand the
+- **`starship`** — `binary` method and the only plugin in the catalog
+  with `install_user.sh`. Read both files together to understand the
   root → user split.
-- **`lazygit`** — `tarball` template, no `[install.env]`. Smallest
+- **`lazygit`** — `binary` method, no `[install.env]`. Smallest
   versioned plugin in the catalog.
+- **`copilot-cli`** — the only catalog plugin shipping two methods
+  (`installer` + `binary`). Read both `install.installer.sh` and
+  `install.binary.sh` to see the multi-method `$COCOON_INSTALL_METHOD`
+  fail-fast pattern in action.
 
 ## Troubleshooting
 
