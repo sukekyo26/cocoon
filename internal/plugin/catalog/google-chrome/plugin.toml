@@ -6,6 +6,10 @@ default = false
 
 [install]
 requires_root = true
+default_method = "apt"
+
+[install.methods.apt]
+description = ".deb package fetched from dl.google.com and installed via apt"
 
 [version]
 version_capable = false

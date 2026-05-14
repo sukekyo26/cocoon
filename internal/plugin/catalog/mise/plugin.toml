@@ -7,6 +7,10 @@ default = false
 [install]
 requires_root = false
 volumes = ["/home/${USERNAME}/.mise"]
+default_method = "installer"
+
+[install.methods.installer]
+description = "Upstream mise.run installer script piped to sh"
 
 [install.env]
 MISE_DATA_DIR = "/home/${USERNAME}/.mise"

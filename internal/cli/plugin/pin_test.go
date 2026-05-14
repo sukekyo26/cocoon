@@ -345,24 +345,31 @@ func TestPin_MethodUnknownNameFails(t *testing.T) {
 	}
 }
 
-// --method on a plugin that has no [install.methods] declared at all
-// (the legacy single-install.sh shape): ErrUsage with a hint pointing
-// the user at dropping --method.
+// --method with a name that's not in the plugin's declared methods on a
+// catalog plugin with a single declared method (e.g. `go` declares only
+// "archive"): the error lists the declared keys so typos are easy to
+// fix. Catalog-wide enforcement of [install.methods] (loader rule) means
+// the legacy "no methods declared at all" scenario is unreachable for
+// catalog plugins — the loader rejects them first.
 //
 //nolint:paralleltest // t.Chdir + t.Setenv mutate process state.
-func TestPin_MethodPluginWithoutMethodsFails(t *testing.T) {
+func TestPin_MethodMismatchedNameListsDeclared(t *testing.T) {
 	withIsolatedHome(t)
 	dir := t.TempDir()
 	seedWorkspace(t, dir, "[plugins]\nenable = [\"go\"]\n")
 	t.Chdir(dir)
 
-	// `go` is an embedded plugin that ships with a single install.sh and
-	// has no [install.methods] section.
+	// `go` is an embedded plugin whose only declared method is "archive".
+	// Asking for --method binary should fail with a typo-friendly error
+	// that names the declared keys.
 	_, _, err := runPinCmd(t, "go", "1.23.4", "--method", "binary")
 	if !errors.Is(err, plugincli.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage", err)
 	}
-	if !strings.Contains(err.Error(), "no [install.methods]") {
-		t.Errorf("err should mention the missing section, got: %v", err)
+	if !strings.Contains(err.Error(), `no method "binary"`) {
+		t.Errorf("err should name the missing method, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "declared: archive") {
+		t.Errorf("err should list declared methods, got: %v", err)
 	}
 }

@@ -7,6 +7,10 @@ default = false
 [install]
 requires_root = true
 volumes = ["/home/${USERNAME}/.config"]
+default_method = "binary"
+
+[install.methods.binary]
+description = "Single starship binary extracted from a GitHub Release tarball"
 
 [version]
 version_capable = true

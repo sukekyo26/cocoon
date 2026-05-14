@@ -7,6 +7,10 @@ default = false
 [install]
 requires_root = true
 volumes = ["/home/${USERNAME}/.sample"]
+default_method = "installer"
+
+[install.methods.installer]
+description = "Sample installer (test fixture)"
 
 [install.env]
 SAMPLE_HOME = "/home/${USERNAME}/.sample"

@@ -10,10 +10,9 @@ import (
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
 
-// installScriptCorpus concatenates the plugin's install scripts (legacy
-// `install.sh` OR `install.<method>.sh` files from a [install.methods]
-// plugin) together with `plugin.toml`, returning the joined blob the
-// mustContain / mustNotContain assertions search.
+// installScriptCorpus concatenates the plugin's install.<method>.sh files
+// together with plugin.toml, returning the joined blob the mustContain /
+// mustNotContain assertions search.
 //
 // `install_user.sh` is intentionally NOT folded in here — it is the only
 // auxiliary script TestPluginContracts handles separately (appended at the
@@ -21,28 +20,17 @@ import (
 // most once. The broader `install*.sh` glob would otherwise also pick up
 // `install_user.sh` and double-count it.
 //
-// Plugins that declare [install.methods] cannot also ship install.sh
-// (loader enforces this), so the explicit two-pattern selection below
-// handles both shapes without further special-casing.
+// The legacy `install.sh` shape is rejected by the loader (validateMethodScripts);
+// only the `install.<method>.sh` form is valid in the catalog. The glob
+// `install.*.sh` matches it directly without further branching.
 func installScriptCorpus(t *testing.T, dir, id string) string {
 	t.Helper()
-	var matches []string
-	// Legacy single-method form.
-	legacy := filepath.Join(dir, "install.sh")
-	if _, err := os.Stat(legacy); err == nil {
-		matches = append(matches, legacy)
-	}
-	// Multi-method form: install.<name>.sh. `*` in filepath.Glob never
-	// matches a path separator, so this pattern catches install.gh-cli.sh
-	// / install.binary.sh / etc. but NOT install.sh (no chars between
-	// the two literal dots) and NOT install_user.sh (no leading dot).
-	methodMatches, err := filepath.Glob(filepath.Join(dir, "install.*.sh"))
+	matches, err := filepath.Glob(filepath.Join(dir, "install.*.sh"))
 	if err != nil {
 		t.Fatalf("glob method scripts: %v", err)
 	}
-	matches = append(matches, methodMatches...)
 	if len(matches) == 0 {
-		t.Fatalf("plugin %q ships no install script", id)
+		t.Fatalf("plugin %q ships no install.<method>.sh script", id)
 	}
 	sort.Strings(matches)
 	var b strings.Builder
@@ -370,7 +358,8 @@ func TestPluginContracts(t *testing.T) {
 }
 
 // TestInstallScriptsMatchDeclaredMethods enforces the bidirectional
-// invariant for method-style plugins:
+// invariant between [install.methods] declarations and install.<name>.sh
+// files on disk:
 //
 //   - every [install.methods.<name>] declaration in plugin.toml has a
 //     matching install.<name>.sh file on disk (loader checks this at
@@ -380,9 +369,9 @@ func TestPluginContracts(t *testing.T) {
 //     (catches typos in filenames and orphaned scripts left behind by a
 //     rename — the loader cannot detect this without the inverse scan).
 //
-// Legacy single-install.sh plugins (no [install.methods]) must NOT ship
-// any install.<name>.sh siblings; that mix would be ambiguous about
-// which script `cocoon gen` runs.
+// Since [install.methods] is now mandatory (loader rejects an empty one),
+// the "no declared methods" branch is dead by design — `plugin.Load`
+// would fail before this test runs.
 func TestInstallScriptsMatchDeclaredMethods(t *testing.T) {
 	t.Parallel()
 
@@ -418,23 +407,9 @@ func TestInstallScriptsMatchDeclaredMethods(t *testing.T) {
 				gotMethods[name] = struct{}{}
 			}
 
-			if len(p.Install.Methods) == 0 {
-				if len(methodScripts) > 0 {
-					names := make([]string, 0, len(gotMethods))
-					for n := range gotMethods {
-						names = append(names, n)
-					}
-					sort.Strings(names)
-					t.Errorf("plugin %q has no [install.methods] declared but ships install.<name>.sh files: %s "+
-						"(declare them, or rename them out of the install.<name>.sh shape)",
-						id, strings.Join(names, ", "))
-				}
-				return
-			}
-
-			// Methods declared → every declaration has a file, every file
-			// has a declaration. Both directions checked so a rename
-			// doesn't leave one or the other orphaned.
+			// Every declaration has a file, every file has a declaration.
+			// Both directions checked so a rename doesn't leave one or the
+			// other orphaned.
 			for name := range p.Install.Methods {
 				if _, ok := gotMethods[name]; !ok {
 					t.Errorf("plugin %q declares method %q but install.%s.sh is missing", id, name, name)

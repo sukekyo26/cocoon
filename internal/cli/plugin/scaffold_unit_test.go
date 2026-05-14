@@ -90,18 +90,18 @@ func TestApplyPickedTemplate(t *testing.T) {
 	t.Parallel()
 	t.Run("non_empty_overwrites", func(t *testing.T) {
 		t.Parallel()
-		opts := &scaffoldOpts{template: tmplGeneric} //nolint:exhaustruct // only template matters
-		applyPickedTemplate(opts, string(tmplTarball))
-		if opts.template != tmplTarball {
-			t.Errorf("template = %q, want %q", opts.template, tmplTarball)
+		opts := &scaffoldOpts{template: tmplInstaller} //nolint:exhaustruct // only template matters
+		applyPickedTemplate(opts, string(tmplBinary))
+		if opts.template != tmplBinary {
+			t.Errorf("template = %q, want %q", opts.template, tmplBinary)
 		}
 	})
 	t.Run("empty_preserves_existing", func(t *testing.T) {
 		t.Parallel()
-		opts := &scaffoldOpts{template: tmplCurlPipe} //nolint:exhaustruct // only template matters
+		opts := &scaffoldOpts{template: tmplApt} //nolint:exhaustruct // only template matters
 		applyPickedTemplate(opts, "")
-		if opts.template != tmplCurlPipe {
-			t.Errorf("template = %q, want %q (unchanged)", opts.template, tmplCurlPipe)
+		if opts.template != tmplApt {
+			t.Errorf("template = %q, want %q (unchanged)", opts.template, tmplApt)
 		}
 	})
 }
@@ -131,7 +131,7 @@ func TestPromptMissing_AllSetSkipsForm(t *testing.T) {
 		setVersionCapable:  true,
 		setTemplate:        true,
 		setWithInstallUser: true,
-		template:           tmplGeneric,
+		template:           tmplInstaller,
 	} //nolint:exhaustruct // remaining fields default; only setX flags matter
 	p := &fakePrompter{}
 	cat := i18n.New(i18n.Detect())
@@ -149,7 +149,7 @@ func TestPromptMissing_AllSetSkipsForm(t *testing.T) {
 func TestPromptMissing_NoneSetBuildsAllGroups(t *testing.T) {
 	t.Parallel()
 	//nolint:exhaustruct // setX defaults all-false; promptMissing builds all 7 groups.
-	opts := &scaffoldOpts{template: tmplGeneric}
+	opts := &scaffoldOpts{template: tmplInstaller}
 	p := &fakePrompter{}
 	cat := i18n.New(i18n.Detect())
 	if err := promptMissing(opts, cat, p); err != nil {
@@ -165,7 +165,7 @@ func TestPromptMissing_NoneSetBuildsAllGroups(t *testing.T) {
 func TestPromptMissing_PrompterErrorPropagates(t *testing.T) {
 	t.Parallel()
 	//nolint:exhaustruct // setX defaults all-false
-	opts := &scaffoldOpts{template: tmplGeneric}
+	opts := &scaffoldOpts{template: tmplInstaller}
 	want := errors.New("prompter exploded")
 	p := &fakePrompter{onRunErr: want}
 	cat := i18n.New(i18n.Detect())
@@ -178,7 +178,7 @@ func TestPromptMissing_PrompterErrorPropagates(t *testing.T) {
 func TestPromptMissing_CanceledPropagates(t *testing.T) {
 	t.Parallel()
 	//nolint:exhaustruct // setX defaults all-false
-	opts := &scaffoldOpts{template: tmplGeneric}
+	opts := &scaffoldOpts{template: tmplInstaller}
 	p := &fakePrompter{onRunErr: ErrCanceled}
 	cat := i18n.New(i18n.Detect())
 	err := promptMissing(opts, cat, p)

@@ -7,9 +7,9 @@ default = false
 [install]
 requires_root = false
 volumes = ["/home/${USERNAME}/.copilot"]
-default_method = "gh-cli"
+default_method = "installer"
 
-[install.methods.gh-cli]
+[install.methods.installer]
 description = "Install via the upstream gh.io install script (default)"
 
 [install.methods.binary]

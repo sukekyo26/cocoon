@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# Install Demo Tar
+# Install Demo Bin from a GitHub Release binary asset.
+# Method category: binary — downloads a single binary (or extracts one
+#                  from a tarball) and places it on PATH.
 #
 # Inputs (env):
 #   PIN              : version (without leading "v"); empty = latest
-#   CHECKSUM_AMD64   : sha256 of amd64 tarball; empty to skip verification
-#   CHECKSUM_ARM64   : sha256 of arm64 tarball; empty to skip verification
+#   CHECKSUM_AMD64   : sha256 of amd64 asset; empty to skip verification
+#   CHECKSUM_ARM64   : sha256 of arm64 asset; empty to skip verification
 set -euo pipefail
 
 ARCH="$(dpkg --print-architecture)"
@@ -33,15 +35,13 @@ else
 fi
 
 curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
-  "https://github.com/OWNER/REPO/releases/download/v${VERSION}/REPO-${DOWNLOAD_ARCH}-unknown-linux-musl.tar.gz" \
-  -o /tmp/demo.tar.gz
+  "https://github.com/OWNER/REPO/releases/download/v${VERSION}/REPO-${DOWNLOAD_ARCH}-unknown-linux-musl" \
+  -o /usr/local/bin/demo
 
 if [ -n "$CHECKSUM" ]; then
-  echo "${CHECKSUM}  /tmp/demo.tar.gz" | sha256sum -c -
+  echo "${CHECKSUM}  /usr/local/bin/demo" | sha256sum -c -
 else
-  echo "WARNING: SHA256 verification skipped for Demo Tar (no checksum for demo in [plugins.versions])" >&2
+  echo "WARNING: SHA256 verification skipped for Demo Bin (no checksum for demo in [plugins.versions])" >&2
 fi
 
-# TODO: extract to the right destination.
-tar -xzf /tmp/demo.tar.gz -C /usr/local/bin
-rm /tmp/demo.tar.gz
+chmod 0755 /usr/local/bin/demo

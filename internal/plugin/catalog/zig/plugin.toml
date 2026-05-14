@@ -9,6 +9,10 @@ packages = ["jq"]
 
 [install]
 requires_root = true
+default_method = "archive"
+
+[install.methods.archive]
+description = "Multi-file Zig toolchain tarball from ziglang.org index.json"
 
 [version]
 version_capable = true

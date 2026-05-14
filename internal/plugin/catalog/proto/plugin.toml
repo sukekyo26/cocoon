@@ -23,6 +23,10 @@ packages = [
 [install]
 requires_root = false
 volumes = ["/home/${USERNAME}/.proto"]
+default_method = "installer"
+
+[install.methods.installer]
+description = "Upstream moonrepo.dev installer script piped to bash"
 
 [install.env]
 PROTO_HOME = "/home/${USERNAME}/.proto"

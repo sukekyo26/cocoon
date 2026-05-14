@@ -7,6 +7,10 @@ default = false
 [install]
 requires_root = false
 volumes = ["/home/${USERNAME}/.aws"]
+default_method = "archive"
+
+[install.methods.archive]
+description = "Extract vendored AWS CLI v2 zip and run its bundled installer"
 
 [version]
 version_capable = false

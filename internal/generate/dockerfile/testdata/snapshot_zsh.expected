@@ -135,7 +135,7 @@ RUN mkdir -p /home/${USERNAME}/.aws /home/${USERNAME}/.cargo /home/${USERNAME}/.
     chown ${USERNAME}:${USERNAME} /home/${USERNAME}/.aws /home/${USERNAME}/.cargo /home/${USERNAME}/.claude /home/${USERNAME}/.config /home/${USERNAME}/.copilot /home/${USERNAME}/.deno /home/${USERNAME}/.proto /home/${USERNAME}/.rustup /home/${USERNAME}/go
 # Install Docker CLI
 ARG DOCKER_GID
-RUN RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" DOCKER_GID="${DOCKER_GID}" bash <<'COCOON_PLUGIN_EOF'
+RUN RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" COCOON_INSTALL_METHOD="apt" DOCKER_GID="${DOCKER_GID}" bash <<'COCOON_PLUGIN_EOF'
 #!/usr/bin/env bash
 # Install Docker CLI (client only, to use host Docker daemon via socket mount)
 # https://github.com/docker/cli
@@ -173,7 +173,7 @@ fi
 usermod -aG "$docker_group" "${USERNAME}"
 COCOON_PLUGIN_EOF
 # Install GitHub CLI
-RUN RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" bash <<'COCOON_PLUGIN_EOF'
+RUN RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" COCOON_INSTALL_METHOD="apt" bash <<'COCOON_PLUGIN_EOF'
 #!/usr/bin/env bash
 # Install GitHub CLI (https://github.com/cli/cli)
 set -euo pipefail
@@ -194,7 +194,7 @@ apt-get clean
 rm -rf /var/lib/apt/lists/* /var/tmp/*
 COCOON_PLUGIN_EOF
 # Install Zig
-RUN RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" PIN="0.14.0" CHECKSUM_AMD64="" CHECKSUM_ARM64="" bash <<'COCOON_PLUGIN_EOF'
+RUN RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" COCOON_INSTALL_METHOD="archive" PIN="0.14.0" CHECKSUM_AMD64="" CHECKSUM_ARM64="" bash <<'COCOON_PLUGIN_EOF'
 #!/usr/bin/env bash
 # Install Zig (required for cargo-lambda cross-compilation) (https://github.com/ziglang/zig)
 #
@@ -266,7 +266,7 @@ ln -sf /usr/local/zig/zig /usr/local/bin/zig
 rm /tmp/zig.tar.xz
 COCOON_PLUGIN_EOF
 # Install Go
-RUN RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" PIN="1.26.1" CHECKSUM_AMD64="" CHECKSUM_ARM64="" bash <<'COCOON_PLUGIN_EOF'
+RUN RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" COCOON_INSTALL_METHOD="archive" PIN="1.26.1" CHECKSUM_AMD64="" CHECKSUM_ARM64="" bash <<'COCOON_PLUGIN_EOF'
 #!/usr/bin/env bash
 # Install Go (https://github.com/golang/go)
 #
@@ -318,7 +318,7 @@ COCOON_PLUGIN_EOF
 ENV GOPATH="/home/${USERNAME}/go"
 ENV PATH="/usr/local/go/bin:$GOPATH/bin:$PATH"
 # Install lazygit
-RUN RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" PIN="0.44.1" CHECKSUM_AMD64="" CHECKSUM_ARM64="" bash <<'COCOON_PLUGIN_EOF'
+RUN RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" COCOON_INSTALL_METHOD="binary" PIN="0.44.1" CHECKSUM_AMD64="" CHECKSUM_ARM64="" bash <<'COCOON_PLUGIN_EOF'
 #!/usr/bin/env bash
 # Install lazygit (https://github.com/jesseduffield/lazygit)
 #
@@ -380,7 +380,7 @@ rm /tmp/lazygit.tar.gz
 COCOON_PLUGIN_EOF
 USER ${USERNAME}
 # Install proto
-RUN RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" PIN="0.46.1" CHECKSUM_AMD64="" CHECKSUM_ARM64="" bash <<'COCOON_PLUGIN_EOF'
+RUN RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" COCOON_INSTALL_METHOD="installer" PIN="0.46.1" CHECKSUM_AMD64="" CHECKSUM_ARM64="" bash <<'COCOON_PLUGIN_EOF'
 #!/usr/bin/env bash
 # Install proto (multi-language version manager) (https://github.com/moonrepo/proto)
 #
@@ -417,7 +417,7 @@ COCOON_PLUGIN_EOF
 ENV PROTO_HOME="/home/${USERNAME}/.proto"
 ENV PATH="$PROTO_HOME/shims:$PROTO_HOME/bin:$PATH"
 # Install AWS CLI v2
-RUN RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" bash <<'COCOON_PLUGIN_EOF'
+RUN RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" COCOON_INSTALL_METHOD="archive" bash <<'COCOON_PLUGIN_EOF'
 #!/usr/bin/env bash
 # Install AWS CLI v2 (https://github.com/aws/aws-cli)
 set -euo pipefail
@@ -436,7 +436,7 @@ sudo ./aws/install
 rm -rf aws awscliv2.zip
 COCOON_PLUGIN_EOF
 # Install AWS SAM CLI
-RUN RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" bash <<'COCOON_PLUGIN_EOF'
+RUN RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" COCOON_INSTALL_METHOD="archive" bash <<'COCOON_PLUGIN_EOF'
 #!/usr/bin/env bash
 # Install AWS SAM CLI (https://github.com/aws/aws-sam-cli)
 set -euo pipefail
@@ -457,21 +457,22 @@ sudo ./sam-installation/install
 rm -rf sam-installation aws-sam-cli.zip
 COCOON_PLUGIN_EOF
 # Install GitHub Copilot CLI
-RUN RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" COCOON_INSTALL_METHOD="gh-cli" PIN="0.0.369" CHECKSUM_AMD64="" CHECKSUM_ARM64="" bash <<'COCOON_PLUGIN_EOF'
+RUN RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" COCOON_INSTALL_METHOD="installer" PIN="0.0.369" CHECKSUM_AMD64="" CHECKSUM_ARM64="" bash <<'COCOON_PLUGIN_EOF'
 #!/usr/bin/env bash
 # Install GitHub Copilot CLI via the upstream gh.io installer.
-# Method: pipes https://gh.io/copilot-install through bash with VERSION and
-#         PREFIX env, exactly as the documented upstream flow does. Pick
-#         install.binary.sh when gh.io is blocked or curl|sh is forbidden.
+# Method category: installer — pipes https://gh.io/copilot-install through
+#                  bash with VERSION and PREFIX env, exactly as the
+#                  documented upstream flow does. Pick install.binary.sh
+#                  when gh.io is blocked or curl|sh is forbidden.
 #
 # Inputs (env):
 #   PIN                   : Copilot CLI version (without leading "v"); empty = latest
-#   COCOON_INSTALL_METHOD : selected install method; must equal "gh-cli"
+#   COCOON_INSTALL_METHOD : selected install method; must equal "installer"
 set -euo pipefail
 
 : "${COCOON_INSTALL_METHOD:?missing}"
-if [ "$COCOON_INSTALL_METHOD" != "gh-cli" ]; then
-  echo "install.gh-cli.sh invoked with COCOON_INSTALL_METHOD=$COCOON_INSTALL_METHOD; expected gh-cli" >&2
+if [ "$COCOON_INSTALL_METHOD" != "installer" ]; then
+  echo "install.installer.sh invoked with COCOON_INSTALL_METHOD=$COCOON_INSTALL_METHOD; expected installer" >&2
   exit 1
 fi
 
@@ -485,7 +486,7 @@ fi
 COCOON_PLUGIN_EOF
 ENV PATH="/home/${USERNAME}/.local/bin:$PATH"
 # Install Claude Code
-RUN RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" bash <<'COCOON_PLUGIN_EOF'
+RUN RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" COCOON_INSTALL_METHOD="installer" bash <<'COCOON_PLUGIN_EOF'
 #!/usr/bin/env bash
 # Install Claude Code (https://github.com/anthropics/claude-code)
 set -euo pipefail
@@ -495,7 +496,7 @@ curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-erro
 COCOON_PLUGIN_EOF
 ENV PATH="/home/${USERNAME}/.local/bin:$PATH"
 # Install uv
-RUN RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" PIN="0.5.7" CHECKSUM_AMD64="" CHECKSUM_ARM64="" bash <<'COCOON_PLUGIN_EOF'
+RUN RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" COCOON_INSTALL_METHOD="installer" PIN="0.5.7" CHECKSUM_AMD64="" CHECKSUM_ARM64="" bash <<'COCOON_PLUGIN_EOF'
 #!/usr/bin/env bash
 # Install uv (fast Python package and project manager) (https://github.com/astral-sh/uv)
 #
@@ -523,7 +524,7 @@ fi
 COCOON_PLUGIN_EOF
 ENV PATH="/home/${USERNAME}/.local/bin:$PATH"
 # Install Rust
-RUN RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" bash <<'COCOON_PLUGIN_EOF'
+RUN RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" COCOON_INSTALL_METHOD="installer" bash <<'COCOON_PLUGIN_EOF'
 #!/usr/bin/env bash
 # Install Rust toolchain via rustup (https://github.com/rust-lang/rustup)
 #

@@ -56,16 +56,29 @@ func parsePluginTOML(label string, data []byte) (*Plugin, error) {
 	return &p, nil
 }
 
-// validateMethodScripts enforces that every declared install.methods.<name>
-// entry has a matching install.<name>.sh file in scriptDir, and that the
-// legacy install.sh is absent when methods are declared (exclusivity).
-// Returns nil when [install.methods] is empty so legacy plugins are
-// unaffected.
+// validateMethodScripts enforces three invariants on every plugin:
+//
+//  1. [install.methods] is non-empty — every plugin declares at least one
+//     install method by category name (binary / installer / apt / archive
+//     per the docs/plugins.md convention; arbitrary names also accepted).
+//  2. each declared method has a matching install.<name>.sh file in scriptDir.
+//  3. a literal install.sh file must NOT exist. The legacy single-method
+//     shape is dropped — all plugins use the same install.<name>.sh layout
+//     so the loader / generator / scaffold / docs don't have to branch on
+//     "declared methods" vs "implicit install.sh".
+//
+// The error message for a stray install.sh names the rename + plugin.toml
+// edit the author needs (rather than asking them to read the docs), so a
+// user-overlay plugin that pre-dates this rule gets actionable migration
+// guidance the first time `cocoon gen` rejects it.
 func validateMethodScripts(label string, p *Plugin, fsys fs.FS, scriptDir string) error {
-	if len(p.Install.Methods) == 0 {
-		return nil
-	}
 	a := newAccumulator()
+	if len(p.Install.Methods) == 0 {
+		a.add("[install.methods] must declare at least one entry "+
+			"(category convention: binary / installer / apt / archive — see docs/plugins.md). "+
+			"Single-method plugins still need one entry; pick the category that matches your script.",
+			"install", "methods")
+	}
 	for name := range p.Install.Methods {
 		scriptPath := path.Join(scriptDir, "install."+name+".sh")
 		if _, err := fs.Stat(fsys, scriptPath); err != nil {
@@ -73,7 +86,10 @@ func validateMethodScripts(label string, p *Plugin, fsys fs.FS, scriptDir string
 		}
 	}
 	if _, err := fs.Stat(fsys, path.Join(scriptDir, "install.sh")); err == nil {
-		a.add("install.sh must not exist when [install.methods] is declared; use install.<name>.sh instead", "install")
+		a.add("install.sh is no longer supported; rename it to install.<category>.sh "+
+			"(binary / installer / apt / archive) and declare a matching [install.methods.<category>] "+
+			"entry in plugin.toml. See docs/plugins.md for the category convention.",
+			"install")
 	}
 	if len(*a.errs) == 0 {
 		return nil
