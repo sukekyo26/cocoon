@@ -12,6 +12,7 @@ var (
 	rxBuildArg     = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`)
 	rxPluginVolume = regexp.MustCompile(`^/home/\$\{USERNAME\}/[^/]+$`)
 	rxPluginURL    = regexp.MustCompile(`^https://[^\s]+$`)
+	rxMethodName   = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
 )
 
 // accumulator is a trimmed copy of internal/config's errAccumulator so
@@ -91,6 +92,29 @@ func (i *Install) validate(a *accumulator) {
 	for idx, v := range i.Volumes {
 		if !rxPluginVolume.MatchString(v) {
 			a.add("volume does not match "+rxPluginVolume.String(), "volumes", fmt.Sprintf("%d", idx))
+		}
+	}
+	i.validateMethods(a)
+}
+
+func (i *Install) validateMethods(a *accumulator) {
+	if len(i.Methods) == 0 {
+		if i.DefaultMethod != "" {
+			a.add("default_method requires at least one [install.methods.<name>] entry", "default_method")
+		}
+		return
+	}
+	if i.DefaultMethod == "" {
+		a.add("default_method must be set when [install.methods] is declared", "default_method")
+	} else if _, ok := i.Methods[i.DefaultMethod]; !ok {
+		a.add(fmt.Sprintf("default_method %q is not declared in [install.methods]", i.DefaultMethod), "default_method")
+	}
+	for name, m := range i.Methods {
+		if !rxMethodName.MatchString(name) {
+			a.add("method name does not match "+rxMethodName.String(), "methods", name)
+		}
+		if m.Description == "" {
+			a.add("description must not be empty", "methods", name, "description")
 		}
 	}
 }

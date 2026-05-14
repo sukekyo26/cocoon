@@ -127,3 +127,98 @@ func TestLoadEnabledFromFS_NilSrcReturnsSentinel(t *testing.T) {
 		})
 	}
 }
+
+const methodTOMLBody = `
+[metadata]
+name = "x"
+description = "y"
+url = "https://example.com/x"
+default = false
+
+[install]
+default_method = "official"
+
+[install.methods.official]
+description = "Official installer"
+
+[install.methods.binary]
+description = "Direct binary"
+
+[version]
+version_capable = false
+`
+
+// TestLoad_MethodScriptMissing pins that Load rejects a plugin declaring
+// [install.methods.<name>] when the matching install.<name>.sh file is
+// missing from the same directory.
+func TestLoad_MethodScriptMissing(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	tomlPath := filepath.Join(dir, "plugin.toml")
+	require.NoError(t, os.WriteFile(tomlPath, []byte(methodTOMLBody), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "install.official.sh"), []byte("#!/bin/sh\n"), 0o600))
+	// install.binary.sh intentionally absent.
+	_, err := plugin.Load(tomlPath)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "install.binary.sh does not exist")
+}
+
+// TestLoad_MethodScriptsPresent pins the happy path: all declared
+// methods have their install.<name>.sh and Load succeeds.
+func TestLoad_MethodScriptsPresent(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	tomlPath := filepath.Join(dir, "plugin.toml")
+	require.NoError(t, os.WriteFile(tomlPath, []byte(methodTOMLBody), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "install.official.sh"), []byte("#!/bin/sh\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "install.binary.sh"), []byte("#!/bin/sh\n"), 0o600))
+	p, err := plugin.Load(tomlPath)
+	require.NoError(t, err)
+	require.Equal(t, "official", p.Install.DefaultMethod)
+	require.Contains(t, p.Install.Methods, "official")
+	require.Contains(t, p.Install.Methods, "binary")
+}
+
+// TestLoad_InstallShRejectedWithMethods pins the exclusivity rule: a
+// plugin with [install.methods] declared must not also ship a legacy
+// install.sh in the same directory.
+func TestLoad_InstallShRejectedWithMethods(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	tomlPath := filepath.Join(dir, "plugin.toml")
+	require.NoError(t, os.WriteFile(tomlPath, []byte(methodTOMLBody), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "install.official.sh"), []byte("#!/bin/sh\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "install.binary.sh"), []byte("#!/bin/sh\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "install.sh"), []byte("#!/bin/sh\n"), 0o600))
+	_, err := plugin.Load(tomlPath)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "install.sh must not exist when [install.methods] is declared")
+}
+
+// TestLoad_LegacyPluginUnaffected pins backward compatibility: a plugin
+// without [install.methods] loads successfully when only install.sh is
+// present (or even when absent — script existence is unchecked in the
+// legacy path).
+func TestLoad_LegacyPluginUnaffected(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	tomlPath := filepath.Join(dir, "plugin.toml")
+	body := `
+[metadata]
+name = "x"
+description = "y"
+url = "https://example.com/x"
+default = false
+
+[install]
+requires_root = false
+
+[version]
+version_capable = false
+`
+	require.NoError(t, os.WriteFile(tomlPath, []byte(body), 0o600))
+	p, err := plugin.Load(tomlPath)
+	require.NoError(t, err)
+	require.Empty(t, p.Install.Methods)
+	require.Empty(t, p.Install.DefaultMethod)
+}
