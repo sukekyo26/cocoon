@@ -449,7 +449,15 @@ func (p *PluginsSpec) validate(a *errAccumulator) {
 			a.add("checksum_arm64 must be 64 lowercase hex chars", "versions", name, "checksum_arm64")
 		}
 	}
-	for id, method := range p.Methods {
+	// Sort plugin ids so ValidationError.Error()'s "first error"
+	// summary stays stable across runs (map iteration is randomised).
+	methodIDs := make([]string, 0, len(p.Methods))
+	for id := range p.Methods {
+		methodIDs = append(methodIDs, id)
+	}
+	slices.Sort(methodIDs)
+	for _, id := range methodIDs {
+		method := p.Methods[id]
 		if !rxPluginID.MatchString(id) {
 			a.add("plugin id does not match "+rxPluginID.String(), "methods", id)
 		}

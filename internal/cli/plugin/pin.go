@@ -145,16 +145,26 @@ func renderPinSnippet(id, ref, amd64sum, arm64sum, method string) string {
 
 // validateMethodForPin loads the resolved plugin and confirms the requested
 // method name exists under [install.methods]. Returns ErrUsage for the
-// user-correctable failure (method name not declared) and ErrFailure when
-// the manifest itself cannot be read. The "plugin has no methods declared"
-// branch is unreachable here because the loader's validateMethodScripts
-// already rejects a plugin.toml without [install.methods]; if that check
-// is somehow bypassed we fall through into the "method not declared"
-// branch and surface declared=[] (empty list) which is still useful.
+// user-correctable failures (no methods declared / method name not declared)
+// and ErrFailure when the manifest itself cannot be read.
+//
+// loadPluginFromLayer only runs strict unmarshal — it skips
+// validateMethodScripts and plugin.Validate — so a user-overlay plugin
+// without [install.methods] reaches this function with an empty
+// Install.Methods map. Handle that case explicitly rather than falling
+// through into the "method not declared (declared: )" branch, which
+// would surface an empty declared list and obscure the real fix.
 func validateMethodForPin(layered *plugin.LayeredFS, id, method string) error {
 	p, err := loadPluginFromLayer(layered, id)
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrFailure, err)
+	}
+	if len(p.Install.Methods) == 0 {
+		return fmt.Errorf(
+			"%w: plugin %q declares no [install.methods] in plugin.toml; "+
+				"--method is only meaningful when the plugin offers two or more "+
+				"install variants — drop --method to pin only the version",
+			ErrUsage, id)
 	}
 	if _, ok := p.Install.Methods[method]; !ok {
 		declared := make([]string, 0, len(p.Install.Methods))

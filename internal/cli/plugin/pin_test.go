@@ -345,6 +345,53 @@ func TestPin_MethodUnknownNameFails(t *testing.T) {
 	}
 }
 
+// --method on a user-overlay plugin whose plugin.toml declares no
+// [install.methods] section at all: validateMethodForPin loads via
+// loadPluginFromLayer (strict unmarshal only — the loader's catalog-wide
+// `[install.methods]` enforcement is bypassed for user overlays at this
+// call site), so an empty Methods map reaches the validator. The user
+// must see an actionable ErrUsage that explains --method is meaningless
+// here rather than the misleading "declared: " empty-list message the
+// next branch would produce.
+//
+//nolint:paralleltest // t.Chdir + t.Setenv mutate process state.
+func TestPin_MethodFailsWhenPluginDeclaresNoMethods(t *testing.T) {
+	home := withIsolatedHome(t)
+	pluginDir := filepath.Join(home, ".cocoon", "plugins", "no-methods")
+	if err := os.MkdirAll(pluginDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	body := `[metadata]
+name = "no-methods"
+description = "fixture without install.methods"
+url = "https://example.test"
+default = false
+
+[install]
+requires_root = false
+
+[version]
+version_capable = false
+`
+	if err := os.WriteFile(filepath.Join(pluginDir, "plugin.toml"), []byte(body), 0o600); err != nil {
+		t.Fatalf("write plugin.toml: %v", err)
+	}
+	dir := t.TempDir()
+	seedWorkspace(t, dir, "[plugins]\nenable = [\"no-methods\"]\n")
+	t.Chdir(dir)
+
+	_, _, err := runPinCmd(t, "no-methods", "1.2.3", "--method", "binary")
+	if !errors.Is(err, plugincli.ErrUsage) {
+		t.Fatalf("err = %v, want ErrUsage", err)
+	}
+	if !strings.Contains(err.Error(), "declares no [install.methods]") {
+		t.Errorf("err should explain --method needs declared methods, got: %v", err)
+	}
+	if strings.Contains(err.Error(), "declared: )") {
+		t.Errorf("err should not show empty declared list, got: %v", err)
+	}
+}
+
 // --method with a name that's not in the plugin's declared methods on a
 // catalog plugin with a single declared method (e.g. `go` declares only
 // "archive"): the error lists the declared keys so typos are easy to

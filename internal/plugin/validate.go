@@ -3,6 +3,7 @@ package plugin
 import (
 	"fmt"
 	"regexp"
+	"slices"
 
 	"github.com/sukekyo26/cocoon/internal/config"
 )
@@ -109,7 +110,15 @@ func (i *Install) validateMethods(a *accumulator) {
 	} else if _, ok := i.Methods[i.DefaultMethod]; !ok {
 		a.add(fmt.Sprintf("default_method %q is not declared in [install.methods]", i.DefaultMethod), "default_method")
 	}
-	for name, m := range i.Methods {
+	// Sort method names so ValidationError.Error()'s "first error"
+	// summary stays stable across runs (map iteration is randomised).
+	names := make([]string, 0, len(i.Methods))
+	for name := range i.Methods {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	for _, name := range names {
+		m := i.Methods[name]
 		if !rxMethodName.MatchString(name) {
 			a.add("method name does not match "+rxMethodName.String(), "methods", name)
 		}

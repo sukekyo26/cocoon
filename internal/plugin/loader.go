@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 
 	"github.com/sukekyo26/cocoon/internal/config"
 )
@@ -79,10 +80,28 @@ func validateMethodScripts(label string, p *Plugin, fsys fs.FS, scriptDir string
 			"Single-method plugins still need one entry; pick the category that matches your script.",
 			"install", "methods")
 	}
+	// Sort method names so the accumulator's FieldError ordering is
+	// stable across runs — ValidationError.Error() summarises the first
+	// entry, and a map-iteration order would make the "leading" error
+	// flicker between runs.
+	names := make([]string, 0, len(p.Install.Methods))
 	for name := range p.Install.Methods {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	for _, name := range names {
 		scriptPath := path.Join(scriptDir, "install."+name+".sh")
-		if _, err := fs.Stat(fsys, scriptPath); err != nil {
+		st, statErr := fs.Stat(fsys, scriptPath)
+		switch {
+		case errors.Is(statErr, fs.ErrNotExist):
 			a.add("install."+name+".sh does not exist", "install", "methods", name)
+		case statErr != nil:
+			// Permission / I/O failures surface as themselves so the
+			// author can fix the real cause; collapsing them into
+			// "does not exist" would send them on a wild-goose chase.
+			a.add(fmt.Sprintf("install.%s.sh: %v", name, statErr), "install", "methods", name)
+		case st.IsDir():
+			a.add("install."+name+".sh must be a regular file (got a directory)", "install", "methods", name)
 		}
 	}
 	if _, err := fs.Stat(fsys, path.Join(scriptDir, "install.sh")); err == nil {
