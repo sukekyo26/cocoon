@@ -124,6 +124,13 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 		"comma-separated <id>=<ref> pins for version_capable plugins (each <id> must also appear in --plugins)",
 	)
 	cmd.Flags().StringVar(
+		&flags.PluginMethods,
+		"plugin-methods",
+		"",
+		"comma-separated <id>=<method> picks for plugins that declare multiple [install.methods] "+
+			"(each <id> must also appear in --plugins; <method> must be a declared key)",
+	)
+	cmd.Flags().StringVar(
 		&flags.AliasBundles,
 		"alias-bundles",
 		"",
@@ -156,6 +163,7 @@ type initFlags struct {
 	AptCategories  string
 	Plugins        string
 	PluginVersions string
+	PluginMethods  string
 	AliasBundles   string
 	Ports          string
 	Force          bool
@@ -177,6 +185,7 @@ func zeroFlags() initFlags {
 		AptCategories:  "",
 		Plugins:        "",
 		PluginVersions: "",
+		PluginMethods:  "",
 		AliasBundles:   "",
 		Ports:          "",
 		Force:          false,
@@ -208,6 +217,8 @@ type initAnswers struct {
 	PluginsSet        bool
 	PluginVersions    map[string]string
 	PluginVersionsSet bool
+	PluginMethods     map[string]string
+	PluginMethodsSet  bool
 	AliasBundles      []string
 	AliasBundlesSet   bool
 	Ports             []string
@@ -236,6 +247,8 @@ func zeroAnswers() initAnswers {
 		PluginsSet:        false,
 		PluginVersions:    nil,
 		PluginVersionsSet: false,
+		PluginMethods:     nil,
+		PluginMethodsSet:  false,
 		AliasBundles:      nil,
 		AliasBundlesSet:   false,
 		Ports:             nil,
@@ -286,6 +299,7 @@ func runInit(cmd *cobra.Command, stdout, stderr io.Writer, flags *initFlags) err
 		Packages:       pkgs,
 		Plugins:        ans.Plugins,
 		PluginVersions: ans.PluginVersions,
+		PluginMethods:  ans.PluginMethods,
 		Ports:          ans.Ports,
 	}, cat)
 	if err := os.WriteFile(target, []byte(content), 0o644); err != nil { //nolint:gosec // workspace.toml is user-readable.
@@ -438,6 +452,13 @@ func applyFlags(flags *initFlags, plugins map[string]*plugin.Plugin) (initAnswer
 		}
 		ans.PluginVersions, ans.PluginVersionsSet = pins, true
 	}
+	if flags.PluginMethods != "" {
+		picks, err := parsePluginMethods(flags.PluginMethods, plugins, ans.Plugins)
+		if err != nil {
+			return ans, err
+		}
+		ans.PluginMethods, ans.PluginMethodsSet = picks, true
+	}
 	if flags.AliasBundles != "" {
 		ids, err := parseAliasBundles(flags.AliasBundles)
 		if err != nil {
@@ -495,6 +516,9 @@ func applyDefaults(ans initAnswers, plugins map[string]*plugin.Plugin) (initAnsw
 	}
 	if !ans.PortsSet {
 		ans.Ports, ans.PortsSet = nil, true
+	}
+	if !ans.PluginMethodsSet {
+		ans.PluginMethods, ans.PluginMethodsSet = nil, true
 	}
 	return ans, nil
 }
@@ -604,6 +628,19 @@ func promptForMissing(ans initAnswers, cat *i18n.Catalog, plugins map[string]*pl
 		}
 		ans.PluginsSet = true
 	}
+	// Method prompts run BEFORE version prompts because picking a method may
+	// change the upstream URL shown beside the version picker (e.g. official
+	// installer page vs. GitHub Releases). Allocate the map up front for the
+	// same reason promptPluginVersionsForCapable does: an empty map is the
+	// "use default_method everywhere" signal, indistinguishable from nil for
+	// downstream consumers.
+	if ans.PluginMethods == nil {
+		ans.PluginMethods = make(map[string]string)
+	}
+	if err := promptPluginMethodsForMulti(cat, plugins, ans.Plugins, ans.PluginMethods); err != nil {
+		return ans, err
+	}
+	ans.PluginMethodsSet = true
 	// Allocate the map even if the prompt produces no picks; an empty map
 	// is equivalent to nil in writePluginVersions (both hit the len==0
 	// fallback that emits the commented-out template).
@@ -1017,6 +1054,63 @@ func parsePluginVersions(raw string, plugins map[string]*plugin.Plugin, enabled 
 	return out, nil
 }
 
+// parsePluginMethods parses `--plugin-methods=<id>=<method>,…` into a map.
+// Each id must be a known plugin, listed in enabled (--plugins), and declare
+// [install.methods] in plugin.toml. The method must be one of the declared
+// keys. Empty input returns a non-nil empty map (nilnil lint); duplicate ids
+// are rejected so a typo cannot silently pick the last value.
+func parsePluginMethods(raw string, plugins map[string]*plugin.Plugin, enabled []string) (map[string]string, error) {
+	enabledSet := make(map[string]struct{}, len(enabled))
+	for _, id := range enabled {
+		enabledSet[id] = struct{}{}
+	}
+	out := map[string]string{}
+	for _, part := range strings.Split(raw, ",") {
+		token := strings.TrimSpace(part)
+		if token == "" {
+			continue
+		}
+		if strings.Count(token, "=") != 1 {
+			return nil, fmt.Errorf(
+				"%w: --plugin-methods token %q must be <id>=<method>", ErrUsage, token)
+		}
+		eq := strings.IndexByte(token, '=')
+		id := strings.TrimSpace(token[:eq])
+		method := strings.TrimSpace(token[eq+1:])
+		if id == "" || method == "" {
+			return nil, fmt.Errorf(
+				"%w: --plugin-methods token %q must be <id>=<method>", ErrUsage, token)
+		}
+		p, ok := plugins[id]
+		if !ok {
+			return nil, fmt.Errorf(
+				"%w: --plugin-methods: unknown plugin %q (run `cocoon plugin list`)",
+				ErrUsage, id)
+		}
+		if _, on := enabledSet[id]; !on {
+			return nil, fmt.Errorf(
+				"%w: --plugin-methods: plugin %q must also appear in --plugins",
+				ErrUsage, id)
+		}
+		if len(p.Install.Methods) == 0 {
+			return nil, fmt.Errorf(
+				"%w: --plugin-methods: plugin %q has no [install.methods] — drop it from --plugin-methods",
+				ErrUsage, id)
+		}
+		if _, declared := p.Install.Methods[method]; !declared {
+			return nil, fmt.Errorf(
+				"%w: --plugin-methods: plugin %q has no method %q in [install.methods]",
+				ErrUsage, id, method)
+		}
+		if _, dup := out[id]; dup {
+			return nil, fmt.Errorf(
+				"%w: --plugin-methods: duplicate id %q", ErrUsage, id)
+		}
+		out[id] = method
+	}
+	return out, nil
+}
+
 // validatePluginConflicts reports the first incompatible pair in the
 // enabled list. Conflicts are declared on plugin.toml's metadata.conflicts
 // field; the relation is required to be symmetric so checking one
@@ -1123,6 +1217,7 @@ type containerSpec struct {
 	Packages       []string
 	Plugins        []string
 	PluginVersions map[string]string
+	PluginMethods  map[string]string
 	Ports          []string
 }
 
@@ -1189,6 +1284,7 @@ func renderWorkspaceToml(s containerSpec, cat *i18n.Catalog) string {
 		sb.WriteString("]\n\n")
 	}
 
+	writePluginMethods(&sb, cat, s.PluginMethods)
 	writePluginVersions(&sb, cat, s.PluginVersions)
 
 	sb.WriteString(cat.Msg("init_toml_section_apt"))
@@ -1260,6 +1356,29 @@ func renderWorkspaceToml(s containerSpec, cat *i18n.Catalog) string {
 	}
 
 	return strings.TrimRight(sb.String(), "\n") + "\n"
+}
+
+// writePluginMethods emits a single `[plugins.methods]` block with one
+// `<id> = "<method>"` line per pick, alphabetically sorted by id. When picks
+// is empty it falls back to the commented-out template so users discover the
+// section without us having to render an empty `[plugins.methods]` table.
+func writePluginMethods(sb *strings.Builder, cat *i18n.Catalog, picks map[string]string) {
+	if len(picks) == 0 {
+		emitTemplate(sb, cat, "init_toml_template_plugins_methods")
+		return
+	}
+	ids := make([]string, 0, len(picks))
+	for id := range picks {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	sb.WriteString(cat.Msg("init_toml_section_plugins_methods"))
+	sb.WriteByte('\n')
+	sb.WriteString("[plugins.methods]\n")
+	for _, id := range ids {
+		fmt.Fprintf(sb, "%s = %q\n", id, picks[id])
+	}
+	sb.WriteByte('\n')
 }
 
 // writePluginVersions emits a single `[plugins.versions]` section with one

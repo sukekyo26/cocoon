@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `cocoon init` now prompts for an install method when an enabled plugin declares two or more entries under `[install.methods]` in its `plugin.toml` (the new schema introduced in PR #39). Each option lists the method name and its description; the plugin's `default_method` is pre-selected so pressing Enter accepts the recommendation. Plugins with a single declared method (or none) are silently skipped — no prompt churn for the common case. The choice is written to a new `[plugins.methods]` table in the generated `workspace.toml` (`<plugin-id> = "<method-name>"` per line); plugins absent from the table fall back to `default_method` at install time. Method prompts run **before** version prompts so the per-method upstream URL surfaces correctly under the version picker description.
+- New `cocoon init --plugin-methods` flag, mirroring the existing `--plugin-versions` flag: `--plugin-methods="<id>=<method>,<id>=<method>"` skips the prompt for each named plugin (each `<id>` must also appear in `--plugins`; `<method>` must be a key under that plugin's `[install.methods]`). Used together with `--yes`, this drives the new method selection non-interactively from CI.
+
 ## [0.3.1] - 2026-05-14
 
 ### Added

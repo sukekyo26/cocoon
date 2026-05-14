@@ -6,6 +6,11 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+### 追加
+
+- `cocoon init` の対話モードで、`plugin.toml` の `[install.methods]` に 2 つ以上のエントリを宣言したプラグイン（PR #39 で導入された新スキーマ）に対して「インストール方式」のピッカーを表示するようにしました。各選択肢には method 名と description を併記し、プラグインの `default_method` を初期選択にしているので、推奨どおりで良ければそのまま Enter で確定できます。method を 1 つしか持たない（または宣言していない）プラグインはサイレントにスキップ — 一般プラグインに余計なプロンプトが増えることはありません。選択結果は生成される `workspace.toml` の新セクション `[plugins.methods]` (1 行 1 プラグインの `<id> = "<method>"` 形式) に書き出され、ここに現れないプラグインはインストール時に `default_method` にフォールバックします。method プロンプトは version プロンプトの **前** に走るので、選んだ method 固有の上流 URL が version ピッカーの説明欄に正しく出ます。
+- 新フラグ `cocoon init --plugin-methods` を追加: `--plugin-versions` フラグと同じ形式 (`--plugin-methods="<id>=<method>,<id>=<method>"`) で、指定されたプラグインの method プロンプトをスキップします (`<id>` は `--plugins` にも含まれている必要があり、`<method>` はそのプラグインの `[install.methods]` に宣言されたキーでなければなりません)。`--yes` と組み合わせれば method 選択も含めて CI で完全に non-interactive 実行できます。
+
 ## [0.3.1] - 2026-05-14
 
 ### 追加
