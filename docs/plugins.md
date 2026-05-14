@@ -60,15 +60,28 @@ archive).
 ```
 plugins/<id>/
 ├── plugin.toml         # required
-├── install.sh          # optional — see below
+├── install.sh          # legacy single-method form — see below
+├── install.<name>.sh   # method-style alternative (one file per declared [install.methods] entry)
 └── install_user.sh     # optional (only when "install.sh vs install_user.sh" applies)
 ```
+
+A plugin is in **one** of two shapes:
+
+- **Single-method (legacy)**: ships `install.sh`. No `[install.methods]`
+  section in `plugin.toml`. This is what every plugin in the catalog
+  looked like before v0.4 and what most plugins still look like.
+- **Multi-method**: declares `[install.methods.<name>]` in `plugin.toml`
+  and ships one `install.<name>.sh` per declared method. `install.sh`
+  is rejected — the loader refuses a plugin that mixes both shapes. Pick
+  this when the same tool needs alternative install paths (e.g.
+  `gh.io` installer vs. a direct binary download for environments where
+  `gh.io` is firewalled or `curl|sh` is forbidden by policy).
 
 A plugin's **install snippet** (the `# Install …` comment + RUN block in
 the generated Dockerfile) is emitted only when at least one of these is
 present:
 
-- `install.sh`
+- `install.sh` (single-method) **or** `install.<name>.sh` (multi-method)
 - `install_user.sh`
 - `[install.env]`
 
@@ -98,7 +111,9 @@ of the install phase and the named-volume declaration in
 | `[install]`  | `build_args`      | list of strings    | `[]`  |   | Names of build-time variables (e.g. `DOCKER_GID`) the plugin consumes. The generator emits matching `ARG <name>` lines once per plugin (next to whichever of `install.sh` / `install_user.sh` runs first) and threads `<name>="${<name>}"` into the per-RUN env prefix of every hook, so both `install.sh` and `install_user.sh` can read `$<name>` as a normal env var. ARG scope is stage-wide, so a single declaration covers both RUNs. Names match `^[A-Z_][A-Z0-9_]*$`. |
 | `[install]`  | `env`             | map<string,string> | `{}`  |   | `ENV` lines emitted after the install runs. Values can reference earlier `ENV`/`ARG` vars. |
 | `[install]`  | `volumes`         | list of strings    | `[]`  |   | Per-user paths under `/home/${USERNAME}/<dir>`; each one is `mkdir -p`'d, `chown`'d, and declared as a docker named volume so its contents persist across rebuilds. |
-| `[version]`  | `version_capable` | bool               | —     | ✓ | If true, `install.sh` accepts `$PIN` and optionally `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` (see "Versioned plugins" below). |
+| `[install]`  | `default_method`  | string             | —     | ✓ when `[install.methods]` is declared | Name of the method picked when `workspace.toml`'s `[plugins.methods]` does not pin one. Must be a key under `[install.methods]`. Forbidden when `[install.methods]` is absent. |
+| `[install.methods.<name>]` | `description` | string | — | ✓ when the method is declared | One-line description shown in `cocoon init`'s method picker. `<name>` matches `^[a-z][a-z0-9_-]*$` and must have a matching `install.<name>.sh` file on disk. |
+| `[version]`  | `version_capable` | bool               | —     | ✓ | If true, the install script accepts `$PIN` and optionally `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` (see "Versioned plugins" below). |
 
 Strict unmarshal: unknown top-level fields and unknown keys inside
 known sections are rejected loud. If you see `unknown field "foo"`
@@ -142,6 +157,66 @@ second hook keeps that boundary explicit and obvious.
 If there is no rc edit and no user-owned config to write, you don't
 need `install_user.sh`. The current catalog reflects this: starship
 is the only plugin that uses it.
+
+## Multi-method plugins (`[install.methods]`)
+
+A plugin opts into multiple install methods by declaring two or more
+entries under `[install.methods.<name>]` in `plugin.toml` and shipping
+one `install.<name>.sh` script per declared method. `install.sh` is
+forbidden in this shape — the loader refuses a plugin that mixes both.
+
+```toml
+# plugin.toml
+[install]
+requires_root = false
+default_method = "gh-cli"
+
+[install.methods.gh-cli]
+description = "Install via the upstream gh.io install script (default)"
+
+[install.methods.binary]
+description = "Direct binary from GitHub Releases (Zscaler-friendly)"
+```
+
+With the matching `install.gh-cli.sh` and `install.binary.sh` files on
+disk, the plugin offers two install paths. The selection flows through
+`workspace.toml`:
+
+```toml
+[plugins.methods]
+copilot-cli = "binary"  # plugins absent here use their default_method
+```
+
+`cocoon init` shows a per-plugin method picker (only for plugins with two
+or more declared methods) and writes the user's choice into
+`[plugins.methods]`. The picker's pre-selected row is the plugin's
+`default_method`, so accepting the recommendation is just Enter.
+
+The chosen script receives every standard env var (`$PIN`,
+`$CHECKSUM_AMD64`, `$CHECKSUM_ARM64`, `$RC_FILE`, `$RC_SYNTAX`,
+`$LOGIN_SHELL`, build-arg variables) plus one additional value:
+
+| Var | Meaning |
+|---|---|
+| `$COCOON_INSTALL_METHOD` | Selected method name (e.g. `"binary"`). Always set when the plugin declares `[install.methods]`. Empty for legacy single-`install.sh` plugins. |
+
+The script should fail-fast when the env is missing (`: "${COCOON_INSTALL_METHOD:?missing}"`)
+and reject mismatched values so a renamed script catches a stale
+`workspace.toml` reference before it pulls down the wrong artifact.
+
+**Pin/checksum scope.** Pins live under `[plugins.versions]` and are
+**workspace-scoped, not method-scoped** — the catalog deliberately keeps
+`plugin.toml` free of per-method checksums to bound the diff every
+upstream release produces. When switching methods, refresh
+`checksum_amd64` / `checksum_arm64` in `workspace.toml` (or use
+`cocoon plugin pin --method <name>` to do both at once) so the install
+script's `sha256sum -c -` still matches the new artifact.
+
+**3-layer overlay.** Method resolution is currently **same-layer only**:
+a plugin's `plugin.toml` and every declared `install.<name>.sh` must
+live in the same layer (embedded / user / project). Cross-layer
+distribution (e.g. one method script in the user layer and another in
+the project layer) is not supported yet.
 
 ## Environment variables passed to install scripts
 
