@@ -421,12 +421,19 @@ type installRunData struct {
 // installRunTmpl inlines the install body via a quoted heredoc. The
 // single-quoted 'COCOON_PLUGIN_EOF' suppresses parameter/command
 // substitution so the script lands verbatim, and per-RUN env vars
-// (PIN / RC_FILE / etc.) stay scoped to that step.
+// (PIN / RC_FILE / etc.) stay scoped to that step. The apt cache
+// mounts mirror the apt-related RUN blocks elsewhere in the generator
+// so install.apt.sh plugins (and any other plugin that touches apt
+// internally) reuse /var/cache/apt + /var/lib/apt across builds —
+// without them, `apt-get update` re-fetches the index each build and
+// the lists land in the image layer.
 var installRunTmpl = tmplx.MustParse("dockerfile-plugin-install", `{{ .Comment }}
 {{- range .ArgLines }}
 {{ . }}
 {{- end }}
-RUN {{ range .EnvPairs }}{{ . }} {{ end }}bash <<'COCOON_PLUGIN_EOF'
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    {{ range .EnvPairs }}{{ . }} {{ end }}bash <<'COCOON_PLUGIN_EOF'
 {{ .ScriptBody }}COCOON_PLUGIN_EOF`, nil)
 
 // renderInstallRun normalises the trailing newline so the closing delim
