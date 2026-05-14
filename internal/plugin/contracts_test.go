@@ -10,20 +10,37 @@ import (
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
 
-// installScriptCorpus concatenates every install*.sh script (legacy
-// install.sh OR install.<method>.sh from a [install.methods] plugin)
-// plus optional install_user.sh and plugin.toml, returning the joined
-// blob the mustContain / mustNotContain assertions search.
+// installScriptCorpus concatenates the plugin's install scripts (legacy
+// `install.sh` OR `install.<method>.sh` files from a [install.methods]
+// plugin) together with `plugin.toml`, returning the joined blob the
+// mustContain / mustNotContain assertions search.
+//
+// `install_user.sh` is intentionally NOT folded in here — it is the only
+// auxiliary script TestPluginContracts handles separately (appended at the
+// call site), so keeping responsibility split means each script is read at
+// most once. The broader `install*.sh` glob would otherwise also pick up
+// `install_user.sh` and double-count it.
 //
 // Plugins that declare [install.methods] cannot also ship install.sh
-// (loader enforces this), so the same glob handles both shapes without
-// special-casing.
+// (loader enforces this), so the explicit two-pattern selection below
+// handles both shapes without further special-casing.
 func installScriptCorpus(t *testing.T, dir, id string) string {
 	t.Helper()
-	matches, err := filepath.Glob(filepath.Join(dir, "install*.sh"))
-	if err != nil {
-		t.Fatalf("glob install scripts: %v", err)
+	var matches []string
+	// Legacy single-method form.
+	legacy := filepath.Join(dir, "install.sh")
+	if _, err := os.Stat(legacy); err == nil {
+		matches = append(matches, legacy)
 	}
+	// Multi-method form: install.<name>.sh. `*` in filepath.Glob never
+	// matches a path separator, so this pattern catches install.gh-cli.sh
+	// / install.binary.sh / etc. but NOT install.sh (no chars between
+	// the two literal dots) and NOT install_user.sh (no leading dot).
+	methodMatches, err := filepath.Glob(filepath.Join(dir, "install.*.sh"))
+	if err != nil {
+		t.Fatalf("glob method scripts: %v", err)
+	}
+	matches = append(matches, methodMatches...)
 	if len(matches) == 0 {
 		t.Fatalf("plugin %q ships no install script", id)
 	}
