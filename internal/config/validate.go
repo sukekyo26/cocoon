@@ -32,6 +32,13 @@ var (
 	rxLang             = regexp.MustCompile(`^[a-z]{2,3}_[A-Z]{2}\.UTF-8$`)
 	rxEmail            = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
 	rxAbsolutePath     = regexp.MustCompile(`^/`)
+	// rxMountTarget: a [[mounts]].target is interpolated unquoted into the
+	// generated Dockerfile `ENV COCOON_BIND_PATHS="..."` line and into the
+	// docker-compose `source:target` volume spec. A quote, backtick, `$`,
+	// `:`, whitespace, or newline would break out of either context, so the
+	// container target is restricted to a path of POSIX portable filename
+	// chars plus the literal `${USERNAME}` placeholder. Whitelist > blacklist.
+	rxMountTarget = regexp.MustCompile(`^(?:/(?:\$\{USERNAME\}|[A-Za-z0-9._-])+)+/?$`)
 	// rxHostname matches an RFC 1123-style hostname: dot-joined labels,
 	// each label 1+ alnum chars (hyphen allowed inside but not at the
 	// start/end). Underscores and consecutive dots (a..b) are rejected.
@@ -336,6 +343,16 @@ func (s *SecurityOptSpec) validate(a *errAccumulator) {
 	}
 }
 
+// entrypointRequiredCaps lists the capabilities docker-entrypoint.sh needs
+// at container start: CHOWN to re-own the home subtree, SETUID/SETGID to
+// drop privileges via setpriv. Dropping any of them (or ALL) strands the
+// container as root, so reject the drop at generation time. Keys are bare
+// names; a leading CAP_ is stripped before lookup since Docker accepts both
+// "CHOWN" and "CAP_CHOWN".
+var entrypointRequiredCaps = map[string]struct{}{
+	"ALL": {}, "CHOWN": {}, "SETUID": {}, "SETGID": {},
+}
+
 func (cs *CapabilitiesSpec) validate(a *errAccumulator) {
 	checkCapList(a.at("add"), cs.Add)
 	checkCapList(a.at("drop"), cs.Drop)
@@ -347,6 +364,14 @@ func (cs *CapabilitiesSpec) validate(a *errAccumulator) {
 		if _, conflict := addSet[c]; conflict {
 			a.add(fmt.Sprintf("%q appears in both add and drop", c))
 			break
+		}
+	}
+	for i, c := range cs.Drop {
+		if _, required := entrypointRequiredCaps[strings.TrimPrefix(c, "CAP_")]; required {
+			a.add(fmt.Sprintf(
+				"%q cannot be dropped: docker-entrypoint.sh needs CHOWN, SETUID, "+
+					"and SETGID at container start to remap the user and drop "+
+					"privileges", c), "drop", fmt.Sprintf("%d", i))
 		}
 	}
 }
@@ -582,6 +607,11 @@ func (m *Mount) validate(a *errAccumulator) {
 	}
 	if !rxAbsolutePath.MatchString(m.Target) {
 		a.add("target must be an absolute path", "target")
+	} else if !rxMountTarget.MatchString(m.Target) {
+		a.add("target may contain only [A-Za-z0-9._/-] and the ${USERNAME} "+
+			"placeholder (quotes, backticks, $, :, whitespace are rejected "+
+			"because the target flows unquoted into the generated Dockerfile "+
+			"ENV and the docker-compose volume spec)", "target")
 	}
 }
 

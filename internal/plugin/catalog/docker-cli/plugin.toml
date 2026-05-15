@@ -6,7 +6,6 @@ default = true
 
 [install]
 requires_root = true
-build_args = ["DOCKER_GID"]
 default_method = "apt"
 
 [install.methods.apt]

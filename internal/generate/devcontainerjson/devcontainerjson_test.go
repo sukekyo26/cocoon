@@ -163,6 +163,8 @@ func TestGenerateMinimalDefaults(t *testing.T) {
 		`"service": "dev"`,
 		`"workspaceFolder": "/home/developer/workspace/dev"`,
 		`"shutdownAction": "stopCompose"`,
+		`"remoteUser": "developer"`,
+		`"updateRemoteUserUID": false`,
 		`"extensions": []`,
 	} {
 		if !strings.Contains(got, want) {
@@ -280,5 +282,26 @@ func TestGenerateDeepMergeReplacesScalarsAndLists(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Errorf("expected %q in:\n%s", want, got)
 		}
+	}
+}
+
+// TestGenerateRemoteUserOverrideWins verifies a [devcontainer] override of
+// remoteUser replaces the cocoon default (deepMerge keeps the existing slot).
+func TestGenerateRemoteUserOverrideWins(t *testing.T) {
+	t.Parallel()
+	ctx := &generate.WorkspaceContext{
+		WS: &config.Workspace{
+			Devcontainer: config.Devcontainer{"remoteUser": "root"},
+		},
+	}
+	got, err := devcontainerjson.Generate(ctx)
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	if !strings.Contains(got, `"remoteUser": "root"`) {
+		t.Errorf("expected overridden remoteUser, got:\n%s", got)
+	}
+	if strings.Contains(got, `"remoteUser": "developer"`) {
+		t.Errorf("the override must replace the default remoteUser:\n%s", got)
 	}
 }

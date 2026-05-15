@@ -329,7 +329,7 @@ DEBUG          = "1"
 | フィールド | 型 | 必須 | 説明 |
 |---|---|---|---|
 | `source` | string | yes | ホスト側パス。`~` 可。空文字列不可。 |
-| `target` | string | yes | コンテナ側パス。絶対パスのみ。 |
+| `target` | string | yes | コンテナ側パス。絶対パスで、`[A-Za-z0-9._/-]` と `${USERNAME}` プレースホルダのみ使用可。引用符・`:`・`$`・バッククオート・空白は不可 — target は生成 Dockerfile と docker-compose の volume spec へ無クオートで展開されるため。 |
 | `readonly` | bool | no | デフォルト `false`。 |
 
 ```toml
@@ -368,7 +368,9 @@ docker compose -f .devcontainer/docker-compose.yml build
 
 ### チーム運用シナリオ
 
-cocoon の生成物 `.devcontainer/*` は、ワークスペースが `[certificates]` を有効化しているかどうかで内容が変わります。有効化したワークスペースは team 全員で同じ cert 配線付き成果物を共有し、無効化 (デフォルト) のワークスペースは cert 配線ゼロの成果物を共有します。
+生成される `.devcontainer/` はホスト非依存で、コミットして共有する前提です: `.env` に `UID`/`GID`/`DOCKER_GID` は含まれず、`docker-entrypoint.sh` が起動時にバインドマウントされたワークスペースからコンテナユーザーの identity を解決します。ディレクトリ一式をコミットすれば全員がそのままビルドでき、各自での再生成も cocoon バイナリの共有も不要です。以下の corp CA 配線だけはホスト側の手順が残ります。
+
+cocoon の生成物 `.devcontainer/*` の **cert 配線** は、ワークスペースが `[certificates]` を有効化しているかどうかで内容が変わります。有効化したワークスペースは team 全員で同じ cert 配線付き成果物を共有し、無効化 (デフォルト) のワークスペースは cert 配線ゼロの成果物を共有します。
 
 | メンバー | cocoon バイナリ | `~/.cocoon/certs/` 作成 | 必要な操作 |
 |---|---|---|---|

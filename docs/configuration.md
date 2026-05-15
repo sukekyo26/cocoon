@@ -329,7 +329,7 @@ Extra bind mounts from host to container. Repeatable.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `source` | string | yes | Host path. May include `~`. Must not be empty. |
-| `target` | string | yes | Container path. Must be absolute. |
+| `target` | string | yes | Container path. Must be absolute; only `[A-Za-z0-9._/-]` and the `${USERNAME}` placeholder are allowed. Quotes, `:`, `$`, backticks, and whitespace are rejected because the target is interpolated unquoted into the generated Dockerfile and the docker-compose volume spec. |
 | `readonly` | bool | no | Default `false`. |
 
 ```toml
@@ -377,9 +377,16 @@ to copy the cert into each project.
 
 ### Team workflow
 
-Generated `.devcontainer/*` artifacts depend on whether the workspace opted
-in. Opted-in workspaces share the same cert-wired artifacts across the team;
-opted-out workspaces share cert-free artifacts.
+The generated `.devcontainer/` is host-independent and meant to be committed:
+`.env` carries no `UID`/`GID`/`DOCKER_GID`, and `docker-entrypoint.sh` resolves
+the container user's identity from the bind-mounted workspace at container
+start. Commit the whole directory and every teammate builds it as-is — no
+per-host regeneration, no shared cocoon binary. The corporate-CA wiring below
+is the one feature that still needs a host-side step.
+
+Generated `.devcontainer/*` **cert artifacts** depend on whether the workspace
+opted in. Opted-in workspaces share the same cert-wired artifacts across the
+team; opted-out workspaces share cert-free artifacts.
 
 | Member | cocoon binary | `~/.cocoon/certs/` creation | Required action |
 |---|---|---|---|

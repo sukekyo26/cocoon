@@ -71,6 +71,8 @@ type templateData struct {
 	CustomCertificates     string
 	PluginInstalls         string
 	DockerfilePostPlugins  string
+	CocoonWorkspace        string
+	CocoonBindPaths        string
 }
 
 //nolint:lll // Dockerfile RUN/echo lines cannot be wrapped without changing semantics.
@@ -81,8 +83,6 @@ ARG IMAGE_VERSION={{ .ImageVersion }}
 FROM ${IMAGE}:${IMAGE_VERSION}
 
 ARG USERNAME
-ARG UID
-ARG GID
 
 {{ with .AptMirrorRewritePre -}}
 {{ . }}
@@ -134,16 +134,20 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 {{ . }}
 
 {{ end -}}
-RUN existing_user="$(getent passwd ${UID} | cut -d: -f1)" && \
+# The container user is created with a FIXED uid/gid (1000) so the committed
+# .devcontainer/ stays host-independent; docker-entrypoint.sh remaps it to the
+# host owner at container start. A base-image account already on 1000
+# (e.g. ubuntu:24.04 ships 'ubuntu') is removed first.
+RUN existing_user="$(getent passwd 1000 | cut -d: -f1)" && \
     if [ -n "$existing_user" ] && [ "$existing_user" != "${USERNAME}" ]; then \
         userdel -r "$existing_user" 2>/dev/null || true; \
     fi && \
-    existing_group="$(getent group ${GID} | cut -d: -f1)" && \
+    existing_group="$(getent group 1000 | cut -d: -f1)" && \
     if [ -n "$existing_group" ] && [ "$existing_group" != "${USERNAME}" ]; then \
         groupdel "$existing_group" 2>/dev/null || true; \
     fi && \
-    groupadd -g ${GID} ${USERNAME} && \
-    useradd -m -s {{ .LoginShellPath }} -u ${UID} -g ${GID} ${USERNAME} && \
+    groupadd -g 1000 ${USERNAME} && \
+    useradd -m -s {{ .LoginShellPath }} -u 1000 -g 1000 ${USERNAME} && \
     usermod -aG sudo ${USERNAME} && \
     echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${USERNAME} && \
     chmod 0440 /etc/sudoers.d/${USERNAME}
@@ -155,6 +159,12 @@ WORKDIR /home/${USERNAME}
 ENV LANG={{ .LocaleLang }}
 ENV LANGUAGE={{ .LocaleLanguage }}
 ENV LC_ALL={{ .LocaleLang }}
+
+# Inputs read by docker-entrypoint.sh, which remaps the fixed-uid user above
+# to the host owner at container start.
+ENV COCOON_USER=${USERNAME}
+ENV COCOON_WORKSPACE="{{ .CocoonWorkspace }}"
+ENV COCOON_BIND_PATHS="{{ .CocoonBindPaths }}"
 
 # Ensure the active login shell's rc file exists before any later RUN
 # (plugin install scripts, cert env exports, completion init) appends to it
@@ -206,11 +216,12 @@ RUN mkdir -p ~/.local
 {{ . }}
 
 {{ end -}}
-# Entrypoint: sync image files to volume-mounted ~/.local
+# Entrypoint: runs as root to remap UID/GID to the host owner, then drops
+# privileges to ${USERNAME} and re-execs itself. The unprivileged re-entry
+# syncs image files into the volume-mounted ~/.local before exec'ing CMD.
 USER root
 COPY .devcontainer/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
-USER ${USERNAME}
 
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["sleep", "infinity"]
@@ -276,6 +287,8 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 		return "", fmt.Errorf("dockerfile: %w", err)
 	}
 
+	cocoonWorkspace, cocoonBindPaths := cocoonEntrypointPaths(ctx)
+
 	data := templateData{
 		Image:                  ctx.WS.Container.Image,
 		ImageVersion:           ctx.WS.Container.ImageVersion,
@@ -304,6 +317,8 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 		CustomCertificates:     certInstallEnv,
 		PluginInstalls:         pluginInstalls,
 		DockerfilePostPlugins:  postPlugins,
+		CocoonWorkspace:        cocoonWorkspace,
+		CocoonBindPaths:        cocoonBindPaths,
 	}
 
 	out, err := tmplx.Render(tmpl, data)
@@ -320,6 +335,33 @@ func pickRepoDir(override, root string) string {
 		return override
 	}
 	return filepath.Base(root)
+}
+
+// cocoonEntrypointPaths returns the resolved container workspace path and the
+// colon-joined set of bind-mount paths at or under the user's home. docker-entrypoint.sh
+// stats the workspace to detect the host uid/gid, and must never chown a bind
+// mount (that rewrites ownership on the host). The mount-root branch mirrors
+// compose.workspaceBindMount.
+func cocoonEntrypointPaths(ctx *generate.WorkspaceContext) (workspace, bindPaths string) {
+	user := ctx.Username()
+	home := "/home/" + user
+	workspace = home + "/workspace"
+	if ctx.WS.Workspace.MountRootOrDefault() != ".." {
+		workspace += "/" + ctx.ServiceName()
+	}
+	resolve := func(p string) string {
+		return strings.TrimRight(strings.ReplaceAll(p, "${USERNAME}", user), "/")
+	}
+	paths := []string{workspace}
+	for _, m := range ctx.HomeFileMounts() {
+		paths = append(paths, resolve(m.Target))
+	}
+	for _, m := range ctx.Mounts() {
+		if t := resolve(m.Target); t == home || strings.HasPrefix(t, home+"/") {
+			paths = append(paths, t)
+		}
+	}
+	return workspace, strings.Join(paths, ":")
 }
 
 // filterShellPackages drops any LoginShellAptPackages() entry that's already

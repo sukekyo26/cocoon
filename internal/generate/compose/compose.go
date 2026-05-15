@@ -303,15 +303,11 @@ func buildService(ctx *generate.WorkspaceContext, mounts []*yaml.Node) *yaml.Nod
 		yamlx.QuotedIfSpecial("IMAGE=${IMAGE}"),
 		yamlx.QuotedIfSpecial("IMAGE_VERSION=${IMAGE_VERSION}"),
 		yamlx.QuotedIfSpecial("USERNAME=${USERNAME}"),
-		yamlx.QuotedIfSpecial("UID=${UID}"),
-		yamlx.QuotedIfSpecial("GID=${GID}"),
-		yamlx.QuotedIfSpecial("DOCKER_GID=${DOCKER_GID}"),
 	)})
 
 	pairs := []yamlx.Pair{
 		{Key: "container_name", Value: yamlx.QuotedIfSpecial("${CONTAINER_SERVICE_NAME}")},
 		{Key: "build", Value: yamlx.Map(buildPairs...)},
-		{Key: "user", Value: yamlx.QuotedIfSpecial("${UID}:${GID}")},
 		{Key: "environment", Value: stringSeq(ctx.BuildEnvironment())},
 		{Key: "volumes", Value: yamlx.Seq(mounts...)},
 	}
@@ -350,12 +346,6 @@ func buildService(ctx *generate.WorkspaceContext, mounts []*yaml.Node) *yaml.Nod
 	}
 	if sec := ctx.SecurityOptions(); len(sec) > 0 {
 		pairs = append(pairs, yamlx.Pair{Key: "security_opt", Value: stringSeq(sec)})
-	}
-	if ctx.WS.Container.DockerSocketEnabled() {
-		pairs = append(pairs, yamlx.Pair{
-			Key:   "group_add",
-			Value: yamlx.Seq(yamlx.QuotedIfSpecial("${DOCKER_GID}")),
-		})
 	}
 	if ctx.WS.Workspace.MountRootOrDefault() == "." {
 		// `mount_root = "."` mounts only the project so the host bind point

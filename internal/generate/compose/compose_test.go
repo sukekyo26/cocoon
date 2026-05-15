@@ -146,3 +146,36 @@ func repoRoot(t *testing.T) string {
 	// internal/generate/compose -> repo root
 	return filepath.Clean(filepath.Join(wd, "..", "..", ".."))
 }
+
+// TestGenerate_DockerSocketNoUserNoGroupAdd verifies that enabling
+// docker_socket adds the socket bind mount but emits neither a `user:`
+// override nor `group_add`: UID/GID and the docker group are resolved at
+// container start by docker-entrypoint.sh, keeping the compose file
+// host-independent.
+func TestGenerate_DockerSocketNoUserNoGroupAdd(t *testing.T) {
+	t.Parallel()
+
+	socketOn := true
+	ws := &config.Workspace{
+		Container: config.ContainerSpec{
+			ServiceName:  "dev",
+			Username:     "dev",
+			Image:        "ubuntu",
+			ImageVersion: "24.04",
+			DockerSocket: &socketOn,
+		},
+	}
+	ctx := &generate.WorkspaceContext{WS: ws}
+	got, err := compose.Generate(ctx, compose.Options{})
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	if !strings.Contains(got, "/var/run/docker.sock:/var/run/docker.sock") {
+		t.Errorf("docker_socket should still add the socket bind mount:\n%s", got)
+	}
+	for _, bad := range []string{"group_add", "${UID}", "${GID}", "${DOCKER_GID}"} {
+		if strings.Contains(got, bad) {
+			t.Errorf("host-independent compose must not contain %q:\n%s", bad, got)
+		}
+	}
+}

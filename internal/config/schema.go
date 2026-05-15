@@ -95,9 +95,10 @@ type ContainerSpec struct {
 
 	// DockerSocket opts in to bind-mounting /var/run/docker.sock so DinD
 	// workflows can reach the host daemon. When true the generators add the
-	// bind mount and `group_add: ${DOCKER_GID}` so the container user can
-	// talk to the socket. Pointer so the loader can distinguish "field
-	// omitted" (default false) from an explicit `docker_socket = false`.
+	// bind mount; docker-entrypoint.sh reconciles the container user's group
+	// membership to the socket's GID at container start. Pointer so the
+	// loader can distinguish "field omitted" (default false) from an explicit
+	// `docker_socket = false`.
 	DockerSocket *bool `toml:"docker_socket,omitempty"`
 }
 

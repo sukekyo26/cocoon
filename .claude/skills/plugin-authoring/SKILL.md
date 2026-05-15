@@ -78,7 +78,7 @@ cocoon plugin scaffold my-tool \
 
 - `[apt].packages` — 必要な OS パッケージ
 - `[install.env]` — `ENV` として出力したい変数
-- `[install.build_args]` — Dockerfile の `ARG` を経由して受けたい host 由来の値（例: `DOCKER_GID`）
+- `[install.build_args]` — Dockerfile の `ARG` 経由で受けたいビルド時変数名（catalog では現在未使用; 自作プラグイン向けの機構）
 - `install.<category>.sh` 本体 — 上流 URL / 依存ロジック / cleanup
 - 必要なら `install_user.sh` — rc 編集や `<tool> init` 系のユーザー権限処理
 
@@ -92,7 +92,7 @@ cocoon plugin scaffold my-tool \
 | `binary`    | `internal/plugin/catalog/starship/`    | tar から単一抽出 + `install_user.sh` で rc 編集 |
 | `installer` | `internal/plugin/catalog/bun/`         | `bun.sh/install \| bash` + `[install.env]` で PATH 出力 |
 | `installer` | `internal/plugin/catalog/proto/`       | `moonrepo.dev/install/proto.sh` + `PROTO_HOME` |
-| `apt`       | `internal/plugin/catalog/docker-cli/`  | apt source 追加、`build_args = ["DOCKER_GID"]` |
+| `apt`       | `internal/plugin/catalog/docker-cli/`  | サードパーティ apt repo 追加（keyring + `sources.list.d`）からの install |
 | `apt`       | `internal/plugin/catalog/google-chrome/` | `.deb` を `apt-get install` |
 | `archive`   | `internal/plugin/catalog/go/`          | `version_capable`、ARCH 切替、`/usr/local/go` ツリー展開 |
 | `archive`   | `internal/plugin/catalog/zig/`         | 上流 `index.json` 経由でアセット名解決 |

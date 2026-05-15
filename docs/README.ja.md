@@ -27,7 +27,7 @@ cocoon gen    # .devcontainer/ をフルで再生成
 docker compose -f .devcontainer/docker-compose.yml up -d
 ```
 
-リポジトリにコミットされるのは 30 行ほどの `workspace.toml` だけです。`Dockerfile` も compose ファイルも `devcontainer.json` も、必要なときに毎回フルで作り直されるので、設定の "魔法" がリポジトリに溜まりません。すべての変更がジェネレータの決定的な再実行になります。
+真実の源は 30 行ほどの `workspace.toml` です。`cocoon gen` はそこから `.devcontainer/` 全体を決定的に再生成するので、設定の "魔法" がリポジトリに溜まらず、すべての変更がジェネレータの再実行になります。生成物はホスト非依存なので、`workspace.toml` だけをコミットしてホストごとに再生成してもよいですし、`.devcontainer/` を一度コミットしてチーム全員がそのままビルドしてもかまいません。
 
 ## 何が生成されるか
 
@@ -38,8 +38,8 @@ docker compose -f .devcontainer/docker-compose.yml up -d
 | `Dockerfile` | 有効化された各プラグインを `bash` heredoc でインライン化したマルチステージビルド |
 | `docker-compose.yml` | サービス + named volumes + ports + 任意のサイドカー |
 | `devcontainer.json` | VS Code Reopen-in-Container 用 (出力しない選択も可) |
-| `docker-entrypoint.sh` | コンテナ起動毎にイメージ焼き込みバイナリを named volume へ復元 |
-| `.env` | `COMPOSE_PROJECT_NAME`、UID/GID、IMAGE / IMAGE_VERSION |
+| `docker-entrypoint.sh` | コンテナ起動毎にユーザーをホスト UID/GID へ再マッピングし、イメージ焼き込みバイナリを named volume へ復元 |
+| `.env` | `COMPOSE_PROJECT_NAME`、`CONTAINER_SERVICE_NAME`、`USERNAME`、IMAGE / IMAGE_VERSION — ホスト非依存・コミット可 |
 
 同じ生成物で `docker compose up`（CLI 経由）と VS Code の "Reopen in Container" の両方が動きます。
 

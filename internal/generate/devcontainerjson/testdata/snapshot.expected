@@ -11,6 +11,8 @@
 		3000
 	],
 	"shutdownAction": "stopCompose",
+	"remoteUser": "testuser",
+	"updateRemoteUserUID": false,
 	"customizations": {
 		"vscode": {
 			"extensions": [
