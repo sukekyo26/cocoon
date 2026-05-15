@@ -50,13 +50,19 @@ var (
 	// rxGroupName matches a Linux group name (lowercase, optional trailing $
 	// for the useradd convention); rxGID matches a bare numeric GID. A
 	// group_add entry must satisfy one of the two.
-	rxGroupName    = regexp.MustCompile(`^[a-z_][a-z0-9_-]*\$?$`)
-	rxGID          = regexp.MustCompile(`^[0-9]+$`)
-	rxDevicePerms  = regexp.MustCompile(`^[rwm]+$`)
-	rxAptName      = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
-	rxAptSuite     = regexp.MustCompile(`^[a-z][a-z0-9._-]*$`)
-	rxAptComponent = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
-	rxAptArch      = regexp.MustCompile(`^(amd64|arm64|i386|armhf|ppc64el|s390x)$`)
+	rxGroupName   = regexp.MustCompile(`^[a-z_][a-z0-9_-]*\$?$`)
+	rxGID         = regexp.MustCompile(`^[0-9]+$`)
+	rxDevicePerms = regexp.MustCompile(`^[rwm]+$`)
+	// rxContainerName matches the syntactic shape of a Docker container
+	// name or ID (Docker's restricted-name pattern). Used to reject a
+	// malformed `ipc = "container:<name>"` target at validation time
+	// rather than letting whitespace/newlines reach the generated Compose
+	// file and fail at `docker compose` time.
+	rxContainerName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]+$`)
+	rxAptName       = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
+	rxAptSuite      = regexp.MustCompile(`^[a-z][a-z0-9._-]*$`)
+	rxAptComponent  = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
+	rxAptArch       = regexp.MustCompile(`^(amd64|arm64|i386|armhf|ppc64el|s390x)$`)
 	// rxImageVersion bounds image_version to the Docker tag character set
 	// minus the colon and the registry-path slash, both of which would let
 	// a user smuggle a second `<image>:<tag>` segment past the FROM
@@ -266,10 +272,11 @@ func validateDevices(a *errAccumulator, devices []string) {
 }
 
 // validateContainerIPC checks [container].ipc. Bare Compose modes are taken
-// as-is and container:<name> names an external container left to the runtime,
-// but service:<name> must resolve to the main service or a defined sidecar
-// (mirroring the depends_on undefined-sidecar check) so a typo fails here
-// rather than at `docker compose` time.
+// as-is. container:<name> names an external container left to the runtime, so
+// only its syntactic shape is checked (rxContainerName). service:<name> must
+// resolve to the main service or a defined sidecar (mirroring the depends_on
+// undefined-sidecar check) so a typo fails here rather than at
+// `docker compose` time.
 func (w *Workspace) validateContainerIPC(a *errAccumulator) {
 	ipc := *w.Container.IPC
 	modes := []string{"none", "host", "private", "shareable"}
@@ -277,8 +284,13 @@ func (w *Workspace) validateContainerIPC(a *errAccumulator) {
 		return
 	}
 	if name, ok := strings.CutPrefix(ipc, "container:"); ok {
-		if name == "" {
+		switch {
+		case name == "":
 			a.add(`container: requires a target name (e.g. "container:db")`)
+		case !rxContainerName.MatchString(name):
+			a.add(fmt.Sprintf(
+				`container:%s is not a valid Docker container name or ID (%s)`,
+				name, rxContainerName.String()))
 		}
 		return
 	}

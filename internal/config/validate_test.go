@@ -1386,7 +1386,10 @@ func TestValidate_ContainerDevicesRejectsBadEntries(t *testing.T) {
 
 func TestValidate_ContainerIPCAcceptsValid(t *testing.T) {
 	t.Parallel()
-	for _, mode := range []string{"none", "host", "private", "shareable", "container:other"} {
+	for _, mode := range []string{
+		"none", "host", "private", "shareable",
+		"container:other", "container:my-db.1",
+	} {
 		t.Run(mode, func(t *testing.T) {
 			t.Parallel()
 			require.NoError(t, loadWS(t, containerWorkspace("ipc = "+strconv.Quote(mode)+"\n")))
@@ -1429,6 +1432,8 @@ func TestValidate_ContainerIPCRejectsBadValues(t *testing.T) {
 		{"bogus", "bogus", "ipc must be one of"},
 		{"service-no-name", "service:", "requires a target name"},
 		{"container-no-name", "container:", "requires a target name"},
+		{"container-space", "container:bad name", "not a valid Docker container name"},
+		{"container-newline", "container:bad\nname", "not a valid Docker container name"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
