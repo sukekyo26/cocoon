@@ -765,7 +765,10 @@ func TestValidate_ContainerCapabilitiesRejectsAddDropConflict(t *testing.T) {
 
 func TestValidate_ContainerCapabilitiesRejectsEntrypointRequiredDrop(t *testing.T) {
 	t.Parallel()
-	for _, cap := range []string{"ALL", "CHOWN", "SETUID", "SETGID"} {
+	for _, cap := range []string{
+		"ALL", "CHOWN", "SETUID", "SETGID",
+		"CAP_CHOWN", "CAP_SETUID", "CAP_SETGID",
+	} {
 		t.Run(cap, func(t *testing.T) {
 			t.Parallel()
 			body := minimalWorkspace() +

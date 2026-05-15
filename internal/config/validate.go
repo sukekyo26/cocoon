@@ -346,7 +346,9 @@ func (s *SecurityOptSpec) validate(a *errAccumulator) {
 // entrypointRequiredCaps lists the capabilities docker-entrypoint.sh needs
 // at container start: CHOWN to re-own the home subtree, SETUID/SETGID to
 // drop privileges via setpriv. Dropping any of them (or ALL) strands the
-// container as root, so reject the drop at generation time.
+// container as root, so reject the drop at generation time. Keys are bare
+// names; a leading CAP_ is stripped before lookup since Docker accepts both
+// "CHOWN" and "CAP_CHOWN".
 var entrypointRequiredCaps = map[string]struct{}{
 	"ALL": {}, "CHOWN": {}, "SETUID": {}, "SETGID": {},
 }
@@ -365,7 +367,7 @@ func (cs *CapabilitiesSpec) validate(a *errAccumulator) {
 		}
 	}
 	for i, c := range cs.Drop {
-		if _, required := entrypointRequiredCaps[c]; required {
+		if _, required := entrypointRequiredCaps[strings.TrimPrefix(c, "CAP_")]; required {
 			a.add(fmt.Sprintf(
 				"%q cannot be dropped: docker-entrypoint.sh needs CHOWN, SETUID, "+
 					"and SETGID at container start to remap the user and drop "+
