@@ -13,6 +13,11 @@ service_name = "snapshot-test"
 username = "testuser"
 image = "ubuntu"
 image_version = "24.04"
+docker_socket = true
+group_add = ["audio", "992"]
+devices = ["/dev/dri:/dev/dri", "/dev/fuse:/dev/fuse:rwm"]
+ipc = "host"
+gpus = "all"
 
 [container.hosts]
 "db.local" = "host-gateway"

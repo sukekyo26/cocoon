@@ -81,6 +81,10 @@ devcontainer = true
 | `image` | string | `ubuntu` \| `debian` \| `node` \| `python` \| `golang` \| `rust` \| `denoland/deno` | ベースイメージ。DockerHub の **正式名称** をそのまま記述します (`go` ではなく `golang`、deno は vendor namespace 込みで `denoland/deno`)。workspace.toml だけ見れば FROM 行が一意に決まり、cocoon 側のエイリアス解決は不要。 |
 | `image_version` | string | プレーンな Docker タグ: 先頭は英数字または `_`、2 文字目以降は `.` / `-` も可、スラッシュ・コロン禁止 | イメージタグ (例: `26.04` / `24-bookworm-slim` / `1.26.3-bookworm` / `debian-2.7.14`)。下表は `cocoon init` で提示される推奨候補で、**正しい形式であれば上流レジストリが公開している任意のタグを受理**します。パッチや新マイナーが出た日にすぐ pin できます (例: `1.26.4-bookworm` を cocoon リリースを待たずに使う)。 |
 | `docker_socket` | bool | — | `/var/run/docker.sock` をマウントして docker-in-docker を有効化。デフォルト `false`。 |
+| `group_add` | `[]string` | 各エントリはグループ名 (`^[a-z_][a-z0-9_-]*\$?$`) または数値 GID | コンテナユーザーが参加する補助グループ (Compose `group_add:`)。ユーザーは数値 `UID:GID` で動くためイメージの `/etc/group` のグループは実行時に適用されず、本フィールドが必要。グループ**名**はイメージの `/etc/group` に既存である必要があるが、数値 GID は対応するエントリ不要。 |
+| `devices` | `[]string` | `HOST:CONTAINER[:rwm]`、両パスとも絶対 | ホストのデバイスをコンテナにマップ (Compose `devices:`)。例: GPU レンダリング用の `/dev/dri`。CDI 構文は非対応。 |
+| `ipc` | string | `none` \| `host` \| `private` \| `shareable` \| `service:<名前>` \| `container:<名前>` | IPC 名前空間モード (Compose `ipc:`)。`host` は大きな共有メモリセグメントを与え、ML 用途でよく必要になる。 |
+| `gpus` | string | `all` | GPU アクセスを要求 (Compose `gpus:`)。現状はリテラル `all` のみサポート。 |
 
 **推奨される image / version の組合せ** (固定リストではありません — 正しい形式の任意タグを受理):
 
@@ -117,6 +121,11 @@ image_version = "26.04"
 # 言語ランタイムイメージを選んでプラグインを省略する例:
 # image = "node"
 # image_version = "24-bookworm-slim"
+
+# group_add = ["audio", "dialout"]
+# devices   = ["/dev/dri:/dev/dri"]
+# ipc       = "host"
+# gpus      = "all"
 ```
 
 ### `[container.resources]`

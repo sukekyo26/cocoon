@@ -6,6 +6,10 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+### 追加
+
+- `[container]` に 4 つのオプションフィールドを追加しました。それぞれ対応する Compose の `services:` 属性に出力されます: `group_add` (コンテナユーザーの補助グループ — グループ名または数値 GID)、`devices` (ホストデバイスのマッピング `HOST:CONTAINER[:rwm]`)、`ipc` (IPC 名前空間モード。共有メモリを要する ML 用途では `"host"` など)、`gpus` (GPU アクセス。現状 `"all"` のみサポート)。`cocoon init` は 4 フィールドのコメントアウト済みテンプレートを `[container]` 配下に書き出します。
+
 ### 変更
 
 - **BREAKING (生成物)**: 生成される `.devcontainer/` がホスト非依存になり、共有リポジトリにコミットして安全に使えるようになりました — チーム全員がコミットされた同じ `.devcontainer/` をビルドでき、各自での再生成は不要です。生成される `.devcontainer/.env` から `UID` / `GID` / `DOCKER_GID` キーを削除し、`docker-compose.yml` からも `user:` オーバーライド・`UID`/`GID`/`DOCKER_GID` の `build.args`・`group_add:` を削除しました。イメージはコンテナユーザーを固定 uid/gid (1000) で作成します。コンテナは `root` で起動し、`docker-entrypoint.sh` がバインドマウントされたワークスペースのホスト側所有者に合わせてユーザーを再マッピング (および `docker_socket` 有効時は docker ソケットのグループへ追加) してから、そのユーザーへ権限を落とします。`devcontainer.json` には `"remoteUser"` と `"updateRemoteUserUID": false` を追加し、VS Code が独自のホスト UID 再マッピングを重ねずに非特権ユーザーでアタッチするようにしました。`cocoon gen` を再実行して生成物を更新・コミットしてください。チームメンバーは `docker compose build` (または dev container を開き直す) だけで利用できます。エントリポイントが起動時に `CHOWN` / `SETUID` / `SETGID` ケイパビリティを必要とするため、`cocoon gen` はこれら (または `ALL`) を含む `[container.capabilities].drop` を拒否します。`[[mounts]].target` の検証も厳格化し、`[A-Za-z0-9._/-]` と `${USERNAME}` プレースホルダのみを許可します (target が生成 Dockerfile にも展開されるようになったため)。

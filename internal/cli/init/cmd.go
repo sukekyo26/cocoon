@@ -1245,9 +1245,17 @@ func renderWorkspaceToml(s containerSpec, cat *i18n.Catalog) string {
 	fmt.Fprintf(&sb, "image = %q\n", s.Image)
 	fmt.Fprintf(&sb, "image_version = %q\n\n", s.ImageVersion)
 
-	// Commented-out templates for [container.*] opt-in extras. Grouped
-	// under [container] so a reader scanning the file finds related
-	// knobs next to the parent section.
+	// Commented-out templates for [container] opt-in extras. The flat-field
+	// templates come first so an uncommented line still belongs to
+	// [container]; the [container.*] subtables follow.
+	for _, key := range []string{
+		"init_toml_template_container_group_add",
+		"init_toml_template_container_devices",
+		"init_toml_template_container_ipc",
+		"init_toml_template_container_gpus",
+	} {
+		emitTemplate(&sb, cat, key)
+	}
 	for _, key := range []string{
 		"init_toml_template_container_resources",
 		"init_toml_template_container_hosts",
