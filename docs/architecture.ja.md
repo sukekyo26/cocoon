@@ -82,12 +82,12 @@ sequenceDiagram
 .devcontainer/
 ├── Dockerfile               # プラグインキャッシュを参照するマルチステージビルド
 ├── docker-compose.yml       # dev コンテナ + サイドカー用の compose ファイル
-├── docker-entrypoint.sh     # named volume にイメージ焼き込み済 ~/.local をコピーするシム
-├── .env                     # COMPOSE_PROJECT_NAME, CONTAINER_SERVICE_NAME, UID, GID, DOCKER_GID, OS_*
+├── docker-entrypoint.sh     # ユーザーをホスト UID/GID へ再マッピングし、イメージ焼き込み済 ~/.local を named volume へ同期
+├── .env                     # COMPOSE_PROJECT_NAME, CONTAINER_SERVICE_NAME, USERNAME, IMAGE, IMAGE_VERSION (ホスト非依存)
 └── devcontainer.json        # [workspace] devcontainer = true のときのみ
 ```
 
-`docker-entrypoint.sh` がある理由は、`~/.local/` にマウントされる named volume がイメージに焼き込まれたプラグインバイナリを rebuild 後に隠してしまうため。コンテナ起動毎に `~/.image-local/` → `~/.local/` をコピーした上で `exec "$@"` する仕組みです。
+`docker-entrypoint.sh` はコンテナ起動毎に root で動きます。まずコンテナユーザーの UID/GID をバインドマウントされたワークスペースのホスト側所有者に合わせて再マッピングし (これが生成された `.devcontainer/` をホスト非依存にしている)、次に `~/.image-local/` → `~/.local/` をコピーし (`~/.local/` の named volume がイメージ焼き込みバイナリを rebuild 後に隠すのを防ぐ)、最後にユーザーへ権限を落としてからコマンドを `exec` します。
 
 ## マウント戦略
 

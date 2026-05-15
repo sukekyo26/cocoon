@@ -38,8 +38,8 @@ docker compose -f .devcontainer/docker-compose.yml up -d
 | `Dockerfile` | 有効化された各プラグインを `bash` heredoc でインライン化したマルチステージビルド |
 | `docker-compose.yml` | サービス + named volumes + ports + 任意のサイドカー |
 | `devcontainer.json` | VS Code Reopen-in-Container 用 (出力しない選択も可) |
-| `docker-entrypoint.sh` | コンテナ起動毎にイメージ焼き込みバイナリを named volume へ復元 |
-| `.env` | `COMPOSE_PROJECT_NAME`、UID/GID、IMAGE / IMAGE_VERSION |
+| `docker-entrypoint.sh` | コンテナ起動毎にユーザーをホスト UID/GID へ再マッピングし、イメージ焼き込みバイナリを named volume へ復元 |
+| `.env` | `COMPOSE_PROJECT_NAME`、`CONTAINER_SERVICE_NAME`、`USERNAME`、IMAGE / IMAGE_VERSION — ホスト非依存・コミット可 |
 
 同じ生成物で `docker compose up`（CLI 経由）と VS Code の "Reopen in Container" の両方が動きます。
 

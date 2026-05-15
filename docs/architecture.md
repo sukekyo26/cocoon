@@ -82,12 +82,12 @@ Each artifact is rendered into memory first, then written atomically through `in
 .devcontainer/
 ├── Dockerfile               # Multi-stage build referencing the plugin cache
 ├── docker-compose.yml       # Compose file for the dev container + sidecars
-├── docker-entrypoint.sh     # Tiny shim that copies image-baked ~/.local files into the named volume
-├── .env                     # COMPOSE_PROJECT_NAME, CONTAINER_SERVICE_NAME, UID, GID, DOCKER_GID, OS_*
+├── docker-entrypoint.sh     # Remaps the user to the host UID/GID, then syncs image-baked ~/.local into the named volume
+├── .env                     # COMPOSE_PROJECT_NAME, CONTAINER_SERVICE_NAME, USERNAME, IMAGE, IMAGE_VERSION (host-independent)
 └── devcontainer.json        # Only when [workspace] devcontainer = true
 ```
 
-`docker-entrypoint.sh` exists because the named volume mounted on `~/.local/` would otherwise hide image-baked plugin binaries on rebuild. The entrypoint copies `~/.image-local/` → `~/.local/` on every container start, then `exec "$@"`.
+`docker-entrypoint.sh` runs as root on every container start. It first remaps the container user's UID/GID to the host owner of the bind-mounted workspace — this is what makes the committed `.devcontainer/` host-independent — then copies `~/.image-local/` → `~/.local/` (the named volume on `~/.local/` would otherwise hide image-baked plugin binaries on rebuild), and finally drops privileges to the user before `exec`'ing the command.
 
 ## Mount strategy
 

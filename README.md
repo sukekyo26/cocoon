@@ -38,8 +38,8 @@ The only file checked into your repository is a ~30-line `workspace.toml`. The `
 | `Dockerfile` | Multi-stage build with every enabled plugin inlined as `bash` heredocs |
 | `docker-compose.yml` | Service + named volumes + ports + optional sidecars |
 | `devcontainer.json` | VS Code Reopen-in-Container support (skippable) |
-| `docker-entrypoint.sh` | Restores image-baked binaries on each container start |
-| `.env` | `COMPOSE_PROJECT_NAME`, UID/GID, IMAGE / IMAGE_VERSION |
+| `docker-entrypoint.sh` | Remaps the container user to the host UID/GID, then restores image-baked binaries, on each start |
+| `.env` | `COMPOSE_PROJECT_NAME`, `CONTAINER_SERVICE_NAME`, `USERNAME`, IMAGE / IMAGE_VERSION — host-independent, safe to commit |
 
 The same artifacts power both `docker compose up` from the CLI and VS Code's "Reopen in Container".
 

@@ -377,9 +377,16 @@ to copy the cert into each project.
 
 ### Team workflow
 
-Generated `.devcontainer/*` artifacts depend on whether the workspace opted
-in. Opted-in workspaces share the same cert-wired artifacts across the team;
-opted-out workspaces share cert-free artifacts.
+The generated `.devcontainer/` is host-independent and meant to be committed:
+`.env` carries no `UID`/`GID`/`DOCKER_GID`, and `docker-entrypoint.sh` resolves
+the container user's identity from the bind-mounted workspace at container
+start. Commit the whole directory and every teammate builds it as-is — no
+per-host regeneration, no shared cocoon binary. The corporate-CA wiring below
+is the one feature that still needs a host-side step.
+
+Generated `.devcontainer/*` **cert artifacts** depend on whether the workspace
+opted in. Opted-in workspaces share the same cert-wired artifacts across the
+team; opted-out workspaces share cert-free artifacts.
 
 | Member | cocoon binary | `~/.cocoon/certs/` creation | Required action |
 |---|---|---|---|
