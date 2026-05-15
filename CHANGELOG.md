@@ -6,6 +6,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `[container]` accepts four new optional fields, each mapped to the matching Compose `services:` attribute: `group_add` (supplementary groups — group name or numeric GID — for the container user), `devices` (host device mappings `HOST:CONTAINER[:rwm]`), `ipc` (IPC namespace mode, e.g. `"host"` for ML workloads needing shared memory), and `gpus` (GPU access; only `"all"` is supported). `cocoon init` writes commented-out templates for all four under `[container]`.
+
 ### Changed
 
 - **BREAKING (generated artifacts)**: The generated `.devcontainer/` is now host-independent and safe to commit to a shared repository — every team member builds the same committed `.devcontainer/` with no per-host regeneration. The generated `.devcontainer/.env` no longer carries the `UID`, `GID`, or `DOCKER_GID` keys; `docker-compose.yml` drops the `user:` override, the `UID`/`GID`/`DOCKER_GID` `build.args`, and the `group_add:` entry; and the image builds the container user at a fixed uid/gid (1000). The container now starts as `root` and `docker-entrypoint.sh` remaps that user to the host owner of the bind-mounted workspace (and joins the docker socket's group when `docker_socket` is enabled) before dropping privileges back to the user. `devcontainer.json` gains `"remoteUser"` and `"updateRemoteUserUID": false` so VS Code attaches as the unprivileged user without running its own host-UID remap on top. Re-run `cocoon gen` to regenerate, then commit the result; teammates only need `docker compose build` (or to reopen the dev container). Because the entrypoint now needs the `CHOWN`, `SETUID`, and `SETGID` capabilities at container start, `cocoon gen` rejects a `[container.capabilities].drop` list that contains any of them (or `ALL`). `[[mounts]].target` is also validated more strictly — only `[A-Za-z0-9._/-]` and the `${USERNAME}` placeholder are allowed, since the target now also flows into the generated Dockerfile.
