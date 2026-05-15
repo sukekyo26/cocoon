@@ -9,11 +9,13 @@ cocoon の主要な変更を記録します。フォーマットは
 ### 追加
 
 - `[container]` に 4 つのオプションフィールドを追加しました。それぞれ対応する Compose の `services:` 属性に出力されます: `group_add` (コンテナユーザーの補助グループ — グループ名または数値 GID)、`devices` (ホストデバイスのマッピング `HOST:CONTAINER[:rwm]`)、`ipc` (IPC 名前空間モード。共有メモリを要する ML 用途では `"host"` など)、`gpus` (GPU アクセス。現状 `"all"` のみサポート)。`cocoon init` は 4 フィールドのコメントアウト済みテンプレートを `[container]` 配下に書き出します。
+- `docker-cli` プラグインが有効なのに `[container].docker_socket` が未設定のとき、`cocoon gen` が警告するようになりました — コンテナ内の Docker クライアントが接続できる daemon ソケットが無いため、`docker` コマンドは実行時に失敗します。警告は修正方法 (`[container]` に `docker_socket = true`) を示し、リモートの `DOCKER_HOST` に接続する構成では無視してよい旨も伝えます。`cocoon init` も `[container]` 配下にコメントアウト済みの `docker_socket` テンプレート行を書き出すようになりました。
 
 ### 変更
 
 - **BREAKING (生成物)**: 生成される `.devcontainer/` がホスト非依存になり、共有リポジトリにコミットして安全に使えるようになりました — チーム全員がコミットされた同じ `.devcontainer/` をビルドでき、各自での再生成は不要です。生成される `.devcontainer/.env` から `UID` / `GID` / `DOCKER_GID` キーを削除し、`docker-compose.yml` からも `user:` オーバーライド・`UID`/`GID`/`DOCKER_GID` の `build.args`・`group_add:` を削除しました。イメージはコンテナユーザーを固定 uid/gid (1000) で作成します。コンテナは `root` で起動し、`docker-entrypoint.sh` がバインドマウントされたワークスペースのホスト側所有者に合わせてユーザーを再マッピング (および `docker_socket` 有効時は docker ソケットのグループへ追加) してから、そのユーザーへ権限を落とします。`devcontainer.json` には `"remoteUser"` と `"updateRemoteUserUID": false` を追加し、VS Code が独自のホスト UID 再マッピングを重ねずに非特権ユーザーでアタッチするようにしました。`cocoon gen` を再実行して生成物を更新・コミットしてください。チームメンバーは `docker compose build` (または dev container を開き直す) だけで利用できます。エントリポイントが起動時に `CHOWN` / `SETUID` / `SETGID` ケイパビリティを必要とするため、`cocoon gen` はこれら (または `ALL`) を含む `[container.capabilities].drop` を拒否します。`[[mounts]].target` の検証も厳格化し、`[A-Za-z0-9._/-]` と `${USERNAME}` プレースホルダのみを許可します (target が生成 Dockerfile にも展開されるようになったため)。
 - **BREAKING (プラグイン作者向け)**: `docker-cli` プラグインは `DOCKER_GID` ビルド引数を取らなくなりました (`plugin.toml` から `[install].build_args` を削除)。マウントされた docker ソケットへのコンテナユーザーのアクセスは、起動時に `docker-entrypoint.sh` が設定します。docker-cli の旧 `build_args = ["DOCKER_GID"]` パターンを真似してホストのグループ id を受け取っていたカスタムプラグインは、それを削除してソケットグループの処理をエントリポイントに任せてください。
+- `docker-cli` プラグインが既定で有効ではなくなりました — `plugin.toml` を `default = false` に変更しました。`--plugins` を指定しない `cocoon init --yes` は `docker-cli` を事前選択せず `[plugins] enable = []` を生成し、対話式のプラグイン選択も初期チェックなしで始まります。コンテナ内で Docker クライアントが必要な場合は `docker-cli` を明示的に有効化し (`--plugins` または選択画面で)、ホスト daemon に到達できるよう `docker_socket = true` も併せて設定してください。
 
 ## [0.4.0] - 2026-05-15
 
