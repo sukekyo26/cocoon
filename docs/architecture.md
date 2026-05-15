@@ -87,7 +87,7 @@ Each artifact is rendered into memory first, then written atomically through `in
 └── devcontainer.json        # Only when [workspace] devcontainer = true
 ```
 
-`docker-entrypoint.sh` runs as root on every container start. It first remaps the container user's UID/GID to the host owner of the bind-mounted workspace — this is what makes the committed `.devcontainer/` host-independent — then copies `~/.image-local/` → `~/.local/` (the named volume on `~/.local/` would otherwise hide image-baked plugin binaries on rebuild), and finally drops privileges to the user before `exec`'ing the command.
+`docker-entrypoint.sh` runs as root on every container start. It first remaps the container user's UID/GID to the host owner of the bind-mounted workspace — this is what makes the committed `.devcontainer/` host-independent — then drops privileges and re-execs itself as that user via `setpriv`. The unprivileged re-entry copies `~/.image-local/` → `~/.local/` (the named volume on `~/.local/` would otherwise hide image-baked plugin binaries on rebuild) before `exec`'ing the command.
 
 ## Mount strategy
 

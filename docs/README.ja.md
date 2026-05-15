@@ -27,7 +27,7 @@ cocoon gen    # .devcontainer/ をフルで再生成
 docker compose -f .devcontainer/docker-compose.yml up -d
 ```
 
-リポジトリにコミットされるのは 30 行ほどの `workspace.toml` だけです。`Dockerfile` も compose ファイルも `devcontainer.json` も、必要なときに毎回フルで作り直されるので、設定の "魔法" がリポジトリに溜まりません。すべての変更がジェネレータの決定的な再実行になります。
+真実の源は 30 行ほどの `workspace.toml` です。`cocoon gen` はそこから `.devcontainer/` 全体を決定的に再生成するので、設定の "魔法" がリポジトリに溜まらず、すべての変更がジェネレータの再実行になります。生成物はホスト非依存なので、`workspace.toml` だけをコミットしてホストごとに再生成してもよいですし、`.devcontainer/` を一度コミットしてチーム全員がそのままビルドしてもかまいません。
 
 ## 何が生成されるか
 

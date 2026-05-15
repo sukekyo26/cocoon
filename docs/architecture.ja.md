@@ -87,7 +87,7 @@ sequenceDiagram
 └── devcontainer.json        # [workspace] devcontainer = true のときのみ
 ```
 
-`docker-entrypoint.sh` はコンテナ起動毎に root で動きます。まずコンテナユーザーの UID/GID をバインドマウントされたワークスペースのホスト側所有者に合わせて再マッピングし (これが生成された `.devcontainer/` をホスト非依存にしている)、次に `~/.image-local/` → `~/.local/` をコピーし (`~/.local/` の named volume がイメージ焼き込みバイナリを rebuild 後に隠すのを防ぐ)、最後にユーザーへ権限を落としてからコマンドを `exec` します。
+`docker-entrypoint.sh` はコンテナ起動毎に root で動きます。まずコンテナユーザーの UID/GID をバインドマウントされたワークスペースのホスト側所有者に合わせて再マッピングし (これが生成された `.devcontainer/` をホスト非依存にしている)、次に `setpriv` でそのユーザーへ権限を落として自身を再実行します。非特権ユーザーとして再入したパスで `~/.image-local/` → `~/.local/` をコピーし (`~/.local/` の named volume がイメージ焼き込みバイナリを rebuild 後に隠すのを防ぐ)、コマンドを `exec` します。
 
 ## マウント戦略
 

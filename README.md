@@ -27,7 +27,7 @@ cocoon gen    # .devcontainer/ is regenerated from scratch
 docker compose -f .devcontainer/docker-compose.yml up -d
 ```
 
-The only file checked into your repository is a ~30-line `workspace.toml`. The `Dockerfile`, the compose file, and `devcontainer.json` are all regenerated on demand, so configuration "magic" never accumulates in the repo and every change is a deterministic re-run of the generator.
+A ~30-line `workspace.toml` is the source of truth. `cocoon gen` regenerates the whole `.devcontainer/` from it deterministically, so configuration "magic" never accumulates and every change is a re-run of the generator. The generated artifacts are host-independent, so you can either keep `workspace.toml` as the only checked-in file and regenerate per host, or commit `.devcontainer/` once and have every teammate build it as-is.
 
 ## What you get
 
