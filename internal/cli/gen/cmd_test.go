@@ -490,6 +490,92 @@ func TestGen_HomeFilesAbsent_NoNotice(t *testing.T) {
 	}
 }
 
+// dockerCLINoSocketWorkspaceTOML enables the docker-cli plugin but leaves
+// docker_socket unset — the misconfiguration warnDockerCLIWithoutSocket flags.
+const dockerCLINoSocketWorkspaceTOML = `[workspace]
+mount_root = "."
+devcontainer = true
+
+[container]
+service_name = "demo"
+username = "alice"
+image = "ubuntu"
+image_version = "24.04"
+
+[plugins]
+enable = ["docker-cli"]
+
+[apt]
+packages = []
+`
+
+// runGenForWarn runs `cocoon gen` over body in an isolated tempdir and
+// returns captured stderr. It fails the test if gen itself errors.
+func runGenForWarn(t *testing.T, body string) string {
+	t.Helper()
+	work := t.TempDir()
+	home := filepath.Join(work, "home")
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		t.Fatalf("mkdir home: %v", err)
+	}
+	t.Setenv("HOME", home)
+	pinEnglish(t)
+	t.Chdir(work)
+
+	if err := os.WriteFile(filepath.Join(work, "workspace.toml"), []byte(body), 0o600); err != nil {
+		t.Fatalf("write workspace.toml: %v", err)
+	}
+	var stdout, stderr bytes.Buffer
+	cmd := gencli.NewCommand(&stdout, &stderr)
+	cmd.SetArgs(nil)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("gen: %v\nstderr:\n%s", err, stderr.String())
+	}
+	return stderr.String()
+}
+
+const dockerCLIWarnSubstr = "docker-cli plugin is enabled"
+
+// TestGen_DockerCLIWithoutSocket_Warns asserts gen flags the docker-cli
+// plugin enabled without docker_socket — the in-container client has no
+// daemon to reach.
+//
+//nolint:paralleltest // runGenForWarn uses t.Setenv + t.Chdir
+func TestGen_DockerCLIWithoutSocket_Warns(t *testing.T) {
+	// No t.Parallel(): t.Setenv blocks parallel execution.
+	stderr := runGenForWarn(t, dockerCLINoSocketWorkspaceTOML)
+	if !strings.Contains(stderr, dockerCLIWarnSubstr) {
+		t.Errorf("expected docker_socket warning on stderr\n--- got ---\n%s", stderr)
+	}
+}
+
+// TestGen_DockerCLIWithSocket_NoWarn asserts the warning stays silent once
+// docker_socket = true is set alongside the docker-cli plugin.
+//
+//nolint:paralleltest // runGenForWarn uses t.Setenv + t.Chdir
+func TestGen_DockerCLIWithSocket_NoWarn(t *testing.T) {
+	// No t.Parallel(): t.Setenv blocks parallel execution.
+	body := strings.Replace(dockerCLINoSocketWorkspaceTOML,
+		`image_version = "24.04"`,
+		"image_version = \"24.04\"\ndocker_socket = true", 1)
+	stderr := runGenForWarn(t, body)
+	if strings.Contains(stderr, dockerCLIWarnSubstr) {
+		t.Errorf("docker_socket warning should be silent when docker_socket = true\n--- got ---\n%s", stderr)
+	}
+}
+
+// TestGen_NoDockerCLI_NoWarn asserts the warning does not fire when the
+// docker-cli plugin is absent, even without docker_socket.
+//
+//nolint:paralleltest // runGenForWarn uses t.Setenv + t.Chdir
+func TestGen_NoDockerCLI_NoWarn(t *testing.T) {
+	// No t.Parallel(): t.Setenv blocks parallel execution.
+	stderr := runGenForWarn(t, minimalWorkspaceTOML)
+	if strings.Contains(stderr, dockerCLIWarnSubstr) {
+		t.Errorf("docker_socket warning should not fire without docker-cli\n--- got ---\n%s", stderr)
+	}
+}
+
 // TestGen_MissingWorkspaceReturnsUsage covers the discovery-miss path
 // when workspace.toml is absent and no --workspace flag is given.
 func TestGen_MissingWorkspaceReturnsUsage(t *testing.T) {

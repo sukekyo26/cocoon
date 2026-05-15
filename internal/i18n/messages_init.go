@@ -109,12 +109,13 @@ var messagesEN_init = map[string]string{
 	"gen_certs_notice_path":   "  Drop *.crt files into ~/.cocoon/certs/ to bake corporate / private CAs into the container at build time.",
 	"gen_certs_notice_team":   "  Team members who skip VS Code Dev Containers must run `mkdir -p ~/.cocoon/certs` once on their host (VS Code users get this auto-created via initializeCommand).",
 	// gen home_files: host-side touch + notices
-	"gen_home_file_touched":               "created %s (empty, 0600) for [home_files] bind",
-	"gen_home_files_notice_header":        "Host files for [home_files]:",
-	"gen_home_files_notice_check":         "  Verify these files exist on the host before running `docker compose up`:",
-	"gen_home_files_notice_item":          "    ~/%s",
-	"gen_home_files_in_container_warning": "WARNING: cocoon gen is running inside a container (/.dockerenv detected); [home_files] entries will be touched in this container's HOME, not the Docker host's. Run `cocoon gen` on the host before `docker compose up`.",
-	"gen_home_files_is_directory":         "%s exists as a directory (likely auto-created by a previous `docker compose up` when the file was missing); remove it with `rm -rf %s` and re-run `cocoon gen`",
+	"gen_home_file_touched":                 "created %s (empty, 0600) for [home_files] bind",
+	"gen_home_files_notice_header":          "Host files for [home_files]:",
+	"gen_home_files_notice_check":           "  Verify these files exist on the host before running `docker compose up`:",
+	"gen_home_files_notice_item":            "    ~/%s",
+	"gen_home_files_in_container_warning":   "WARNING: cocoon gen is running inside a container (/.dockerenv detected); [home_files] entries will be touched in this container's HOME, not the Docker host's. Run `cocoon gen` on the host before `docker compose up`.",
+	"gen_home_files_is_directory":           "%s exists as a directory (likely auto-created by a previous `docker compose up` when the file was missing); remove it with `rm -rf %s` and re-run `cocoon gen`",
+	"gen_docker_cli_without_socket_warning": "WARNING: the docker-cli plugin is enabled but [container].docker_socket is not set; the in-container docker client has no daemon socket to reach, so `docker ...` will fail with \"cannot connect to the Docker daemon\". Add `docker_socket = true` under [container] in workspace.toml, or remove the docker-cli plugin. Ignore this if the container talks to a remote DOCKER_HOST.",
 }
 
 // messagesJA_init mirrors messagesEN_init in Japanese. Untranslated keys
@@ -220,10 +221,11 @@ var messagesJA_init = map[string]string{
 	"gen_certs_notice_path":   "  社内 / プライベート CA を取り込む場合は `.crt` を `~/.cocoon/certs/` に置いてください。build 時に自動取り込みされます。",
 	"gen_certs_notice_team":   "  VS Code Dev Containers を使わないチームメンバーは初回のみホストで `mkdir -p ~/.cocoon/certs` の実行が必要です (VS Code 経由は initializeCommand で自動)。",
 	// gen home_files: host-side touch + notices
-	"gen_home_file_touched":               "[home_files] バインド用に %s を作成しました (空ファイル, 0600)",
-	"gen_home_files_notice_header":        "[home_files] のホスト側ファイル:",
-	"gen_home_files_notice_check":         "  `docker compose up` を実行する前に、ホストで次のファイルが存在することを確認してください:",
-	"gen_home_files_notice_item":          "    ~/%s",
-	"gen_home_files_in_container_warning": "警告: cocoon gen がコンテナ内 (/.dockerenv を検出) で実行されています。[home_files] エントリは Docker ホストではなくこのコンテナの HOME に対して touch されます。`docker compose up` の前にホスト側で `cocoon gen` を実行してください。",
-	"gen_home_files_is_directory":         "%s がディレクトリとして存在します (以前の `docker compose up` がファイル不在時に自動作成した可能性)。`rm -rf %s` で削除してから `cocoon gen` を再実行してください",
+	"gen_home_file_touched":                 "[home_files] バインド用に %s を作成しました (空ファイル, 0600)",
+	"gen_home_files_notice_header":          "[home_files] のホスト側ファイル:",
+	"gen_home_files_notice_check":           "  `docker compose up` を実行する前に、ホストで次のファイルが存在することを確認してください:",
+	"gen_home_files_notice_item":            "    ~/%s",
+	"gen_home_files_in_container_warning":   "警告: cocoon gen がコンテナ内 (/.dockerenv を検出) で実行されています。[home_files] エントリは Docker ホストではなくこのコンテナの HOME に対して touch されます。`docker compose up` の前にホスト側で `cocoon gen` を実行してください。",
+	"gen_home_files_is_directory":           "%s がディレクトリとして存在します (以前の `docker compose up` がファイル不在時に自動作成した可能性)。`rm -rf %s` で削除してから `cocoon gen` を再実行してください",
+	"gen_docker_cli_without_socket_warning": "警告: docker-cli プラグインは有効ですが [container].docker_socket が未設定です。コンテナ内の docker クライアントが接続できる daemon ソケットが無いため、`docker ...` は \"cannot connect to the Docker daemon\" で失敗します。workspace.toml の [container] に `docker_socket = true` を追加するか、docker-cli プラグインを外してください。リモートの DOCKER_HOST に接続する構成ならこの警告は無視して構いません。",
 }
