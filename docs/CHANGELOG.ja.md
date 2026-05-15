@@ -6,6 +6,11 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+### 変更
+
+- **BREAKING (生成物)**: 生成される `.devcontainer/` がホスト非依存になり、共有リポジトリにコミットして安全に使えるようになりました — チーム全員がコミットされた同じ `.devcontainer/` をビルドでき、各自での再生成は不要です。生成される `.devcontainer/.env` から `UID` / `GID` / `DOCKER_GID` キーを削除し、`docker-compose.yml` からも `user:` オーバーライド・`UID`/`GID`/`DOCKER_GID` の `build.args`・`group_add:` を削除しました。イメージはコンテナユーザーを固定 uid/gid (1000) で作成します。コンテナは `root` で起動し、`docker-entrypoint.sh` がバインドマウントされたワークスペースのホスト側所有者に合わせてユーザーを再マッピング (および `docker_socket` 有効時は docker ソケットのグループへ追加) してから、そのユーザーへ権限を落とします。`devcontainer.json` には `"remoteUser"` と `"updateRemoteUserUID": false` を追加し、VS Code が独自のホスト UID 再マッピングを重ねずに非特権ユーザーでアタッチするようにしました。`cocoon gen` を再実行して生成物を更新・コミットしてください。チームメンバーは `docker compose build` (または dev container を開き直す) だけで利用できます。
+- **BREAKING (プラグイン作者向け)**: `docker-cli` プラグインは `DOCKER_GID` ビルド引数を取らなくなりました (`plugin.toml` から `[install].build_args` を削除)。マウントされた docker ソケットへのコンテナユーザーのアクセスは、起動時に `docker-entrypoint.sh` が設定します。docker-cli の旧 `build_args = ["DOCKER_GID"]` パターンを真似してホストのグループ id を受け取っていたカスタムプラグインは、それを削除してソケットグループの処理をエントリポイントに任せてください。
+
 ## [0.4.0] - 2026-05-15
 
 ### 追加

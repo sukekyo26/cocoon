@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING (generated artifacts)**: The generated `.devcontainer/` is now host-independent and safe to commit to a shared repository — every team member builds the same committed `.devcontainer/` with no per-host regeneration. The generated `.devcontainer/.env` no longer carries the `UID`, `GID`, or `DOCKER_GID` keys; `docker-compose.yml` drops the `user:` override, the `UID`/`GID`/`DOCKER_GID` `build.args`, and the `group_add:` entry; and the image builds the container user at a fixed uid/gid (1000). The container now starts as `root` and `docker-entrypoint.sh` remaps that user to the host owner of the bind-mounted workspace (and joins the docker socket's group when `docker_socket` is enabled) before dropping privileges back to the user. `devcontainer.json` gains `"remoteUser"` and `"updateRemoteUserUID": false` so VS Code attaches as the unprivileged user without running its own host-UID remap on top. Re-run `cocoon gen` to regenerate, then commit the result; teammates only need `docker compose build` (or to reopen the dev container).
+- **BREAKING (plugin authors)**: The `docker-cli` plugin no longer accepts a `DOCKER_GID` build arg — `[install].build_args` was removed from its `plugin.toml`. The container user's access to the mounted docker socket is configured at container start by `docker-entrypoint.sh`. Custom plugins that copied docker-cli's old `build_args = ["DOCKER_GID"]` pattern to receive a host group id should drop it and let the entrypoint handle the socket group instead.
+
 ## [0.4.0] - 2026-05-15
 
 ### Added

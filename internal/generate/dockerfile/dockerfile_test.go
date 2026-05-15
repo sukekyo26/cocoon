@@ -751,3 +751,75 @@ func TestGenerate_AptOrderingWithMirrorAndProxy_StableShape(t *testing.T) {
 		t.Errorf("expected mirror→proxy→apt-install order (rewriteIdx=%d proxyIdx=%d aptIdx=%d)", rewriteIdx, proxyIdx, aptIdx)
 	}
 }
+
+// generateFromSnapshotFixture renders the Dockerfile from the parent-mount
+// snapshot fixture with the embedded catalog plugins.
+func generateFromSnapshotFixture(t *testing.T) string {
+	t.Helper()
+	root := repoRoot(t)
+	wsPath := filepath.Join(root, "tests", "fixtures", "snapshot.workspace.toml")
+	pluginsDir := filepath.Join(root, "internal", "plugin", "catalog")
+
+	ws, err := config.LoadWorkspace(wsPath)
+	if err != nil {
+		t.Fatalf("load workspace: %v", err)
+	}
+	var warns bytes.Buffer
+	plugins, err := plugin.LoadEnabled(pluginsDir, ws.Plugins.Enable, &warns)
+	if err != nil {
+		t.Fatalf("load plugins: %v", err)
+	}
+	ctx := &generate.WorkspaceContext{WS: ws, PluginsFS: os.DirFS(pluginsDir), Plugins: plugins, Warnings: &warns}
+	got, err := dockerfile.Generate(ctx, dockerfile.Options{
+		WorkspaceRoot: root, RepoDir: "cocoon", Plugins: plugins, Warnings: &warns,
+	})
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	return got
+}
+
+// TestGenerate_HostIndependentImage pins the host-independent contract: the
+// Dockerfile takes no UID/GID build args, creates the user at a fixed uid/gid
+// 1000, exposes the docker-entrypoint.sh inputs as ENV, and keeps the final
+// stage as root so the entrypoint can remap before dropping privileges.
+func TestGenerate_HostIndependentImage(t *testing.T) {
+	t.Parallel()
+
+	got := generateFromSnapshotFixture(t)
+	for _, bad := range []string{"ARG UID", "ARG GID", "ARG DOCKER_GID", "DOCKER_GID"} {
+		if strings.Contains(got, bad) {
+			t.Errorf("host-independent Dockerfile must not contain %q:\n%s", bad, got)
+		}
+	}
+	for _, want := range []string{
+		"useradd -m -s /bin/bash -u 1000 -g 1000 ${USERNAME}",
+		"ENV COCOON_USER=${USERNAME}",
+		`ENV COCOON_WORKSPACE="`,
+		`ENV COCOON_BIND_PATHS="`,
+		"RUN chmod +x /usr/local/bin/docker-entrypoint.sh\n\nENTRYPOINT",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("expected %q in Dockerfile:\n%s", want, got)
+		}
+	}
+}
+
+// TestEntrypointScript pins the contract of the embedded entrypoint: a bash
+// script that branches on root and drops privileges via setpriv.
+func TestEntrypointScript(t *testing.T) {
+	t.Parallel()
+
+	got := dockerfile.EntrypointScript()
+	for _, want := range []string{
+		"#!/bin/bash\n",
+		"COCOON_WORKSPACE",
+		"COCOON_BIND_PATHS",
+		`[ "$(id -u)" -ne 0 ]`,
+		"setpriv",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("EntrypointScript missing %q", want)
+		}
+	}
+}
