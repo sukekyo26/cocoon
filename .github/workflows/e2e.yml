@@ -241,20 +241,27 @@ jobs:
             dev
           docker compose -f .devcontainer/docker-compose.yml up -d
           docker compose -f .devcontainer/docker-compose.yml exec -T dev bash -lc 'echo cocoon-e2e-ok'
-          # docker-entrypoint.sh remaps the fixed-uid (1000) container user to
-          # the host owner of the bind-mounted workspace, then drops privileges.
-          # `up -d` returns before the entrypoint finishes, so poll until the
-          # in-container `dev` user resolves to the runner's uid — proof the
-          # committed, host-independent .devcontainer/ adapted to this host.
+          # docker-entrypoint.sh remaps the fixed-uid/gid (1000:1000) container
+          # user to the host owner of the bind-mounted workspace, then drops
+          # privileges. `up -d` returns before the entrypoint finishes, so poll
+          # until the in-container `dev` user resolves to the runner's uid AND
+          # gid — proof the committed, host-independent .devcontainer/ adapted
+          # to this host. Asserting gid catches a broken groupmod/primary-group
+          # remap that a uid-only check would miss.
           host_uid="$(id -u)"
+          host_gid="$(id -g)"
           container_uid=""
+          container_gid=""
           for _ in $(seq 1 30); do
             container_uid="$(docker compose -f .devcontainer/docker-compose.yml exec -T -u dev dev id -u 2>/dev/null | tr -d '\r\n' || true)"
-            if [ "$container_uid" = "$host_uid" ]; then
+            container_gid="$(docker compose -f .devcontainer/docker-compose.yml exec -T -u dev dev id -g 2>/dev/null | tr -d '\r\n' || true)"
+            if [ "$container_uid" = "$host_uid" ] && [ "$container_gid" = "$host_gid" ]; then
               break
             fi
             sleep 1
           done
           test "$host_uid" = "$container_uid" \
             || { echo "UID remap failed: host=$host_uid container=$container_uid" >&2; exit 1; }
+          test "$host_gid" = "$container_gid" \
+            || { echo "GID remap failed: host=$host_gid container=$container_gid" >&2; exit 1; }
           docker compose -f .devcontainer/docker-compose.yml down -v
