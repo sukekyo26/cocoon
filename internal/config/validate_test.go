@@ -763,6 +763,20 @@ func TestValidate_ContainerCapabilitiesRejectsAddDropConflict(t *testing.T) {
 	require.Contains(t, err.Error(), "appears in both add and drop")
 }
 
+func TestValidate_ContainerCapabilitiesRejectsEntrypointRequiredDrop(t *testing.T) {
+	t.Parallel()
+	for _, cap := range []string{"ALL", "CHOWN", "SETUID", "SETGID"} {
+		t.Run(cap, func(t *testing.T) {
+			t.Parallel()
+			body := minimalWorkspace() +
+				"\n[container.capabilities]\ndrop = [\"" + cap + "\"]\n"
+			err := loadWS(t, body)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "cannot be dropped")
+		})
+	}
+}
+
 func TestValidate_ContainerSecurityOptAcceptsValid(t *testing.T) {
 	t.Parallel()
 	body := minimalWorkspace() +
@@ -1079,6 +1093,38 @@ func TestValidate_MountAccepts(t *testing.T) {
 	body := minimalWorkspace() +
 		"\n[[mounts]]\nsource = \"./local\"\ntarget = \"/etc/profile\"\n"
 	require.NoError(t, loadWS(t, body))
+}
+
+func TestValidate_MountTargetAcceptsUsernamePlaceholder(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[[mounts]]\nsource = \"./local\"\ntarget = \"/home/${USERNAME}/.ssh\"\n"
+	require.NoError(t, loadWS(t, body))
+}
+
+func TestValidate_MountTargetRejectsUnsafeChars(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name   string
+		target string
+	}{
+		{"double-quote", `/etc/foo"bar`},
+		{"backtick", "/etc/foo`bar"},
+		{"bare-dollar", "/etc/$HOME/x"},
+		{"colon", "/etc/foo:bar"},
+		{"newline", "/etc/foo\nRUN echo pwned"},
+		{"space", "/etc/foo bar"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			body := minimalWorkspace() +
+				"\n[[mounts]]\nsource = \"./local\"\ntarget = " + tomlString(tc.target) + "\n"
+			err := loadWS(t, body)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "target may contain only")
+		})
+	}
 }
 
 func TestValidate_AptSourcesBadComponent(t *testing.T) {

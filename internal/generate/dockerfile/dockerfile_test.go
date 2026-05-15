@@ -805,6 +805,45 @@ func TestGenerate_HostIndependentImage(t *testing.T) {
 	}
 }
 
+// TestGenerate_BindPathsIncludeHomeRootMount pins that a [[mounts]] target at
+// exactly the user's home directory is recorded in COCOON_BIND_PATHS, so the
+// entrypoint's chown sweep prunes it instead of recursively re-owning the
+// host-mounted tree.
+func TestGenerate_BindPathsIncludeHomeRootMount(t *testing.T) {
+	t.Parallel()
+
+	root := repoRoot(t)
+	wsPath := filepath.Join(root, "tests", "fixtures", "snapshot.workspace.toml")
+	pluginsDir := filepath.Join(root, "internal", "plugin", "catalog")
+	ws, err := config.LoadWorkspace(wsPath)
+	if err != nil {
+		t.Fatalf("load workspace: %v", err)
+	}
+	ws.Mounts = []config.Mount{{Source: "/host/x", Target: "/home/${USERNAME}"}}
+
+	var warns bytes.Buffer
+	plugins, err := plugin.LoadEnabled(pluginsDir, ws.Plugins.Enable, &warns)
+	if err != nil {
+		t.Fatalf("load plugins: %v", err)
+	}
+	ctx := &generate.WorkspaceContext{WS: ws, PluginsFS: os.DirFS(pluginsDir), Plugins: plugins, Warnings: &warns}
+	got, err := dockerfile.Generate(ctx, dockerfile.Options{
+		WorkspaceRoot: root, RepoDir: "cocoon", Plugins: plugins, Warnings: &warns,
+	})
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	for _, line := range strings.Split(got, "\n") {
+		if strings.HasPrefix(line, "ENV COCOON_BIND_PATHS=") {
+			if !strings.Contains(line, "/home/testuser\"") && !strings.Contains(line, "/home/testuser:") {
+				t.Errorf("home-root mount missing from COCOON_BIND_PATHS: %s", line)
+			}
+			return
+		}
+	}
+	t.Fatalf("ENV COCOON_BIND_PATHS not found in:\n%s", got)
+}
+
 // TestEntrypointScript pins the contract of the embedded entrypoint: a bash
 // script that branches on root and drops privileges via setpriv.
 func TestEntrypointScript(t *testing.T) {

@@ -593,9 +593,9 @@ test -f "$HOME/.cocoon/.shellrc.fish"; and source "$HOME/.cocoon/.shellrc.fish"
 COCOON_RC
 COCOON_RC_BLOCK
 
-# Entrypoint: remap UID/GID to the host owner, then sync image files to the
-# volume-mounted ~/.local. Runs as root so it can remap, then drops privileges
-# to ${USERNAME} before exec'ing CMD.
+# Entrypoint: runs as root to remap UID/GID to the host owner, then drops
+# privileges to ${USERNAME} and re-execs itself. The unprivileged re-entry
+# syncs image files into the volume-mounted ~/.local before exec'ing CMD.
 USER root
 COPY .devcontainer/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh

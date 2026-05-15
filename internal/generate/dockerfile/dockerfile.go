@@ -216,9 +216,9 @@ RUN mkdir -p ~/.local
 {{ . }}
 
 {{ end -}}
-# Entrypoint: remap UID/GID to the host owner, then sync image files to the
-# volume-mounted ~/.local. Runs as root so it can remap, then drops privileges
-# to ${USERNAME} before exec'ing CMD.
+# Entrypoint: runs as root to remap UID/GID to the host owner, then drops
+# privileges to ${USERNAME} and re-execs itself. The unprivileged re-entry
+# syncs image files into the volume-mounted ~/.local before exec'ing CMD.
 USER root
 COPY .devcontainer/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
@@ -338,7 +338,7 @@ func pickRepoDir(override, root string) string {
 }
 
 // cocoonEntrypointPaths returns the resolved container workspace path and the
-// colon-joined set of bind-mount paths under the user's home. docker-entrypoint.sh
+// colon-joined set of bind-mount paths at or under the user's home. docker-entrypoint.sh
 // stats the workspace to detect the host uid/gid, and must never chown a bind
 // mount (that rewrites ownership on the host). The mount-root branch mirrors
 // compose.workspaceBindMount.
@@ -357,7 +357,7 @@ func cocoonEntrypointPaths(ctx *generate.WorkspaceContext) (workspace, bindPaths
 		paths = append(paths, resolve(m.Target))
 	}
 	for _, m := range ctx.Mounts() {
-		if t := resolve(m.Target); strings.HasPrefix(t, home+"/") {
+		if t := resolve(m.Target); t == home || strings.HasPrefix(t, home+"/") {
 			paths = append(paths, t)
 		}
 	}
