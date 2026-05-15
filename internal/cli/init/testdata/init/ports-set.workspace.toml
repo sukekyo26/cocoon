@@ -18,6 +18,19 @@ username = "dev"
 image = "ubuntu"
 image_version = "22.04"
 
+# group_add — extra supplementary groups (name or numeric GID) the container user joins.
+#   docker_socket = true additionally appends the host docker group.
+# group_add = ["audio", "dialout"]
+
+# devices — map host devices into the container (HOST:CONTAINER[:rwm]).
+# devices = ["/dev/dri:/dev/dri"]
+
+# ipc — IPC namespace mode; "host" exposes a large shared-memory segment (ML workloads).
+# ipc = "host"
+
+# gpus — request GPU access. Only "all" is currently supported.
+# gpus = "all"
+
 # [container.resources] — override compose resource defaults (Docker uses unset = unlimited).
 #   Tune shm_size, pids_limit, cpus, memory.
 # [container.resources]
