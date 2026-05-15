@@ -329,7 +329,7 @@ DEBUG          = "1"
 | フィールド | 型 | 必須 | 説明 |
 |---|---|---|---|
 | `source` | string | yes | ホスト側パス。`~` 可。空文字列不可。 |
-| `target` | string | yes | コンテナ側パス。絶対パスのみ。 |
+| `target` | string | yes | コンテナ側パス。絶対パスで、`[A-Za-z0-9._/-]` と `${USERNAME}` プレースホルダのみ使用可。引用符・`:`・`$`・バッククオート・空白は不可 — target は生成 Dockerfile と docker-compose の volume spec へ無クオートで展開されるため。 |
 | `readonly` | bool | no | デフォルト `false`。 |
 
 ```toml

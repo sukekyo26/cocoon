@@ -329,7 +329,7 @@ Extra bind mounts from host to container. Repeatable.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `source` | string | yes | Host path. May include `~`. Must not be empty. |
-| `target` | string | yes | Container path. Must be absolute. |
+| `target` | string | yes | Container path. Must be absolute; only `[A-Za-z0-9._/-]` and the `${USERNAME}` placeholder are allowed. Quotes, `:`, `$`, backticks, and whitespace are rejected because the target is interpolated unquoted into the generated Dockerfile and the docker-compose volume spec. |
 | `readonly` | bool | no | Default `false`. |
 
 ```toml
