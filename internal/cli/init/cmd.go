@@ -1249,6 +1249,7 @@ func renderWorkspaceToml(s containerSpec, cat *i18n.Catalog) string {
 	// templates come first so an uncommented line still belongs to
 	// [container]; the [container.*] subtables follow.
 	for _, key := range []string{
+		"init_toml_template_container_docker_socket",
 		"init_toml_template_container_group_add",
 		"init_toml_template_container_devices",
 		"init_toml_template_container_ipc",
