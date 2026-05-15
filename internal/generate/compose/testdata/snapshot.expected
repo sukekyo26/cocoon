@@ -17,6 +17,7 @@ services:
       - "../..:/home/${USERNAME}/workspace:cached"
       - "local:/home/${USERNAME}/.local"
       - "cocoon:/home/${USERNAME}/.cocoon"
+      - "/var/run/docker.sock:/var/run/docker.sock"
       - "proto:/home/${USERNAME}/.proto"
       - "aws:/home/${USERNAME}/.aws"
       - "config:/home/${USERNAME}/.config"
@@ -47,6 +48,14 @@ services:
     security_opt:
       - seccomp=unconfined
       - "no-new-privileges:true"
+    group_add:
+      - audio
+      - "992"
+    devices:
+      - "/dev/dri:/dev/dri"
+      - "/dev/fuse:/dev/fuse:rwm"
+    ipc: host
+    gpus: all
     tty: true
     init: true
     command: sleep infinity

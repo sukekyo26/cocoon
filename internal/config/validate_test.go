@@ -1288,3 +1288,143 @@ func TestValidate_SidecarMountInvalid(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "source must not be empty")
 }
+
+// containerWorkspace returns a minimal workspace.toml with extra lines
+// injected inside the [container] section, for exercising flat [container]
+// fields (group_add / devices / ipc / gpus).
+func containerWorkspace(extra string) string {
+	return `
+[container]
+service_name = "dev"
+username = "developer"
+image = "ubuntu"
+image_version = "24.04"
+` + extra + `
+[plugins]
+enable = []
+`
+}
+
+func TestValidate_ContainerGroupAddAcceptsNamesAndGIDs(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		toml string
+	}{
+		{"name", `group_add = ["audio"]`},
+		{"name-with-dash", `group_add = ["host-users"]`},
+		{"numeric-gid", `group_add = ["992"]`},
+		{"mixed", `group_add = ["audio", "992", "dialout"]`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			require.NoError(t, loadWS(t, containerWorkspace(tc.toml+"\n")))
+		})
+	}
+}
+
+func TestValidate_ContainerGroupAddRejectsBadEntries(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name, toml, want string
+	}{
+		{"uppercase", `group_add = ["Audio"]`, "must be a group name"},
+		{"leading-digit-name", `group_add = ["9audio"]`, "must be a group name"},
+		{"empty", `group_add = [""]`, "must not be empty"},
+		{"duplicate", `group_add = ["audio", "audio"]`, "duplicate"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			err := loadWS(t, containerWorkspace(tc.toml+"\n"))
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.want)
+		})
+	}
+}
+
+func TestValidate_ContainerDevicesAcceptsValid(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name, toml string
+	}{
+		{"two-part", `devices = ["/dev/dri:/dev/dri"]`},
+		{"three-part-perms", `devices = ["/dev/sda:/dev/xvda:rwm"]`},
+		{"multiple", `devices = ["/dev/dri:/dev/dri", "/dev/fuse:/dev/fuse:rw"]`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			require.NoError(t, loadWS(t, containerWorkspace(tc.toml+"\n")))
+		})
+	}
+}
+
+func TestValidate_ContainerDevicesRejectsBadEntries(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name, toml, want string
+	}{
+		{"relative-host", `devices = ["dev/dri:/dev/dri"]`, "host path must be absolute"},
+		{"relative-container", `devices = ["/dev/dri:dev/dri"]`, "container path must be absolute"},
+		{"missing-container", `devices = ["/dev/dri"]`, "must be HOST:CONTAINER"},
+		{"too-many-parts", `devices = ["/dev/dri:/dev/dri:rwm:x"]`, "must be HOST:CONTAINER"},
+		{"bad-perms", `devices = ["/dev/dri:/dev/dri:xyz"]`, "cgroup permissions"},
+		{"duplicate", `devices = ["/dev/dri:/dev/dri", "/dev/dri:/dev/dri"]`, "duplicate"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			err := loadWS(t, containerWorkspace(tc.toml+"\n"))
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.want)
+		})
+	}
+}
+
+func TestValidate_ContainerIPCAcceptsValid(t *testing.T) {
+	t.Parallel()
+	for _, mode := range []string{"none", "host", "private", "shareable", "service:db", "container:other"} {
+		t.Run(mode, func(t *testing.T) {
+			t.Parallel()
+			require.NoError(t, loadWS(t, containerWorkspace("ipc = "+strconv.Quote(mode)+"\n")))
+		})
+	}
+}
+
+func TestValidate_ContainerIPCRejectsBadValues(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name, value, want string
+	}{
+		{"bogus", "bogus", "ipc must be one of"},
+		{"service-no-name", "service:", "requires a target name"},
+		{"container-no-name", "container:", "requires a target name"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			err := loadWS(t, containerWorkspace("ipc = "+strconv.Quote(tc.value)+"\n"))
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.want)
+		})
+	}
+}
+
+func TestValidate_ContainerGpusAcceptsAll(t *testing.T) {
+	t.Parallel()
+	require.NoError(t, loadWS(t, containerWorkspace("gpus = \"all\"\n")))
+}
+
+func TestValidate_ContainerGpusRejectsNonAll(t *testing.T) {
+	t.Parallel()
+	for _, v := range []string{"2", "none", "ALL"} {
+		t.Run(v, func(t *testing.T) {
+			t.Parallel()
+			err := loadWS(t, containerWorkspace("gpus = "+strconv.Quote(v)+"\n"))
+			require.Error(t, err)
+			require.Contains(t, err.Error(), `gpus must be "all"`)
+		})
+	}
+}

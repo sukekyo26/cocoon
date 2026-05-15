@@ -334,3 +334,57 @@ func TestWorkspaceContext_HomeFileMounts(t *testing.T) {
 		}
 	})
 }
+
+func TestWorkspaceContext_GroupAdd(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name     string
+		groupAdd []string
+		want     []string
+	}{
+		{"empty", nil, []string{}},
+		{"single", []string{"audio"}, []string{"audio"}},
+		{"name-and-gid", []string{"audio", "992"}, []string{"audio", "992"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			ws := &config.Workspace{}
+			ws.Container.GroupAdd = tc.groupAdd
+			c := &generate.WorkspaceContext{WS: ws}
+			got := c.GroupAdd()
+			if got == nil {
+				t.Fatal("GroupAdd must never return nil")
+			}
+			if strings.Join(got, ",") != strings.Join(tc.want, ",") {
+				t.Errorf("GroupAdd() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestWorkspaceContext_DevicesIPCGpus(t *testing.T) {
+	t.Parallel()
+	ws := &config.Workspace{}
+	ws.Container.Devices = []string{"/dev/dri:/dev/dri"}
+	ws.Container.IPC = ptr("host")
+	ws.Container.Gpus = ptr("all")
+	c := &generate.WorkspaceContext{WS: ws}
+	if got := c.Devices(); len(got) != 1 || got[0] != "/dev/dri:/dev/dri" {
+		t.Errorf("Devices() = %v", got)
+	}
+	if c.IPC() != "host" {
+		t.Errorf("IPC() = %q, want host", c.IPC())
+	}
+	if c.Gpus() != "all" {
+		t.Errorf("Gpus() = %q, want all", c.Gpus())
+	}
+
+	empty := &generate.WorkspaceContext{WS: &config.Workspace{}}
+	if got := empty.Devices(); got == nil || len(got) != 0 {
+		t.Errorf("Devices() should be empty non-nil, got %v", got)
+	}
+	if empty.IPC() != "" || empty.Gpus() != "" {
+		t.Errorf("IPC/Gpus should be empty when unset")
+	}
+}
