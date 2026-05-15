@@ -45,8 +45,14 @@ var (
 	rxHostnameLabel = `[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?`
 	rxHostname      = regexp.MustCompile(
 		`^(?:` + rxHostnameLabel + `)(?:\.(?:` + rxHostnameLabel + `))*$`)
-	rxSysctlKey    = regexp.MustCompile(`^[a-z][a-z0-9._-]*$`)
-	rxCapability   = regexp.MustCompile(`^[A-Z][A-Z0-9_]*$`)
+	rxSysctlKey  = regexp.MustCompile(`^[a-z][a-z0-9._-]*$`)
+	rxCapability = regexp.MustCompile(`^[A-Z][A-Z0-9_]*$`)
+	// rxGroupName matches a Linux group name (lowercase, optional trailing $
+	// for the useradd convention); rxGID matches a bare numeric GID. A
+	// group_add entry must satisfy one of the two.
+	rxGroupName    = regexp.MustCompile(`^[a-z_][a-z0-9_-]*\$?$`)
+	rxGID          = regexp.MustCompile(`^[0-9]+$`)
+	rxDevicePerms  = regexp.MustCompile(`^[rwm]+$`)
 	rxAptName      = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
 	rxAptSuite     = regexp.MustCompile(`^[a-z][a-z0-9._-]*$`)
 	rxAptComponent = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
@@ -204,6 +210,85 @@ func (c *ContainerSpec) validate(a *errAccumulator) {
 		c.SecurityOpt.validate(a.at("security_opt"))
 	}
 	validateSkel(a.at("skel"), c.Skel)
+	validateGroupAdd(a.at("group_add"), c.GroupAdd)
+	validateDevices(a.at("devices"), c.Devices)
+	if c.IPC != nil {
+		validateIPC(a.at("ipc"), *c.IPC)
+	}
+	if c.Gpus != nil {
+		validateGpus(a.at("gpus"), *c.Gpus)
+	}
+}
+
+// validateGroupAdd accepts a group name (rxGroupName) or a numeric GID.
+// Docker requires the group to already exist in the container image; only
+// the syntactic shape is checked here.
+func validateGroupAdd(a *errAccumulator, groups []string) {
+	if hasDuplicates(groups) {
+		a.add("contains duplicate entries")
+	}
+	for i, g := range groups {
+		idx := fmt.Sprintf("%d", i)
+		switch {
+		case g == "":
+			a.add("must not be empty", idx)
+		case !rxGroupName.MatchString(g) && !rxGID.MatchString(g):
+			a.add("must be a group name ("+rxGroupName.String()+") or a numeric GID", idx)
+		}
+	}
+}
+
+// validateDevices checks Compose `devices:` entries of the form
+// HOST:CONTAINER[:rwm]. Both paths must be absolute; CDI device syntax is
+// not supported.
+func validateDevices(a *errAccumulator, devices []string) {
+	if hasDuplicates(devices) {
+		a.add("contains duplicate entries")
+	}
+	for i, d := range devices {
+		idx := fmt.Sprintf("%d", i)
+		parts := strings.Split(d, ":")
+		if len(parts) < 2 || len(parts) > 3 {
+			a.add("must be HOST:CONTAINER or HOST:CONTAINER:rwm", idx)
+			continue
+		}
+		if !rxAbsolutePath.MatchString(parts[0]) {
+			a.add("host path must be absolute", idx)
+		}
+		if !rxAbsolutePath.MatchString(parts[1]) {
+			a.add("container path must be absolute", idx)
+		}
+		if len(parts) == 3 && !rxDevicePerms.MatchString(parts[2]) {
+			a.add("cgroup permissions must be a combination of r, w, m", idx)
+		}
+	}
+}
+
+// validateIPC accepts the bare Compose IPC modes plus the service:<name> /
+// container:<name> forms.
+func validateIPC(a *errAccumulator, ipc string) {
+	modes := []string{"none", "host", "private", "shareable"}
+	if slices.Contains(modes, ipc) {
+		return
+	}
+	for _, prefix := range []string{"service:", "container:"} {
+		if name, ok := strings.CutPrefix(ipc, prefix); ok {
+			if name == "" {
+				a.add(prefix + ` requires a target name (e.g. "` + prefix + `db")`)
+			}
+			return
+		}
+	}
+	a.add("ipc must be one of " + strings.Join(modes, ", ") +
+		`, "service:<name>" or "container:<name>"`)
+}
+
+// validateGpus currently accepts only the literal "all"; the per-device
+// list form (driver/count) is not yet exposed.
+func validateGpus(a *errAccumulator, gpus string) {
+	if gpus != "all" {
+		a.add(`gpus must be "all" (the only value currently supported)`)
+	}
 }
 
 // validateSkel leaves existence of Source to docker build (COPY surfaces a
