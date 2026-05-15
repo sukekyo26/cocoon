@@ -125,6 +125,9 @@ func (w *Workspace) runValidate(a *errAccumulator) {
 	w.Container.validate(a.at("container"))
 	w.Plugins.validate(a.at("plugins"))
 	w.validateImagePluginConflict(a.at("container"))
+	if w.Container.IPC != nil {
+		w.validateContainerIPC(a.at("container", "ipc"))
+	}
 	if w.Ports != nil {
 		w.Ports.validate(a.at("ports"))
 	}
@@ -212,17 +215,15 @@ func (c *ContainerSpec) validate(a *errAccumulator) {
 	validateSkel(a.at("skel"), c.Skel)
 	validateGroupAdd(a.at("group_add"), c.GroupAdd)
 	validateDevices(a.at("devices"), c.Devices)
-	if c.IPC != nil {
-		validateIPC(a.at("ipc"), *c.IPC)
-	}
 	if c.Gpus != nil {
 		validateGpus(a.at("gpus"), *c.Gpus)
 	}
 }
 
-// validateGroupAdd accepts a group name (rxGroupName) or a numeric GID.
-// Docker requires the group to already exist in the container image; only
-// the syntactic shape is checked here.
+// validateGroupAdd accepts a group name (rxGroupName) or a numeric GID. A
+// name must resolve in the image's /etc/group at runtime; a numeric GID is
+// passed straight through as a supplemental GID and needs no matching entry.
+// Only the syntactic shape is checked here.
 func validateGroupAdd(a *errAccumulator, groups []string) {
 	if hasDuplicates(groups) {
 		a.add("contains duplicate entries")
@@ -264,20 +265,36 @@ func validateDevices(a *errAccumulator, devices []string) {
 	}
 }
 
-// validateIPC accepts the bare Compose IPC modes plus the service:<name> /
-// container:<name> forms.
-func validateIPC(a *errAccumulator, ipc string) {
+// validateContainerIPC checks [container].ipc. Bare Compose modes are taken
+// as-is and container:<name> names an external container left to the runtime,
+// but service:<name> must resolve to the main service or a defined sidecar
+// (mirroring the depends_on undefined-sidecar check) so a typo fails here
+// rather than at `docker compose` time.
+func (w *Workspace) validateContainerIPC(a *errAccumulator) {
+	ipc := *w.Container.IPC
 	modes := []string{"none", "host", "private", "shareable"}
 	if slices.Contains(modes, ipc) {
 		return
 	}
-	for _, prefix := range []string{"service:", "container:"} {
-		if name, ok := strings.CutPrefix(ipc, prefix); ok {
-			if name == "" {
-				a.add(prefix + ` requires a target name (e.g. "` + prefix + `db")`)
-			}
+	if name, ok := strings.CutPrefix(ipc, "container:"); ok {
+		if name == "" {
+			a.add(`container: requires a target name (e.g. "container:db")`)
+		}
+		return
+	}
+	if name, ok := strings.CutPrefix(ipc, "service:"); ok {
+		if name == "" {
+			a.add(`service: requires a target name (e.g. "service:db")`)
 			return
 		}
+		if _, defined := w.Services[name]; !defined && name != w.Container.ServiceName {
+			a.add(fmt.Sprintf(
+				`service:%s references undefined service %q. `+
+					`Name the main service or a defined [services.<name>] sidecar.`,
+				name, name,
+			))
+		}
+		return
 	}
 	a.add("ipc must be one of " + strings.Join(modes, ", ") +
 		`, "service:<name>" or "container:<name>"`)

@@ -1313,6 +1313,7 @@ func TestValidate_ContainerGroupAddAcceptsNamesAndGIDs(t *testing.T) {
 	}{
 		{"name", `group_add = ["audio"]`},
 		{"name-with-dash", `group_add = ["host-users"]`},
+		{"name-trailing-dollar", `group_add = ["machine$"]`},
 		{"numeric-gid", `group_add = ["992"]`},
 		{"mixed", `group_add = ["audio", "992", "dialout"]`},
 	}
@@ -1385,12 +1386,39 @@ func TestValidate_ContainerDevicesRejectsBadEntries(t *testing.T) {
 
 func TestValidate_ContainerIPCAcceptsValid(t *testing.T) {
 	t.Parallel()
-	for _, mode := range []string{"none", "host", "private", "shareable", "service:db", "container:other"} {
+	for _, mode := range []string{"none", "host", "private", "shareable", "container:other"} {
 		t.Run(mode, func(t *testing.T) {
 			t.Parallel()
 			require.NoError(t, loadWS(t, containerWorkspace("ipc = "+strconv.Quote(mode)+"\n")))
 		})
 	}
+}
+
+// ipc = "service:<name>" resolves against generated service names: the main
+// service and any defined [services.<name>] sidecar. A typo must fail here
+// rather than at `docker compose` time.
+func TestValidate_ContainerIPCServiceTargetResolvesAgainstServices(t *testing.T) {
+	t.Parallel()
+	withSidecar := func(ipc string) string {
+		return containerWorkspace("ipc = "+strconv.Quote(ipc)+"\n") + `
+[services.db]
+image = "postgres:16"
+`
+	}
+	t.Run("defined-sidecar", func(t *testing.T) {
+		t.Parallel()
+		require.NoError(t, loadWS(t, withSidecar("service:db")))
+	})
+	t.Run("main-service", func(t *testing.T) {
+		t.Parallel()
+		require.NoError(t, loadWS(t, withSidecar("service:dev")))
+	})
+	t.Run("undefined-service", func(t *testing.T) {
+		t.Parallel()
+		err := loadWS(t, withSidecar("service:typo"))
+		require.Error(t, err)
+		require.Contains(t, err.Error(), `references undefined service "typo"`)
+	})
 }
 
 func TestValidate_ContainerIPCRejectsBadValues(t *testing.T) {
