@@ -162,9 +162,9 @@ jobs:
           echo "::endgroup::"
           # The generated tree must land under .devcontainer/ exclusively;
           # any leakage back into config/ or to the project root is a regression.
-          # The .env file is critical for compose interpolation (UID/GID/
-          # DOCKER_GID/CONTAINER_SERVICE_NAME/OS_IMAGE/OS_VERSION/USERNAME);
-          # without it `docker compose build` fails with
+          # The .env file is critical for compose interpolation
+          # (COMPOSE_PROJECT_NAME / CONTAINER_SERVICE_NAME / USERNAME / IMAGE /
+          # IMAGE_VERSION); without it `docker compose build` fails with
           # `failed to parse stage name ":": invalid reference format`.
           test -f .devcontainer/Dockerfile
           test -f .devcontainer/docker-compose.yml
@@ -179,12 +179,8 @@ jobs:
           #
           # Two compose-side conveniences we have to replicate manually:
           #   1. .env loading — compose auto-loads .env from the compose file's
-          #      directory; bake does not. We can't `source .env` either: bash
-          #      treats UID (and EUID) as readonly variables, so the
-          #      `UID=<runner-uid>` line that cocoon writes aborts the shell
-          #      under `set -e`. We read .env into an array and pass it inline
-          #      to bake's child process via `env KEY=VAL ... cmd`, which
-          #      bypasses the parent shell's readonly attributes entirely.
+          #      directory; bake does not. We read .env into an array and pass
+          #      it inline to bake's child process via `env KEY=VAL ... cmd`.
           #   2. Path resolution — compose resolves `context: ..` relative to
           #      the compose file's directory; bake resolves it relative to
           #      its own cwd. Without an override bake fails with
@@ -245,4 +241,20 @@ jobs:
             dev
           docker compose -f .devcontainer/docker-compose.yml up -d
           docker compose -f .devcontainer/docker-compose.yml exec -T dev bash -lc 'echo cocoon-e2e-ok'
+          # docker-entrypoint.sh remaps the fixed-uid (1000) container user to
+          # the host owner of the bind-mounted workspace, then drops privileges.
+          # `up -d` returns before the entrypoint finishes, so poll until the
+          # in-container `dev` user resolves to the runner's uid — proof the
+          # committed, host-independent .devcontainer/ adapted to this host.
+          host_uid="$(id -u)"
+          container_uid=""
+          for _ in $(seq 1 30); do
+            container_uid="$(docker compose -f .devcontainer/docker-compose.yml exec -T -u dev dev id -u 2>/dev/null | tr -d '\r\n' || true)"
+            if [ "$container_uid" = "$host_uid" ]; then
+              break
+            fi
+            sleep 1
+          done
+          test "$host_uid" = "$container_uid" \
+            || { echo "UID remap failed: host=$host_uid container=$container_uid" >&2; exit 1; }
           docker compose -f .devcontainer/docker-compose.yml down -v
