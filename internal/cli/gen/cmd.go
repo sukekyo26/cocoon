@@ -234,6 +234,7 @@ func printNextSteps(log *logx.Logger, cat *i18n.Catalog, devcontainer bool) {
 	if devcontainer {
 		log.Info(cat.Msg("gen_next_step_vscode"))
 	}
+	log.Info(cat.Msg("gen_next_step_manage"))
 }
 
 // warnDockerCLIWithoutSocket flags the docker-cli-without-docker_socket
