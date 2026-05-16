@@ -189,6 +189,7 @@ var allTemplateSectionHeaders = []string{
 	"# [container.security_opt]",
 	"# [[container.skel]]",
 	// [plugins.*]
+	"# [plugins.methods]",
 	"# [plugins.versions]",
 	// [apt.*]
 	"# [apt.mirror]",
