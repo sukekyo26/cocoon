@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"flag"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -860,5 +861,34 @@ func TestEntrypointScript(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Errorf("EntrypointScript missing %q", want)
 		}
+	}
+}
+
+// TestEntrypointScript_BashSyntax runs `bash -n` over the embedded
+// docker-entrypoint.sh. The string-contains test above cannot catch a
+// parse error, and a broken entrypoint only fails at container start —
+// while running as root mid-uid/gid-remap.
+func TestEntrypointScript_BashSyntax(t *testing.T) {
+	t.Parallel()
+	assertBashSyntax(t, dockerfile.EntrypointScript())
+}
+
+// assertBashSyntax writes script to a temp file and runs `bash -n` over it,
+// failing on any parse error. Skips when bash is not on PATH.
+func assertBashSyntax(t *testing.T, script string) {
+	t.Helper()
+	bashPath, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("bash not on PATH")
+	}
+	scriptPath := filepath.Join(t.TempDir(), "script.sh")
+	if writeErr := os.WriteFile(scriptPath, []byte(script), 0o600); writeErr != nil {
+		t.Fatalf("write script: %v", writeErr)
+	}
+	cmd := exec.CommandContext(t.Context(), bashPath, "-n", scriptPath)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if runErr := cmd.Run(); runErr != nil {
+		t.Fatalf("bash -n rejected the embedded script: %v\n%s", runErr, stderr.String())
 	}
 }
