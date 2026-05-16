@@ -62,6 +62,23 @@ preflight() {
   [ -f "$ENV_FILE" ] || die "not found: ${ENV_FILE} (run 'cocoon gen' first)"
 }
 
+# require_buildx fails fast when the buildx plugin is missing. `rebuild`
+# runs `docker compose build`, and the generated Dockerfile relies on
+# BuildKit-only features (`# syntax=`, `RUN --mount=type=cache`, and
+# additional build contexts). Without buildx, compose silently falls back
+# to the legacy "classic" builder and the build fails with a confusing
+# "classic builder doesn't support additional contexts" error.
+require_buildx() {
+  docker buildx version >/dev/null 2>&1 && return 0
+  echo "manage.sh: docker buildx is not installed — 'rebuild' needs BuildKit." >&2
+  echo "  The generated Dockerfile / compose file use BuildKit-only features," >&2
+  echo "  which the legacy 'classic' builder cannot handle. Install buildx with:" >&2
+  echo "    sudo apt-get install docker-buildx-plugin" >&2
+  echo "  or place the binary from https://github.com/docker/buildx/releases" >&2
+  echo "  into /usr/libexec/docker/cli-plugins/docker-buildx (chmod +x)." >&2
+  exit 1
+}
+
 # project_name reads COMPOSE_PROJECT_NAME from .env for display only; the
 # actual scoping is done by docker compose via -f/--env-file.
 project_name() {
@@ -124,6 +141,7 @@ cmd_clean() {
 cmd_rebuild() {
   local proj
   proj="$(project_name)"
+  require_buildx
   confirm "Rebuild the image for '${proj}' with --no-cache and recreate the container?"
   dc build --no-cache
   dc up -d --force-recreate
