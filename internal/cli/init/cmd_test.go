@@ -899,12 +899,10 @@ func TestDefaultPluginIDs(t *testing.T) {
 	plugins := loadPluginsForTest(t)
 
 	got := defaultPluginIDs(plugins)
-	// The current catalog ships `docker-cli` as the only default-on plugin.
-	// If you add another default-on plugin, update this assertion alongside
-	// the catalog change.
-	want := []string{"docker-cli"}
-	if len(got) != len(want) || got[0] != want[0] {
-		t.Errorf("default plugin ids: got %v, want %v", got, want)
+	// The current catalog ships no `default = true` plugin. If you add one,
+	// update this assertion alongside the catalog change.
+	if len(got) != 0 {
+		t.Errorf("default plugin ids: got %v, want none", got)
 	}
 }
 
@@ -953,10 +951,10 @@ func TestRunInit_PluginsFlagRejectsUnknown(t *testing.T) {
 }
 
 //nolint:paralleltest // t.Chdir
-func TestRunInit_YesDefaultsToDockerCli(t *testing.T) {
-	// `--yes` with no --plugins should fall back to defaultPluginIDs(),
-	// which currently means just docker-cli (the only `default = true`
-	// plugin in the embedded catalog).
+func TestRunInit_YesNoDefaultPlugins(t *testing.T) {
+	// `--yes` with no --plugins falls back to defaultPluginIDs(); the
+	// embedded catalog ships no `default = true` plugin, so the generated
+	// workspace.toml enables nothing.
 	pinEnglish(t)
 	work := t.TempDir()
 	t.Chdir(work)
@@ -970,7 +968,7 @@ func TestRunInit_YesDefaultsToDockerCli(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read workspace.toml: %v", err)
 	}
-	want := "[plugins]\nenable = [\n    \"docker-cli\",\n]"
+	want := "[plugins]\nenable = []"
 	if !strings.Contains(string(body), want) {
 		t.Errorf("workspace.toml missing %q\n--- got ---\n%s", want, body)
 	}
@@ -1580,13 +1578,36 @@ func TestRenderWorkspaceToml_TemplateOrdering(t *testing.T) {
 	}, cat)
 
 	containerActive := strings.Index(got, "[container]\n")
+	dockerSocketTpl := strings.Index(got, "# docker_socket = true")
+	groupAddTpl := strings.Index(got, "# group_add = [")
 	containerHostsTpl := strings.Index(got, "# [container.hosts]")
 	containerShellActive := strings.Index(got, "[container.shell]\n")
-	if containerActive < 0 || containerHostsTpl < 0 || containerShellActive < 0 {
-		t.Fatalf("anchor missing: container=%d hosts=%d shell=%d", containerActive, containerHostsTpl, containerShellActive)
+	if containerActive < 0 || dockerSocketTpl < 0 || groupAddTpl < 0 ||
+		containerHostsTpl < 0 || containerShellActive < 0 {
+		t.Fatalf("anchor missing: container=%d docker_socket=%d group_add=%d hosts=%d shell=%d",
+			containerActive, dockerSocketTpl, groupAddTpl, containerHostsTpl, containerShellActive)
 	}
-	if containerActive >= containerHostsTpl || containerHostsTpl >= containerShellActive {
-		t.Errorf("expected order [container] < [container.hosts] template < [container.shell], got %d / %d / %d",
-			containerActive, containerHostsTpl, containerShellActive)
+	if containerActive >= dockerSocketTpl || dockerSocketTpl >= groupAddTpl ||
+		groupAddTpl >= containerHostsTpl || containerHostsTpl >= containerShellActive {
+		t.Errorf("expected order [container] < docker_socket < group_add < [container.hosts] < [container.shell], "+
+			"got %d / %d / %d / %d / %d",
+			containerActive, dockerSocketTpl, groupAddTpl, containerHostsTpl, containerShellActive)
+	}
+}
+
+// TestRenderWorkspaceToml_DockerSocketTemplatePresent pins that every
+// generated workspace.toml carries the commented-out docker_socket opt-in
+// line so users discover it without re-running init.
+func TestRenderWorkspaceToml_DockerSocketTemplatePresent(t *testing.T) {
+	t.Parallel()
+	for _, lang := range []i18n.Lang{i18n.LangEN, i18n.LangJA} {
+		cat := i18n.New(lang)
+		got := renderWorkspaceToml(containerSpec{
+			ServiceName: "svc", Username: "dev", Image: "ubuntu", ImageVersion: "26.04",
+			Shell: "bash", MountRoot: ".", Devcontainer: true,
+		}, cat)
+		if !strings.Contains(got, "# docker_socket = true") {
+			t.Errorf("[%s] output missing docker_socket template line\n--- got ---\n%s", lang, got)
+		}
 	}
 }

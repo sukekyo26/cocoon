@@ -239,6 +239,39 @@ func (c *WorkspaceContext) SecurityOptions() []string {
 	return out
 }
 
+// GroupAdd returns the user-configured Compose `group_add:` list. Never
+// returns nil.
+func (c *WorkspaceContext) GroupAdd() []string {
+	if c.WS == nil || c.WS.Container.GroupAdd == nil {
+		return []string{}
+	}
+	return c.WS.Container.GroupAdd
+}
+
+// Devices never returns nil.
+func (c *WorkspaceContext) Devices() []string {
+	if c.WS == nil || c.WS.Container.Devices == nil {
+		return []string{}
+	}
+	return c.WS.Container.Devices
+}
+
+// IPC returns the configured IPC namespace mode or "" when unset.
+func (c *WorkspaceContext) IPC() string {
+	if c.WS == nil || c.WS.Container.IPC == nil {
+		return ""
+	}
+	return *c.WS.Container.IPC
+}
+
+// Gpus returns the configured GPU request or "" when unset.
+func (c *WorkspaceContext) Gpus() string {
+	if c.WS == nil || c.WS.Container.Gpus == nil {
+		return ""
+	}
+	return *c.WS.Container.Gpus
+}
+
 // LocaleLang returns locale.lang or "" if unset.
 func (c *WorkspaceContext) LocaleLang() string {
 	if c.WS == nil || c.WS.Locale == nil || c.WS.Locale.Lang == nil {

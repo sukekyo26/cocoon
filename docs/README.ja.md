@@ -27,7 +27,7 @@ cocoon gen    # .devcontainer/ をフルで再生成
 docker compose -f .devcontainer/docker-compose.yml up -d
 ```
 
-リポジトリにコミットされるのは 30 行ほどの `workspace.toml` だけです。`Dockerfile` も compose ファイルも `devcontainer.json` も、必要なときに毎回フルで作り直されるので、設定の "魔法" がリポジトリに溜まりません。すべての変更がジェネレータの決定的な再実行になります。
+真実の源は 30 行ほどの `workspace.toml` です。`cocoon gen` はそこから `.devcontainer/` 全体を決定的に再生成するので、設定の "魔法" がリポジトリに溜まらず、すべての変更がジェネレータの再実行になります。生成物はホスト非依存なので、`workspace.toml` だけをコミットしてホストごとに再生成してもよいですし、`.devcontainer/` を一度コミットしてチーム全員がそのままビルドしてもかまいません。
 
 ## 何が生成されるか
 
@@ -38,10 +38,26 @@ docker compose -f .devcontainer/docker-compose.yml up -d
 | `Dockerfile` | 有効化された各プラグインを `bash` heredoc でインライン化したマルチステージビルド |
 | `docker-compose.yml` | サービス + named volumes + ports + 任意のサイドカー |
 | `devcontainer.json` | VS Code Reopen-in-Container 用 (出力しない選択も可) |
-| `docker-entrypoint.sh` | コンテナ起動毎にイメージ焼き込みバイナリを named volume へ復元 |
-| `.env` | `COMPOSE_PROJECT_NAME`、UID/GID、IMAGE / IMAGE_VERSION |
+| `docker-entrypoint.sh` | コンテナ起動毎にユーザーをホスト UID/GID へ再マッピングし、イメージ焼き込みバイナリを named volume へ復元 |
+| `manage.sh` | プロジェクト単位の Docker クリーン / リビルド用ヘルパー（ホスト側で実行） |
+| `.env` | `COMPOSE_PROJECT_NAME`、`CONTAINER_SERVICE_NAME`、`USERNAME`、IMAGE / IMAGE_VERSION — ホスト非依存・コミット可 |
 
 同じ生成物で `docker compose up`（CLI 経由）と VS Code の "Reopen in Container" の両方が動きます。
+
+### 掃除とリビルド
+
+Docker は未使用のイメージ・ボリューム・ビルドキャッシュを溜め込み、ディスクを圧迫します。`.devcontainer/manage.sh` は **このプロジェクトの** リソースだけを掃除・リビルドします — スクリプトが生成された compose ファイルに対して `docker compose` を駆動するため、スコープは自動です。
+
+```bash
+./.devcontainer/manage.sh clean             # コンテナ + ネットワーク + ボリューム + ビルド済みイメージ
+./.devcontainer/manage.sh clean containers  # コンテナのみ（ネットワーク・ボリューム・イメージは残す）
+./.devcontainer/manage.sh clean image       # コンテナ + ネットワーク + ビルド済みイメージ（ボリュームのデータは残す）
+./.devcontainer/manage.sh clean volumes     # コンテナ + ネットワーク + ボリューム（ビルド済みイメージは残す — 高速リビルド）
+./.devcontainer/manage.sh rebuild           # --no-cache でイメージを再ビルドしコンテナを再生成
+./.devcontainer/manage.sh prune-cache       # Docker ビルドキャッシュを prune（全プロジェクトに影響）
+```
+
+破壊的なコマンドは実行前に確認します。`-y` で確認をスキップできます。ビルドキャッシュはプロジェクト単位にスコープできないため `prune-cache` は構造上グローバルで、意図的に `clean` とは別コマンドにしています。全コマンドは `./.devcontainer/manage.sh -h` を参照してください。
 
 ## 動作要件
 

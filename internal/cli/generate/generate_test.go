@@ -60,19 +60,34 @@ packages = []
 				{path: ".devcontainer/docker-compose.yml", mustContain: []string{
 					"svc-all", "init: true", "stop_grace_period: 30s",
 					"shm_size: 1gb", "pids_limit: 4096",
-				}, mustNotContain: []string{"{{"}},
+				}, mustNotContain: []string{"{{", "${UID}", "${GID}", "group_add"}},
 				{path: ".devcontainer/Dockerfile", mustContain: []string{
 					"# syntax=docker/dockerfile:1.7",
 					"type=cache,target=/var/cache/apt",
 					"type=cache,target=/var/lib/apt",
+					"useradd -m -s /bin/bash -u 1000 -g 1000",
+					"ENV COCOON_USER=${USERNAME}",
+					`ENV COCOON_WORKSPACE="/home/alice/workspace/svc-all"`,
 					"ENTRYPOINT", "CMD",
 				}, mustNotContain: []string{
 					"{{", "Install Docker CLI", "Install AWS CLI", "Install Zig",
-					"DOCKER_GID", "apt-get clean",
+					"DOCKER_GID", "ARG UID", "ARG GID", "apt-get clean",
 				}},
-				{path: ".devcontainer/devcontainer.json", mustContain: []string{"svc-all", "alice"}, mustNotContain: []string{"{{"}},
+				{path: ".devcontainer/devcontainer.json", mustContain: []string{
+					"svc-all", `"remoteUser": "alice"`, `"updateRemoteUserUID": false`,
+				}, mustNotContain: []string{"{{"}},
 				{path: ".devcontainer/docker-compose.yml", mustContain: []string{"svc-all"}, mustNotContain: []string{"{{"}},
-				{path: ".devcontainer/docker-entrypoint.sh", mustContain: []string{"#!/bin/bash", "$HOME/.image-local"}},
+				{path: ".devcontainer/.env", mustContain: []string{
+					"CONTAINER_SERVICE_NAME=svc-all", "USERNAME=alice",
+					"IMAGE=ubuntu", "IMAGE_VERSION=24.04",
+				}, mustNotContain: []string{"UID=", "GID=", "DOCKER_GID="}},
+				{path: ".devcontainer/docker-entrypoint.sh", mustContain: []string{
+					"#!/bin/bash", "$HOME/.image-local", "setpriv",
+				}},
+				{path: ".devcontainer/manage.sh", mustContain: []string{
+					"#!/usr/bin/env bash", "prune-cache",
+					"docker compose -f", "down --volumes --rmi local",
+				}},
 			},
 		},
 		{
@@ -86,6 +101,7 @@ packages = []
 					"Docker CLI", "GitHub CLI",
 				}, mustNotContain: []string{
 					"{{", "Install AWS CLI", "Install AWS SAM CLI", "Install Zig",
+					"ARG DOCKER_GID", "DOCKER_GID",
 				}},
 				{path: ".devcontainer/docker-compose.yml", mustContain: []string{"svc-partial"}},
 				{path: ".devcontainer/devcontainer.json", mustContain: []string{"svc-partial", "bob"}},

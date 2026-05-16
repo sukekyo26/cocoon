@@ -2,9 +2,10 @@
 # Install Docker CLI (client only, to use host Docker daemon via socket mount)
 # https://github.com/docker/cli
 #
-# Inputs (env):
-#   DOCKER_GID : host docker group GID (passed via Dockerfile ARG -> --build-arg)
-#   USERNAME   : container username
+# This installs the CLI packages only. The container user's access to the
+# mounted docker socket is configured at container start by
+# docker-entrypoint.sh, which resolves the socket's GID and joins the user
+# to a matching group.
 set -euo pipefail
 
 mkdir -p /etc/apt/keyrings
@@ -26,10 +27,3 @@ apt-get update
 apt-get install -y --no-install-recommends docker-ce-cli docker-compose-plugin
 apt-get clean
 rm -rf /var/lib/apt/lists/* /var/tmp/*
-
-docker_group=$(getent group "${DOCKER_GID}" 2>/dev/null | cut -d: -f1 || true)
-if [ -z "$docker_group" ]; then
-  groupadd -g "${DOCKER_GID}" docker
-  docker_group=docker
-fi
-usermod -aG "$docker_group" "${USERNAME}"

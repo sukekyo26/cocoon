@@ -17,6 +17,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -37,6 +38,11 @@ var ErrUsage = errors.New("usage error")
 var ErrFailure = errors.New("gen failed")
 
 var errCertsPathNotDirectory = errors.New("cocoon certs path exists but is not a directory")
+
+// dockerCLIPluginID is the catalog id of the Docker CLI plugin. Enabling it
+// without docker_socket leaves the in-container client with no daemon to
+// reach; warnDockerCLIWithoutSocket flags that combination.
+const dockerCLIPluginID = "docker-cli"
 
 const genLong = `cocoon gen — generate .devcontainer/{Dockerfile, docker-compose.yml, devcontainer.json}
 
@@ -132,6 +138,8 @@ func runGen(stdout, stderr io.Writer, workspaceFlag, outputFlag string) error {
 		}
 	}
 
+	warnDockerCLIWithoutSocket(ctx, log, cat)
+
 	cwd, _ := os.Getwd() //nolint:errcheck // cwd is best-effort for pretty-printing only.
 	for _, a := range arts {
 		log.Success(cat.Msg("gen_wrote", displayPath(cwd, filepath.Join(outDir, a.Rel))))
@@ -225,6 +233,18 @@ func printNextSteps(log *logx.Logger, cat *i18n.Catalog, devcontainer bool) {
 	log.Info(cat.Msg("gen_next_step_compose"))
 	if devcontainer {
 		log.Info(cat.Msg("gen_next_step_vscode"))
+	}
+	log.Info(cat.Msg("gen_next_step_manage"))
+}
+
+// warnDockerCLIWithoutSocket flags the docker-cli-without-docker_socket
+// combination: the in-container docker client has no daemon socket to reach,
+// so `docker ...` fails at runtime. Only a warning — using docker-cli against
+// a remote DOCKER_HOST is a legitimate socket-less setup.
+func warnDockerCLIWithoutSocket(ctx *generate.WorkspaceContext, log *logx.Logger, cat *i18n.Catalog) {
+	if slices.Contains(ctx.EnabledPlugins(), dockerCLIPluginID) &&
+		!ctx.WS.Container.DockerSocketEnabled() {
+		log.Warn(cat.Msg("gen_docker_cli_without_socket_warning"))
 	}
 }
 

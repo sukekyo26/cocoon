@@ -2,11 +2,10 @@
 name = "Docker CLI"
 description = "Docker CLI client for using host Docker daemon via socket mount"
 url = "https://github.com/docker/cli"
-default = true
+default = false
 
 [install]
 requires_root = true
-build_args = ["DOCKER_GID"]
 default_method = "apt"
 
 [install.methods.apt]

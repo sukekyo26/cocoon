@@ -67,6 +67,12 @@ func buildConfig(ctx *generate.WorkspaceContext) *orderedMap {
 		base.set("forwardPorts", forwardPorts)
 	}
 	base.set("shutdownAction", "stopCompose")
+	// Container PID 1 starts as root (docker-entrypoint.sh remaps UID/GID,
+	// then drops privileges); remoteUser makes VS Code attach as the
+	// unprivileged user. updateRemoteUserUID is pinned false so VS Code does
+	// not run its own host-UID remap on top of the entrypoint's.
+	base.set("remoteUser", ctx.Username())
+	base.set("updateRemoteUserUID", false)
 
 	customizations := newOrderedMap()
 	vscode := newOrderedMap()

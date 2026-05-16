@@ -303,15 +303,11 @@ func buildService(ctx *generate.WorkspaceContext, mounts []*yaml.Node) *yaml.Nod
 		yamlx.QuotedIfSpecial("IMAGE=${IMAGE}"),
 		yamlx.QuotedIfSpecial("IMAGE_VERSION=${IMAGE_VERSION}"),
 		yamlx.QuotedIfSpecial("USERNAME=${USERNAME}"),
-		yamlx.QuotedIfSpecial("UID=${UID}"),
-		yamlx.QuotedIfSpecial("GID=${GID}"),
-		yamlx.QuotedIfSpecial("DOCKER_GID=${DOCKER_GID}"),
 	)})
 
 	pairs := []yamlx.Pair{
 		{Key: "container_name", Value: yamlx.QuotedIfSpecial("${CONTAINER_SERVICE_NAME}")},
 		{Key: "build", Value: yamlx.Map(buildPairs...)},
-		{Key: "user", Value: yamlx.QuotedIfSpecial("${UID}:${GID}")},
 		{Key: "environment", Value: stringSeq(ctx.BuildEnvironment())},
 		{Key: "volumes", Value: yamlx.Seq(mounts...)},
 	}
@@ -342,21 +338,7 @@ func buildService(ctx *generate.WorkspaceContext, mounts []*yaml.Node) *yaml.Nod
 		}
 		pairs = append(pairs, yamlx.Pair{Key: "sysctls", Value: yamlx.Map(entries...)})
 	}
-	if add := ctx.CapAdd(); len(add) > 0 {
-		pairs = append(pairs, yamlx.Pair{Key: "cap_add", Value: stringSeq(add)})
-	}
-	if drop := ctx.CapDrop(); len(drop) > 0 {
-		pairs = append(pairs, yamlx.Pair{Key: "cap_drop", Value: stringSeq(drop)})
-	}
-	if sec := ctx.SecurityOptions(); len(sec) > 0 {
-		pairs = append(pairs, yamlx.Pair{Key: "security_opt", Value: stringSeq(sec)})
-	}
-	if ctx.WS.Container.DockerSocketEnabled() {
-		pairs = append(pairs, yamlx.Pair{
-			Key:   "group_add",
-			Value: yamlx.Seq(yamlx.QuotedIfSpecial("${DOCKER_GID}")),
-		})
-	}
+	pairs = append(pairs, runtimeOptionPairs(ctx)...)
 	if ctx.WS.Workspace.MountRootOrDefault() == "." {
 		// `mount_root = "."` mounts only the project so the host bind point
 		// already includes the project basename. Emit a matching
@@ -373,6 +355,35 @@ func buildService(ctx *generate.WorkspaceContext, mounts []*yaml.Node) *yaml.Nod
 	pairs = append(pairs, yamlx.Pair{Key: "command", Value: yamlx.QuotedIfSpecial("sleep infinity")})
 	pairs = append(pairs, applyResources(ctx)...)
 	return yamlx.Map(pairs...)
+}
+
+// runtimeOptionPairs emits the optional capability / security / device /
+// namespace service fields in a fixed order so generated YAML is
+// deterministic. Each entry is omitted when its source section is unset.
+func runtimeOptionPairs(ctx *generate.WorkspaceContext) []yamlx.Pair {
+	pairs := make([]yamlx.Pair, 0, 7)
+	if add := ctx.CapAdd(); len(add) > 0 {
+		pairs = append(pairs, yamlx.Pair{Key: "cap_add", Value: stringSeq(add)})
+	}
+	if drop := ctx.CapDrop(); len(drop) > 0 {
+		pairs = append(pairs, yamlx.Pair{Key: "cap_drop", Value: stringSeq(drop)})
+	}
+	if sec := ctx.SecurityOptions(); len(sec) > 0 {
+		pairs = append(pairs, yamlx.Pair{Key: "security_opt", Value: stringSeq(sec)})
+	}
+	if g := ctx.GroupAdd(); len(g) > 0 {
+		pairs = append(pairs, yamlx.Pair{Key: "group_add", Value: stringSeq(g)})
+	}
+	if dev := ctx.Devices(); len(dev) > 0 {
+		pairs = append(pairs, yamlx.Pair{Key: "devices", Value: stringSeq(dev)})
+	}
+	if ipc := ctx.IPC(); ipc != "" {
+		pairs = append(pairs, yamlx.Pair{Key: "ipc", Value: yamlx.QuotedIfSpecial(ipc)})
+	}
+	if gpus := ctx.Gpus(); gpus != "" {
+		pairs = append(pairs, yamlx.Pair{Key: "gpus", Value: yamlx.QuotedIfSpecial(gpus)})
+	}
+	return pairs
 }
 
 func applyResources(ctx *generate.WorkspaceContext) []yamlx.Pair {

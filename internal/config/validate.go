@@ -32,18 +32,37 @@ var (
 	rxLang             = regexp.MustCompile(`^[a-z]{2,3}_[A-Z]{2}\.UTF-8$`)
 	rxEmail            = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
 	rxAbsolutePath     = regexp.MustCompile(`^/`)
+	// rxMountTarget: a [[mounts]].target is interpolated unquoted into the
+	// generated Dockerfile `ENV COCOON_BIND_PATHS="..."` line and into the
+	// docker-compose `source:target` volume spec. A quote, backtick, `$`,
+	// `:`, whitespace, or newline would break out of either context, so the
+	// container target is restricted to a path of POSIX portable filename
+	// chars plus the literal `${USERNAME}` placeholder. Whitelist > blacklist.
+	rxMountTarget = regexp.MustCompile(`^(?:/(?:\$\{USERNAME\}|[A-Za-z0-9._-])+)+/?$`)
 	// rxHostname matches an RFC 1123-style hostname: dot-joined labels,
 	// each label 1+ alnum chars (hyphen allowed inside but not at the
 	// start/end). Underscores and consecutive dots (a..b) are rejected.
 	rxHostnameLabel = `[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?`
 	rxHostname      = regexp.MustCompile(
 		`^(?:` + rxHostnameLabel + `)(?:\.(?:` + rxHostnameLabel + `))*$`)
-	rxSysctlKey    = regexp.MustCompile(`^[a-z][a-z0-9._-]*$`)
-	rxCapability   = regexp.MustCompile(`^[A-Z][A-Z0-9_]*$`)
-	rxAptName      = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
-	rxAptSuite     = regexp.MustCompile(`^[a-z][a-z0-9._-]*$`)
-	rxAptComponent = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
-	rxAptArch      = regexp.MustCompile(`^(amd64|arm64|i386|armhf|ppc64el|s390x)$`)
+	rxSysctlKey  = regexp.MustCompile(`^[a-z][a-z0-9._-]*$`)
+	rxCapability = regexp.MustCompile(`^[A-Z][A-Z0-9_]*$`)
+	// rxGroupName matches a Linux group name (lowercase, optional trailing $
+	// for the useradd convention); rxGID matches a bare numeric GID. A
+	// group_add entry must satisfy one of the two.
+	rxGroupName   = regexp.MustCompile(`^[a-z_][a-z0-9_-]*\$?$`)
+	rxGID         = regexp.MustCompile(`^[0-9]+$`)
+	rxDevicePerms = regexp.MustCompile(`^[rwm]+$`)
+	// rxContainerName matches the syntactic shape of a Docker container
+	// name or ID (Docker's restricted-name pattern). Used to reject a
+	// malformed `ipc = "container:<name>"` target at validation time
+	// rather than letting whitespace/newlines reach the generated Compose
+	// file and fail at `docker compose` time.
+	rxContainerName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]+$`)
+	rxAptName       = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
+	rxAptSuite      = regexp.MustCompile(`^[a-z][a-z0-9._-]*$`)
+	rxAptComponent  = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
+	rxAptArch       = regexp.MustCompile(`^(amd64|arm64|i386|armhf|ppc64el|s390x)$`)
 	// rxImageVersion bounds image_version to the Docker tag character set
 	// minus the colon and the registry-path slash, both of which would let
 	// a user smuggle a second `<image>:<tag>` segment past the FROM
@@ -112,6 +131,9 @@ func (w *Workspace) runValidate(a *errAccumulator) {
 	w.Container.validate(a.at("container"))
 	w.Plugins.validate(a.at("plugins"))
 	w.validateImagePluginConflict(a.at("container"))
+	if w.Container.IPC != nil {
+		w.validateContainerIPC(a.at("container", "ipc"))
+	}
 	if w.Ports != nil {
 		w.Ports.validate(a.at("ports"))
 	}
@@ -197,6 +219,105 @@ func (c *ContainerSpec) validate(a *errAccumulator) {
 		c.SecurityOpt.validate(a.at("security_opt"))
 	}
 	validateSkel(a.at("skel"), c.Skel)
+	validateGroupAdd(a.at("group_add"), c.GroupAdd)
+	validateDevices(a.at("devices"), c.Devices)
+	if c.Gpus != nil {
+		validateGpus(a.at("gpus"), *c.Gpus)
+	}
+}
+
+// validateGroupAdd accepts a group name (rxGroupName) or a numeric GID. A
+// name must resolve in the image's /etc/group at runtime; a numeric GID is
+// passed straight through as a supplemental GID and needs no matching entry.
+// Only the syntactic shape is checked here.
+func validateGroupAdd(a *errAccumulator, groups []string) {
+	if hasDuplicates(groups) {
+		a.add("contains duplicate entries")
+	}
+	for i, g := range groups {
+		idx := fmt.Sprintf("%d", i)
+		switch {
+		case g == "":
+			a.add("must not be empty", idx)
+		case !rxGroupName.MatchString(g) && !rxGID.MatchString(g):
+			a.add("must be a group name ("+rxGroupName.String()+") or a numeric GID", idx)
+		}
+	}
+}
+
+// validateDevices checks Compose `devices:` entries of the form
+// HOST:CONTAINER[:rwm]. Both paths must be absolute; CDI device syntax is
+// not supported.
+func validateDevices(a *errAccumulator, devices []string) {
+	if hasDuplicates(devices) {
+		a.add("contains duplicate entries")
+	}
+	for i, d := range devices {
+		idx := fmt.Sprintf("%d", i)
+		parts := strings.Split(d, ":")
+		if len(parts) < 2 || len(parts) > 3 {
+			a.add("must be HOST:CONTAINER or HOST:CONTAINER:rwm", idx)
+			continue
+		}
+		if !rxAbsolutePath.MatchString(parts[0]) {
+			a.add("host path must be absolute", idx)
+		}
+		if !rxAbsolutePath.MatchString(parts[1]) {
+			a.add("container path must be absolute", idx)
+		}
+		if len(parts) == 3 && !rxDevicePerms.MatchString(parts[2]) {
+			a.add("cgroup permissions must be a combination of r, w, m", idx)
+		}
+	}
+}
+
+// validateContainerIPC checks [container].ipc. Bare Compose modes are taken
+// as-is. container:<name> names an external container left to the runtime, so
+// only its syntactic shape is checked (rxContainerName). service:<name> must
+// resolve to the main service or a defined sidecar (mirroring the depends_on
+// undefined-sidecar check) so a typo fails here rather than at
+// `docker compose` time.
+func (w *Workspace) validateContainerIPC(a *errAccumulator) {
+	ipc := *w.Container.IPC
+	modes := []string{"none", "host", "private", "shareable"}
+	if slices.Contains(modes, ipc) {
+		return
+	}
+	if name, ok := strings.CutPrefix(ipc, "container:"); ok {
+		switch {
+		case name == "":
+			a.add(`container: requires a target name (e.g. "container:db")`)
+		case !rxContainerName.MatchString(name):
+			a.add(fmt.Sprintf(
+				`container:%s is not a valid Docker container name or ID (%s)`,
+				name, rxContainerName.String()))
+		}
+		return
+	}
+	if name, ok := strings.CutPrefix(ipc, "service:"); ok {
+		if name == "" {
+			a.add(`service: requires a target name (e.g. "service:db")`)
+			return
+		}
+		if _, defined := w.Services[name]; !defined && name != w.Container.ServiceName {
+			a.add(fmt.Sprintf(
+				`service:%s references undefined service %q. `+
+					`Name the main service or a defined [services.<name>] sidecar.`,
+				name, name,
+			))
+		}
+		return
+	}
+	a.add("ipc must be one of " + strings.Join(modes, ", ") +
+		`, "service:<name>" or "container:<name>"`)
+}
+
+// validateGpus currently accepts only the literal "all"; the per-device
+// list form (driver/count) is not yet exposed.
+func validateGpus(a *errAccumulator, gpus string) {
+	if gpus != "all" {
+		a.add(`gpus must be "all" (the only value currently supported)`)
+	}
 }
 
 // validateSkel leaves existence of Source to docker build (COPY surfaces a
@@ -336,6 +457,16 @@ func (s *SecurityOptSpec) validate(a *errAccumulator) {
 	}
 }
 
+// entrypointRequiredCaps lists the capabilities docker-entrypoint.sh needs
+// at container start: CHOWN to re-own the home subtree, SETUID/SETGID to
+// drop privileges via setpriv. Dropping any of them (or ALL) strands the
+// container as root, so reject the drop at generation time. Keys are bare
+// names; a leading CAP_ is stripped before lookup since Docker accepts both
+// "CHOWN" and "CAP_CHOWN".
+var entrypointRequiredCaps = map[string]struct{}{
+	"ALL": {}, "CHOWN": {}, "SETUID": {}, "SETGID": {},
+}
+
 func (cs *CapabilitiesSpec) validate(a *errAccumulator) {
 	checkCapList(a.at("add"), cs.Add)
 	checkCapList(a.at("drop"), cs.Drop)
@@ -347,6 +478,14 @@ func (cs *CapabilitiesSpec) validate(a *errAccumulator) {
 		if _, conflict := addSet[c]; conflict {
 			a.add(fmt.Sprintf("%q appears in both add and drop", c))
 			break
+		}
+	}
+	for i, c := range cs.Drop {
+		if _, required := entrypointRequiredCaps[strings.TrimPrefix(c, "CAP_")]; required {
+			a.add(fmt.Sprintf(
+				"%q cannot be dropped: docker-entrypoint.sh needs CHOWN, SETUID, "+
+					"and SETGID at container start to remap the user and drop "+
+					"privileges", c), "drop", fmt.Sprintf("%d", i))
 		}
 	}
 }
@@ -582,6 +721,11 @@ func (m *Mount) validate(a *errAccumulator) {
 	}
 	if !rxAbsolutePath.MatchString(m.Target) {
 		a.add("target must be an absolute path", "target")
+	} else if !rxMountTarget.MatchString(m.Target) {
+		a.add("target may contain only [A-Za-z0-9._/-] and the ${USERNAME} "+
+			"placeholder (quotes, backticks, $, :, whitespace are rejected "+
+			"because the target flows unquoted into the generated Dockerfile "+
+			"ENV and the docker-compose volume spec)", "target")
 	}
 }
 

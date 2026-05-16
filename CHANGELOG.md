@@ -6,6 +6,20 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-05-16
+
+### Added
+
+- `[container]` accepts four new optional fields, each mapped to the matching Compose `services:` attribute: `group_add` (supplementary groups — group name or numeric GID — for the container user), `devices` (host device mappings `HOST:CONTAINER[:rwm]`), `ipc` (IPC namespace mode, e.g. `"host"` for ML workloads needing shared memory), and `gpus` (GPU access; only `"all"` is supported). `cocoon init` writes commented-out templates for all four under `[container]`.
+- `cocoon gen` warns when the `docker-cli` plugin is enabled but `[container].docker_socket` is unset — the in-container Docker client then has no daemon socket to reach, so `docker` commands fail at runtime. The warning names the fix (`docker_socket = true` under `[container]`) and notes it is safe to ignore when the container targets a remote `DOCKER_HOST`. `cocoon init` also now emits a commented-out `docker_socket` template line under `[container]`.
+- `cocoon gen` now also writes `.devcontainer/manage.sh`, a project-scoped Docker clean / rebuild helper run on the host. `./.devcontainer/manage.sh clean` removes this project's containers, networks, volumes, and locally-built image in one step; `clean containers` / `clean image` / `clean volumes` delete a single resource kind while preserving the others (e.g. `clean volumes` keeps the built image for a fast rebuild); `rebuild` rebuilds the image with `--no-cache` and recreates the container; `prune-cache` prunes the Docker build cache (which, unlike the others, cannot be scoped to one project and so is global). Destructive commands confirm first unless `-y` is passed. Scoping is automatic — the script drives `docker compose` against the generated compose file, so it never touches unrelated projects.
+
+### Changed
+
+- **BREAKING (generated artifacts)**: The generated `.devcontainer/` is now host-independent and safe to commit to a shared repository — every team member builds the same committed `.devcontainer/` with no per-host regeneration. The generated `.devcontainer/.env` no longer carries the `UID`, `GID`, or `DOCKER_GID` keys; `docker-compose.yml` drops the `user:` override, the `UID`/`GID`/`DOCKER_GID` `build.args`, and the `group_add:` entry; and the image builds the container user at a fixed uid/gid (1000). The container now starts as `root` and `docker-entrypoint.sh` remaps that user to the host owner of the bind-mounted workspace (and joins the docker socket's group when `docker_socket` is enabled) before dropping privileges back to the user. `devcontainer.json` gains `"remoteUser"` and `"updateRemoteUserUID": false` so VS Code attaches as the unprivileged user without running its own host-UID remap on top. Re-run `cocoon gen` to regenerate, then commit the result; teammates only need `docker compose build` (or to reopen the dev container). Because the entrypoint now needs the `CHOWN`, `SETUID`, and `SETGID` capabilities at container start, `cocoon gen` rejects a `[container.capabilities].drop` list that contains any of them (or `ALL`). `[[mounts]].target` is also validated more strictly — only `[A-Za-z0-9._/-]` and the `${USERNAME}` placeholder are allowed, since the target now also flows into the generated Dockerfile.
+- **BREAKING (plugin authors)**: The `docker-cli` plugin no longer accepts a `DOCKER_GID` build arg — `[install].build_args` was removed from its `plugin.toml`. The container user's access to the mounted docker socket is configured at container start by `docker-entrypoint.sh`. Custom plugins that copied docker-cli's old `build_args = ["DOCKER_GID"]` pattern to receive a host group id should drop it and let the entrypoint handle the socket group instead.
+- The `docker-cli` plugin is no longer enabled by default — its `plugin.toml` now has `default = false`. `cocoon init --yes` without `--plugins` generates `[plugins] enable = []` instead of pre-selecting `docker-cli`, and the interactive plugin picker starts with nothing pre-checked. Add `docker-cli` explicitly (via `--plugins` or the picker) when you need the in-container Docker client, and pair it with `docker_socket = true` so it can reach the host daemon.
+
 ## [0.4.0] - 2026-05-15
 
 ### Added
@@ -135,7 +149,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Add `COMPOSE_PROJECT_NAME` derivation from the project directory basename so docker compose namespacing matches the host directory.
 - Add i18n catalog (English / Japanese) covering every CLI prompt, error message, and inline `workspace.toml` comment, switched via `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG`.
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/sukekyo26/cocoon/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/sukekyo26/cocoon/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/sukekyo26/cocoon/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/sukekyo26/cocoon/compare/v0.2.0...v0.3.0

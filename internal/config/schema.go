@@ -93,11 +93,27 @@ type ContainerSpec struct {
 	SecurityOpt  *SecurityOptSpec    `toml:"security_opt,omitempty"`
 	Skel         []SkelEntry         `toml:"skel,omitempty"`
 
+	// GroupAdd lists supplementary groups (name or numeric GID) the container
+	// user joins, emitted as Compose `group_add:`. Needed because the user runs
+	// as a numeric `${UID}:${GID}`, so groups baked into the image's /etc/group
+	// are not applied at runtime.
+	GroupAdd []string `toml:"group_add,omitempty"`
+	// Devices maps host devices into the container as Compose `devices:`
+	// entries (`HOST:CONTAINER[:rwm]`).
+	Devices []string `toml:"devices,omitempty"`
+	// IPC sets the container's IPC namespace mode (Compose `ipc:`), e.g.
+	// "host" for ML workloads that need a large shared-memory segment.
+	IPC *string `toml:"ipc,omitempty"`
+	// Gpus requests GPU access (Compose `gpus:`). Only the literal "all" is
+	// supported; the per-device list form is not yet exposed.
+	Gpus *string `toml:"gpus,omitempty"`
+
 	// DockerSocket opts in to bind-mounting /var/run/docker.sock so DinD
 	// workflows can reach the host daemon. When true the generators add the
-	// bind mount and `group_add: ${DOCKER_GID}` so the container user can
-	// talk to the socket. Pointer so the loader can distinguish "field
-	// omitted" (default false) from an explicit `docker_socket = false`.
+	// bind mount; docker-entrypoint.sh reconciles the container user's group
+	// membership to the socket's GID at container start. Pointer so the
+	// loader can distinguish "field omitted" (default false) from an explicit
+	// `docker_socket = false`.
 	DockerSocket *bool `toml:"docker_socket,omitempty"`
 }
 

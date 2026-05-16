@@ -1,8 +1,9 @@
 // Package generatecli implements the in-process generation pipeline used by
 // the `cocoon gen` command. It loads workspace.toml + the enabled plugin
 // TOMLs once and produces the generated artifacts (Dockerfile,
-// docker-compose.yml, devcontainer.json when enabled, docker-entrypoint.sh)
-// under .devcontainer/. Callers are responsible for atomic placement.
+// docker-compose.yml, devcontainer.json when enabled, docker-entrypoint.sh,
+// manage.sh, .env) under .devcontainer/. Callers are responsible for atomic
+// placement.
 package generatecli
 
 import (
@@ -68,10 +69,11 @@ func LoadContext(
 }
 
 // BuildArtifacts produces the in-memory list of generated files
-// (compose, Dockerfile, devcontainer.json when enabled, shellrc) for
-// the given loaded WorkspaceContext.
+// (docker-compose.yml, Dockerfile, devcontainer.json when enabled,
+// docker-entrypoint.sh, manage.sh, .env) for the given loaded
+// WorkspaceContext.
 func BuildArtifacts(ctx *generate.WorkspaceContext, stderr io.Writer) ([]Artifact, error) {
-	arts := make([]Artifact, 0, 5)
+	arts := make([]Artifact, 0, 6)
 	warnW := logx.YellowWriter(stderr)
 
 	body, err := compose.Generate(ctx, compose.Options{Plugins: ctx.Plugins, Warnings: warnW})
@@ -102,6 +104,12 @@ func BuildArtifacts(ctx *generate.WorkspaceContext, stderr io.Writer) ([]Artifac
 	arts = append(arts, Artifact{
 		Rel:  ".devcontainer/docker-entrypoint.sh",
 		Body: dockerfile.EntrypointScript(),
+		Mode: 0o755,
+	})
+
+	arts = append(arts, Artifact{
+		Rel:  ".devcontainer/manage.sh",
+		Body: generate.ManageScript(),
 		Mode: 0o755,
 	})
 
