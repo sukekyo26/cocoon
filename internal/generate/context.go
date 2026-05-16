@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"slices"
 	"strings"
 
 	"github.com/sukekyo26/cocoon/internal/config"
@@ -359,7 +360,7 @@ func (c *WorkspaceContext) envOrder() []string {
 	for k := range m {
 		keys = append(keys, k)
 	}
-	sortStrings(keys)
+	slices.Sort(keys)
 	return keys
 }
 
@@ -519,7 +520,7 @@ func (c *WorkspaceContext) SidecarNames() []string {
 	for k := range m {
 		keys = append(keys, k)
 	}
-	sortStrings(keys)
+	slices.Sort(keys)
 	return keys
 }
 
@@ -533,14 +534,4 @@ func (c *WorkspaceContext) DevcontainerOverrides() map[string]any {
 		out[k] = v
 	}
 	return out
-}
-
-// sortStrings is split out so tests can assert lexicographic ordering
-// without importing sort across every generator subpackage.
-func sortStrings(s []string) {
-	for i := 1; i < len(s); i++ {
-		for j := i; j > 0 && s[j-1] > s[j]; j-- {
-			s[j-1], s[j] = s[j], s[j-1]
-		}
-	}
 }

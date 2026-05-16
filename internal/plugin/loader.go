@@ -73,9 +73,9 @@ func parsePluginTOML(label string, data []byte) (*Plugin, error) {
 // user-overlay plugin that pre-dates this rule gets actionable migration
 // guidance the first time `cocoon gen` rejects it.
 func validateMethodScripts(label string, p *Plugin, fsys fs.FS, scriptDir string) error {
-	a := newAccumulator()
+	a := config.NewAccumulator()
 	if len(p.Install.Methods) == 0 {
-		a.add("[install.methods] must declare at least one entry "+
+		a.Add("[install.methods] must declare at least one entry "+
 			"(category convention: binary / installer / apt / archive — see docs/plugins.md). "+
 			"Single-method plugins still need one entry; pick the category that matches your script.",
 			"install", "methods")
@@ -94,14 +94,14 @@ func validateMethodScripts(label string, p *Plugin, fsys fs.FS, scriptDir string
 		st, statErr := fs.Stat(fsys, scriptPath)
 		switch {
 		case errors.Is(statErr, fs.ErrNotExist):
-			a.add("install."+name+".sh does not exist", "install", "methods", name)
+			a.Add("install."+name+".sh does not exist", "install", "methods", name)
 		case statErr != nil:
 			// Permission / I/O failures surface as themselves so the
 			// author can fix the real cause; collapsing them into
 			// "does not exist" would send them on a wild-goose chase.
-			a.add(fmt.Sprintf("install.%s.sh: %v", name, statErr), "install", "methods", name)
+			a.Add(fmt.Sprintf("install.%s.sh: %v", name, statErr), "install", "methods", name)
 		case st.IsDir():
-			a.add("install."+name+".sh must be a regular file (got a directory)", "install", "methods", name)
+			a.Add("install."+name+".sh must be a regular file (got a directory)", "install", "methods", name)
 		}
 	}
 	// A stat failure that is not fs.ErrNotExist (e.g. permission denied,
@@ -112,21 +112,22 @@ func validateMethodScripts(label string, p *Plugin, fsys fs.FS, scriptDir string
 	// validation failure.
 	switch _, err := fs.Stat(fsys, path.Join(scriptDir, "install.sh")); {
 	case err == nil:
-		a.add("install.sh is no longer supported; rename it to install.<category>.sh "+
+		a.Add("install.sh is no longer supported; rename it to install.<category>.sh "+
 			"(binary / installer / apt / archive) and declare a matching [install.methods.<category>] "+
 			"entry in plugin.toml. See docs/plugins.md for the category convention.",
 			"install")
 	case !errors.Is(err, fs.ErrNotExist):
-		a.add(fmt.Sprintf(
+		a.Add(fmt.Sprintf(
 			"install.sh: cannot rule out a legacy file (%v); "+
 				"resolve the stat failure before retrying — the loader rejects "+
 				"install.sh as a plugin script, so a missed check would let it run silently",
 			err), "install")
 	}
-	if len(*a.errs) == 0 {
+	errs := a.Errors()
+	if len(errs) == 0 {
 		return nil
 	}
-	return &config.ValidationError{Path: label, Errors: *a.errs}
+	return &config.ValidationError{Path: label, Errors: errs}
 }
 
 // ErrNilPluginsFS lets callers distinguish "forgot to wire PluginsFS" from

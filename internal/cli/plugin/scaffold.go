@@ -10,6 +10,7 @@ import (
 
 	"github.com/charmbracelet/huh"
 
+	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
 	"github.com/sukekyo26/cocoon/internal/config"
 	"github.com/sukekyo26/cocoon/internal/fsx"
 	"github.com/sukekyo26/cocoon/internal/i18n"
@@ -56,11 +57,11 @@ func validateID(id string, cat *i18n.Catalog, stderr io.Writer) error {
 	log := logx.New(io.Discard, stderr)
 	if id == "" {
 		log.Error("ERROR: " + cat.Msg("plugin_scaffold_missing_id"))
-		return ErrUsage
+		return clihelpers.ErrUsage
 	}
 	if !config.IsValidPluginID(id) {
 		log.Error("ERROR: " + cat.Msg("plugin_scaffold_invalid_id", id))
-		return ErrUsage
+		return clihelpers.ErrUsage
 	}
 	return nil
 }
@@ -119,7 +120,7 @@ func (huhPrompter) Run(groups []*huh.Group) error {
 	form := huh.NewForm(groups...)
 	if err := form.Run(); err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
-			return ErrCanceled
+			return clihelpers.ErrCanceled
 		}
 		return fmt.Errorf("plugin scaffold: prompt: %w", err)
 	}
@@ -217,7 +218,7 @@ func finalizeOpts(opts *scaffoldOpts, cat *i18n.Catalog, stderr io.Writer) error
 		// ok
 	default:
 		log.Error("ERROR: " + cat.Msg("plugin_scaffold_unknown_template", string(opts.template)))
-		return ErrUsage
+		return clihelpers.ErrUsage
 	}
 
 	if opts.nonInteractive {
@@ -226,23 +227,23 @@ func finalizeOpts(opts *scaffoldOpts, cat *i18n.Catalog, stderr io.Writer) error
 		// English sentinel for the "missing" case.
 		if opts.name == "" {
 			log.Error("ERROR: " + cat.Msg("plugin_scaffold_missing_flag", "name"))
-			return ErrUsage
+			return clihelpers.ErrUsage
 		}
 		if opts.description == "" {
 			log.Error("ERROR: " + cat.Msg("plugin_scaffold_missing_flag", "description"))
-			return ErrUsage
+			return clihelpers.ErrUsage
 		}
 		if opts.url == "" {
 			log.Error("ERROR: " + cat.Msg("plugin_scaffold_missing_flag", "url"))
-			return ErrUsage
+			return clihelpers.ErrUsage
 		}
 		if err := validateNameInput(opts.name); err != nil {
 			log.Error("ERROR: " + cat.Msg("plugin_scaffold_blank_name"))
-			return ErrUsage
+			return clihelpers.ErrUsage
 		}
 		if err := validateDescriptionInput(opts.description); err != nil {
 			log.Error("ERROR: " + cat.Msg("plugin_scaffold_blank_description"))
-			return ErrUsage
+			return clihelpers.ErrUsage
 		}
 		if err := validateURLInput(opts.url); err != nil {
 			if errors.Is(err, errInputRequired) {
@@ -250,13 +251,13 @@ func finalizeOpts(opts *scaffoldOpts, cat *i18n.Catalog, stderr io.Writer) error
 			} else {
 				log.Error("ERROR: " + cat.Msg("plugin_scaffold_invalid_url"))
 			}
-			return ErrUsage
+			return clihelpers.ErrUsage
 		}
 	}
 
 	if opts.template == tmplBinary && !opts.versionCapable {
 		log.Error("ERROR: " + cat.Msg("plugin_scaffold_binary_needs_ver"))
-		return ErrUsage
+		return clihelpers.ErrUsage
 	}
 	return nil
 }
@@ -281,13 +282,13 @@ func renderAndWrite(
 	if err != nil {
 		cleanup()
 		log.Errorf("ERROR: render %s: %s", name, err)
-		return "", ErrFailure
+		return "", clihelpers.ErrFailure
 	}
 	path := filepath.Join(dir, name)
 	if writeErr := fsx.AtomicWriteFile(path, []byte(body), mode); writeErr != nil {
 		cleanup()
 		log.Errorf("ERROR: write %s: %s", path, writeErr)
-		return "", ErrFailure
+		return "", clihelpers.ErrFailure
 	}
 	return path, nil
 }
@@ -298,25 +299,25 @@ func runScaffold(opts scaffoldOpts, cat *i18n.Catalog, stdout, stderr io.Writer)
 	switch {
 	case errors.Is(err, ErrWorkspaceNotFound):
 		log.Error("ERROR: " + cat.Msg("plugin_scaffold_no_plugins_dir"))
-		return ErrUsage
+		return clihelpers.ErrUsage
 	case err != nil:
 		log.Errorf("ERROR: resolve plugins dir: %s", err)
-		return ErrFailure
+		return clihelpers.ErrFailure
 	}
 	opts.pluginsDir = pluginsDir
 	dir := filepath.Join(opts.pluginsDir, opts.id)
 	dirExisted, err := dirExists(dir)
 	if err != nil {
 		log.Errorf("ERROR: %s: %s", dir, err)
-		return ErrFailure
+		return clihelpers.ErrFailure
 	}
 	if dirExisted && !opts.force {
 		log.Error("ERROR: " + cat.Msg("plugin_scaffold_dir_exists", dir))
-		return ErrFailure
+		return clihelpers.ErrFailure
 	}
 	if mkErr := os.MkdirAll(dir, 0o755); mkErr != nil {
 		log.Errorf("ERROR: mkdir %s: %s", dir, mkErr)
-		return ErrFailure
+		return clihelpers.ErrFailure
 	}
 
 	data := scaffoldData{
@@ -370,7 +371,7 @@ func runScaffold(opts scaffoldOpts, cat *i18n.Catalog, stdout, stderr io.Writer)
 		cleanup()
 		log.Error("ERROR: " + cat.Msg("plugin_scaffold_validation_failed"))
 		log.Errorf("  %s", err)
-		return ErrFailure
+		return clihelpers.ErrFailure
 	}
 
 	log.Info(cat.Msg("plugin_scaffold_done", dir, len(written)))

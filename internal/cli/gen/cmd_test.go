@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
 	gencli "github.com/sukekyo26/cocoon/internal/cli/gen"
 )
 
@@ -456,7 +457,7 @@ func TestGen_HomeFiles_RejectsExistingDirectory(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected gen to fail when home_files entry is a directory")
 	}
-	if !errors.Is(err, gencli.ErrFailure) {
+	if !errors.Is(err, clihelpers.ErrFailure) {
 		t.Errorf("expected ErrFailure, got %v", err)
 	}
 	if !strings.Contains(stderr.String(), "rm -rf "+target) {
@@ -604,7 +605,7 @@ func TestGen_MissingWorkspaceReturnsUsage(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected ErrUsage, got nil")
 	}
-	if !errors.Is(err, gencli.ErrUsage) {
+	if !errors.Is(err, clihelpers.ErrUsage) {
 		t.Errorf("expected ErrUsage, got %v", err)
 	}
 }

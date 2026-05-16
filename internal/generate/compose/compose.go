@@ -8,7 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"sort"
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -177,7 +178,7 @@ func mergeCustomVolumes(
 	pathToSrc map[string]volSrc,
 	warnings io.Writer,
 ) ([]volPair, error) {
-	customNames := sortedKeys(customVols)
+	customNames := slices.Sorted(maps.Keys(customVols))
 	for _, name := range customNames {
 		if _, reserved := reservedVolumeNames[name]; reserved {
 			return nil, fmt.Errorf(
@@ -320,7 +321,7 @@ func buildService(ctx *generate.WorkspaceContext, mounts []*yaml.Node) *yaml.Nod
 	}
 	if hosts := ctx.ExtraHosts(); len(hosts) > 0 {
 		items := make([]*yaml.Node, 0, len(hosts))
-		for _, k := range sortedKeys(hosts) {
+		for _, k := range slices.Sorted(maps.Keys(hosts)) {
 			items = append(items, yamlx.QuotedIfSpecial(k+":"+hosts[k]))
 		}
 		pairs = append(pairs, yamlx.Pair{Key: "extra_hosts", Value: yamlx.Seq(items...)})
@@ -333,7 +334,7 @@ func buildService(ctx *generate.WorkspaceContext, mounts []*yaml.Node) *yaml.Nod
 	}
 	if sysctls := ctx.Sysctls(); len(sysctls) > 0 {
 		entries := make([]yamlx.Pair, 0, len(sysctls))
-		for _, k := range sortedKeys(sysctls) {
+		for _, k := range slices.Sorted(maps.Keys(sysctls)) {
 			entries = append(entries, yamlx.Pair{Key: k, Value: sysctlNode(sysctls[k])})
 		}
 		pairs = append(pairs, yamlx.Pair{Key: "sysctls", Value: yamlx.Map(entries...)})
@@ -502,15 +503,6 @@ func floatNode(f float64) *yaml.Node {
 		Tag:   "!!float",
 		Value: s,
 	}
-}
-
-func sortedKeys[V any](m map[string]V) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	sort.Strings(out)
-	return out
 }
 
 // portNode emits a single docker-compose ports entry. Short form becomes a

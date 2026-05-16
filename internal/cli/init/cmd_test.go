@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
 	"github.com/sukekyo26/cocoon/internal/config"
 	"github.com/sukekyo26/cocoon/internal/i18n"
 	"github.com/sukekyo26/cocoon/internal/plugin"
@@ -169,7 +170,7 @@ func TestApplyFlags_InvalidServiceName(t *testing.T) {
 	plugins := loadPluginsForTest(t)
 	for _, bad := range []string{"BAD", "with space", "1leading", "_under"} {
 		_, err := applyFlags(&initFlags{ServiceName: bad}, plugins)
-		if !errors.Is(err, ErrUsage) {
+		if !errors.Is(err, clihelpers.ErrUsage) {
 			t.Errorf("%q → expected ErrUsage, got %v", bad, err)
 		}
 	}
@@ -180,7 +181,7 @@ func TestApplyFlags_InvalidUsername(t *testing.T) {
 	plugins := loadPluginsForTest(t)
 	for _, bad := range []string{"BAD", "with space", "1leading"} {
 		_, err := applyFlags(&initFlags{Username: bad}, plugins)
-		if !errors.Is(err, ErrUsage) {
+		if !errors.Is(err, clihelpers.ErrUsage) {
 			t.Errorf("%q → expected ErrUsage, got %v", bad, err)
 		}
 	}
@@ -190,7 +191,7 @@ func TestApplyFlags_InvalidImage(t *testing.T) {
 	t.Parallel()
 	plugins := loadPluginsForTest(t)
 	_, err := applyFlags(&initFlags{Image: "alpine"}, plugins)
-	if !errors.Is(err, ErrUsage) {
+	if !errors.Is(err, clihelpers.ErrUsage) {
 		t.Errorf("expected ErrUsage for unknown --image, got %v", err)
 	}
 }
@@ -199,7 +200,7 @@ func TestApplyFlags_ImageVersionWithoutImage(t *testing.T) {
 	t.Parallel()
 	plugins := loadPluginsForTest(t)
 	_, err := applyFlags(&initFlags{ImageVersion: "24.04"}, plugins)
-	if !errors.Is(err, ErrUsage) {
+	if !errors.Is(err, clihelpers.ErrUsage) {
 		t.Errorf("--image-version without --image should be ErrUsage, got %v", err)
 	}
 }
@@ -215,7 +216,7 @@ func TestApplyFlags_ImageVersionBadFormat(t *testing.T) {
 			continue // empty means "flag not set", which is allowed
 		}
 		_, err := applyFlags(&initFlags{Image: "ubuntu", ImageVersion: bad}, plugins)
-		if !errors.Is(err, ErrUsage) {
+		if !errors.Is(err, clihelpers.ErrUsage) {
 			t.Errorf("bad image-version %q should be ErrUsage, got %v", bad, err)
 		}
 	}
@@ -255,7 +256,7 @@ func TestApplyFlags_InvalidMountRoot(t *testing.T) {
 	t.Parallel()
 	plugins := loadPluginsForTest(t)
 	_, err := applyFlags(&initFlags{MountRoot: "/abs"}, plugins)
-	if !errors.Is(err, ErrUsage) {
+	if !errors.Is(err, clihelpers.ErrUsage) {
 		t.Errorf("expected ErrUsage for /abs mount-root, got %v", err)
 	}
 }
@@ -279,7 +280,7 @@ func TestApplyFlags_UnknownAptCategory(t *testing.T) {
 	t.Parallel()
 	plugins := loadPluginsForTest(t)
 	_, err := applyFlags(&initFlags{AptCategories: "text-editors,not-a-real-category"}, plugins)
-	if !errors.Is(err, ErrUsage) {
+	if !errors.Is(err, clihelpers.ErrUsage) {
 		t.Errorf("expected ErrUsage for unknown apt category, got %v", err)
 	}
 }
@@ -300,7 +301,7 @@ func TestApplyDefaults_RequiresServiceName(t *testing.T) {
 	t.Parallel()
 	plugins := loadPluginsForTest(t)
 	_, err := applyDefaults(initAnswers{Username: "dev"}, plugins)
-	if !errors.Is(err, ErrUsage) {
+	if !errors.Is(err, clihelpers.ErrUsage) {
 		t.Errorf("--yes without service_name should be ErrUsage, got %v", err)
 	}
 }
@@ -309,7 +310,7 @@ func TestApplyDefaults_RequiresUsername(t *testing.T) {
 	t.Parallel()
 	plugins := loadPluginsForTest(t)
 	_, err := applyDefaults(initAnswers{ServiceName: "x"}, plugins)
-	if !errors.Is(err, ErrUsage) {
+	if !errors.Is(err, clihelpers.ErrUsage) {
 		t.Errorf("--yes without username should be ErrUsage, got %v", err)
 	}
 }
@@ -444,7 +445,7 @@ func TestParseAptCategories(t *testing.T) {
 	if err != nil || len(out) != 0 {
 		t.Errorf("only commas → empty list, got %v %v", out, err)
 	}
-	if _, err := parseAptCategories("not-a-real-cat"); !errors.Is(err, ErrUsage) {
+	if _, err := parseAptCategories("not-a-real-cat"); !errors.Is(err, clihelpers.ErrUsage) {
 		t.Errorf("unknown category should be ErrUsage, got %v", err)
 	}
 }
@@ -660,7 +661,7 @@ func TestRunInit_YesRejectsMissingServiceName(t *testing.T) {
 	cmd := NewCommand(io.Discard, io.Discard)
 	cmd.SetArgs([]string{"--yes", "--username", "dev"})
 	err := cmd.Execute()
-	if !errors.Is(err, ErrUsage) {
+	if !errors.Is(err, clihelpers.ErrUsage) {
 		t.Errorf("expected ErrUsage, got %v", err)
 	}
 	if _, statErr := os.Stat(filepath.Join(work, "workspace.toml")); statErr == nil {
@@ -677,7 +678,7 @@ func TestRunInit_YesRejectsMissingUsername(t *testing.T) {
 	cmd := NewCommand(io.Discard, io.Discard)
 	cmd.SetArgs([]string{"--yes", "--service-name", "myapp"})
 	err := cmd.Execute()
-	if !errors.Is(err, ErrUsage) {
+	if !errors.Is(err, clihelpers.ErrUsage) {
 		t.Errorf("expected ErrUsage, got %v", err)
 	}
 }
@@ -692,7 +693,7 @@ func TestRunInit_RefusesOverwriteWithoutForce(t *testing.T) {
 	}
 	cmd := NewCommand(io.Discard, io.Discard)
 	cmd.SetArgs([]string{"--yes", "--service-name", "x", "--username", "y"})
-	if err := cmd.Execute(); !errors.Is(err, ErrUsage) {
+	if err := cmd.Execute(); !errors.Is(err, clihelpers.ErrUsage) {
 		t.Errorf("expected ErrUsage for existing file, got %v", err)
 	}
 	body, readErr := os.ReadFile(filepath.Join(work, "workspace.toml"))
@@ -738,7 +739,7 @@ func TestRunInit_DevcontainerConflict(t *testing.T) {
 		"--yes", "--service-name", "x", "--username", "y",
 		"--devcontainer", "--no-devcontainer",
 	})
-	if err := cmd.Execute(); !errors.Is(err, ErrUsage) {
+	if err := cmd.Execute(); !errors.Is(err, clihelpers.ErrUsage) {
 		t.Errorf("conflicting flags should be ErrUsage, got %v", err)
 	}
 }
@@ -753,7 +754,7 @@ func TestRunInit_CertificatesConflict(t *testing.T) {
 		"--yes", "--service-name", "x", "--username", "y",
 		"--certificates", "--no-certificates",
 	})
-	if err := cmd.Execute(); !errors.Is(err, ErrUsage) {
+	if err := cmd.Execute(); !errors.Is(err, clihelpers.ErrUsage) {
 		t.Errorf("conflicting --certificates flags should be ErrUsage, got %v", err)
 	}
 }
@@ -853,7 +854,7 @@ func TestParsePlugins(t *testing.T) {
 	if err != nil || len(out) != 2 || out[0] != "go" || out[1] != "uv" {
 		t.Errorf("whitespace handling: got %v %v", out, err)
 	}
-	if _, err := parsePlugins("does-not-exist", plugins); !errors.Is(err, ErrUsage) {
+	if _, err := parsePlugins("does-not-exist", plugins); !errors.Is(err, clihelpers.ErrUsage) {
 		t.Errorf("unknown plugin should be ErrUsage, got %v", err)
 	}
 }
@@ -871,7 +872,7 @@ func TestValidatePluginConflicts(t *testing.T) {
 	}
 
 	err := validatePluginConflicts(plugins, []string{"alpha", "beta"})
-	if !errors.Is(err, ErrUsage) {
+	if !errors.Is(err, clihelpers.ErrUsage) {
 		t.Errorf("alpha+beta should be ErrUsage, got %v", err)
 	}
 
@@ -942,7 +943,7 @@ func TestRunInit_PluginsFlagRejectsUnknown(t *testing.T) {
 		"--yes", "--service-name", "x", "--username", "y",
 		"--plugins", "does-not-exist",
 	})
-	if err := cmd.Execute(); !errors.Is(err, ErrUsage) {
+	if err := cmd.Execute(); !errors.Is(err, clihelpers.ErrUsage) {
 		t.Errorf("unknown plugin should be ErrUsage, got %v", err)
 	}
 	if _, statErr := os.Stat(filepath.Join(work, "workspace.toml")); statErr == nil {
@@ -1001,26 +1002,26 @@ func TestParsePluginVersions(t *testing.T) {
 	}
 
 	for _, bad := range []string{"go", "go=", "=1.23", "go==1.23"} {
-		if _, err := parsePluginVersions(bad, plugins, enabled); !errors.Is(err, ErrUsage) {
+		if _, err := parsePluginVersions(bad, plugins, enabled); !errors.Is(err, clihelpers.ErrUsage) {
 			t.Errorf("malformed token %q: expected ErrUsage, got %v", bad, err)
 		}
 	}
 
-	if _, err := parsePluginVersions("does-not-exist=1.0", plugins, enabled); !errors.Is(err, ErrUsage) {
+	if _, err := parsePluginVersions("does-not-exist=1.0", plugins, enabled); !errors.Is(err, clihelpers.ErrUsage) {
 		t.Errorf("unknown plugin: expected ErrUsage, got %v", err)
 	}
 
 	// docker-cli ships in the embedded catalog but is `version_capable=false`.
-	if _, err := parsePluginVersions("docker-cli=1.0", plugins, []string{"docker-cli"}); !errors.Is(err, ErrUsage) {
+	if _, err := parsePluginVersions("docker-cli=1.0", plugins, []string{"docker-cli"}); !errors.Is(err, clihelpers.ErrUsage) {
 		t.Errorf("non-version-capable: expected ErrUsage, got %v", err)
 	}
 
 	// `go` is version_capable but the caller did not list it in --plugins.
-	if _, err := parsePluginVersions("go=1.23.4", plugins, []string{"uv"}); !errors.Is(err, ErrUsage) {
+	if _, err := parsePluginVersions("go=1.23.4", plugins, []string{"uv"}); !errors.Is(err, clihelpers.ErrUsage) {
 		t.Errorf("missing-from-enable: expected ErrUsage, got %v", err)
 	}
 
-	if _, err := parsePluginVersions("go=1.23.4,go=1.24.0", plugins, enabled); !errors.Is(err, ErrUsage) {
+	if _, err := parsePluginVersions("go=1.23.4,go=1.24.0", plugins, enabled); !errors.Is(err, clihelpers.ErrUsage) {
 		t.Errorf("duplicate id: expected ErrUsage, got %v", err)
 	}
 }
@@ -1069,7 +1070,7 @@ func TestRunInit_PluginVersionsRejectsUnknownPlugin(t *testing.T) {
 		"--plugins", "go",
 		"--plugin-versions", "does-not-exist=1.0",
 	})
-	if err := cmd.Execute(); !errors.Is(err, ErrUsage) {
+	if err := cmd.Execute(); !errors.Is(err, clihelpers.ErrUsage) {
 		t.Errorf("expected ErrUsage, got %v", err)
 	}
 }
@@ -1085,7 +1086,7 @@ func TestRunInit_PluginVersionsRejectsNonVersionCapable(t *testing.T) {
 		"--plugins", "docker-cli",
 		"--plugin-versions", "docker-cli=1.0",
 	})
-	if err := cmd.Execute(); !errors.Is(err, ErrUsage) {
+	if err := cmd.Execute(); !errors.Is(err, clihelpers.ErrUsage) {
 		t.Errorf("expected ErrUsage for non-version-capable docker-cli, got %v", err)
 	}
 }
@@ -1101,7 +1102,7 @@ func TestRunInit_PluginVersionsRejectsMissingFromEnable(t *testing.T) {
 		"--plugins", "uv",
 		"--plugin-versions", "go=1.23.4",
 	})
-	if err := cmd.Execute(); !errors.Is(err, ErrUsage) {
+	if err := cmd.Execute(); !errors.Is(err, clihelpers.ErrUsage) {
 		t.Errorf("expected ErrUsage when pin is for a non-enabled plugin, got %v", err)
 	}
 }
@@ -1126,7 +1127,7 @@ func TestApplyFlags_InvalidShell(t *testing.T) {
 	plugins := loadPluginsForTest(t)
 	for _, bad := range []string{"csh", "tcsh", "sh", "BASH"} {
 		_, err := applyFlags(&initFlags{Shell: bad}, plugins)
-		if !errors.Is(err, ErrUsage) {
+		if !errors.Is(err, clihelpers.ErrUsage) {
 			t.Errorf("--shell %q: expected ErrUsage, got %v", bad, err)
 		}
 	}
@@ -1164,7 +1165,7 @@ func TestRunInit_ShellFlagRejectsInvalid(t *testing.T) {
 	cmd.SetArgs([]string{
 		"--yes", "--service-name", "x", "--username", "y", "--shell", "csh",
 	})
-	if err := cmd.Execute(); !errors.Is(err, ErrUsage) {
+	if err := cmd.Execute(); !errors.Is(err, clihelpers.ErrUsage) {
 		t.Errorf("--shell csh should be ErrUsage, got %v", err)
 	}
 }
@@ -1206,7 +1207,7 @@ func TestParseAliasBundles(t *testing.T) {
 	if err != nil || len(out) != 2 || out[0] != "git" || out[1] != "ls" {
 		t.Errorf("whitespace handling: got %v %v", out, err)
 	}
-	if _, err := parseAliasBundles("k8s"); !errors.Is(err, ErrUsage) {
+	if _, err := parseAliasBundles("k8s"); !errors.Is(err, clihelpers.ErrUsage) {
 		t.Errorf("unknown bundle should be ErrUsage, got %v", err)
 	}
 }
@@ -1272,7 +1273,7 @@ func TestRunInit_AliasBundlesFlagRejectsUnknown(t *testing.T) {
 		"--yes", "--service-name", "x", "--username", "y",
 		"--alias-bundles", "k8s",
 	})
-	if err := cmd.Execute(); !errors.Is(err, ErrUsage) {
+	if err := cmd.Execute(); !errors.Is(err, clihelpers.ErrUsage) {
 		t.Errorf("--alias-bundles k8s should be ErrUsage, got %v", err)
 	}
 }
@@ -1314,7 +1315,7 @@ func TestParsePorts(t *testing.T) {
 				if err == nil {
 					t.Fatalf("parsePorts(%q) err = nil, want error", tc.raw)
 				}
-				if !errors.Is(err, ErrUsage) {
+				if !errors.Is(err, clihelpers.ErrUsage) {
 					t.Errorf("parsePorts(%q) err = %v, want errors.Is ErrUsage", tc.raw, err)
 				}
 				if !errors.Is(err, config.ErrPortShortForm) {
@@ -1470,7 +1471,7 @@ func TestRunInit_PortsFlagRejectsInvalid(t *testing.T) {
 				"--yes", "--service-name", "x", "--username", "y",
 				"--ports", tc.flag,
 			})
-			if err := cmd.Execute(); !errors.Is(err, ErrUsage) {
+			if err := cmd.Execute(); !errors.Is(err, clihelpers.ErrUsage) {
 				t.Errorf("--ports %q should be ErrUsage, got %v", tc.flag, err)
 			}
 		})

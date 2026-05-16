@@ -6,8 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/sukekyo26/cocoon/internal/aptbase"
@@ -237,7 +238,11 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 	}
 	configDir := filepath.Join(root, "config")
 
-	customVolPaths := sortedValues(ctx.CustomVolumes())
+	customVols := ctx.CustomVolumes()
+	customVolPaths := make([]string, 0, len(customVols))
+	for _, k := range slices.Sorted(maps.Keys(customVols)) {
+		customVolPaths = append(customVolPaths, customVols[k])
+	}
 	overrides := ctx.PluginVersionOverrides()
 	enabled := ctx.EnabledPlugins()
 
@@ -433,19 +438,6 @@ func formatAptContinuations(packages []string) string {
 		b.WriteString("    " + p + " \\\n")
 	}
 	return b.String()
-}
-
-func sortedValues(m map[string]string) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	out := make([]string, 0, len(keys))
-	for _, k := range keys {
-		out = append(out, m[k])
-	}
-	return out
 }
 
 // splitAptSetupForBootstrap places [apt.mirror] / [apt.proxy] relative

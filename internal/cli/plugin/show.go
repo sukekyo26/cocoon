@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
 	"github.com/sukekyo26/cocoon/internal/logx"
 )
 
@@ -39,11 +40,11 @@ func runShow(stdout, stderr io.Writer, id string) error {
 	}
 	src := layered.Source(id)
 	if src == "" {
-		return fmt.Errorf("%w: plugin %q not found in any layer", ErrUsage, id)
+		return fmt.Errorf("%w: plugin %q not found in any layer", clihelpers.ErrUsage, id)
 	}
 	p, err := loadPluginFromLayer(layered, id)
 	if err != nil {
-		return fmt.Errorf("%w: %w", ErrFailure, err)
+		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
 	}
 
 	log := logx.New(stdout, stderr)

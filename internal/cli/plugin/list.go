@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
 
@@ -46,7 +47,7 @@ func runList(stdout, _ io.Writer, sourceFilter string) error {
 		sourceFilter != plugin.SourceUser &&
 		sourceFilter != plugin.SourceProject {
 		return fmt.Errorf("%w: --source must be one of %q / %q / %q",
-			ErrUsage, plugin.SourceEmbedded, plugin.SourceUser, plugin.SourceProject)
+			clihelpers.ErrUsage, plugin.SourceEmbedded, plugin.SourceUser, plugin.SourceProject)
 	}
 
 	layered, err := resolveLayered()

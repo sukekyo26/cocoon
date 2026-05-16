@@ -11,12 +11,6 @@ package selfupdatecli
 
 import "errors"
 
-// ErrUsage signals a bad invocation; mapped to exit 2 at the binary boundary.
-var ErrUsage = errors.New("usage error")
-
-// ErrFailure signals a runtime failure of `cocoon self-update`.
-var ErrFailure = errors.New("self-update failed")
-
 // errAssetMissing is wrapped when the SHA256SUMS file does not list
 // the asset we just downloaded.
 var errAssetMissing = errors.New("asset checksum missing")

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/sukekyo26/cocoon/internal/aliasbundles"
 	"github.com/sukekyo26/cocoon/internal/aptcategories"
+	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
 	"github.com/sukekyo26/cocoon/internal/config"
 	"github.com/sukekyo26/cocoon/internal/i18n"
 	"github.com/sukekyo26/cocoon/internal/logx"
@@ -258,25 +260,25 @@ func zeroAnswers() initAnswers {
 
 func runInit(cmd *cobra.Command, stdout, stderr io.Writer, flags *initFlags) error {
 	if flags.Devcontainer && flags.NoDevcontainer {
-		return fmt.Errorf("%w: --devcontainer and --no-devcontainer are mutually exclusive", ErrUsage)
+		return fmt.Errorf("%w: --devcontainer and --no-devcontainer are mutually exclusive", clihelpers.ErrUsage)
 	}
 	if flags.Certificates && flags.NoCertificates {
-		return fmt.Errorf("%w: --certificates and --no-certificates are mutually exclusive", ErrUsage)
+		return fmt.Errorf("%w: --certificates and --no-certificates are mutually exclusive", clihelpers.ErrUsage)
 	}
 	cat := i18n.New(i18n.Detect())
 
 	cwd, err := os.Getwd()
 	if err != nil {
-		return fmt.Errorf("%w: %w", ErrFailure, err)
+		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
 	}
 	target := filepath.Join(cwd, "workspace.toml")
 	if _, statErr := os.Stat(target); statErr == nil && !flags.Force {
-		return fmt.Errorf("%w: %s already exists; use --force to overwrite", ErrUsage, target)
+		return fmt.Errorf("%w: %s already exists; use --force to overwrite", clihelpers.ErrUsage, target)
 	}
 
 	plugins, err := loadEmbeddedPlugins()
 	if err != nil {
-		return fmt.Errorf("%w: %s", ErrFailure, cat.Msg("init_err_plugin_load_fmt", err))
+		return fmt.Errorf("%w: %s", clihelpers.ErrFailure, cat.Msg("init_err_plugin_load_fmt", err))
 	}
 
 	ans, err := collectAnswers(flags, cat, plugins)
@@ -303,7 +305,7 @@ func runInit(cmd *cobra.Command, stdout, stderr io.Writer, flags *initFlags) err
 		Ports:          ans.Ports,
 	}, cat)
 	if err := os.WriteFile(target, []byte(content), 0o644); err != nil { //nolint:gosec // workspace.toml is user-readable.
-		return fmt.Errorf("%w: write %s: %w", ErrFailure, target, err)
+		return fmt.Errorf("%w: write %s: %w", clihelpers.ErrFailure, target, err)
 	}
 
 	log := logx.New(stdout, stderr)
@@ -359,7 +361,7 @@ func assertNoImagePluginConflict(ans initAnswers) error {
 	return fmt.Errorf(
 		"%w: image=%q already provides %s; drop %q from --plugins, "+
 			"or pick --image=ubuntu/debian to pin a custom %s via the plugin",
-		ErrUsage, ans.Image, conflict, conflict, conflict,
+		clihelpers.ErrUsage, ans.Image, conflict, conflict, conflict,
 	)
 }
 
@@ -372,21 +374,21 @@ func applyFlags(flags *initFlags, plugins map[string]*plugin.Plugin) (initAnswer
 	if flags.ServiceName != "" {
 		if !rxServiceName.MatchString(flags.ServiceName) {
 			return ans, fmt.Errorf("%w: --service-name %q does not match %s",
-				ErrUsage, flags.ServiceName, rxServiceName)
+				clihelpers.ErrUsage, flags.ServiceName, rxServiceName)
 		}
 		ans.ServiceName = flags.ServiceName
 	}
 	if flags.Username != "" {
 		if !rxUsername.MatchString(flags.Username) {
 			return ans, fmt.Errorf("%w: --username %q does not match %s",
-				ErrUsage, flags.Username, rxUsername)
+				clihelpers.ErrUsage, flags.Username, rxUsername)
 		}
 		ans.Username = flags.Username
 	}
 	if flags.Image != "" {
 		if _, ok := config.SupportedImageVersions[flags.Image]; !ok {
 			return ans, fmt.Errorf("%w: --image %q not in %s",
-				ErrUsage, flags.Image, strings.Join(config.SupportedImages, ", "))
+				clihelpers.ErrUsage, flags.Image, strings.Join(config.SupportedImages, ", "))
 		}
 		ans.Image, ans.ImageSet = flags.Image, true
 	}
@@ -394,25 +396,25 @@ func applyFlags(flags *initFlags, plugins map[string]*plugin.Plugin) (initAnswer
 		if flags.Image == "" {
 			return ans, fmt.Errorf(
 				"%w: --image-version %q requires --image (so the registry path is known)",
-				ErrUsage, flags.ImageVersion)
+				clihelpers.ErrUsage, flags.ImageVersion)
 		}
 		if !rxImageVersionInput.MatchString(flags.ImageVersion) {
 			return ans, fmt.Errorf(
 				"%w: --image-version %q must match %s",
-				ErrUsage, flags.ImageVersion, rxImageVersionInput.String())
+				clihelpers.ErrUsage, flags.ImageVersion, rxImageVersionInput.String())
 		}
 		ans.ImageVersion, ans.ImageVersionSet = flags.ImageVersion, true
 	}
 	if flags.Shell != "" {
 		if !slices.Contains(config.SupportedShells, flags.Shell) {
 			return ans, fmt.Errorf("%w: --shell %q not in %s",
-				ErrUsage, flags.Shell, strings.Join(config.SupportedShells, ", "))
+				clihelpers.ErrUsage, flags.Shell, strings.Join(config.SupportedShells, ", "))
 		}
 		ans.Shell, ans.ShellSet = flags.Shell, true
 	}
 	if flags.MountRoot != "" {
 		if flags.MountRoot != "." && flags.MountRoot != ".." {
-			return ans, fmt.Errorf(`%w: --mount-root must be "." or ".."`, ErrUsage)
+			return ans, fmt.Errorf(`%w: --mount-root must be "." or ".."`, clihelpers.ErrUsage)
 		}
 		ans.MountRoot, ans.MountRootSet = flags.MountRoot, true
 	}
@@ -479,13 +481,13 @@ func applyFlags(flags *initFlags, plugins map[string]*plugin.Plugin) (initAnswer
 // applyDefaults fills the still-empty answer fields with sensible
 // defaults so --yes can proceed without prompts. service_name and
 // username are required and never defaulted; missing them returns
-// ErrUsage so CI scripts know to pass the flags.
+// clihelpers.ErrUsage so CI scripts know to pass the flags.
 func applyDefaults(ans initAnswers, plugins map[string]*plugin.Plugin) (initAnswers, error) {
 	if ans.ServiceName == "" {
-		return ans, fmt.Errorf("%w: --yes requires --service-name", ErrUsage)
+		return ans, fmt.Errorf("%w: --yes requires --service-name", clihelpers.ErrUsage)
 	}
 	if ans.Username == "" {
-		return ans, fmt.Errorf("%w: --yes requires --username", ErrUsage)
+		return ans, fmt.Errorf("%w: --yes requires --username", clihelpers.ErrUsage)
 	}
 	if !ans.ImageSet {
 		ans.Image, ans.ImageSet = "ubuntu", true
@@ -656,7 +658,7 @@ func promptForMissing(ans initAnswers, cat *i18n.Catalog, plugins map[string]*pl
 
 // promptPluginsWithRetry re-runs the multi-select on conflict (up to 2 more
 // times) so the user can reconcile without restarting the whole flow. Three
-// failures in a row return ErrUsage so scripted invocations cannot loop
+// failures in a row return clihelpers.ErrUsage so scripted invocations cannot loop
 // forever. excludeID hides one plugin id from the picker (empty = none).
 func promptPluginsWithRetry(cat *i18n.Catalog, plugins map[string]*plugin.Plugin,
 	excludeID string, target *[]string,
@@ -675,7 +677,7 @@ func promptPluginsWithRetry(cat *i18n.Catalog, plugins map[string]*plugin.Plugin
 		// form is reappearing.
 		fmt.Fprintln(os.Stderr, err)
 	}
-	return fmt.Errorf("%w: plugin conflict not resolved after %d attempts", ErrUsage, maxAttempts)
+	return fmt.Errorf("%w: plugin conflict not resolved after %d attempts", clihelpers.ErrUsage, maxAttempts)
 }
 
 // filterPluginIDs returns ids with excludeID removed. Empty excludeID
@@ -706,9 +708,9 @@ func filterPluginIDs(ids []string, excludeID string) []string {
 func runSingleFieldForm(field huh.Field) error {
 	if err := huh.NewForm(huh.NewGroup(field)).WithKeyMap(keyMapWithoutPrevHelp()).Run(); err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
-			return fmt.Errorf("%w: aborted", ErrUsage)
+			return fmt.Errorf("%w: aborted", clihelpers.ErrUsage)
 		}
-		return fmt.Errorf("%w: prompt: %w", ErrFailure, err)
+		return fmt.Errorf("%w: prompt: %w", clihelpers.ErrFailure, err)
 	}
 	return nil
 }
@@ -877,7 +879,7 @@ func portsInputValidator(cat *i18n.Catalog) func(string) error {
 func pluginsMultiSelect(cat *i18n.Catalog, plugins map[string]*plugin.Plugin,
 	excludeID string, target *[]string,
 ) *huh.MultiSelect[string] {
-	ids := sortedPluginIDs(plugins)
+	ids := slices.Sorted(maps.Keys(plugins))
 	options := make([]huh.Option[string], 0, len(ids))
 	for _, id := range ids {
 		if id == excludeID {
@@ -937,7 +939,7 @@ func parseAptCategories(raw string) ([]string, error) {
 		}
 		if aptcategories.AptCategoryByID(id) == nil {
 			return nil, fmt.Errorf("%w: unknown apt category %q (run `cocoon init --help` for the list)",
-				ErrUsage, id)
+				clihelpers.ErrUsage, id)
 		}
 		ids = append(ids, id)
 	}
@@ -956,7 +958,7 @@ func parsePorts(raw string) ([]string, error) {
 			continue
 		}
 		if err := config.ValidateShortForm(p); err != nil {
-			return nil, fmt.Errorf("%w: --ports %w", ErrUsage, err)
+			return nil, fmt.Errorf("%w: --ports %w", clihelpers.ErrUsage, err)
 		}
 		ports = append(ports, p)
 	}
@@ -972,7 +974,7 @@ func parseAliasBundles(raw string) ([]string, error) {
 			continue
 		}
 		if aliasbundles.AliasBundleByID(id) == nil {
-			return nil, fmt.Errorf("%w: unknown alias bundle %q", ErrUsage, id)
+			return nil, fmt.Errorf("%w: unknown alias bundle %q", clihelpers.ErrUsage, id)
 		}
 		ids = append(ids, id)
 	}
@@ -990,7 +992,7 @@ func parsePlugins(raw string, plugins map[string]*plugin.Plugin) ([]string, erro
 		}
 		if _, ok := plugins[id]; !ok {
 			return nil, fmt.Errorf("%w: unknown plugin %q (run `cocoon plugin list` for the catalog)",
-				ErrUsage, id)
+				clihelpers.ErrUsage, id)
 		}
 		ids = append(ids, id)
 	}
@@ -1016,34 +1018,34 @@ func parsePluginVersions(raw string, plugins map[string]*plugin.Plugin, enabled 
 		// as the pin ref. Real pin refs never contain '='.
 		if strings.Count(token, "=") != 1 {
 			return nil, fmt.Errorf(
-				"%w: --plugin-versions token %q must be <id>=<ref>", ErrUsage, token)
+				"%w: --plugin-versions token %q must be <id>=<ref>", clihelpers.ErrUsage, token)
 		}
 		eq := strings.IndexByte(token, '=')
 		id := strings.TrimSpace(token[:eq])
 		ref := strings.TrimSpace(token[eq+1:])
 		if id == "" || ref == "" {
 			return nil, fmt.Errorf(
-				"%w: --plugin-versions token %q must be <id>=<ref>", ErrUsage, token)
+				"%w: --plugin-versions token %q must be <id>=<ref>", clihelpers.ErrUsage, token)
 		}
 		p, ok := plugins[id]
 		if !ok {
 			return nil, fmt.Errorf(
 				"%w: --plugin-versions: unknown plugin %q (run `cocoon plugin list`)",
-				ErrUsage, id)
+				clihelpers.ErrUsage, id)
 		}
 		if !p.Version.VersionCapable {
 			return nil, fmt.Errorf(
 				"%w: --plugin-versions: plugin %q is not version_capable",
-				ErrUsage, id)
+				clihelpers.ErrUsage, id)
 		}
 		if _, on := enabledSet[id]; !on {
 			return nil, fmt.Errorf(
 				"%w: --plugin-versions: plugin %q must also appear in --plugins",
-				ErrUsage, id)
+				clihelpers.ErrUsage, id)
 		}
 		if _, dup := out[id]; dup {
 			return nil, fmt.Errorf(
-				"%w: --plugin-versions: duplicate id %q", ErrUsage, id)
+				"%w: --plugin-versions: duplicate id %q", clihelpers.ErrUsage, id)
 		}
 		out[id] = ref
 	}
@@ -1072,39 +1074,39 @@ func parsePluginMethods(raw string, plugins map[string]*plugin.Plugin, enabled [
 		}
 		if strings.Count(token, "=") != 1 {
 			return nil, fmt.Errorf(
-				"%w: --plugin-methods token %q must be <id>=<method>", ErrUsage, token)
+				"%w: --plugin-methods token %q must be <id>=<method>", clihelpers.ErrUsage, token)
 		}
 		eq := strings.IndexByte(token, '=')
 		id := strings.TrimSpace(token[:eq])
 		method := strings.TrimSpace(token[eq+1:])
 		if id == "" || method == "" {
 			return nil, fmt.Errorf(
-				"%w: --plugin-methods token %q must be <id>=<method>", ErrUsage, token)
+				"%w: --plugin-methods token %q must be <id>=<method>", clihelpers.ErrUsage, token)
 		}
 		p, ok := plugins[id]
 		if !ok {
 			return nil, fmt.Errorf(
 				"%w: --plugin-methods: unknown plugin %q (run `cocoon plugin list`)",
-				ErrUsage, id)
+				clihelpers.ErrUsage, id)
 		}
 		if _, on := enabledSet[id]; !on {
 			return nil, fmt.Errorf(
 				"%w: --plugin-methods: plugin %q must also appear in --plugins",
-				ErrUsage, id)
+				clihelpers.ErrUsage, id)
 		}
 		if len(p.Install.Methods) == 0 {
 			return nil, fmt.Errorf(
 				"%w: --plugin-methods: plugin %q has no [install.methods] — drop it from --plugin-methods",
-				ErrUsage, id)
+				clihelpers.ErrUsage, id)
 		}
 		if _, declared := p.Install.Methods[method]; !declared {
 			return nil, fmt.Errorf(
 				"%w: --plugin-methods: plugin %q has no method %q in [install.methods]",
-				ErrUsage, id, method)
+				clihelpers.ErrUsage, id, method)
 		}
 		if _, dup := out[id]; dup {
 			return nil, fmt.Errorf(
-				"%w: --plugin-methods: duplicate id %q", ErrUsage, id)
+				"%w: --plugin-methods: duplicate id %q", clihelpers.ErrUsage, id)
 		}
 		out[id] = method
 	}
@@ -1133,7 +1135,7 @@ func validatePluginConflicts(plugins map[string]*plugin.Plugin, enabled []string
 		for _, other := range p.Metadata.Conflicts {
 			if _, hit := enabledSet[other]; hit {
 				return fmt.Errorf("%w: %s conflicts with %s — pick one",
-					ErrUsage, id, other)
+					clihelpers.ErrUsage, id, other)
 			}
 		}
 	}
@@ -1148,16 +1150,6 @@ func defaultPluginIDs(plugins map[string]*plugin.Plugin) []string {
 		if p.Metadata.Default {
 			ids = append(ids, id)
 		}
-	}
-	sort.Strings(ids)
-	return ids
-}
-
-// sortedPluginIDs returns ids in lexical order.
-func sortedPluginIDs(plugins map[string]*plugin.Plugin) []string {
-	ids := make([]string, 0, len(plugins))
-	for id := range plugins {
-		ids = append(ids, id)
 	}
 	sort.Strings(ids)
 	return ids

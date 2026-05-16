@@ -31,12 +31,6 @@ import (
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
 
-// ErrUsage signals a bad invocation; mapped to exit 2 at the binary boundary.
-var ErrUsage = errors.New("usage error")
-
-// ErrFailure signals a runtime failure during generation.
-var ErrFailure = errors.New("gen failed")
-
 var errCertsPathNotDirectory = errors.New("cocoon certs path exists but is not a directory")
 
 // dockerCLIPluginID is the catalog id of the Docker CLI plugin. Enabling it
@@ -106,11 +100,11 @@ func runGen(stdout, stderr io.Writer, workspaceFlag, outputFlag string) error {
 
 	catalog, err := plugin.CatalogFS()
 	if err != nil {
-		return fmt.Errorf("%w: %w", ErrFailure, err)
+		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
 	}
 	userPluginDir, err := userPluginsDir()
 	if err != nil {
-		return fmt.Errorf("%w: %w", ErrFailure, err)
+		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
 	}
 	projectPluginDir := filepath.Join(filepath.Dir(wsPath), ".cocoon", "plugins")
 	layered := plugin.NewLayeredFS(catalog, userPluginDir, projectPluginDir)
@@ -118,23 +112,23 @@ func runGen(stdout, stderr io.Writer, workspaceFlag, outputFlag string) error {
 
 	ctx, err := generatecli.LoadContext(wsPath, layered, "", stderr)
 	if err != nil {
-		return fmt.Errorf("%w: %w", ErrFailure, err)
+		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
 	}
 	arts, err := generatecli.BuildArtifacts(ctx, stderr)
 	if err != nil {
-		return fmt.Errorf("%w: %w", ErrFailure, err)
+		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
 	}
 	if err := generatecli.WriteArtifacts(arts, outDir); err != nil {
-		return fmt.Errorf("%w: %w", ErrFailure, err)
+		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
 	}
 	if ctx.CertificatesEnabled() {
 		if err := ensureUserCertsDir(log, cat); err != nil {
-			return fmt.Errorf("%w: %w", ErrFailure, err)
+			return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
 		}
 	}
 	if ctx.HasHomeFiles() {
 		if err := ensureHomeFiles(ctx, log, cat); err != nil {
-			return fmt.Errorf("%w: %w", ErrFailure, err)
+			return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
 		}
 	}
 
@@ -170,25 +164,25 @@ func resolveWorkspace(flag string) (string, error) {
 	if flag != "" {
 		abs, err := filepath.Abs(flag)
 		if err != nil {
-			return "", fmt.Errorf("%w: resolve --workspace: %w", ErrUsage, err)
+			return "", fmt.Errorf("%w: resolve --workspace: %w", clihelpers.ErrUsage, err)
 		}
 		if _, statErr := os.Stat(abs); statErr != nil {
-			return "", fmt.Errorf("%w: --workspace %s: %w", ErrUsage, abs, statErr)
+			return "", fmt.Errorf("%w: --workspace %s: %w", clihelpers.ErrUsage, abs, statErr)
 		}
 		return abs, nil
 	}
 	cwd, err := os.Getwd()
 	if err != nil {
-		return "", fmt.Errorf("%w: %w", ErrFailure, err)
+		return "", fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
 	}
 	found, err := config.Discover(cwd)
 	if err != nil {
-		return "", fmt.Errorf("%w: discover workspace.toml: %w", ErrFailure, err)
+		return "", fmt.Errorf("%w: discover workspace.toml: %w", clihelpers.ErrFailure, err)
 	}
 	if found == "" {
 		return "", fmt.Errorf(
 			"%w: workspace.toml not found in %s or any parent (try `cocoon init`)",
-			ErrUsage, cwd,
+			clihelpers.ErrUsage, cwd,
 		)
 	}
 	return found, nil

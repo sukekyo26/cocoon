@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
 	"github.com/sukekyo26/cocoon/internal/i18n"
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
@@ -101,7 +102,7 @@ func TestParsePluginMethods_Errors(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			_, err := parsePluginMethods(tc.raw, plugins, tc.enabled)
-			if !errors.Is(err, ErrUsage) {
+			if !errors.Is(err, clihelpers.ErrUsage) {
 				t.Fatalf("err = %v, want ErrUsage", err)
 			}
 			if !strings.Contains(err.Error(), tc.wantSub) {
@@ -148,7 +149,7 @@ func TestApplyFlags_PluginMethodsRequiresEnabled(t *testing.T) {
 		PluginMethods: "multi=binary",
 	}
 	_, err := applyFlags(&flags, plugins)
-	if !errors.Is(err, ErrUsage) {
+	if !errors.Is(err, clihelpers.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage", err)
 	}
 }

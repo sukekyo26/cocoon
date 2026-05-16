@@ -88,35 +88,44 @@ func IsValidPluginID(id string) bool {
 	return rxPluginID.MatchString(id)
 }
 
-// errAccumulator collects FieldError rows scoped under a base path.
-type errAccumulator struct {
+// Accumulator collects FieldError rows scoped under a base path.
+type Accumulator struct {
 	base []string
 	errs *[]FieldError
 }
 
-func newAccumulator() *errAccumulator {
+// NewAccumulator returns an empty Accumulator rooted at no base path.
+func NewAccumulator() *Accumulator {
 	errs := make([]FieldError, 0)
-	return &errAccumulator{base: nil, errs: &errs}
+	return &Accumulator{base: nil, errs: &errs}
 }
 
-func (a *errAccumulator) at(seg ...string) *errAccumulator {
+// At returns a child Accumulator whose collected errors are prefixed with
+// seg; the shared error slice is carried over so child writes are visible
+// to the parent.
+func (a *Accumulator) At(seg ...string) *Accumulator {
 	out := make([]string, 0, len(a.base)+len(seg))
 	out = append(out, a.base...)
 	out = append(out, seg...)
-	return &errAccumulator{base: out, errs: a.errs}
+	return &Accumulator{base: out, errs: a.errs}
 }
 
-func (a *errAccumulator) add(msg string, seg ...string) {
+// Add records a FieldError at base+seg with the given message.
+func (a *Accumulator) Add(msg string, seg ...string) {
 	loc := make([]string, 0, len(a.base)+len(seg))
 	loc = append(loc, a.base...)
 	loc = append(loc, seg...)
 	*a.errs = append(*a.errs, FieldError{Loc: loc, Message: msg})
 }
 
+// Errors returns the FieldError rows collected so far across this
+// Accumulator and every child created via At.
+func (a *Accumulator) Errors() []FieldError { return *a.errs }
+
 // Validate runs every cross-field check on the workspace. On failure the
 // returned error is a *ValidationError with Path = path.
 func (w *Workspace) Validate(path string) error {
-	a := newAccumulator()
+	a := NewAccumulator()
 	w.runValidate(a)
 	if len(*a.errs) == 0 {
 		return nil
@@ -124,54 +133,54 @@ func (w *Workspace) Validate(path string) error {
 	return &ValidationError{Path: path, Errors: *a.errs}
 }
 
-func (w *Workspace) runValidate(a *errAccumulator) {
+func (w *Workspace) runValidate(a *Accumulator) {
 	if w.Workspace != nil {
-		w.Workspace.validate(a.at("workspace"))
+		w.Workspace.validate(a.At("workspace"))
 	}
-	w.Container.validate(a.at("container"))
-	w.Plugins.validate(a.at("plugins"))
-	w.validateImagePluginConflict(a.at("container"))
+	w.Container.validate(a.At("container"))
+	w.Plugins.validate(a.At("plugins"))
+	w.validateImagePluginConflict(a.At("container"))
 	if w.Container.IPC != nil {
-		w.validateContainerIPC(a.at("container", "ipc"))
+		w.validateContainerIPC(a.At("container", "ipc"))
 	}
 	if w.Ports != nil {
-		w.Ports.validate(a.at("ports"))
+		w.Ports.validate(a.At("ports"))
 	}
-	checkMapKeys(a.at("env"), w.Env, rxEnvKey, "env")
+	CheckMapKeys(a.At("env"), w.Env, rxEnvKey, "env")
 	if w.Apt != nil {
-		w.Apt.validate(a.at("apt"))
+		w.Apt.validate(a.At("apt"))
 	}
 	if w.Locale != nil {
-		w.Locale.validate(a.at("locale"))
+		w.Locale.validate(a.At("locale"))
 	}
 	if w.Certificates != nil {
-		w.Certificates.validate(a.at("certificates"))
+		w.Certificates.validate(a.At("certificates"))
 	}
 	if w.Git != nil {
-		w.Git.validate(a.at("git"))
+		w.Git.validate(a.At("git"))
 	}
 	for i, m := range w.Mounts {
-		m.validate(a.at("mounts", fmt.Sprintf("%d", i)))
+		m.validate(a.At("mounts", fmt.Sprintf("%d", i)))
 	}
 	if w.HomeFiles != nil {
-		w.HomeFiles.validate(a.at("home_files"))
+		w.HomeFiles.validate(a.At("home_files"))
 	}
 	w.validateServices(a)
 	w.validateRepositories(a)
 }
 
-func (w *WorkspaceSpec) validate(a *errAccumulator) {
+func (w *WorkspaceSpec) validate(a *Accumulator) {
 	if w.MountRoot != "" && w.MountRoot != "." && w.MountRoot != ".." {
-		a.add(`mount_root must be "." or ".."`, "mount_root")
+		a.Add(`mount_root must be "." or ".."`, "mount_root")
 	}
 }
 
-func (c *ContainerSpec) validate(a *errAccumulator) {
+func (c *ContainerSpec) validate(a *Accumulator) {
 	if !rxServiceName.MatchString(c.ServiceName) {
-		a.add("service_name does not match "+rxServiceName.String(), "service_name")
+		a.Add("service_name does not match "+rxServiceName.String(), "service_name")
 	}
 	if !rxUsername.MatchString(c.Username) {
-		a.add("username does not match "+rxUsername.String(), "username")
+		a.Add("username does not match "+rxUsername.String(), "username")
 	}
 	if c.DeprecatedOs != "" || c.DeprecatedOsVersion != "" {
 		// The migration error already tells the user the exact rewrite, and
@@ -194,7 +203,7 @@ func (c *ContainerSpec) validate(a *errAccumulator) {
 		if legacyVersion == "" {
 			legacyVersion = "<fill in: see docs/configuration.md for the suggestion list>"
 		}
-		a.add(
+		a.Add(
 			`os / os_version are no longer supported. Replace them with two fields under [container]:`+"\n"+
 				`        image = "`+legacyOs+`"`+"\n"+
 				`        image_version = "`+legacyVersion+`"`+"\n"+
@@ -205,24 +214,24 @@ func (c *ContainerSpec) validate(a *errAccumulator) {
 		validateImage(a, c.Image, c.ImageVersion)
 	}
 	if c.Shell != nil {
-		c.Shell.validate(a.at("shell"))
+		c.Shell.validate(a.At("shell"))
 	}
-	validateExtraHosts(a.at("hosts"), c.Hosts)
+	validateExtraHosts(a.At("hosts"), c.Hosts)
 	if c.DNS != nil {
-		c.DNS.validate(a.at("dns"))
+		c.DNS.validate(a.At("dns"))
 	}
-	validateSysctls(a.at("sysctls"), c.Sysctls)
+	validateSysctls(a.At("sysctls"), c.Sysctls)
 	if c.Capabilities != nil {
-		c.Capabilities.validate(a.at("capabilities"))
+		c.Capabilities.validate(a.At("capabilities"))
 	}
 	if c.SecurityOpt != nil {
-		c.SecurityOpt.validate(a.at("security_opt"))
+		c.SecurityOpt.validate(a.At("security_opt"))
 	}
-	validateSkel(a.at("skel"), c.Skel)
-	validateGroupAdd(a.at("group_add"), c.GroupAdd)
-	validateDevices(a.at("devices"), c.Devices)
+	validateSkel(a.At("skel"), c.Skel)
+	validateGroupAdd(a.At("group_add"), c.GroupAdd)
+	validateDevices(a.At("devices"), c.Devices)
 	if c.Gpus != nil {
-		validateGpus(a.at("gpus"), *c.Gpus)
+		validateGpus(a.At("gpus"), *c.Gpus)
 	}
 }
 
@@ -230,17 +239,17 @@ func (c *ContainerSpec) validate(a *errAccumulator) {
 // name must resolve in the image's /etc/group at runtime; a numeric GID is
 // passed straight through as a supplemental GID and needs no matching entry.
 // Only the syntactic shape is checked here.
-func validateGroupAdd(a *errAccumulator, groups []string) {
-	if hasDuplicates(groups) {
-		a.add("contains duplicate entries")
+func validateGroupAdd(a *Accumulator, groups []string) {
+	if HasDuplicates(groups) {
+		a.Add("contains duplicate entries")
 	}
 	for i, g := range groups {
 		idx := fmt.Sprintf("%d", i)
 		switch {
 		case g == "":
-			a.add("must not be empty", idx)
+			a.Add("must not be empty", idx)
 		case !rxGroupName.MatchString(g) && !rxGID.MatchString(g):
-			a.add("must be a group name ("+rxGroupName.String()+") or a numeric GID", idx)
+			a.Add("must be a group name ("+rxGroupName.String()+") or a numeric GID", idx)
 		}
 	}
 }
@@ -248,25 +257,25 @@ func validateGroupAdd(a *errAccumulator, groups []string) {
 // validateDevices checks Compose `devices:` entries of the form
 // HOST:CONTAINER[:rwm]. Both paths must be absolute; CDI device syntax is
 // not supported.
-func validateDevices(a *errAccumulator, devices []string) {
-	if hasDuplicates(devices) {
-		a.add("contains duplicate entries")
+func validateDevices(a *Accumulator, devices []string) {
+	if HasDuplicates(devices) {
+		a.Add("contains duplicate entries")
 	}
 	for i, d := range devices {
 		idx := fmt.Sprintf("%d", i)
 		parts := strings.Split(d, ":")
 		if len(parts) < 2 || len(parts) > 3 {
-			a.add("must be HOST:CONTAINER or HOST:CONTAINER:rwm", idx)
+			a.Add("must be HOST:CONTAINER or HOST:CONTAINER:rwm", idx)
 			continue
 		}
 		if !rxAbsolutePath.MatchString(parts[0]) {
-			a.add("host path must be absolute", idx)
+			a.Add("host path must be absolute", idx)
 		}
 		if !rxAbsolutePath.MatchString(parts[1]) {
-			a.add("container path must be absolute", idx)
+			a.Add("container path must be absolute", idx)
 		}
 		if len(parts) == 3 && !rxDevicePerms.MatchString(parts[2]) {
-			a.add("cgroup permissions must be a combination of r, w, m", idx)
+			a.Add("cgroup permissions must be a combination of r, w, m", idx)
 		}
 	}
 }
@@ -277,7 +286,7 @@ func validateDevices(a *errAccumulator, devices []string) {
 // resolve to the main service or a defined sidecar (mirroring the depends_on
 // undefined-sidecar check) so a typo fails here rather than at
 // `docker compose` time.
-func (w *Workspace) validateContainerIPC(a *errAccumulator) {
+func (w *Workspace) validateContainerIPC(a *Accumulator) {
 	ipc := *w.Container.IPC
 	modes := []string{"none", "host", "private", "shareable"}
 	if slices.Contains(modes, ipc) {
@@ -286,9 +295,9 @@ func (w *Workspace) validateContainerIPC(a *errAccumulator) {
 	if name, ok := strings.CutPrefix(ipc, "container:"); ok {
 		switch {
 		case name == "":
-			a.add(`container: requires a target name (e.g. "container:db")`)
+			a.Add(`container: requires a target name (e.g. "container:db")`)
 		case !rxContainerName.MatchString(name):
-			a.add(fmt.Sprintf(
+			a.Add(fmt.Sprintf(
 				`container:%s is not a valid Docker container name or ID (%s)`,
 				name, rxContainerName.String()))
 		}
@@ -296,11 +305,11 @@ func (w *Workspace) validateContainerIPC(a *errAccumulator) {
 	}
 	if name, ok := strings.CutPrefix(ipc, "service:"); ok {
 		if name == "" {
-			a.add(`service: requires a target name (e.g. "service:db")`)
+			a.Add(`service: requires a target name (e.g. "service:db")`)
 			return
 		}
 		if _, defined := w.Services[name]; !defined && name != w.Container.ServiceName {
-			a.add(fmt.Sprintf(
+			a.Add(fmt.Sprintf(
 				`service:%s references undefined service %q. `+
 					`Name the main service or a defined [services.<name>] sidecar.`,
 				name, name,
@@ -308,38 +317,38 @@ func (w *Workspace) validateContainerIPC(a *errAccumulator) {
 		}
 		return
 	}
-	a.add("ipc must be one of " + strings.Join(modes, ", ") +
+	a.Add("ipc must be one of " + strings.Join(modes, ", ") +
 		`, "service:<name>" or "container:<name>"`)
 }
 
 // validateGpus currently accepts only the literal "all"; the per-device
 // list form (driver/count) is not yet exposed.
-func validateGpus(a *errAccumulator, gpus string) {
+func validateGpus(a *Accumulator, gpus string) {
 	if gpus != "all" {
-		a.add(`gpus must be "all" (the only value currently supported)`)
+		a.Add(`gpus must be "all" (the only value currently supported)`)
 	}
 }
 
 // validateSkel leaves existence of Source to docker build (COPY surfaces a
 // clean "file not found" error).
-func validateSkel(a *errAccumulator, entries []SkelEntry) {
+func validateSkel(a *Accumulator, entries []SkelEntry) {
 	seenSrc := map[string]int{}
 	seenTgt := map[string]int{}
 	for i, e := range entries {
 		idx := fmt.Sprintf("%d", i)
-		checkSkelPath(a.at(idx, "source"), e.Source, "source")
+		checkSkelPath(a.At(idx, "source"), e.Source, "source")
 		if strings.HasSuffix(e.Target, "/") {
-			a.add("target must not end with / (files only, not directories)", idx, "target")
+			a.Add("target must not end with / (files only, not directories)", idx, "target")
 		} else {
-			checkSkelPath(a.at(idx, "target"), e.Target, "target")
+			checkSkelPath(a.At(idx, "target"), e.Target, "target")
 		}
 		if prev, dup := seenSrc[e.Source]; dup && e.Source != "" {
-			a.add(fmt.Sprintf("source duplicates entry [%d]", prev), idx, "source")
+			a.Add(fmt.Sprintf("source duplicates entry [%d]", prev), idx, "source")
 		} else if e.Source != "" {
 			seenSrc[e.Source] = i
 		}
 		if prev, dup := seenTgt[e.Target]; dup && e.Target != "" {
-			a.add(fmt.Sprintf("target duplicates entry [%d]", prev), idx, "target")
+			a.Add(fmt.Sprintf("target duplicates entry [%d]", prev), idx, "target")
 		} else if e.Target != "" {
 			seenTgt[e.Target] = i
 		}
@@ -353,18 +362,18 @@ func validateSkel(a *errAccumulator, entries []SkelEntry) {
 // patch / new-minor tag upstream publishes without waiting for a cocoon
 // release. The regex excludes colon and slash that would let a malformed
 // tag smuggle a second `<image>:<tag>` segment past the FROM template.
-func validateImage(a *errAccumulator, image, imageVersion string) {
+func validateImage(a *Accumulator, image, imageVersion string) {
 	if image == "" {
-		a.add("image is required and must be one of "+strings.Join(SupportedImages, ", "), "image")
+		a.Add("image is required and must be one of "+strings.Join(SupportedImages, ", "), "image")
 		return
 	}
 	suggestions, known := SupportedImageVersions[image]
 	if !known {
-		a.add("image must be one of "+strings.Join(SupportedImages, ", ")+" (got "+image+")", "image")
+		a.Add("image must be one of "+strings.Join(SupportedImages, ", ")+" (got "+image+")", "image")
 		return
 	}
 	if imageVersion == "" {
-		a.add(
+		a.Add(
 			"image_version is required for image="+image+
 				" (suggestions: "+strings.Join(suggestions, ", ")+
 				"; any tag matching "+rxImageVersion.String()+" is accepted)",
@@ -373,7 +382,7 @@ func validateImage(a *errAccumulator, image, imageVersion string) {
 		return
 	}
 	if !rxImageVersion.MatchString(imageVersion) {
-		a.add(
+		a.Add(
 			"image_version "+strconv.Quote(imageVersion)+" does not match "+rxImageVersion.String()+
 				" (use a plain Docker tag, e.g. "+suggestions[0]+")",
 			"image_version",
@@ -384,7 +393,7 @@ func validateImage(a *errAccumulator, image, imageVersion string) {
 // validateImagePluginConflict rejects pairs from ImageProvidesPlugin where
 // the base toolchain would be overwritten or shadowed by the plugin (wasting
 // docker-build time for no benefit). Other combinations coexist cleanly.
-func (w *Workspace) validateImagePluginConflict(a *errAccumulator) {
+func (w *Workspace) validateImagePluginConflict(a *Accumulator) {
 	pluginID, conflicts := ImageProvidesPlugin[w.Container.Image]
 	if !conflicts {
 		return
@@ -392,7 +401,7 @@ func (w *Workspace) validateImagePluginConflict(a *errAccumulator) {
 	if !slices.Contains(w.Plugins.Enable, pluginID) {
 		return
 	}
-	a.add(
+	a.Add(
 		`image = "`+w.Container.Image+`" already provides `+pluginID+
 			`. Remove "`+pluginID+`" from [plugins].enable, or switch to `+
 			`image = "ubuntu" / "debian" to pin a custom `+pluginID+
@@ -401,29 +410,29 @@ func (w *Workspace) validateImagePluginConflict(a *errAccumulator) {
 	)
 }
 
-func checkSkelPath(a *errAccumulator, p, label string) {
+func checkSkelPath(a *Accumulator, p, label string) {
 	switch {
 	case p == "":
-		a.add(label + " must not be empty")
+		a.Add(label + " must not be empty")
 	case strings.HasPrefix(p, "/"):
-		a.add(label + " must be relative (no leading /)")
+		a.Add(label + " must be relative (no leading /)")
 	case strings.HasPrefix(p, "~"):
-		a.add(label + " must not start with ~")
+		a.Add(label + " must not start with ~")
 	case strings.HasPrefix(p, "-"):
-		a.add(label + " must not start with `-` (would look like a Dockerfile flag in the COPY line)")
+		a.Add(label + " must not start with `-` (would look like a Dockerfile flag in the COPY line)")
 	case strings.Contains(p, ":"):
-		a.add(label + " must not contain `:` (would corrupt the COPY directive)")
+		a.Add(label + " must not contain `:` (would corrupt the COPY directive)")
 	case containsWhitespaceOrCtrl(p):
-		a.add(label + " must not contain whitespace or control characters " +
+		a.Add(label + " must not contain whitespace or control characters " +
 			"(unquoted in the generated COPY line)")
 	default:
 		for _, seg := range strings.Split(p, "/") {
 			if seg == ".." {
-				a.add(label + " must not contain `..` segments")
+				a.Add(label + " must not contain `..` segments")
 				return
 			}
 			if seg == "" {
-				a.add(label + " must not contain empty segments (// or trailing /)")
+				a.Add(label + " must not contain empty segments (// or trailing /)")
 				return
 			}
 		}
@@ -448,12 +457,12 @@ func hasDotDotSegment(p string) bool {
 	return slices.Contains(strings.Split(p, "/"), "..")
 }
 
-func (s *SecurityOptSpec) validate(a *errAccumulator) {
+func (s *SecurityOptSpec) validate(a *Accumulator) {
 	if s.Seccomp != nil && *s.Seccomp == "" {
-		a.add("seccomp must not be empty (omit the key to use Docker's default)", "seccomp")
+		a.Add("seccomp must not be empty (omit the key to use Docker's default)", "seccomp")
 	}
 	if s.AppArmor != nil && *s.AppArmor == "" {
-		a.add("apparmor must not be empty (omit the key to use Docker's default)", "apparmor")
+		a.Add("apparmor must not be empty (omit the key to use Docker's default)", "apparmor")
 	}
 }
 
@@ -467,22 +476,22 @@ var entrypointRequiredCaps = map[string]struct{}{
 	"ALL": {}, "CHOWN": {}, "SETUID": {}, "SETGID": {},
 }
 
-func (cs *CapabilitiesSpec) validate(a *errAccumulator) {
-	checkCapList(a.at("add"), cs.Add)
-	checkCapList(a.at("drop"), cs.Drop)
+func (cs *CapabilitiesSpec) validate(a *Accumulator) {
+	checkCapList(a.At("add"), cs.Add)
+	checkCapList(a.At("drop"), cs.Drop)
 	addSet := make(map[string]struct{}, len(cs.Add))
 	for _, c := range cs.Add {
 		addSet[c] = struct{}{}
 	}
 	for _, c := range cs.Drop {
 		if _, conflict := addSet[c]; conflict {
-			a.add(fmt.Sprintf("%q appears in both add and drop", c))
+			a.Add(fmt.Sprintf("%q appears in both add and drop", c))
 			break
 		}
 	}
 	for i, c := range cs.Drop {
 		if _, required := entrypointRequiredCaps[strings.TrimPrefix(c, "CAP_")]; required {
-			a.add(fmt.Sprintf(
+			a.Add(fmt.Sprintf(
 				"%q cannot be dropped: docker-entrypoint.sh needs CHOWN, SETUID, "+
 					"and SETGID at container start to remap the user and drop "+
 					"privileges", c), "drop", fmt.Sprintf("%d", i))
@@ -490,13 +499,13 @@ func (cs *CapabilitiesSpec) validate(a *errAccumulator) {
 	}
 }
 
-func checkCapList(a *errAccumulator, caps []string) {
-	if hasDuplicates(caps) {
-		a.add("contains duplicate entries")
+func checkCapList(a *Accumulator, caps []string) {
+	if HasDuplicates(caps) {
+		a.Add("contains duplicate entries")
 	}
 	for i, c := range caps {
 		if !rxCapability.MatchString(c) {
-			a.add("capability does not match "+rxCapability.String(), fmt.Sprintf("%d", i))
+			a.Add("capability does not match "+rxCapability.String(), fmt.Sprintf("%d", i))
 		}
 	}
 }
@@ -504,88 +513,88 @@ func checkCapList(a *errAccumulator, caps []string) {
 // validateSysctls accepts numeric or string values (Compose v3 forwards both
 // transparently). Anything else is rejected so users notice typos before
 // docker compose up complains.
-func validateSysctls(a *errAccumulator, sysctls map[string]any) {
+func validateSysctls(a *Accumulator, sysctls map[string]any) {
 	for key, val := range sysctls {
 		if !rxSysctlKey.MatchString(key) {
-			a.add("sysctl key does not match "+rxSysctlKey.String(), key)
+			a.Add("sysctl key does not match "+rxSysctlKey.String(), key)
 			continue
 		}
 		switch val.(type) {
 		case int64, int, string:
 			// ok
 		default:
-			a.add(fmt.Sprintf("sysctl value must be int or string (got %T)", val), key)
+			a.Add(fmt.Sprintf("sysctl value must be int or string (got %T)", val), key)
 		}
 	}
 }
 
-func (d *DNSSpec) validate(a *errAccumulator) {
-	if hasDuplicates(d.Servers) {
-		a.add("servers contains duplicate entries", "servers")
+func (d *DNSSpec) validate(a *Accumulator) {
+	if HasDuplicates(d.Servers) {
+		a.Add("servers contains duplicate entries", "servers")
 	}
 	for i, ip := range d.Servers {
 		if net.ParseIP(ip) == nil {
-			a.add(fmt.Sprintf("%q is not a valid IPv4/IPv6 address", ip), "servers", fmt.Sprintf("%d", i))
+			a.Add(fmt.Sprintf("%q is not a valid IPv4/IPv6 address", ip), "servers", fmt.Sprintf("%d", i))
 		}
 	}
-	if hasDuplicates(d.Search) {
-		a.add("search contains duplicate entries", "search")
+	if HasDuplicates(d.Search) {
+		a.Add("search contains duplicate entries", "search")
 	}
 	for i, dom := range d.Search {
 		if !rxHostname.MatchString(dom) {
-			a.add("search domain does not match "+rxHostname.String(), "search", fmt.Sprintf("%d", i))
+			a.Add("search domain does not match "+rxHostname.String(), "search", fmt.Sprintf("%d", i))
 		}
 	}
 }
 
 // validateExtraHosts enforces hostname keys plus IP-or-"host-gateway" values.
 // Empty maps are skipped so the generator can omit extra_hosts entirely.
-func validateExtraHosts(a *errAccumulator, hosts map[string]string) {
+func validateExtraHosts(a *Accumulator, hosts map[string]string) {
 	for host, addr := range hosts {
 		if !rxHostname.MatchString(host) {
-			a.add("hostname does not match "+rxHostname.String(), host)
+			a.Add("hostname does not match "+rxHostname.String(), host)
 			continue
 		}
 		if addr == "host-gateway" {
 			continue
 		}
 		if net.ParseIP(addr) == nil {
-			a.add(fmt.Sprintf(`%q must be an IPv4/IPv6 address or the literal "host-gateway"`, addr), host)
+			a.Add(fmt.Sprintf(`%q must be an IPv4/IPv6 address or the literal "host-gateway"`, addr), host)
 		}
 	}
 }
 
-func (s *ContainerShellSpec) validate(a *errAccumulator) {
+func (s *ContainerShellSpec) validate(a *Accumulator) {
 	if s.Default != nil {
 		v := *s.Default
 		// "" is treated as bash by the generator; anything else must be in
 		// the SupportedShells closed set.
 		if v != "" && !slices.Contains(SupportedShells, v) {
-			a.add(`default must be one of "`+strings.Join(SupportedShells, `", "`)+`"`, "default")
+			a.Add(`default must be one of "`+strings.Join(SupportedShells, `", "`)+`"`, "default")
 		}
 	}
-	checkMapKeys(a.at("aliases"), s.Aliases, rxAliasKey, "container.shell.aliases")
-	checkMapKeys(a.at("env"), s.Env, rxShellEnvKey, "container.shell.env")
+	CheckMapKeys(a.At("aliases"), s.Aliases, rxAliasKey, "container.shell.aliases")
+	CheckMapKeys(a.At("env"), s.Env, rxShellEnvKey, "container.shell.env")
 }
 
-func (p *PluginsSpec) validate(a *errAccumulator) {
+func (p *PluginsSpec) validate(a *Accumulator) {
 	for i, id := range p.Enable {
 		if !rxPluginID.MatchString(id) {
-			a.add("plugin id does not match "+rxPluginID.String(), "enable", fmt.Sprintf("%d", i))
+			a.Add("plugin id does not match "+rxPluginID.String(), "enable", fmt.Sprintf("%d", i))
 		}
 	}
-	if hasDuplicates(p.Enable) {
-		a.add("plugins.enable contains duplicate entries", "enable")
+	if HasDuplicates(p.Enable) {
+		a.Add("plugins.enable contains duplicate entries", "enable")
 	}
 	for name, ov := range p.Versions {
 		if ov.Pin == "" {
-			a.add("pin must not be empty", "versions", name, "pin")
+			a.Add("pin must not be empty", "versions", name, "pin")
 		}
 		if ov.ChecksumAmd64 != nil && !rxSha256.MatchString(*ov.ChecksumAmd64) {
-			a.add("checksum_amd64 must be 64 lowercase hex chars", "versions", name, "checksum_amd64")
+			a.Add("checksum_amd64 must be 64 lowercase hex chars", "versions", name, "checksum_amd64")
 		}
 		if ov.ChecksumArm64 != nil && !rxSha256.MatchString(*ov.ChecksumArm64) {
-			a.add("checksum_arm64 must be 64 lowercase hex chars", "versions", name, "checksum_arm64")
+			a.Add("checksum_arm64 must be 64 lowercase hex chars", "versions", name, "checksum_arm64")
 		}
 	}
 	// Sort plugin ids so ValidationError.Error()'s "first error"
@@ -598,38 +607,38 @@ func (p *PluginsSpec) validate(a *errAccumulator) {
 	for _, id := range methodIDs {
 		method := p.Methods[id]
 		if !rxPluginID.MatchString(id) {
-			a.add("plugin id does not match "+rxPluginID.String(), "methods", id)
+			a.Add("plugin id does not match "+rxPluginID.String(), "methods", id)
 		}
 		if !rxPluginMethod.MatchString(method) {
-			a.add("method name does not match "+rxPluginMethod.String(), "methods", id)
+			a.Add("method name does not match "+rxPluginMethod.String(), "methods", id)
 		}
 	}
 }
 
-func (p *PortsSpec) validate(a *errAccumulator) {
+func (p *PortsSpec) validate(a *Accumulator) {
 	validatePortsForward(a, p.Forward)
 }
 
-func (s *AptSpec) validate(a *errAccumulator) {
+func (s *AptSpec) validate(a *Accumulator) {
 	if s.Mirror != nil {
-		s.Mirror.validate(a.at("mirror"))
+		s.Mirror.validate(a.At("mirror"))
 	}
 	if s.Proxy != nil {
-		s.Proxy.validate(a.at("proxy"))
+		s.Proxy.validate(a.At("proxy"))
 	}
 	seenNames := map[string]int{}
 	for i, src := range s.Sources {
 		idx := fmt.Sprintf("%d", i)
-		src.validate(a.at("sources", idx), i, seenNames)
+		src.validate(a.At("sources", idx), i, seenNames)
 	}
 }
 
-func (m *AptMirror) validate(a *errAccumulator) {
+func (m *AptMirror) validate(a *Accumulator) {
 	switch {
 	case !isHTTPURL(m.URL):
-		a.add("url must start with http:// or https://", "url")
+		a.Add("url must start with http:// or https://", "url")
 	case containsUnsafeForSed(m.URL):
-		a.add("url must not contain whitespace, control characters, "+
+		a.Add("url must not contain whitespace, control characters, "+
 			"or any of `'`, `|`, `&`, `\\` (would corrupt the generated "+
 			"sed RUN block)", "url")
 	}
@@ -652,46 +661,46 @@ func containsUnsafeForSed(s string) bool {
 	return false
 }
 
-func (p *AptProxy) validate(a *errAccumulator) {
+func (p *AptProxy) validate(a *Accumulator) {
 	if p.HTTP != nil && !isHTTPURL(*p.HTTP) {
-		a.add("http must start with http:// or https://", "http")
+		a.Add("http must start with http:// or https://", "http")
 	}
 	if p.HTTPS != nil && !isHTTPURL(*p.HTTPS) {
-		a.add("https must start with http:// or https://", "https")
+		a.Add("https must start with http:// or https://", "https")
 	}
 }
 
-func (src *AptSource) validate(a *errAccumulator, i int, seen map[string]int) {
+func (src *AptSource) validate(a *Accumulator, i int, seen map[string]int) {
 	switch {
 	case !rxAptName.MatchString(src.Name):
-		a.add("name does not match "+rxAptName.String(), "name")
+		a.Add("name does not match "+rxAptName.String(), "name")
 	default:
 		if prev, dup := seen[src.Name]; dup {
-			a.add(fmt.Sprintf("name duplicates entry [%d]", prev), "name")
+			a.Add(fmt.Sprintf("name duplicates entry [%d]", prev), "name")
 		} else {
 			seen[src.Name] = i
 		}
 	}
 	if !rxAptSuite.MatchString(src.Suite) {
-		a.add("suite does not match "+rxAptSuite.String(), "suite")
+		a.Add("suite does not match "+rxAptSuite.String(), "suite")
 	}
 	if len(src.Components) == 0 {
-		a.add("components must not be empty", "components")
+		a.Add("components must not be empty", "components")
 	}
 	for ci, comp := range src.Components {
 		if !rxAptComponent.MatchString(comp) {
-			a.add("component does not match "+rxAptComponent.String(),
+			a.Add("component does not match "+rxAptComponent.String(),
 				"components", fmt.Sprintf("%d", ci))
 		}
 	}
 	if !isHTTPURL(src.URL) {
-		a.add("url must start with http:// or https://", "url")
+		a.Add("url must start with http:// or https://", "url")
 	}
 	if !isHTTPURL(src.KeyURL) {
-		a.add("key_url must start with http:// or https://", "key_url")
+		a.Add("key_url must start with http:// or https://", "key_url")
 	}
 	if src.Arch != nil && !rxAptArch.MatchString(*src.Arch) {
-		a.add("arch must be one of amd64/arm64/i386/armhf/ppc64el/s390x", "arch")
+		a.Add("arch must be one of amd64/arm64/i386/armhf/ppc64el/s390x", "arch")
 	}
 }
 
@@ -699,30 +708,30 @@ func isHTTPURL(s string) bool {
 	return strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "https://")
 }
 
-func (l *LocaleSpec) validate(a *errAccumulator) {
+func (l *LocaleSpec) validate(a *Accumulator) {
 	if l.Lang != nil && !rxLang.MatchString(*l.Lang) {
-		a.add("lang does not match "+rxLang.String(), "lang")
+		a.Add("lang does not match "+rxLang.String(), "lang")
 	}
 }
 
-func (g *GitIdentitySpec) validate(a *errAccumulator) {
+func (g *GitIdentitySpec) validate(a *Accumulator) {
 	if g.UserEmail != nil && !rxEmail.MatchString(*g.UserEmail) {
-		a.add("user_email does not match "+rxEmail.String(), "user_email")
+		a.Add("user_email does not match "+rxEmail.String(), "user_email")
 	}
 }
 
 // No-op hook (only field is enable: bool); kept so future fields slot in
 // without re-wiring runValidate.
-func (*CertificatesSpec) validate(_ *errAccumulator) {}
+func (*CertificatesSpec) validate(_ *Accumulator) {}
 
-func (m *Mount) validate(a *errAccumulator) {
+func (m *Mount) validate(a *Accumulator) {
 	if m.Source == "" {
-		a.add("source must not be empty", "source")
+		a.Add("source must not be empty", "source")
 	}
 	if !rxAbsolutePath.MatchString(m.Target) {
-		a.add("target must be an absolute path", "target")
+		a.Add("target must be an absolute path", "target")
 	} else if !rxMountTarget.MatchString(m.Target) {
-		a.add("target may contain only [A-Za-z0-9._/-] and the ${USERNAME} "+
+		a.Add("target may contain only [A-Za-z0-9._/-] and the ${USERNAME} "+
 			"placeholder (quotes, backticks, $, :, whitespace are rejected "+
 			"because the target flows unquoted into the generated Dockerfile "+
 			"ENV and the docker-compose volume spec)", "target")
@@ -740,41 +749,41 @@ func rxHomeFilesSegmentPath(p string) bool {
 	return true
 }
 
-func (h *HomeFilesSpec) validate(a *errAccumulator) {
-	if hasDuplicates(h.Files) {
-		a.add("files contains duplicate entries", "files")
+func (h *HomeFilesSpec) validate(a *Accumulator) {
+	if HasDuplicates(h.Files) {
+		a.Add("files contains duplicate entries", "files")
 	}
 	for i, p := range h.Files {
 		idx := fmt.Sprintf("%d", i)
 		switch {
 		case p == "":
-			a.add("entry must not be empty", "files", idx)
+			a.Add("entry must not be empty", "files", idx)
 		case strings.HasPrefix(p, "/"):
-			a.add("entry must be relative to ~/ (no leading /)", "files", idx)
+			a.Add("entry must be relative to ~/ (no leading /)", "files", idx)
 		case strings.HasPrefix(p, "~"):
-			a.add("entry must not start with ~ (~/ is implied)", "files", idx)
+			a.Add("entry must not start with ~ (~/ is implied)", "files", idx)
 		case strings.HasPrefix(p, "./") || strings.HasPrefix(p, "../"):
-			a.add("entry must not start with ./ or ../", "files", idx)
+			a.Add("entry must not start with ./ or ../", "files", idx)
 		case strings.Contains(p, ":"):
-			a.add("entry must not contain `:` (would corrupt the docker-compose volume spec)", "files", idx)
+			a.Add("entry must not contain `:` (would corrupt the docker-compose volume spec)", "files", idx)
 		case strings.HasSuffix(p, "/"):
-			a.add("entry must not end with / (files only, not directories)", "files", idx)
+			a.Add("entry must not end with / (files only, not directories)", "files", idx)
 		default:
 			rejected := false
 			for _, seg := range strings.Split(p, "/") {
 				if seg == ".." {
-					a.add("entry must not contain `..` segments", "files", idx)
+					a.Add("entry must not contain `..` segments", "files", idx)
 					rejected = true
 					break
 				}
 				if seg == "" {
-					a.add("entry must not contain empty segments (// or trailing /)", "files", idx)
+					a.Add("entry must not contain empty segments (// or trailing /)", "files", idx)
 					rejected = true
 					break
 				}
 			}
 			if !rejected && !rxHomeFilesSegmentPath(p) {
-				a.add(
+				a.Add(
 					"entry must match [A-Za-z0-9._/-]+ "+
 						"(shell-special characters like $, `, ;, &, |, spaces, "+
 						"quotes are rejected because home_files paths flow into "+
@@ -787,47 +796,47 @@ func (h *HomeFilesSpec) validate(a *errAccumulator) {
 }
 
 //nolint:gocognit,gocyclo // composed of small per-service checks; splitting hurts readability.
-func (w *Workspace) validateServices(a *errAccumulator) {
+func (w *Workspace) validateServices(a *Accumulator) {
 	if len(w.Services) == 0 {
 		return
 	}
 	main := w.Container.ServiceName
 	if _, collide := w.Services[main]; collide {
-		a.add(fmt.Sprintf(
+		a.Add(fmt.Sprintf(
 			`[services.%s] collides with [container].service_name = %q. Rename one of them.`,
 			main, main,
 		), "services")
 	}
 	for name, spec := range w.Services {
-		scope := a.at("services", name)
+		scope := a.At("services", name)
 		if !rxServiceName.MatchString(name) {
-			a.add("service name does not match "+rxServiceName.String(), "services", name)
+			a.Add("service name does not match "+rxServiceName.String(), "services", name)
 		}
 		if spec.Image == "" {
-			scope.add("image must not be empty", "image")
+			scope.Add("image must not be empty", "image")
 		}
 		if spec.Env != nil {
-			checkMapKeys(scope.at("env"), spec.Env, rxEnvKey, "services.env")
+			CheckMapKeys(scope.At("env"), spec.Env, rxEnvKey, "services.env")
 		}
-		if hasDuplicates(spec.DependsOn) {
-			scope.add("services.depends_on contains duplicate entries", "depends_on")
+		if HasDuplicates(spec.DependsOn) {
+			scope.Add("services.depends_on contains duplicate entries", "depends_on")
 		}
 		for _, dep := range spec.DependsOn {
 			switch dep {
 			case main:
-				scope.add(fmt.Sprintf(
+				scope.Add(fmt.Sprintf(
 					`[services.%s].depends_on references the main service %q. `+
 						`Sidecars cannot depend on the main dev container; the dependency `+
 						`direction is the opposite.`,
 					name, main,
 				), "depends_on")
 			case name:
-				scope.add(fmt.Sprintf(
+				scope.Add(fmt.Sprintf(
 					`[services.%s].depends_on references itself.`, name,
 				), "depends_on")
 			default:
 				if _, ok := w.Services[dep]; !ok {
-					scope.add(fmt.Sprintf(
+					scope.Add(fmt.Sprintf(
 						`[services.%s].depends_on references undefined sidecar %q. `+
 							`Define [services.%s] or remove the dependency.`,
 						name, dep, dep,
@@ -836,20 +845,20 @@ func (w *Workspace) validateServices(a *errAccumulator) {
 			}
 		}
 		if _, hasLocal := spec.Volumes["local"]; hasLocal {
-			scope.add(fmt.Sprintf(
+			scope.Add(fmt.Sprintf(
 				`[services.%s].volumes uses reserved name "local". Pick another volume key.`, name,
 			), "volumes")
 		}
 		for k, v := range spec.Volumes {
 			if !rxAbsolutePath.MatchString(v) {
-				scope.add("volume target must be an absolute path", "volumes", k)
+				scope.Add("volume target must be an absolute path", "volumes", k)
 			}
 		}
 		for i, m := range spec.Mounts {
-			m.validate(scope.at("mounts", fmt.Sprintf("%d", i)))
+			m.validate(scope.At("mounts", fmt.Sprintf("%d", i)))
 		}
 		if spec.Restart != nil && !validRestart(*spec.Restart) {
-			scope.add(fmt.Sprintf(
+			scope.Add(fmt.Sprintf(
 				"restart must be one of no/always/on-failure/unless-stopped (got %q)",
 				*spec.Restart,
 			), "restart")
@@ -857,35 +866,35 @@ func (w *Workspace) validateServices(a *errAccumulator) {
 	}
 }
 
-func (sm *SidecarMount) validate(a *errAccumulator) {
+func (sm *SidecarMount) validate(a *Accumulator) {
 	if sm.Source == "" {
-		a.add("source must not be empty", "source")
+		a.Add("source must not be empty", "source")
 	}
 	if !rxAbsolutePath.MatchString(sm.Target) {
-		a.add("target must be an absolute path", "target")
+		a.Add("target must be an absolute path", "target")
 	}
 }
 
 //nolint:gocognit,gocyclo // straight-line per-entry validation; splitting fragments the rules.
-func (w *Workspace) validateRepositories(a *errAccumulator) {
+func (w *Workspace) validateRepositories(a *Accumulator) {
 	if w.Repositories == nil || len(w.Repositories.Clone) == 0 {
 		return
 	}
-	scope := a.at("repositories", "clone")
+	scope := a.At("repositories", "clone")
 	seenPaths := make(map[string]int, len(w.Repositories.Clone))
 	seenURLs := make(map[string]int, len(w.Repositories.Clone))
 	for i, entry := range w.Repositories.Clone {
 		idx := fmt.Sprintf("%d", i)
 		if entry.URL == "" {
-			scope.add("url must not be empty", idx, "url")
+			scope.Add("url must not be empty", idx, "url")
 		}
 		if entry.Path != nil {
 			p := *entry.Path
 			switch {
 			case hasDotDotSegment(p):
-				scope.add("path must not contain `..` segments", idx, "path")
+				scope.Add("path must not contain `..` segments", idx, "path")
 			case !rxRepoPath.MatchString(p):
-				scope.add(
+				scope.Add(
 					`path must contain only [A-Za-z0-9_./-], not start with "." or "/" `+
 						`(e.g. "foo/bar")`, idx, "path")
 			}
@@ -896,7 +905,7 @@ func (w *Workspace) validateRepositories(a *errAccumulator) {
 		}
 		resolved := ResolveRepoPath(pathField, entry.URL)
 		if resolved == "" {
-			scope.add(fmt.Sprintf(
+			scope.Add(fmt.Sprintf(
 				`[repositories].clone[%d]: cannot derive target path from url=%q; `+
 					`specify `+"`path`"+` explicitly.`,
 				i, entry.URL,
@@ -906,7 +915,7 @@ func (w *Workspace) validateRepositories(a *errAccumulator) {
 		segments := strings.Split(resolved, "/")
 		for _, s := range segments {
 			if s == ".." {
-				scope.add(fmt.Sprintf(
+				scope.Add(fmt.Sprintf(
 					"[repositories].clone[%d].path=%q: must not contain `..` segments "+
 						"(would escape the parent workspace).",
 					i, resolved,
@@ -915,20 +924,20 @@ func (w *Workspace) validateRepositories(a *errAccumulator) {
 			}
 		}
 		if strings.HasPrefix(resolved, "..") {
-			scope.add(fmt.Sprintf(
+			scope.Add(fmt.Sprintf(
 				"[repositories].clone[%d].path=%q: must not contain `..` segments "+
 					"(would escape the parent workspace).",
 				i, resolved,
 			), idx, "path")
 		}
 		if resolved == "workspace-docker" {
-			scope.add(fmt.Sprintf(
+			scope.Add(fmt.Sprintf(
 				"[repositories].clone[%d].path=%q: cannot overwrite workspace-docker itself.",
 				i, resolved,
 			), idx, "path")
 		}
 		if prev, ok := seenPaths[resolved]; ok {
-			scope.add(fmt.Sprintf(
+			scope.Add(fmt.Sprintf(
 				"[repositories].clone[%d].path=%q: collides with entry [%d] (same target dir).",
 				i, resolved, prev,
 			), idx, "path")
@@ -936,7 +945,7 @@ func (w *Workspace) validateRepositories(a *errAccumulator) {
 			seenPaths[resolved] = i
 		}
 		if prev, ok := seenURLs[entry.URL]; ok {
-			scope.add(fmt.Sprintf(
+			scope.Add(fmt.Sprintf(
 				"[repositories].clone[%d].url=%q: duplicates entry [%d].",
 				i, entry.URL, prev,
 			), idx, "url")
@@ -944,20 +953,22 @@ func (w *Workspace) validateRepositories(a *errAccumulator) {
 			seenURLs[entry.URL] = i
 		}
 		if entry.Depth != nil && *entry.Depth < 1 {
-			scope.add("depth must be >= 1", idx, "depth")
+			scope.Add("depth must be >= 1", idx, "depth")
 		}
 	}
 }
 
-func checkMapKeys(a *errAccumulator, m map[string]string, rx *regexp.Regexp, label string) {
+// CheckMapKeys records a FieldError for every key of m that fails rx.
+func CheckMapKeys(a *Accumulator, m map[string]string, rx *regexp.Regexp, label string) {
 	for k := range m {
 		if !rx.MatchString(k) {
-			a.add(fmt.Sprintf("%s key %q does not match pattern %q", label, k, rx.String()), k)
+			a.Add(fmt.Sprintf("%s key %q does not match pattern %q", label, k, rx.String()), k)
 		}
 	}
 }
 
-func hasDuplicates[T comparable](items []T) bool {
+// HasDuplicates reports whether items contains any value more than once.
+func HasDuplicates[T comparable](items []T) bool {
 	seen := make(map[T]struct{}, len(items))
 	for _, v := range items {
 		if _, dup := seen[v]; dup {
