@@ -209,7 +209,7 @@ func promptMissing(opts *scaffoldOpts, cat *i18n.Catalog, p prompter) error {
 }
 
 // finalizeOpts runs the cross-field rules shared by both interactive and
-// non-interactive modes (e.g. tarball implies version_capable).
+// non-interactive modes (e.g. binary implies version_capable).
 func finalizeOpts(opts *scaffoldOpts, cat *i18n.Catalog, stderr io.Writer) error {
 	log := logx.New(io.Discard, stderr)
 	switch opts.template {

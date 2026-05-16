@@ -248,14 +248,14 @@ OK: scaffolded /home/alice/projects/myapp/.cocoon/plugins/gh-cli (2 files)
 | `--requires-root` | install スクリプトを root 実行に。 |
 | `--version-capable` | `$PIN` / `$CHECKSUM_*` の雛形を生成。 |
 | `--template <kind>` | `installer` \| `binary` \| `apt` \| `archive`。 |
-| `--with-install-user` | `install_user.sh` も生成 (`install.sh` の後に非特権ユーザーで走る)。 |
+| `--with-install-user` | `install_user.sh` も生成 (`install.<category>.sh` の後に非特権ユーザーで走る)。 |
 | `--non-interactive` | プロンプトをスキップ (上記すべて要指定)。 |
 | `--force` | `<plugins-dir>/<id>/` が既存なら上書き。 |
 
 **落とし穴:**
 
 - `--plugins-dir` を指定せず、cocoon プロジェクト外 (workspace.toml 未発見) で実行すると、`./plugins/<id>/` に黙って書く代わりに actionable error で停止する。
-- `--template tarball` は `--version-capable` を要求する。`tarball` 単体だと拒否される。
+- `--template binary` は `--version-capable` を要求する。`binary` 単体だと拒否される。
 - scaffold 後、生成された `plugin.toml` は runtime と同じ strict validator で再ロードされる。失敗 (不正な name、`url` 欠落・形式不正、等) すればディレクトリはロールバックされる。
 - `add` 由来の overlay と同様、scaffold 直後でも `[plugins].enable` に `<id>` を追加しないと `gen` で反映されない。
 

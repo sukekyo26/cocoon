@@ -42,7 +42,7 @@ flowchart LR
 
 ## プラグインシステム
 
-cocoon はビルド時にバイナリ内へ 20 のプラグインを同梱します。各プラグインは `internal/plugin/catalog/<id>/{plugin.toml, install.sh}` に置かれ、3 層オーバーレイで読み込まれます。`~/.cocoon/plugins/` や `<project>/.cocoon/plugins/` にファイルを置けば上書きや追加ができます。
+cocoon はビルド時にバイナリ内へプラグインカタログを同梱します。各プラグインは `internal/plugin/catalog/<id>/{plugin.toml, install.<category>.sh}` に置かれ、3 層オーバーレイで読み込まれます。`~/.cocoon/plugins/` や `<project>/.cocoon/plugins/` にファイルを置けば上書きや追加ができます。
 
 ```mermaid
 flowchart TB
@@ -55,7 +55,7 @@ flowchart TB
     embedded --> dockerfile
 ```
 
-ジェネレータは有効化された各プラグインの `install.sh` (および存在すれば `install_user.sh`) を LayeredFS から直接読み込み、シングルクオートの heredoc (`bash <<'COCOON_PLUGIN_EOF' … COCOON_PLUGIN_EOF`) でその内容をそのまま Dockerfile に埋め込みます。スクリプト固有の env (PIN / CHECKSUM_* / RC_FILE 等) は同じ `RUN` 行に並べることで、後段のレイヤに `ENV` として漏らさず当該ステップに閉じ込めます。ホスト側のキャッシュディレクトリは作りません — ビルドはプロジェクトツリー以外を必要としないため、ホストでも dev コンテナ内でも同じように `cocoon gen` が動作します。
+ジェネレータは有効化された各プラグインの `install.<category>.sh` (および存在すれば `install_user.sh`) を LayeredFS から直接読み込み、シングルクオートの heredoc (`bash <<'COCOON_PLUGIN_EOF' … COCOON_PLUGIN_EOF`) でその内容をそのまま Dockerfile に埋め込みます。スクリプト固有の env (PIN / CHECKSUM_* / RC_FILE 等) は同じ `RUN` 行に並べることで、後段のレイヤに `ENV` として漏らさず当該ステップに閉じ込めます。ホスト側のキャッシュディレクトリは作りません — ビルドはプロジェクトツリー以外を必要としないため、ホストでも dev コンテナ内でも同じように `cocoon gen` が動作します。
 
 ## ジェネレータパイプライン
 
@@ -69,7 +69,7 @@ sequenceDiagram
     cfg-->>cli: WorkspaceContext
     cli->>fs: build LayeredFS (project ∪ user ∪ embedded)
     fs-->>cli: fs.FS
-    cli->>gen: dockerfile / compose / devcontainerjson / envfile / shellrc (install.sh は fs.FS 経由で読む)
+    cli->>gen: dockerfile / compose / devcontainerjson / envfile / shellrc (install.<category>.sh は fs.FS 経由で読む)
     gen-->>cli: artifacts
     cli->>cli: write to .devcontainer/
 ```
@@ -80,7 +80,7 @@ sequenceDiagram
 
 ```text
 .devcontainer/
-├── Dockerfile               # プラグインキャッシュを参照するマルチステージビルド
+├── Dockerfile               # コンテナビルド定義。プラグイン install スクリプトを heredoc で埋め込み
 ├── docker-compose.yml       # dev コンテナ + サイドカー用の compose ファイル
 ├── docker-entrypoint.sh     # ユーザーをホスト UID/GID へ再マッピングし、イメージ焼き込み済 ~/.local を named volume へ同期
 ├── .env                     # COMPOSE_PROJECT_NAME, CONTAINER_SERVICE_NAME, USERNAME, IMAGE, IMAGE_VERSION (ホスト非依存)
