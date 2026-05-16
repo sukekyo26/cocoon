@@ -15,6 +15,8 @@ description: 'Bump project version following Semantic Versioning. Use when asked
 | 新機能追加（Added） | **minor** (x.Y.0) |
 | バグ修正のみ（Fixed/Changed/Removed without BREAKING） | **patch** (x.y.Z) |
 
+> **pre-1.0（0.x）の例外**: メジャー 0 系は SemVer §4「初期開発用、いつでも変更してよい」に該当する。BREAKING があっても major（1.0.0）には上げず **minor で吸収する**（0.4.0 → 0.5.0）。1.0.0 は安定版リリースの意思表示なので、プロジェクトの alpha v0.x 方針が続く限り `0.y.z` に留める。
+
 > CHANGELOG のカテゴリは `Added` → `Changed` → `Fixed` → `Removed` の 4 種類のみ。詳細は changelog スキル参照。
 
 `CHANGELOG.md` の `## [Unreleased]` セクションの内容から判断する。
@@ -33,7 +35,15 @@ description: 'Bump project version following Semantic Versioning. Use when asked
 ## 手順
 
 1. `CHANGELOG.md` の `## [Unreleased]` の内容を確認し、SemVer に従いバージョンを決定
-2. **CHANGELOG 相殺チェック**: 同一 Unreleased 内で追加（Added）と削除/変更（Changed/Removed）が相殺する項目を両方削除する（例: 機能Aを追加 → 同バージョン内で機能Aを削除 → 両エントリとも記載しない）
+2. **CHANGELOG 精査（リリース前の必須チェック）**: `## [Unreleased]` は前回リリースからの**正味の差分**を表す。リリース確定前に、英日両ファイル（`CHANGELOG.md` / `docs/CHANGELOG.ja.md`）の `## [Unreleased]` を changelog スキルの基準で見直し、最終的に残すべきエントリだけにする。
+   - **相殺の削除**: 同一 Unreleased 内で追加→削除されて元に戻った変更は、リリース前後で見ると差分ゼロなのでログ自体が不要 → エントリを両方とも削除する。
+     - Added した機能を同バージョン内で Removed した → 両方削除
+     - A→B→A と元に戻った → 削除
+     - A→B→C と変遷した → 最終状態のみ（A→C）を記載
+   - **対象外エントリの除去**: エンドユーザーまたはプラグイン作者の操作・設定・動作が変わらない項目（内部ロジックのリファクタリング、内部関数のリネーム、ファイル移動、テスト追加、CI/lint 設定変更等）が紛れていないか精査し、見つけたら削除する。判断基準と除外リストは changelog スキルの「記載対象」節に従う。
+   - 整理は `CHANGELOG.md`（英語）と `docs/CHANGELOG.ja.md`（日本語）の両方に同じ内容を適用する。
+
+   > 詳細ルール: **changelog スキル**の「同一バージョン内の整理」「記載対象」節を参照。バージョンアップ時の CHANGELOG 検査はこのスキルに委譲する。
 3. 上記 1〜4 を更新（`echo x.y.z > VERSION`、`internal/version/version.go` の `var Version = "..."` を新値に書き換え）
 4. `## [Unreleased]` 見出しは残す（次の開発用）。見出しの下は空にする
 5. `just ci` を実行してグリーンを確認（`internal/version/version.go` 変更で test 影響がないか保険的に）
@@ -62,3 +72,10 @@ description: 'Bump project version following Semantic Versioning. Use when asked
 ```
 
 `## [Unreleased]` と `## [x.y.z]` の間に空行を1つ入れる。
+
+ファイル末尾の比較リンク参照も更新する（英日両ファイル）。`[Unreleased]` の比較元を新バージョンに差し替え、新バージョンの行を1つ追加する:
+
+```markdown
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/vX.Y.Z...HEAD
+[X.Y.Z]: https://github.com/sukekyo26/cocoon/compare/v<前バージョン>...vX.Y.Z
+```
