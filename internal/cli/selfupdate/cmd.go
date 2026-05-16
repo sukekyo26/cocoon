@@ -209,10 +209,15 @@ func sha256File(path string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
+// renameFn is a test seam: it lets the EXDEV copy fallback in
+// atomicReplace be exercised deterministically without a second real
+// filesystem. Production always uses os.Rename.
+var renameFn = os.Rename
+
 // atomicReplace falls back to copy+chmod when src and dst are on
 // different filesystems (os.Rename's EXDEV).
 func atomicReplace(src, dst string) error {
-	if err := os.Rename(src, dst); err == nil {
+	if err := renameFn(src, dst); err == nil {
 		return nil
 	}
 	in, err := os.Open(src) //nolint:gosec // src is mktemp-d temporary path.
@@ -234,7 +239,7 @@ func atomicReplace(src, dst string) error {
 		_ = os.Remove(tmp)
 		return fmt.Errorf("close %s: %w", tmp, err)
 	}
-	if err := os.Rename(tmp, dst); err != nil {
+	if err := renameFn(tmp, dst); err != nil {
 		_ = os.Remove(tmp)
 		return fmt.Errorf("rename %s -> %s: %w", tmp, dst, err)
 	}
