@@ -53,7 +53,7 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 	return cmd
 }
 
-// rejectUnknownSubcommand returns an clihelpers.ErrUsage-wrapped error when a stray
+// rejectUnknownSubcommand returns a clihelpers.ErrUsage-wrapped error when a stray
 // positional appears under a parent that only carries subcommands.
 func rejectUnknownSubcommand(_ *cobra.Command, args []string) error {
 	if len(args) == 0 {
