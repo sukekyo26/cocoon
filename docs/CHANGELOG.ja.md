@@ -10,6 +10,7 @@ cocoon の主要な変更を記録します。フォーマットは
 
 - `[container]` に 4 つのオプションフィールドを追加しました。それぞれ対応する Compose の `services:` 属性に出力されます: `group_add` (コンテナユーザーの補助グループ — グループ名または数値 GID)、`devices` (ホストデバイスのマッピング `HOST:CONTAINER[:rwm]`)、`ipc` (IPC 名前空間モード。共有メモリを要する ML 用途では `"host"` など)、`gpus` (GPU アクセス。現状 `"all"` のみサポート)。`cocoon init` は 4 フィールドのコメントアウト済みテンプレートを `[container]` 配下に書き出します。
 - `docker-cli` プラグインが有効なのに `[container].docker_socket` が未設定のとき、`cocoon gen` が警告するようになりました — コンテナ内の Docker クライアントが接続できる daemon ソケットが無いため、`docker` コマンドは実行時に失敗します。警告は修正方法 (`[container]` に `docker_socket = true`) を示し、リモートの `DOCKER_HOST` に接続する構成では無視してよい旨も伝えます。`cocoon init` も `[container]` 配下にコメントアウト済みの `docker_socket` テンプレート行を書き出すようになりました。
+- `cocoon gen` が `.devcontainer/manage.sh` も書き出すようになりました。ホスト側で実行するプロジェクト単位の Docker クリーン / リビルド用ヘルパーです。`./.devcontainer/manage.sh clean` はこのプロジェクトのコンテナ・ネットワーク・ボリューム・ローカルビルド済みイメージを一括削除します。`clean containers` / `clean image` / `clean volumes` は 1 種類のリソースだけを削除し他は残します (例: `clean volumes` はビルド済みイメージを残すので高速リビルドできます)。`rebuild` は `--no-cache` でイメージを再ビルドしコンテナを再生成します。`prune-cache` は Docker のビルドキャッシュを prune します (他と違い構造上プロジェクト単位にスコープできないため全体対象です)。破壊的なコマンドは `-y` を渡さない限り実行前に確認します。スコープは自動 — スクリプトは生成された compose ファイルに対して `docker compose` を駆動するので、無関係なプロジェクトには触れません。
 
 ### 変更
 

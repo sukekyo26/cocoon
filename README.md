@@ -39,9 +39,25 @@ A ~30-line `workspace.toml` is the source of truth. `cocoon gen` regenerates the
 | `docker-compose.yml` | Service + named volumes + ports + optional sidecars |
 | `devcontainer.json` | VS Code Reopen-in-Container support (skippable) |
 | `docker-entrypoint.sh` | Remaps the container user to the host UID/GID, then restores image-baked binaries, on each start |
+| `manage.sh` | Project-scoped Docker clean / rebuild helper (run on the host) |
 | `.env` | `COMPOSE_PROJECT_NAME`, `CONTAINER_SERVICE_NAME`, `USERNAME`, IMAGE / IMAGE_VERSION — host-independent, safe to commit |
 
 The same artifacts power both `docker compose up` from the CLI and VS Code's "Reopen in Container".
+
+### Cleaning up and rebuilding
+
+Docker accumulates unused images, volumes, and build cache that eat disk. `.devcontainer/manage.sh` cleans up or rebuilds **only this project's** resources — scoping is automatic because the script drives `docker compose` against the generated compose file.
+
+```bash
+./.devcontainer/manage.sh clean             # containers + networks + volumes + built image
+./.devcontainer/manage.sh clean containers  # containers only (networks, volumes, image kept)
+./.devcontainer/manage.sh clean image       # containers + networks + built image (volume data kept)
+./.devcontainer/manage.sh clean volumes     # containers + networks + volumes (built image kept — fast rebuild)
+./.devcontainer/manage.sh rebuild           # rebuild the image with --no-cache and recreate the container
+./.devcontainer/manage.sh prune-cache       # prune the GLOBAL Docker build cache (affects every project)
+```
+
+Destructive commands ask for confirmation first; pass `-y` to skip it. Build cache cannot be scoped to one project, so `prune-cache` is global by nature — it is deliberately separate from `clean`. Run `./.devcontainer/manage.sh -h` for the full command list.
 
 ## Requirements
 
