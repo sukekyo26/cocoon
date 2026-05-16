@@ -282,6 +282,9 @@ func applyDefaults(ans initAnswers, plugins map[string]*plugin.Plugin) (initAnsw
 	if !ans.PluginMethodsSet {
 		ans.PluginMethods, ans.PluginMethodsSet = nil, true
 	}
+	if !ans.PluginVersionsSet {
+		ans.PluginVersions, ans.PluginVersionsSet = nil, true
+	}
 	return ans, nil
 }
 
