@@ -84,6 +84,10 @@ packages = []
 				{path: ".devcontainer/docker-entrypoint.sh", mustContain: []string{
 					"#!/bin/bash", "$HOME/.image-local", "setpriv",
 				}},
+				{path: ".devcontainer/manage.sh", mustContain: []string{
+					"#!/usr/bin/env bash", "prune-cache",
+					"docker compose -f", "down --volumes --rmi local",
+				}},
 			},
 		},
 		{

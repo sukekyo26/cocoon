@@ -69,9 +69,16 @@ func TestGen_DefaultRun(t *testing.T) {
 		".devcontainer/Dockerfile",
 		".devcontainer/docker-compose.yml",
 		".devcontainer/devcontainer.json",
+		".devcontainer/manage.sh",
 	} {
 		if _, statErr := os.Stat(filepath.Join(work, rel)); statErr != nil {
 			t.Errorf("expected %s to exist: %v", rel, statErr)
+		}
+	}
+
+	if info, statErr := os.Stat(filepath.Join(work, ".devcontainer/manage.sh")); statErr == nil {
+		if perm := info.Mode().Perm(); perm != 0o755 {
+			t.Errorf("manage.sh mode = %o, want 0755", perm)
 		}
 	}
 
@@ -80,9 +87,11 @@ func TestGen_DefaultRun(t *testing.T) {
 		"wrote .devcontainer/Dockerfile",
 		"wrote .devcontainer/docker-compose.yml",
 		"wrote .devcontainer/devcontainer.json",
+		"wrote .devcontainer/manage.sh",
 		"To start the container:",
 		"docker compose -f .devcontainer/docker-compose.yml up -d",
 		`Reopen in Container`,
+		"./.devcontainer/manage.sh -h",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("stdout missing %q\n--- got ---\n%s", want, out)
