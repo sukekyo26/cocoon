@@ -208,3 +208,51 @@ func TestAtomicReplace(t *testing.T) {
 		t.Errorf("src still exists after rename (err = %v)", err)
 	}
 }
+
+// errSimulatedEXDEV stands in for the cross-filesystem rename failure
+// (syscall.EXDEV) that atomicReplace's copy fallback exists to handle.
+var errSimulatedEXDEV = errors.New("simulated cross-device rename")
+
+// TestAtomicReplace_EXDEVFallback exercises the copy fallback: the
+// renameFn seam fails the cross-directory fast path (as os.Rename would
+// across filesystems — runSelfUpdate downloads into the system temp dir
+// while the installed binary may live elsewhere), so atomicReplace must
+// copy src onto dst and leave no temp file behind. The same-directory
+// tmp -> dst rename inside the fallback is allowed through to os.Rename.
+//
+//nolint:paralleltest // mutates the package-level renameFn seam
+func TestAtomicReplace_EXDEVFallback(t *testing.T) {
+	orig := renameFn
+	t.Cleanup(func() { renameFn = orig })
+	renameFn = func(oldpath, newpath string) error {
+		if filepath.Dir(oldpath) != filepath.Dir(newpath) {
+			return errSimulatedEXDEV
+		}
+		return os.Rename(oldpath, newpath)
+	}
+
+	dstDir := t.TempDir()
+	src := filepath.Join(t.TempDir(), "new-binary") // separate dir => fast path "fails"
+	dst := filepath.Join(dstDir, "cocoon")
+	content := []byte("#!/bin/sh\necho fallback\n")
+	if err := os.WriteFile(src, content, 0o600); err != nil {
+		t.Fatalf("write src: %v", err)
+	}
+	if err := os.WriteFile(dst, []byte("old"), 0o600); err != nil {
+		t.Fatalf("write dst: %v", err)
+	}
+
+	if err := atomicReplace(src, dst); err != nil {
+		t.Fatalf("atomicReplace via fallback: %v", err)
+	}
+	got, err := os.ReadFile(dst)
+	if err != nil {
+		t.Fatalf("read dst: %v", err)
+	}
+	if string(got) != string(content) {
+		t.Errorf("dst content = %q, want %q", got, content)
+	}
+	if _, err := os.Stat(dst + ".cocoon-update.tmp"); !os.IsNotExist(err) {
+		t.Errorf("fallback left its temp file behind (err = %v)", err)
+	}
+}
