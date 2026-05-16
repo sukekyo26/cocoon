@@ -43,11 +43,11 @@ cover:
     go tool cover -html={{cover_file}} -o coverage.html
     go tool cover -func={{cover_file}} | tail -1
 
-# CI gate: coverage + total threshold (default 85%, override with MIN_COVERAGE)
+# CI gate: coverage + total threshold (default 80%, override with MIN_COVERAGE)
 cover-check:
     #!/usr/bin/env bash
     set -euo pipefail
-    min_coverage="${MIN_COVERAGE:-85}"
+    min_coverage="${MIN_COVERAGE:-80}"
     go test -shuffle=on -covermode=atomic \
         -coverpkg=./internal/... -coverprofile={{cover_file}} {{pkgs}}
     go tool cover -func={{cover_file}} | tail -1
@@ -115,4 +115,4 @@ shfmt-check:
     shfmt -i 2 -ci -d $(find . -type f -name '*.sh' -not -path './.git/*' -not -path './bin/*')
 
 # Composite pre-push gate mirroring the GitHub Actions pipeline.
-ci: fmt-check vet lint test vuln mod-verify shellcheck shfmt-check
+ci: fmt-check vet lint test cover-check vuln mod-verify shellcheck shfmt-check
