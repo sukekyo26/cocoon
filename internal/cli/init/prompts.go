@@ -21,20 +21,36 @@ import (
 // left the cursor stuck under scrolling options; independent forms side-step
 // it. Tradeoff: no shift+tab back-nav; re-run `cocoon init` to fix.
 //
-//nolint:funlen,gocognit,gocyclo // sequence of independent prompt steps; splitting hides intent.
+// The three groups run in screen order: identity + base image, then the
+// workspace options, then the plugin selection.
 func promptForMissing(ans initAnswers, cat *i18n.Catalog, plugins map[string]*plugin.Plugin) (initAnswers, error) {
+	if err := promptIdentityAndImage(&ans, cat); err != nil {
+		return ans, err
+	}
+	if err := promptWorkspaceOptions(&ans, cat); err != nil {
+		return ans, err
+	}
+	if err := promptPluginSelection(&ans, cat, plugins); err != nil {
+		return ans, err
+	}
+	return ans, nil
+}
+
+// promptIdentityAndImage prompts for service-name, username, base image,
+// image version, and login shell.
+func promptIdentityAndImage(ans *initAnswers, cat *i18n.Catalog) error {
 	if ans.ServiceName == "" {
 		if err := runStrictIdentForm(cat, "init_prompt_service_name",
 			"init_desc_service_name", "init_err_service_name_fmt",
 			rxServiceName, &ans.ServiceName); err != nil {
-			return ans, err
+			return err
 		}
 	}
 	if ans.Username == "" {
 		if err := runStrictIdentForm(cat, "init_prompt_username",
 			"init_desc_username", "init_err_username_fmt",
 			rxUsername, &ans.Username); err != nil {
-			return ans, err
+			return err
 		}
 	}
 	if !ans.ImageSet {
@@ -42,7 +58,7 @@ func promptForMissing(ans initAnswers, cat *i18n.Catalog, plugins map[string]*pl
 			ans.Image = "ubuntu"
 		}
 		if err := runSingleFieldForm(imageSelect(cat, &ans.Image)); err != nil {
-			return ans, err
+			return err
 		}
 		ans.ImageSet = true
 	}
@@ -57,59 +73,73 @@ func promptForMissing(ans initAnswers, cat *i18n.Catalog, plugins map[string]*pl
 			Description(cat.Msg("init_desc_image_version_static")).
 			Validate(versionStringValidator(cat, "init_err_image_version_fmt", ""))
 		if err := runSingleFieldForm(field); err != nil {
-			return ans, err
+			return err
 		}
 		ans.ImageVersionSet = true
 	}
 	if !ans.ShellSet {
 		ans.Shell = "bash"
 		if err := runSingleFieldForm(shellSelect(cat, &ans.Shell)); err != nil {
-			return ans, err
+			return err
 		}
 		ans.ShellSet = true
 	}
+	return nil
+}
+
+// promptWorkspaceOptions prompts for alias bundles, mount root, the
+// devcontainer / certificates toggles, ports, and apt categories.
+func promptWorkspaceOptions(ans *initAnswers, cat *i18n.Catalog) error {
 	if !ans.AliasBundlesSet {
 		ans.AliasBundles = aliasbundles.DefaultAliasBundleIDs()
 		if err := runSingleFieldForm(aliasBundlesMultiSelect(cat, &ans.AliasBundles)); err != nil {
-			return ans, err
+			return err
 		}
 		ans.AliasBundlesSet = true
 	}
 	if !ans.MountRootSet {
 		ans.MountRoot = "."
 		if err := runSingleFieldForm(mountRootSelect(cat, &ans.MountRoot)); err != nil {
-			return ans, err
+			return err
 		}
 		ans.MountRootSet = true
 	}
 	if !ans.DevcontainerSet {
 		ans.Devcontainer = true
 		if err := runSingleFieldForm(devcontainerConfirm(cat, &ans.Devcontainer)); err != nil {
-			return ans, err
+			return err
 		}
 		ans.DevcontainerSet = true
 	}
 	if !ans.CertificatesSet {
 		ans.Certificates = false
 		if err := runSingleFieldForm(certificatesConfirm(cat, &ans.Certificates)); err != nil {
-			return ans, err
+			return err
 		}
 		ans.CertificatesSet = true
 	}
 	if !ans.PortsSet {
 		ports, err := promptForPorts(cat)
 		if err != nil {
-			return ans, err
+			return err
 		}
 		ans.Ports, ans.PortsSet = ports, true
 	}
 	if !ans.AptSet {
 		ans.AptCategories = aptcategories.DefaultAptCategoryIDs()
 		if err := runSingleFieldForm(aptMultiSelect(cat, &ans.AptCategories)); err != nil {
-			return ans, err
+			return err
 		}
 		ans.AptSet = true
 	}
+	return nil
+}
+
+// promptPluginSelection prompts for the enabled plugins, then their install
+// methods, then their version pins. Method prompts run BEFORE version prompts
+// because picking a method may change the upstream URL shown beside the
+// version picker (e.g. official installer page vs. GitHub Releases).
+func promptPluginSelection(ans *initAnswers, cat *i18n.Catalog, plugins map[string]*plugin.Plugin) error {
 	if !ans.PluginsSet {
 		// Hide plugins whose toolchain duplicates the chosen base image so the
 		// user cannot accidentally pick a combination validateImagePluginConflict
@@ -117,21 +147,17 @@ func promptForMissing(ans initAnswers, cat *i18n.Catalog, plugins map[string]*pl
 		excludeID := config.ImageProvidesPlugin[ans.Image]
 		ans.Plugins = filterPluginIDs(defaultPluginIDs(plugins), excludeID)
 		if err := promptPluginsWithRetry(cat, plugins, excludeID, &ans.Plugins); err != nil {
-			return ans, err
+			return err
 		}
 		ans.PluginsSet = true
 	}
-	// Method prompts run BEFORE version prompts because picking a method may
-	// change the upstream URL shown beside the version picker (e.g. official
-	// installer page vs. GitHub Releases). Allocate the map up front for the
-	// same reason promptPluginVersionsForCapable does: an empty map is the
-	// "use default_method everywhere" signal, indistinguishable from nil for
-	// downstream consumers.
+	// Allocate the map up front: an empty map is the "use default_method
+	// everywhere" signal, indistinguishable from nil for downstream consumers.
 	if ans.PluginMethods == nil {
 		ans.PluginMethods = make(map[string]string)
 	}
 	if err := promptPluginMethodsForMulti(cat, plugins, ans.Plugins, ans.PluginMethods); err != nil {
-		return ans, err
+		return err
 	}
 	ans.PluginMethodsSet = true
 	// Allocate the map even if the prompt produces no picks; an empty map
@@ -141,10 +167,10 @@ func promptForMissing(ans initAnswers, cat *i18n.Catalog, plugins map[string]*pl
 		ans.PluginVersions = make(map[string]string)
 	}
 	if err := promptPluginVersionsForCapable(cat, plugins, ans.Plugins, ans.PluginVersions); err != nil {
-		return ans, err
+		return err
 	}
 	ans.PluginVersionsSet = true
-	return ans, nil
+	return nil
 }
 
 // promptPluginsWithRetry re-runs the multi-select on conflict (up to 2 more

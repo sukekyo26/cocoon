@@ -28,27 +28,42 @@ type containerSpec struct {
 
 // renderWorkspaceToml emits workspace.toml. Inline comments come from
 // the i18n catalog so the locale matches the original runner's $LANG
-// (re-run with --force under a different LANG to switch).
-//
-//nolint:funlen // sequence of independent section emits; splitting hides the resulting TOML's top-to-bottom structure.
+// (re-run with --force under a different LANG to switch). The section
+// writers run in the file's top-to-bottom order.
 func renderWorkspaceToml(s containerSpec, cat *i18n.Catalog) string {
 	var sb strings.Builder
 	sb.WriteString(cat.Msg("init_toml_header"))
 	sb.WriteByte('\n')
+	writeWorkspaceSection(&sb, cat, s)
+	writeContainerSection(&sb, cat, s)
+	writeShellSection(&sb, cat, s)
+	writePluginsSection(&sb, cat, s)
+	writeAptSection(&sb, cat, s)
+	writeCertificatesSection(&sb, cat, s)
+	writePortsSection(&sb, cat, s)
+	writeTrailingTemplates(&sb, cat, s)
+	return strings.TrimRight(sb.String(), "\n") + "\n"
+}
 
+// writeWorkspaceSection emits the [workspace] block.
+func writeWorkspaceSection(sb *strings.Builder, cat *i18n.Catalog, s containerSpec) {
 	sb.WriteString(cat.Msg("init_toml_section_workspace"))
 	sb.WriteByte('\n')
 	sb.WriteString("[workspace]\n")
-	fmt.Fprintf(&sb, "mount_root = %q\n", s.MountRoot)
-	fmt.Fprintf(&sb, "devcontainer = %t\n\n", s.Devcontainer)
+	fmt.Fprintf(sb, "mount_root = %q\n", s.MountRoot)
+	fmt.Fprintf(sb, "devcontainer = %t\n\n", s.Devcontainer)
+}
 
+// writeContainerSection emits the [container] block followed by the
+// commented-out templates for its opt-in extras.
+func writeContainerSection(sb *strings.Builder, cat *i18n.Catalog, s containerSpec) {
 	sb.WriteString(cat.Msg("init_toml_section_container"))
 	sb.WriteByte('\n')
 	sb.WriteString("[container]\n")
-	fmt.Fprintf(&sb, "service_name = %q\n", s.ServiceName)
-	fmt.Fprintf(&sb, "username = %q\n", s.Username)
-	fmt.Fprintf(&sb, "image = %q\n", s.Image)
-	fmt.Fprintf(&sb, "image_version = %q\n\n", s.ImageVersion)
+	fmt.Fprintf(sb, "service_name = %q\n", s.ServiceName)
+	fmt.Fprintf(sb, "username = %q\n", s.Username)
+	fmt.Fprintf(sb, "image = %q\n", s.Image)
+	fmt.Fprintf(sb, "image_version = %q\n\n", s.ImageVersion)
 
 	// Commented-out templates for [container] opt-in extras. The flat-field
 	// templates come first so an uncommented line still belongs to
@@ -60,7 +75,7 @@ func renderWorkspaceToml(s containerSpec, cat *i18n.Catalog) string {
 		"init_toml_template_container_ipc",
 		"init_toml_template_container_gpus",
 	} {
-		emitTemplate(&sb, cat, key)
+		emitTemplate(sb, cat, key)
 	}
 	for _, key := range []string{
 		"init_toml_template_container_resources",
@@ -71,20 +86,27 @@ func renderWorkspaceToml(s containerSpec, cat *i18n.Catalog) string {
 		"init_toml_template_container_security_opt",
 		"init_toml_template_container_skel",
 	} {
-		emitTemplate(&sb, cat, key)
+		emitTemplate(sb, cat, key)
 	}
+}
 
+// writeShellSection emits the [container.shell] block.
+func writeShellSection(sb *strings.Builder, cat *i18n.Catalog, s containerSpec) {
 	sb.WriteString(cat.Msg("init_toml_section_container_shell"))
 	sb.WriteByte('\n')
 	sb.WriteString("[container.shell]\n")
-	fmt.Fprintf(&sb, "default = %q\n", s.Shell)
+	fmt.Fprintf(sb, "default = %q\n", s.Shell)
 	if len(s.Aliases) > 0 {
 		sb.WriteString("aliases = ")
-		writeInlineTable(&sb, s.Aliases)
+		writeInlineTable(sb, s.Aliases)
 		sb.WriteByte('\n')
 	}
 	sb.WriteByte('\n')
+}
 
+// writePluginsSection emits the [plugins] block plus the [plugins.methods]
+// and [plugins.versions] sub-blocks.
+func writePluginsSection(sb *strings.Builder, cat *i18n.Catalog, s containerSpec) {
 	sb.WriteString(cat.Msg("init_toml_section_plugins"))
 	sb.WriteByte('\n')
 	sb.WriteString("[plugins]\n")
@@ -93,14 +115,18 @@ func renderWorkspaceToml(s containerSpec, cat *i18n.Catalog) string {
 	} else {
 		sb.WriteString("enable = [\n")
 		for _, id := range s.Plugins {
-			fmt.Fprintf(&sb, "    %q,\n", id)
+			fmt.Fprintf(sb, "    %q,\n", id)
 		}
 		sb.WriteString("]\n\n")
 	}
 
-	writePluginMethods(&sb, cat, s.PluginMethods)
-	writePluginVersions(&sb, cat, s.PluginVersions)
+	writePluginMethods(sb, cat, s.PluginMethods)
+	writePluginVersions(sb, cat, s.PluginVersions)
+}
 
+// writeAptSection emits the [apt] block followed by its commented-out
+// templates.
+func writeAptSection(sb *strings.Builder, cat *i18n.Catalog, s containerSpec) {
 	sb.WriteString(cat.Msg("init_toml_section_apt"))
 	sb.WriteByte('\n')
 	sb.WriteString("[apt]\n")
@@ -109,7 +135,7 @@ func renderWorkspaceToml(s containerSpec, cat *i18n.Catalog) string {
 	} else {
 		sb.WriteString("packages = [\n")
 		for _, pkg := range s.Packages {
-			fmt.Fprintf(&sb, "    %q,\n", pkg)
+			fmt.Fprintf(sb, "    %q,\n", pkg)
 		}
 		sb.WriteString("]\n\n")
 	}
@@ -119,37 +145,46 @@ func renderWorkspaceToml(s containerSpec, cat *i18n.Catalog) string {
 		"init_toml_template_apt_proxy",
 		"init_toml_template_apt_sources",
 	} {
-		emitTemplate(&sb, cat, key)
+		emitTemplate(sb, cat, key)
 	}
+}
 
-	if s.Certificates {
-		sb.WriteString(cat.Msg("init_toml_section_certificates"))
-		sb.WriteByte('\n')
-		sb.WriteString("[certificates]\n")
-		sb.WriteString("enable = true\n\n")
+// writeCertificatesSection emits an active [certificates] block only when
+// the user opted in; the commented-out template is emitted by
+// writeTrailingTemplates in the opt-out case.
+func writeCertificatesSection(sb *strings.Builder, cat *i18n.Catalog, s containerSpec) {
+	if !s.Certificates {
+		return
 	}
+	sb.WriteString(cat.Msg("init_toml_section_certificates"))
+	sb.WriteByte('\n')
+	sb.WriteString("[certificates]\n")
+	sb.WriteString("enable = true\n\n")
+}
 
-	// [ports] is the only top-level extras section that may be emitted as
-	// an active block — when the user supplied ports via --ports or the
-	// interactive prompt. With no ports the commented-out template still
-	// emits so the file remains self-documenting (matches [volumes] /
-	// [env] / [mounts] behavior).
-	if len(s.Ports) > 0 {
-		sb.WriteString(cat.Msg("init_toml_section_ports"))
-		sb.WriteByte('\n')
-		sb.WriteString("[ports]\nforward = [\n")
-		for _, p := range s.Ports {
-			fmt.Fprintf(&sb, "    %q,\n", p)
-		}
-		sb.WriteString("]\n\n")
-	} else {
-		emitTemplate(&sb, cat, "init_toml_template_ports")
+// writePortsSection emits an active [ports] block when the user supplied
+// ports via --ports or the interactive prompt. With no ports the
+// commented-out template still emits so the file remains self-documenting
+// (matches [volumes] / [env] / [mounts] behavior).
+func writePortsSection(sb *strings.Builder, cat *i18n.Catalog, s containerSpec) {
+	if len(s.Ports) == 0 {
+		emitTemplate(sb, cat, "init_toml_template_ports")
+		return
 	}
+	sb.WriteString(cat.Msg("init_toml_section_ports"))
+	sb.WriteByte('\n')
+	sb.WriteString("[ports]\nforward = [\n")
+	for _, p := range s.Ports {
+		fmt.Fprintf(sb, "    %q,\n", p)
+	}
+	sb.WriteString("]\n\n")
+}
 
-	// Top-level opt-in extras at the end of the file. Order roughly
-	// follows "compose runtime knobs first, then host-side persistence,
-	// then locale + Dockerfile hooks, then certificates, then sidecars +
-	// IDE config".
+// writeTrailingTemplates emits the top-level opt-in extras at the end of the
+// file. Order roughly follows "compose runtime knobs first, then host-side
+// persistence, then locale + Dockerfile hooks, then certificates, then
+// sidecars + IDE config".
+func writeTrailingTemplates(sb *strings.Builder, cat *i18n.Catalog, s containerSpec) {
 	templateKeys := []string{
 		"init_toml_template_volumes",
 		"init_toml_template_env",
@@ -166,10 +201,8 @@ func renderWorkspaceToml(s containerSpec, cat *i18n.Catalog) string {
 		"init_toml_template_devcontainer",
 	)
 	for _, key := range templateKeys {
-		emitTemplate(&sb, cat, key)
+		emitTemplate(sb, cat, key)
 	}
-
-	return strings.TrimRight(sb.String(), "\n") + "\n"
 }
 
 // writePluginMethods emits a single `[plugins.methods]` block with one
