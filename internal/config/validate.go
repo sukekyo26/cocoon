@@ -88,7 +88,8 @@ func IsValidPluginID(id string) bool {
 	return rxPluginID.MatchString(id)
 }
 
-// Accumulator collects FieldError rows scoped under a base path.
+// Accumulator collects FieldError rows scoped under a base path. The zero
+// value is usable; NewAccumulator is just a convenience constructor.
 type Accumulator struct {
 	base []string
 	errs *[]FieldError
@@ -100,10 +101,22 @@ func NewAccumulator() *Accumulator {
 	return &Accumulator{base: nil, errs: &errs}
 }
 
+// ensure lazily allocates the shared error slice so a zero-value
+// Accumulator (one not built via NewAccumulator) does not nil-panic on
+// first use. At allocates before handing the pointer to a child, so the
+// parent and every child created via At share one slice.
+func (a *Accumulator) ensure() {
+	if a.errs == nil {
+		errs := make([]FieldError, 0)
+		a.errs = &errs
+	}
+}
+
 // At returns a child Accumulator whose collected errors are prefixed with
 // seg; the shared error slice is carried over so child writes are visible
 // to the parent.
 func (a *Accumulator) At(seg ...string) *Accumulator {
+	a.ensure()
 	out := make([]string, 0, len(a.base)+len(seg))
 	out = append(out, a.base...)
 	out = append(out, seg...)
@@ -112,6 +125,7 @@ func (a *Accumulator) At(seg ...string) *Accumulator {
 
 // Add records a FieldError at base+seg with the given message.
 func (a *Accumulator) Add(msg string, seg ...string) {
+	a.ensure()
 	loc := make([]string, 0, len(a.base)+len(seg))
 	loc = append(loc, a.base...)
 	loc = append(loc, seg...)
@@ -120,17 +134,23 @@ func (a *Accumulator) Add(msg string, seg ...string) {
 
 // Errors returns the FieldError rows collected so far across this
 // Accumulator and every child created via At.
-func (a *Accumulator) Errors() []FieldError { return *a.errs }
+func (a *Accumulator) Errors() []FieldError {
+	if a.errs == nil {
+		return nil
+	}
+	return *a.errs
+}
 
 // Validate runs every cross-field check on the workspace. On failure the
 // returned error is a *ValidationError with Path = path.
 func (w *Workspace) Validate(path string) error {
 	a := NewAccumulator()
 	w.runValidate(a)
-	if len(*a.errs) == 0 {
+	errs := a.Errors()
+	if len(errs) == 0 {
 		return nil
 	}
-	return &ValidationError{Path: path, Errors: *a.errs}
+	return &ValidationError{Path: path, Errors: errs}
 }
 
 func (w *Workspace) runValidate(a *Accumulator) {
