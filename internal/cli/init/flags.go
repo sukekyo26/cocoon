@@ -33,29 +33,6 @@ type initFlags struct {
 	Force          bool
 }
 
-func zeroFlags() initFlags {
-	return initFlags{
-		AutoYes:        false,
-		ServiceName:    "",
-		Username:       "",
-		Image:          "",
-		ImageVersion:   "",
-		Shell:          "",
-		MountRoot:      "",
-		Devcontainer:   false,
-		NoDevcontainer: false,
-		Certificates:   false,
-		NoCertificates: false,
-		AptCategories:  "",
-		Plugins:        "",
-		PluginVersions: "",
-		PluginMethods:  "",
-		AliasBundles:   "",
-		Ports:          "",
-		Force:          false,
-	}
-}
-
 // initAnswers is what gets written into workspace.toml. The *Set companions
 // distinguish "not yet provided" from a zero value the user actively chose
 // (e.g. devcontainer = false), so the prompt builder doesn't skip groups
@@ -89,37 +66,6 @@ type initAnswers struct {
 	PortsSet          bool
 }
 
-func zeroAnswers() initAnswers {
-	return initAnswers{
-		ServiceName:       "",
-		Username:          "",
-		Image:             "",
-		ImageSet:          false,
-		ImageVersion:      "",
-		ImageVersionSet:   false,
-		Shell:             "",
-		ShellSet:          false,
-		MountRoot:         "",
-		MountRootSet:      false,
-		Devcontainer:      false,
-		DevcontainerSet:   false,
-		Certificates:      false,
-		CertificatesSet:   false,
-		AptCategories:     nil,
-		AptSet:            false,
-		Plugins:           nil,
-		PluginsSet:        false,
-		PluginVersions:    nil,
-		PluginVersionsSet: false,
-		PluginMethods:     nil,
-		PluginMethodsSet:  false,
-		AliasBundles:      nil,
-		AliasBundlesSet:   false,
-		Ports:             nil,
-		PortsSet:          false,
-	}
-}
-
 // assertNoImagePluginConflict names the matching --plugins / --image rewrite
 // in the error so the fix is one edit.
 func assertNoImagePluginConflict(ans initAnswers) error {
@@ -142,7 +88,7 @@ func assertNoImagePluginConflict(ans initAnswers) error {
 //
 //nolint:gocognit,gocyclo,funlen // sequence of independent flag checks; splitting hides intent.
 func applyFlags(flags *initFlags, plugins map[string]*plugin.Plugin) (initAnswers, error) {
-	ans := zeroAnswers()
+	var ans initAnswers
 	if flags.ServiceName != "" {
 		if !rxServiceName.MatchString(flags.ServiceName) {
 			return ans, fmt.Errorf("%w: --service-name %q does not match %s",

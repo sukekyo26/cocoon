@@ -42,7 +42,7 @@ non-interactively from CI.`
 
 // NewCommand returns the cobra command for `cocoon init`.
 func NewCommand(stdout, stderr io.Writer) *cobra.Command {
-	flags := zeroFlags()
+	var flags initFlags
 	cmd := &cobra.Command{
 		Use:           "init",
 		Short:         "Create workspace.toml in the current directory",
