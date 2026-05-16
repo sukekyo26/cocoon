@@ -16,7 +16,7 @@ labels: ["enhancement", "plugin"]
 - Architectures: <!-- e.g. amd64, arm64 -->
 
 ## Official install method
-<!-- curl-pipe / tarball / apt / other — with the exact URL or steps -->
+<!-- installer / binary / apt / archive — with the exact URL or steps -->
 
 
 ## Use case
@@ -28,7 +28,7 @@ labels: ["enhancement", "plugin"]
 
 
 ## version_capable
-<!-- Does the project publish versioned releases with SHA256 checksums for tarballs? -->
+<!-- Does the project publish versioned releases with SHA256 checksums for its release assets? -->
 
 
 ## Additional context
