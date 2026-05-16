@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-05-16
+
 ### Added
 
 - `[container]` accepts four new optional fields, each mapped to the matching Compose `services:` attribute: `group_add` (supplementary groups — group name or numeric GID — for the container user), `devices` (host device mappings `HOST:CONTAINER[:rwm]`), `ipc` (IPC namespace mode, e.g. `"host"` for ML workloads needing shared memory), and `gpus` (GPU access; only `"all"` is supported). `cocoon init` writes commented-out templates for all four under `[container]`.
@@ -147,7 +149,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Add `COMPOSE_PROJECT_NAME` derivation from the project directory basename so docker compose namespacing matches the host directory.
 - Add i18n catalog (English / Japanese) covering every CLI prompt, error message, and inline `workspace.toml` comment, switched via `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG`.
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/sukekyo26/cocoon/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/sukekyo26/cocoon/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/sukekyo26/cocoon/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/sukekyo26/cocoon/compare/v0.2.0...v0.3.0
