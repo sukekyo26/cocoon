@@ -49,11 +49,13 @@ docker compose -f .devcontainer/docker-compose.yml up -d
 Docker は未使用のイメージ・ボリューム・ビルドキャッシュを溜め込み、ディスクを圧迫します。`.devcontainer/manage.sh` は **このプロジェクトの** リソースだけを掃除・リビルドします — スクリプトが生成された compose ファイルに対して `docker compose` を駆動するため、スコープは自動です。
 
 ```bash
-./.devcontainer/manage.sh clean       # このプロジェクトのコンテナ・ネットワーク・ボリューム・ビルド済みイメージを削除
-./.devcontainer/manage.sh clean volumes  # ボリュームのみ（ビルド済みイメージは残し高速リビルド）
-./.devcontainer/manage.sh clean image    # ビルド済みイメージのみ（ボリュームのデータは残す）
-./.devcontainer/manage.sh rebuild     # --no-cache でイメージを再ビルドしコンテナを再生成
-./.devcontainer/manage.sh prune-cache # Docker ビルドキャッシュを prune（全プロジェクトに影響）
+./.devcontainer/manage.sh clean             # コンテナ + ネットワーク + ボリューム + ビルド済みイメージ
+./.devcontainer/manage.sh clean containers  # コンテナのみ（ネットワーク・ボリューム・イメージは残す）
+./.devcontainer/manage.sh clean image       # コンテナ + ネットワーク + ビルド済みイメージ（ボリュームのデータは残す）
+./.devcontainer/manage.sh clean volumes     # コンテナ + ネットワーク + ボリューム（ビルド済みイメージは残す — 高速リビルド）
+./.devcontainer/manage.sh clean network     # コンテナ + ネットワーク（ボリューム・イメージは残す）
+./.devcontainer/manage.sh rebuild           # --no-cache でイメージを再ビルドしコンテナを再生成
+./.devcontainer/manage.sh prune-cache       # Docker ビルドキャッシュを prune（全プロジェクトに影響）
 ```
 
 破壊的なコマンドは実行前に確認します。`-y` で確認をスキップできます。ビルドキャッシュはプロジェクト単位にスコープできないため `prune-cache` は構造上グローバルで、意図的に `clean` とは別コマンドにしています。全コマンドは `./.devcontainer/manage.sh -h` を参照してください。

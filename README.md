@@ -49,11 +49,13 @@ The same artifacts power both `docker compose up` from the CLI and VS Code's "Re
 Docker accumulates unused images, volumes, and build cache that eat disk. `.devcontainer/manage.sh` cleans up or rebuilds **only this project's** resources — scoping is automatic because the script drives `docker compose` against the generated compose file.
 
 ```bash
-./.devcontainer/manage.sh clean       # remove this project's containers, networks, volumes, built image
-./.devcontainer/manage.sh clean volumes  # only volumes (keeps the built image for a fast rebuild)
-./.devcontainer/manage.sh clean image    # only the built image (keeps your volume data)
-./.devcontainer/manage.sh rebuild     # rebuild the image with --no-cache and recreate the container
-./.devcontainer/manage.sh prune-cache # prune the GLOBAL Docker build cache (affects every project)
+./.devcontainer/manage.sh clean             # containers + networks + volumes + built image
+./.devcontainer/manage.sh clean containers  # containers only (networks, volumes, image kept)
+./.devcontainer/manage.sh clean image       # containers + networks + built image (volume data kept)
+./.devcontainer/manage.sh clean volumes     # containers + networks + volumes (built image kept — fast rebuild)
+./.devcontainer/manage.sh clean network     # containers + networks (volumes, image kept)
+./.devcontainer/manage.sh rebuild           # rebuild the image with --no-cache and recreate the container
+./.devcontainer/manage.sh prune-cache       # prune the GLOBAL Docker build cache (affects every project)
 ```
 
 Destructive commands ask for confirmation first; pass `-y` to skip it. Build cache cannot be scoped to one project, so `prune-cache` is global by nature — it is deliberately separate from `clean`. Run `./.devcontainer/manage.sh -h` for the full command list.
