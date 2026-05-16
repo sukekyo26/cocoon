@@ -53,7 +53,6 @@ Docker accumulates unused images, volumes, and build cache that eat disk. `.devc
 ./.devcontainer/manage.sh clean containers  # containers only (networks, volumes, image kept)
 ./.devcontainer/manage.sh clean image       # containers + networks + built image (volume data kept)
 ./.devcontainer/manage.sh clean volumes     # containers + networks + volumes (built image kept — fast rebuild)
-./.devcontainer/manage.sh clean network     # containers + networks (volumes, image kept)
 ./.devcontainer/manage.sh rebuild           # rebuild the image with --no-cache and recreate the container
 ./.devcontainer/manage.sh prune-cache       # prune the GLOBAL Docker build cache (affects every project)
 ```

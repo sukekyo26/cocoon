@@ -31,7 +31,6 @@ Commands:
                      image; volumes (your data) are kept.
   clean volumes      Remove containers, networks and named volumes; the
                      locally-built image is kept (fast rebuild).
-  clean network      Remove containers and networks; volumes, image kept.
   rebuild            Rebuild the image with --no-cache and recreate the
                      container. Volumes are kept.
   prune-cache        Prune the GLOBAL Docker build cache. THIS AFFECTS
@@ -127,12 +126,8 @@ cmd_clean() {
       confirm "Remove containers, networks and named volumes for '${proj}'? (image kept)"
       dc down --volumes --remove-orphans
       ;;
-    network | networks)
-      confirm "Remove containers and networks for '${proj}'? (volumes, image kept)"
-      dc down --remove-orphans
-      ;;
     *)
-      die "unknown clean target: ${target} (try: containers, image, volumes, network)"
+      die "unknown clean target: ${target} (try: containers, image, volumes)"
       ;;
   esac
   echo "done."
