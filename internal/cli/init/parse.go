@@ -131,9 +131,10 @@ func parsePlugins(raw string, plugins map[string]*plugin.Plugin) ([]string, erro
 }
 
 // parsePluginVersions parses `--plugin-versions=<id>=<ref>,…` into a map.
-// Each id must be in plugins, in enabled (silent no-op otherwise), and
-// version_capable. Empty input returns a non-nil empty map (nilnil lint).
-// Duplicate ids are rejected so a typo can't silently pick the last value.
+// Each id must be a known plugin, listed in enabled (--plugins), and
+// version_capable; any violation returns ErrUsage. Empty input returns a
+// non-nil empty map (nilnil lint). Duplicate ids are rejected so a typo
+// can't silently pick the last value.
 func parsePluginVersions(raw string, plugins map[string]*plugin.Plugin, enabled []string) (map[string]string, error) {
 	enabledSet := make(map[string]struct{}, len(enabled))
 	for _, id := range enabled {

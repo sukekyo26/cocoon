@@ -45,8 +45,8 @@ func TestValidatePluginConflicts(t *testing.T) {
 	t.Parallel()
 	// The embedded catalog currently ships no plugins with declared
 	// conflicts (custom-ps1 was the only one and has been removed). Build
-	// a synthetic pair in-memory so the validator's symmetric-detection
-	// logic still has a regression guard.
+	// a synthetic pair in-memory so conflict detection and its ErrUsage
+	// classification still have a regression guard.
 	plugins := map[string]*plugin.Plugin{
 		"alpha": {Metadata: plugin.Metadata{Name: "Alpha", Conflicts: []string{"beta"}}},
 		"beta":  {Metadata: plugin.Metadata{Name: "Beta", Conflicts: []string{"alpha"}}},

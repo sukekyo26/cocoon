@@ -139,7 +139,7 @@ func portsInputValidator(cat *i18n.Catalog) func(string) error {
 
 // pluginsMultiSelect sorts options by id so the order is stable across runs
 // (LoadDir returns a map). excludeID hides one plugin id (empty = none) and
-// is used to keep validateImagePluginConflict-tripping picks out of the
+// is used to keep assertNoImagePluginConflict-tripping picks out of the
 // picker entirely.
 func pluginsMultiSelect(cat *i18n.Catalog, plugins map[string]*plugin.Plugin,
 	excludeID string, target *[]string,

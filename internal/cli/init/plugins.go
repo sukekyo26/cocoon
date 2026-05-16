@@ -13,8 +13,8 @@ import (
 
 // validatePluginConflicts reports the first incompatible pair in the
 // enabled list. Conflicts are declared on plugin.toml's metadata.conflicts
-// field; the relation is required to be symmetric so checking one
-// direction is enough.
+// field; every enabled plugin's list is scanned, so an asymmetric
+// declaration (only one side names the other) is still caught.
 func validatePluginConflicts(plugins map[string]*plugin.Plugin, enabled []string) error {
 	enabledSet := make(map[string]struct{}, len(enabled))
 	for _, id := range enabled {

@@ -142,7 +142,7 @@ func promptWorkspaceOptions(ans *initAnswers, cat *i18n.Catalog) error {
 func promptPluginSelection(ans *initAnswers, cat *i18n.Catalog, plugins map[string]*plugin.Plugin) error {
 	if !ans.PluginsSet {
 		// Hide plugins whose toolchain duplicates the chosen base image so the
-		// user cannot accidentally pick a combination validateImagePluginConflict
+		// user cannot accidentally pick a combination assertNoImagePluginConflict
 		// would later reject.
 		excludeID := config.ImageProvidesPlugin[ans.Image]
 		ans.Plugins = filterPluginIDs(defaultPluginIDs(plugins), excludeID)
