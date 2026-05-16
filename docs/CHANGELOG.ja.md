@@ -6,6 +6,10 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+### 修正
+
+- `cocoon init --plugins` が重複したプラグイン id（例: `--plugins go,go`）を明確なエラーで拒否するようになった。従来は `[plugins].enable` が重複した `workspace.toml` を書き出し、後続の `cocoon gen` で初めて拒否されていた。
+
 ## [0.5.0] - 2026-05-16
 
 ### 追加

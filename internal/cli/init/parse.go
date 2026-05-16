@@ -113,9 +113,12 @@ func parseAliasBundles(raw string) ([]string, error) {
 }
 
 // parsePlugins leaves the conflict check to validatePluginConflicts so the
-// same logic covers both flag and prompt paths.
+// same logic covers both flag and prompt paths. Duplicate ids are rejected:
+// config validation rejects a `[plugins].enable` list with duplicates, so
+// catching it here keeps init's fail-fast-before-writing contract.
 func parsePlugins(raw string, plugins map[string]*plugin.Plugin) ([]string, error) {
 	var ids []string
+	seen := make(map[string]struct{})
 	for _, part := range strings.Split(raw, ",") {
 		id := strings.TrimSpace(part)
 		if id == "" {
@@ -125,6 +128,10 @@ func parsePlugins(raw string, plugins map[string]*plugin.Plugin) ([]string, erro
 			return nil, fmt.Errorf("%w: unknown plugin %q (run `cocoon plugin list` for the catalog)",
 				clihelpers.ErrUsage, id)
 		}
+		if _, dup := seen[id]; dup {
+			return nil, fmt.Errorf("%w: --plugins: duplicate id %q", clihelpers.ErrUsage, id)
+		}
+		seen[id] = struct{}{}
 		ids = append(ids, id)
 	}
 	return ids, nil

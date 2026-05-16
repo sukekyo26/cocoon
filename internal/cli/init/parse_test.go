@@ -132,6 +132,9 @@ func TestParsePlugins(t *testing.T) {
 	if _, err := parsePlugins("does-not-exist", plugins); !errors.Is(err, clihelpers.ErrUsage) {
 		t.Errorf("unknown plugin should be ErrUsage, got %v", err)
 	}
+	if _, err := parsePlugins("go,go", plugins); !errors.Is(err, clihelpers.ErrUsage) {
+		t.Errorf("duplicate plugin id should be ErrUsage, got %v", err)
+	}
 }
 
 func TestParsePluginVersions(t *testing.T) {
