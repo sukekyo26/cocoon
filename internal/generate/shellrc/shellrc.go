@@ -14,7 +14,8 @@ package shellrc
 
 import (
 	"fmt"
-	"sort"
+	"maps"
+	"slices"
 	"strings"
 
 	"github.com/sukekyo26/cocoon/internal/generate"
@@ -73,7 +74,7 @@ func persistentShellrcBootstrap(syntax string) string {
 }
 
 func renderEnvLines(env map[string]string, syntax string) []string {
-	keys := sortedKeys(env)
+	keys := slices.Sorted(maps.Keys(env))
 	out := make([]string, len(keys))
 	for i, k := range keys {
 		if syntax == "fish" {
@@ -86,7 +87,7 @@ func renderEnvLines(env map[string]string, syntax string) []string {
 }
 
 func renderAliasLines(aliases map[string]string, syntax string) []string {
-	keys := sortedKeys(aliases)
+	keys := slices.Sorted(maps.Keys(aliases))
 	out := make([]string, len(keys))
 	for i, k := range keys {
 		if syntax == "fish" {
@@ -96,13 +97,4 @@ func renderAliasLines(aliases map[string]string, syntax string) []string {
 		}
 	}
 	return out
-}
-
-func sortedKeys(m map[string]string) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return keys
 }

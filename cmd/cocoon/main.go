@@ -10,11 +10,7 @@ import (
 	"os"
 
 	"github.com/sukekyo26/cocoon/internal/cli"
-	gencli "github.com/sukekyo26/cocoon/internal/cli/gen"
-	generatecli "github.com/sukekyo26/cocoon/internal/cli/generate"
-	initcli "github.com/sukekyo26/cocoon/internal/cli/init"
-	plugincli "github.com/sukekyo26/cocoon/internal/cli/plugin"
-	selfupdatecli "github.com/sukekyo26/cocoon/internal/cli/selfupdate"
+	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
 	"github.com/sukekyo26/cocoon/internal/logx"
 	"github.com/sukekyo26/cocoon/internal/version"
 )
@@ -37,13 +33,9 @@ func exitCode(err error, stderr io.Writer) int {
 	// numeric exit code expected by callers.
 	logx.New(io.Discard, stderr).Errorf("cocoon: %v", err)
 	switch {
-	case errors.Is(err, plugincli.ErrCanceled):
+	case errors.Is(err, clihelpers.ErrCanceled):
 		return 130
-	case errors.Is(err, generatecli.ErrUsage),
-		errors.Is(err, gencli.ErrUsage),
-		errors.Is(err, plugincli.ErrUsage),
-		errors.Is(err, initcli.ErrUsage),
-		errors.Is(err, selfupdatecli.ErrUsage):
+	case errors.Is(err, clihelpers.ErrUsage):
 		return 2
 	default:
 		return 1

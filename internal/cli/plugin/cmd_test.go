@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
 	plugincli "github.com/sukekyo26/cocoon/internal/cli/plugin"
 )
 
@@ -28,7 +29,7 @@ func TestPluginAdd_NoLongerRegistered(t *testing.T) {
 	if err == nil {
 		t.Fatalf("plugin add should be unknown after removal; stdout=%s", stdout.String())
 	}
-	if !errors.Is(err, plugincli.ErrUsage) {
+	if !errors.Is(err, clihelpers.ErrUsage) {
 		t.Errorf("expected ErrUsage, got %v", err)
 	}
 	if !strings.Contains(err.Error(), "unknown subcommand") {
@@ -55,7 +56,7 @@ func TestPluginRemove_NoLongerRegistered(t *testing.T) {
 	if err == nil {
 		t.Fatalf("plugin remove should be unknown after removal; stdout=%s", stdout.String())
 	}
-	if !errors.Is(err, plugincli.ErrUsage) {
+	if !errors.Is(err, clihelpers.ErrUsage) {
 		t.Errorf("expected ErrUsage, got %v", err)
 	}
 	if !strings.Contains(err.Error(), "unknown subcommand") {

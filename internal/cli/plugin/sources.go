@@ -7,12 +7,13 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
 	"github.com/sukekyo26/cocoon/internal/config"
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
 
 // ErrWorkspaceNotFound lets callers map "outside a cocoon project" to
-// ErrUsage and genuine system failures to ErrFailure.
+// clihelpers.ErrUsage and genuine system failures to clihelpers.ErrFailure.
 var ErrWorkspaceNotFound = errors.New("workspace.toml not found in tree")
 
 // resolveLayered drops the project layer silently when no workspace.toml
@@ -21,11 +22,11 @@ var ErrWorkspaceNotFound = errors.New("workspace.toml not found in tree")
 func resolveLayered() (*plugin.LayeredFS, error) {
 	embedded, err := plugin.CatalogFS()
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrFailure, err)
+		return nil, fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
 	}
 	userDir, err := userPluginsDir()
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrFailure, err)
+		return nil, fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
 	}
 	projectDir, projErr := projectPluginsDir()
 	switch {
@@ -34,7 +35,7 @@ func resolveLayered() (*plugin.LayeredFS, error) {
 	case projErr != nil:
 		// Surface system errors (Getwd / stat); don't pretend the layer
 		// is just absent.
-		return nil, fmt.Errorf("%w: project plugins dir: %w", ErrFailure, projErr)
+		return nil, fmt.Errorf("%w: project plugins dir: %w", clihelpers.ErrFailure, projErr)
 	}
 	return plugin.NewLayeredFS(embedded, userDir, projectDir), nil
 }

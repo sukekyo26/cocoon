@@ -10,6 +10,7 @@ import (
 
 	"github.com/charmbracelet/huh"
 
+	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
 	"github.com/sukekyo26/cocoon/internal/i18n"
 )
 
@@ -179,11 +180,11 @@ func TestPromptMissing_CanceledPropagates(t *testing.T) {
 	t.Parallel()
 	//nolint:exhaustruct // setX defaults all-false
 	opts := &scaffoldOpts{template: tmplInstaller}
-	p := &fakePrompter{onRunErr: ErrCanceled}
+	p := &fakePrompter{onRunErr: clihelpers.ErrCanceled}
 	cat := i18n.New(i18n.Detect())
 	err := promptMissing(opts, cat, p)
-	if !errors.Is(err, ErrCanceled) {
-		t.Errorf("err = %v, want errors.Is(err, ErrCanceled)", err)
+	if !errors.Is(err, clihelpers.ErrCanceled) {
+		t.Errorf("err = %v, want errors.Is(err, clihelpers.ErrCanceled)", err)
 	}
 }
 

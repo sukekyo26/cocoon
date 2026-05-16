@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
 	"github.com/sukekyo26/cocoon/internal/config"
 	"github.com/sukekyo26/cocoon/internal/logx"
 	"github.com/sukekyo26/cocoon/internal/plugin"
@@ -67,14 +68,14 @@ func newPinCmd(stdout, stderr io.Writer) *cobra.Command {
 
 func runPin(stdout, stderr io.Writer, id, ref, amd64sum, arm64sum, method string, write bool) error {
 	if id == "" || ref == "" {
-		return fmt.Errorf("%w: both <id> and <ref> are required", ErrUsage)
+		return fmt.Errorf("%w: both <id> and <ref> are required", clihelpers.ErrUsage)
 	}
 	layered, err := resolveLayered()
 	if err != nil {
 		return err
 	}
 	if layered.Source(id) == "" {
-		return fmt.Errorf("%w: plugin %q is not in any layer (cocoon plugin list)", ErrUsage, id)
+		return fmt.Errorf("%w: plugin %q is not in any layer (cocoon plugin list)", clihelpers.ErrUsage, id)
 	}
 	if method != "" {
 		if mErr := validateMethodForPin(layered, id, method); mErr != nil {
@@ -96,22 +97,22 @@ func runPin(stdout, stderr io.Writer, id, ref, amd64sum, arm64sum, method string
 func runPinWrite(stdout, stderr io.Writer, id, ref, amd64sum, arm64sum, method string) error {
 	cwd, cwdErr := os.Getwd()
 	if cwdErr != nil {
-		return fmt.Errorf("%w: getwd: %w", ErrFailure, cwdErr)
+		return fmt.Errorf("%w: getwd: %w", clihelpers.ErrFailure, cwdErr)
 	}
 	wsPath, dErr := config.Discover(cwd)
 	if dErr != nil {
-		return fmt.Errorf("%w: discover workspace.toml: %w", ErrFailure, dErr)
+		return fmt.Errorf("%w: discover workspace.toml: %w", clihelpers.ErrFailure, dErr)
 	}
 	if wsPath == "" {
 		return fmt.Errorf(
 			"%w: --write needs a discoverable workspace.toml (run inside a cocoon project)",
-			ErrUsage)
+			clihelpers.ErrUsage)
 	}
 	if uErr := plugin.UpsertPinAndMethod(wsPath, id, ref, amd64sum, arm64sum, method); uErr != nil {
 		if errors.Is(uErr, plugin.ErrLegacyPinSubsection) {
-			return fmt.Errorf("%w: %w (in %s)", ErrUsage, uErr, wsPath)
+			return fmt.Errorf("%w: %w (in %s)", clihelpers.ErrUsage, uErr, wsPath)
 		}
-		return fmt.Errorf("%w: %w", ErrFailure, uErr)
+		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, uErr)
 	}
 	log := logx.New(stdout, stderr)
 	log.Successf("Updated %s: [plugins.versions] %s", wsPath, id)
@@ -144,9 +145,9 @@ func renderPinSnippet(id, ref, amd64sum, arm64sum, method string) string {
 }
 
 // validateMethodForPin loads the resolved plugin and confirms the requested
-// method name exists under [install.methods]. Returns ErrUsage for the
+// method name exists under [install.methods]. Returns clihelpers.ErrUsage for the
 // user-correctable failures (no methods declared / method name not declared)
-// and ErrFailure when the manifest itself cannot be read.
+// and clihelpers.ErrFailure when the manifest itself cannot be read.
 //
 // loadPluginFromLayer only runs strict unmarshal — it skips
 // validateMethodScripts and plugin.Validate — so a user-overlay plugin
@@ -157,14 +158,14 @@ func renderPinSnippet(id, ref, amd64sum, arm64sum, method string) string {
 func validateMethodForPin(layered *plugin.LayeredFS, id, method string) error {
 	p, err := loadPluginFromLayer(layered, id)
 	if err != nil {
-		return fmt.Errorf("%w: %w", ErrFailure, err)
+		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
 	}
 	if len(p.Install.Methods) == 0 {
 		return fmt.Errorf(
 			"%w: plugin %q declares no [install.methods] in plugin.toml; "+
 				"--method is only meaningful when the plugin offers two or more "+
 				"install variants — drop --method to pin only the version",
-			ErrUsage, id)
+			clihelpers.ErrUsage, id)
 	}
 	if _, ok := p.Install.Methods[method]; !ok {
 		declared := make([]string, 0, len(p.Install.Methods))
@@ -174,7 +175,7 @@ func validateMethodForPin(layered *plugin.LayeredFS, id, method string) error {
 		sort.Strings(declared)
 		return fmt.Errorf(
 			"%w: plugin %q has no method %q in [install.methods] (declared: %s)",
-			ErrUsage, id, method, strings.Join(declared, ", "))
+			clihelpers.ErrUsage, id, method, strings.Join(declared, ", "))
 	}
 	return nil
 }

@@ -7,13 +7,13 @@
 package generatecli
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 
+	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
 	"github.com/sukekyo26/cocoon/internal/config"
 	"github.com/sukekyo26/cocoon/internal/fsx"
 	"github.com/sukekyo26/cocoon/internal/generate"
@@ -24,12 +24,6 @@ import (
 	"github.com/sukekyo26/cocoon/internal/logx"
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
-
-// ErrUsage signals a usage error (missing argument). Maps to exit code 2.
-var ErrUsage = errors.New("usage error")
-
-// ErrFailure signals a runtime failure. Maps to exit code 1.
-var ErrFailure = errors.New("failure")
 
 // Artifact is one generated file. A zero Mode falls back to 0o644.
 type Artifact struct {
@@ -49,15 +43,15 @@ func LoadContext(
 ) (*generate.WorkspaceContext, error) {
 	ws, err := config.LoadWorkspace(wsPath)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrFailure, err)
+		return nil, fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
 	}
 	warnW := logx.YellowWriter(stderr)
 	plugins, err := plugin.LoadEnabledFromFS(pluginsFS, ws.Plugins.Enable, warnW, pluginsPathHint)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrFailure, err)
+		return nil, fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
 	}
 	if cerr := plugin.CheckConflicts(plugins); cerr != nil {
-		return nil, fmt.Errorf("%w: %w", ErrFailure, cerr)
+		return nil, fmt.Errorf("%w: %w", clihelpers.ErrFailure, cerr)
 	}
 	return &generate.WorkspaceContext{
 		WS:         ws,
@@ -78,7 +72,7 @@ func BuildArtifacts(ctx *generate.WorkspaceContext, stderr io.Writer) ([]Artifac
 
 	body, err := compose.Generate(ctx, compose.Options{Plugins: ctx.Plugins, Warnings: warnW})
 	if err != nil {
-		return nil, fmt.Errorf("%w: compose: %w", ErrFailure, err)
+		return nil, fmt.Errorf("%w: compose: %w", clihelpers.ErrFailure, err)
 	}
 	arts = append(arts, Artifact{Rel: ".devcontainer/docker-compose.yml", Body: body, Mode: 0})
 
@@ -89,14 +83,14 @@ func BuildArtifacts(ctx *generate.WorkspaceContext, stderr io.Writer) ([]Artifac
 		Warnings:      warnW,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("%w: dockerfile: %w", ErrFailure, err)
+		return nil, fmt.Errorf("%w: dockerfile: %w", clihelpers.ErrFailure, err)
 	}
 	arts = append(arts, Artifact{Rel: ".devcontainer/Dockerfile", Body: body, Mode: 0})
 
 	if ctx.WS.Workspace.DevContainerOrDefault() {
 		body, err = devcontainerjson.Generate(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("%w: devcontainer.json: %w", ErrFailure, err)
+			return nil, fmt.Errorf("%w: devcontainer.json: %w", clihelpers.ErrFailure, err)
 		}
 		arts = append(arts, Artifact{Rel: ".devcontainer/devcontainer.json", Body: body, Mode: 0})
 	}
@@ -115,7 +109,7 @@ func BuildArtifacts(ctx *generate.WorkspaceContext, stderr io.Writer) ([]Artifac
 
 	envBody, err := envfile.Generate(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("%w: envfile: %w", ErrFailure, err)
+		return nil, fmt.Errorf("%w: envfile: %w", clihelpers.ErrFailure, err)
 	}
 	arts = append(arts, Artifact{Rel: ".devcontainer/.env", Body: envBody, Mode: 0o600})
 	return arts, nil
@@ -127,14 +121,14 @@ func WriteArtifacts(arts []Artifact, outDir string) error {
 	for _, a := range arts {
 		target := filepath.Join(outDir, a.Rel)
 		if mkErr := os.MkdirAll(filepath.Dir(target), 0o755); mkErr != nil {
-			return fmt.Errorf("%w: mkdir %s: %w", ErrFailure, target, mkErr)
+			return fmt.Errorf("%w: mkdir %s: %w", clihelpers.ErrFailure, target, mkErr)
 		}
 		mode := a.Mode
 		if mode == 0 {
 			mode = 0o644
 		}
 		if wErr := fsx.AtomicWriteFile(target, []byte(a.Body), mode); wErr != nil {
-			return fmt.Errorf("%w: write %s: %w", ErrFailure, target, wErr)
+			return fmt.Errorf("%w: write %s: %w", clihelpers.ErrFailure, target, wErr)
 		}
 	}
 	return nil

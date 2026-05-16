@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
 	plugincli "github.com/sukekyo26/cocoon/internal/cli/plugin"
 )
 
@@ -178,7 +179,7 @@ pin = "1.22.5"
 	t.Chdir(dir)
 
 	_, stderr, err := runPinCmd(t, "go", "1.23.4", "--write")
-	if !errors.Is(err, plugincli.ErrUsage) {
+	if !errors.Is(err, clihelpers.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage", err)
 	}
 	if !strings.Contains(err.Error(), "subsection") {
@@ -203,7 +204,7 @@ func TestPin_WriteRequiresWorkspace(t *testing.T) {
 	t.Chdir(dir)
 
 	_, _, err := runPinCmd(t, "go", "1.23.4", "--write")
-	if !errors.Is(err, plugincli.ErrUsage) {
+	if !errors.Is(err, clihelpers.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage", err)
 	}
 	if !strings.Contains(err.Error(), "workspace.toml") {
@@ -337,7 +338,7 @@ func TestPin_MethodUnknownNameFails(t *testing.T) {
 	t.Chdir(dir)
 
 	_, _, err := runPinCmd(t, "multi-method", "1.2.3", "--method", "nonexistent")
-	if !errors.Is(err, plugincli.ErrUsage) {
+	if !errors.Is(err, clihelpers.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage", err)
 	}
 	if !strings.Contains(err.Error(), "binary, official") {
@@ -381,7 +382,7 @@ version_capable = false
 	t.Chdir(dir)
 
 	_, _, err := runPinCmd(t, "no-methods", "1.2.3", "--method", "binary")
-	if !errors.Is(err, plugincli.ErrUsage) {
+	if !errors.Is(err, clihelpers.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage", err)
 	}
 	if !strings.Contains(err.Error(), "declares no [install.methods]") {
@@ -410,7 +411,7 @@ func TestPin_MethodMismatchedNameListsDeclared(t *testing.T) {
 	// Asking for --method binary should fail with a typo-friendly error
 	// that names the declared keys.
 	_, _, err := runPinCmd(t, "go", "1.23.4", "--method", "binary")
-	if !errors.Is(err, plugincli.ErrUsage) {
+	if !errors.Is(err, clihelpers.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage", err)
 	}
 	if !strings.Contains(err.Error(), `no method "binary"`) {

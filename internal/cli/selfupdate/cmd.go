@@ -15,6 +15,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
 	"github.com/sukekyo26/cocoon/internal/logx"
 	"github.com/sukekyo26/cocoon/internal/release"
 	"github.com/sukekyo26/cocoon/internal/version"
@@ -67,7 +68,7 @@ func runSelfUpdate(ctx context.Context, stdout, stderr io.Writer, checkOnly, for
 	current := strings.TrimSpace(version.Get())
 	if current == "" || current == "dev" {
 		log.Error("self-update: cannot self-update a dev build (no version baked in)")
-		return ErrFailure
+		return clihelpers.ErrFailure
 	}
 	current = strings.TrimPrefix(current, "v")
 
@@ -75,7 +76,7 @@ func runSelfUpdate(ctx context.Context, stdout, stderr io.Writer, checkOnly, for
 	defer cancel()
 	rel, err := release.FetchLatest(tctx)
 	if err != nil {
-		return fmt.Errorf("%w: %w", ErrFailure, err)
+		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
 	}
 	latest := strings.TrimPrefix(rel.TagName, "v")
 
@@ -100,15 +101,15 @@ func runSelfUpdate(ctx context.Context, stdout, stderr io.Writer, checkOnly, for
 	assetURL := rel.AssetURL(assetName)
 	sumsURL := rel.AssetURL("SHA256SUMS")
 	if assetURL == "" {
-		return fmt.Errorf("%w: release asset %q not found in %s", ErrFailure, assetName, rel.TagName)
+		return fmt.Errorf("%w: release asset %q not found in %s", clihelpers.ErrFailure, assetName, rel.TagName)
 	}
 	if sumsURL == "" {
-		return fmt.Errorf("%w: SHA256SUMS not found in %s", ErrFailure, rel.TagName)
+		return fmt.Errorf("%w: SHA256SUMS not found in %s", clihelpers.ErrFailure, rel.TagName)
 	}
 
 	tmp, err := os.MkdirTemp("", "cocoon-update-")
 	if err != nil {
-		return fmt.Errorf("%w: mktemp: %w", ErrFailure, err)
+		return fmt.Errorf("%w: mktemp: %w", clihelpers.ErrFailure, err)
 	}
 	defer func() { _ = os.RemoveAll(tmp) }()
 
@@ -118,34 +119,34 @@ func runSelfUpdate(ctx context.Context, stdout, stderr io.Writer, checkOnly, for
 	// scripts see only the stable version / success output.
 	log.Progressf("downloading %s...", assetName)
 	if err = downloadFile(ctx, assetURL, binPath); err != nil {
-		return fmt.Errorf("%w: download %s: %w", ErrFailure, assetName, err)
+		return fmt.Errorf("%w: download %s: %w", clihelpers.ErrFailure, assetName, err)
 	}
 	if err = downloadFile(ctx, sumsURL, sumsPath); err != nil {
-		return fmt.Errorf("%w: download SHA256SUMS: %w", ErrFailure, err)
+		return fmt.Errorf("%w: download SHA256SUMS: %w", clihelpers.ErrFailure, err)
 	}
 
 	expected, err := readChecksum(sumsPath, assetName)
 	if err != nil {
-		return fmt.Errorf("%w: %w", ErrFailure, err)
+		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
 	}
 	actual, err := sha256File(binPath)
 	if err != nil {
-		return fmt.Errorf("%w: %w", ErrFailure, err)
+		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
 	}
 	if !strings.EqualFold(actual, expected) {
-		return fmt.Errorf("%w: checksum mismatch (got %s, want %s)", ErrFailure, actual, expected)
+		return fmt.Errorf("%w: checksum mismatch (got %s, want %s)", clihelpers.ErrFailure, actual, expected)
 	}
 
 	if err = os.Chmod(binPath, 0o755); err != nil {
-		return fmt.Errorf("%w: chmod: %w", ErrFailure, err)
+		return fmt.Errorf("%w: chmod: %w", clihelpers.ErrFailure, err)
 	}
 
 	selfPath, err := os.Executable()
 	if err != nil {
-		return fmt.Errorf("%w: locate self: %w", ErrFailure, err)
+		return fmt.Errorf("%w: locate self: %w", clihelpers.ErrFailure, err)
 	}
 	if err = atomicReplace(binPath, selfPath); err != nil {
-		return fmt.Errorf("%w: replace %s: %w", ErrFailure, selfPath, err)
+		return fmt.Errorf("%w: replace %s: %w", clihelpers.ErrFailure, selfPath, err)
 	}
 
 	log.Successf("updated cocoon to %s at %s", latest, selfPath)
