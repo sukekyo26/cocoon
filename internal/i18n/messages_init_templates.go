@@ -52,6 +52,9 @@ var messagesEN_initTemplates = map[string]string{
 	// [container] flat-field extras (rendered right after the [container]
 	// keys, before any [container.*] subtable so an uncommented line lands
 	// in [container]).
+	"init_toml_template_container_docker_socket": "# docker_socket — bind-mount /var/run/docker.sock so an in-container docker\n" +
+		"#   client (e.g. the docker-cli plugin) can reach the host daemon.\n" +
+		"# docker_socket = true",
 	"init_toml_template_container_group_add": "# group_add — extra supplementary groups (name or numeric GID) the container user joins.\n" +
 		"#   docker_socket = true additionally appends the host docker group.\n" +
 		"# group_add = [\"audio\", \"dialout\"]",
@@ -199,6 +202,9 @@ var messagesJA_initTemplates = map[string]string{
 	// [container] 直下のフラットフィールド (＝[container] キーの直後、
 	// [container.*] サブテーブルより前に出力。コメントを外した行が
 	// [container] に入るようにするため)。
+	"init_toml_template_container_docker_socket": "# docker_socket — /var/run/docker.sock をバインドマウントし、コンテナ内の\n" +
+		"#   docker クライアント (例: docker-cli プラグイン) がホスト daemon に到達できるようにする。\n" +
+		"# docker_socket = true",
 	"init_toml_template_container_group_add": "# group_add — コンテナユーザーが参加する補助グループ (グループ名 または 数値 GID)。\n" +
 		"#   docker_socket = true のときはホストの docker グループも自動で追加される。\n" +
 		"# group_add = [\"audio\", \"dialout\"]",

@@ -18,6 +18,10 @@ username = "dev"
 image = "ubuntu"
 image_version = "22.04"
 
+# docker_socket — bind-mount /var/run/docker.sock so an in-container docker
+#   client (e.g. the docker-cli plugin) can reach the host daemon.
+# docker_socket = true
+
 # group_add — extra supplementary groups (name or numeric GID) the container user joins.
 #   docker_socket = true additionally appends the host docker group.
 # group_add = ["audio", "dialout"]

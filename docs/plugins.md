@@ -320,7 +320,9 @@ Use these embedded plugins as templates when writing your own:
   for `$PIN` + `$CHECKSUM_*` + arch switch.
 - **`docker-cli`** — `apt` method; adds a third-party apt repo
   (keyring + `sources.list.d` entry) then installs from it. Reference
-  for apt-repo plugins.
+  for apt-repo plugins. Disabled by default; enable it explicitly and
+  set `[container].docker_socket = true` so the client reaches the host
+  daemon.
 - **`proto`** — `installer` method; minimal install script because
   the upstream installer does the work, but with a `$PIN`-respecting
   version selection.

@@ -302,7 +302,9 @@ pin エントリを書いても `gen` 時に意味を持たない。
   `$PIN` + `$CHECKSUM_*` + アーキ分岐の典型。
 - **`docker-cli`** — `apt` メソッド。サードパーティ apt リポジトリ
   (keyring + `sources.list.d`) を追加してインストールする。apt リポジトリ系
-  プラグインの参考に。
+  プラグインの参考に。既定では無効。利用時は明示的に有効化し、
+  クライアントがホスト daemon に到達できるよう `[container].docker_socket = true`
+  も設定すること。
 - **`proto`** — `installer` メソッド。upstream installer に任せる
   最小構成だが `$PIN` で版指定はする。
 - **`starship`** — `binary` メソッド、かつ catalog 内で唯一
