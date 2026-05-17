@@ -79,24 +79,30 @@ func runPin(stdout, stderr io.Writer, id, ref, amd64sum, arm64sum, method string
 	if layered.Source(id) == "" {
 		return fmt.Errorf("%w: plugin %q is not in any layer (cocoon plugin list)", clihelpers.ErrUsage, id)
 	}
-	hasChecksum := amd64sum != "" || arm64sum != ""
-	if method != "" || hasChecksum {
-		p, lErr := loadPluginFromLayer(layered, id)
-		if lErr != nil {
-			return fmt.Errorf("%w: %w", clihelpers.ErrFailure, lErr)
+	p, lErr := loadPluginFromLayer(layered, id)
+	if lErr != nil {
+		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, lErr)
+	}
+	// A pin only means something for a version_capable plugin: cocoon gen
+	// hard-rejects a [plugins.versions] entry for any other plugin. Fail fast
+	// here so `plugin pin` never emits a config that cannot generate.
+	if !p.Version.VersionCapable {
+		return fmt.Errorf(
+			"%w: plugin %q is not version_capable; it cannot be pinned "+
+				"([plugins.versions] entries for it are rejected by cocoon gen)",
+			clihelpers.ErrUsage, id)
+	}
+	if method != "" {
+		if mErr := validateMethodForPin(p, id, method); mErr != nil {
+			return mErr
 		}
-		if method != "" {
-			if mErr := validateMethodForPin(p, id, method); mErr != nil {
-				return mErr
-			}
-		}
-		if hasChecksum && !p.Version.VerifiesByChecksum() {
-			return fmt.Errorf(
-				"%w: plugin %q declares verify = %q in plugin.toml; it verifies downloads "+
-					"in-script and takes no per-workspace checksum — drop --amd64-checksum / "+
-					"--arm64-checksum and pin the version only",
-				clihelpers.ErrUsage, id, p.Version.Verify)
-		}
+	}
+	if (amd64sum != "" || arm64sum != "") && !p.Version.VerifiesByChecksum() {
+		return fmt.Errorf(
+			"%w: plugin %q declares verify = %q in plugin.toml; it verifies downloads "+
+				"in-script and takes no per-workspace checksum — drop --amd64-checksum / "+
+				"--arm64-checksum and pin the version only",
+			clihelpers.ErrUsage, id, p.Version.Verify)
 	}
 	if write {
 		return runPinWrite(stdout, stderr, id, ref, amd64sum, arm64sum, method)

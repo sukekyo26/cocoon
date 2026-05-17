@@ -13,6 +13,7 @@ adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - `cocoon init --plugins` now rejects a duplicate plugin id (e.g. `--plugins go,go`) with a clear error, instead of writing a `workspace.toml` whose `[plugins].enable` list `cocoon gen` would later reject.
+- `cocoon plugin pin` now rejects a plugin that is not `version_capable` with a clear error, instead of printing or writing a `[plugins.versions]` entry that `cocoon gen` would later hard-reject.
 
 ### Security
 
