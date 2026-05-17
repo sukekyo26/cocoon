@@ -92,9 +92,10 @@ func TestCheckConflicts(t *testing.T) {
 
 // TestCheckConflicts_Deterministic pins the sorted-scan contract: with two
 // independent conflicting pairs, Go's randomised map iteration would let
-// either pair surface first. Scanning ids in sorted order must report the
-// lexicographically-first pair on every run — repeating the call exercises
-// many iteration orders so a regression that drops the sort is caught.
+// either pair surface first. Scanning plugin ids in sorted order must
+// report the conflict declared by the lexicographically-first plugin on
+// every run — repeating the call exercises many iteration orders so a
+// regression that drops the sort is caught.
 func TestCheckConflicts_Deterministic(t *testing.T) {
 	t.Parallel()
 

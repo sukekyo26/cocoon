@@ -11,9 +11,10 @@ var ErrConflict = errors.New("plugin conflict")
 
 // CheckConflicts returns an error when any enabled plugin declares one of
 // the other enabled plugins in its metadata.conflicts list. Plugin ids are
-// scanned in sorted order, so when more than one conflict exists the same
-// pair is reported on every run. A plugin that lists its own id is ignored
-// — a plugin cannot conflict with itself.
+// scanned in sorted order and each plugin's conflicts in their declared
+// order, so when more than one conflict exists the reported pair is the
+// same on every run. A plugin that lists its own id is ignored — a plugin
+// cannot conflict with itself.
 func CheckConflicts(plugins map[string]*Plugin) error {
 	ids := make([]string, 0, len(plugins))
 	for id := range plugins {
