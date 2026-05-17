@@ -16,7 +16,7 @@ import (
 
 // installHeredocDelim must match the literal in installRunTmpl. A plugin
 // script line equal to this would silently truncate the heredoc, hence
-// the up-front check in checkHeredocCollision.
+// the up-front check in checkScriptBody.
 const installHeredocDelim = "COCOON_PLUGIN_EOF"
 
 // ErrHeredocCollision is returned when a plugin install script
@@ -24,6 +24,11 @@ const installHeredocDelim = "COCOON_PLUGIN_EOF"
 // a sentinel so external callers (and tests) can match the failure
 // class with errors.Is without scraping the message.
 var ErrHeredocCollision = errors.New("dockerfile: plugin install script collides with heredoc delimiter")
+
+// ErrCRLFScript is returned when a plugin install script uses CRLF (or
+// bare CR) line endings. Exposed as a sentinel so callers (and tests)
+// can match the failure class with errors.Is without scraping the message.
+var ErrCRLFScript = errors.New("dockerfile: plugin install script has CRLF line endings")
 
 // fileExistsInFS returns (false, nil) for missing entries / directories,
 // (false, err) for permission / I/O failures so the caller surfaces them
@@ -39,12 +44,19 @@ func fileExistsInFS(fsys fs.FS, name string) (bool, error) {
 	return !st.IsDir(), nil
 }
 
-// checkHeredocCollision rejects scripts containing a line that exactly
-// matches installHeredocDelim. The heredoc form `bash <<'EOF' … EOF`
-// truncates at the first matching line, so a third-party plugin with
-// that literal would silently be cut off mid-build.
-func checkHeredocCollision(pluginID string, scriptBody []byte) error {
-	for _, line := range strings.Split(string(scriptBody), "\n") {
+// checkScriptBody rejects a plugin install script that cannot be embedded
+// safely in the install heredoc. CRLF (or bare CR) line endings leave a
+// stray \r on every command and silently corrupt the build; a line equal
+// to installHeredocDelim would terminate the `bash <<'COCOON_PLUGIN_EOF'`
+// heredoc early. CRLF is checked first: a \r-terminated delimiter line
+// would otherwise slip past the exact-line comparison below.
+func checkScriptBody(pluginID string, scriptBody []byte) error {
+	body := string(scriptBody)
+	if strings.Contains(body, "\r") {
+		return fmt.Errorf("%w: plugin %q contains a carriage return; re-save the install script with LF line endings",
+			ErrCRLFScript, pluginID)
+	}
+	for _, line := range strings.Split(body, "\n") {
 		if line == installHeredocDelim {
 			return fmt.Errorf("%w: plugin %q contains the literal %s; rename it in the script",
 				ErrHeredocCollision, pluginID, installHeredocDelim)
@@ -249,7 +261,7 @@ func renderInstallSnippet(rs runSpec, hasInstall bool, installPath string) (stri
 		if err != nil {
 			return "", err
 		}
-		if err := checkHeredocCollision(rs.id, body); err != nil {
+		if err := checkScriptBody(rs.id, body); err != nil {
 			return "", err
 		}
 		snippet := renderInstallRun(rs.id, "# Install "+rs.comment, rs.argLines, body,
@@ -274,7 +286,7 @@ func renderUserInstallSnippet(rs runSpec, userPath string, argLines []string) (s
 	if err != nil {
 		return "", err
 	}
-	if err := checkHeredocCollision(rs.id, body); err != nil {
+	if err := checkScriptBody(rs.id, body); err != nil {
 		return "", err
 	}
 	return renderInstallRun(rs.id, "# Configure "+rs.comment+" (user)", argLines, body,
