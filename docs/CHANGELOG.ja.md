@@ -6,6 +6,22 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-05-18
+
+### 追加
+
+- `plugin.toml` にオプションの `[version].verify` フィールドを追加しました。`version_capable` プラグインがダウンロードをどう検証するかを選びます: `"checksum"`（既定 — install スクリプトが `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` を検証）または `"pgp"`（スクリプトが同梱署名鍵で in-script 検証し、workspace 単位の checksum を取らない）。`verify = "pgp"` のプラグインに `[plugins.versions]` で `checksum_amd64` / `checksum_arm64` を設定する、または `cocoon plugin pin --amd64-checksum` / `--arm64-checksum` を渡すと、対処方法を示すエラーで拒否されます。
+- **セキュリティ**: リリースバイナリ（`cocoon-linux-amd64` / `cocoon-linux-arm64` / `cocoon-darwin-amd64` / `cocoon-darwin-arm64`）と `SHA256SUMS` に、リリースワークフローが生成する署名付きの build provenance attestation（SLSA provenance、Sigstore 経由）が付与されるようになりました。ダウンロードしたアセットは `gh attestation verify <file> --repo sukekyo26/cocoon` で、cocoon の GitHub Actions リリースパイプラインでビルドされ別の場所で再ビルド・差し替えされていないことを確認できます。
+
+### 修正
+
+- **セキュリティ**: `install.sh` ブートストラップインストーラの全ダウンロードを HTTPS に固定（`curl --proto '=https' --tlsv1.2`）。cocoon のプラグイン install スクリプトと同じ姿勢に揃えた。従来はプロトコル無制限で、ネットワーク攻撃者がリクエストを平文 HTTP にダウングレード／リダイレクトし、整合性検証が照合する `SHA256SUMS` を差し替える余地があった。
+- **セキュリティ**: `aws-cli` / `aws-sam-cli` / `nerd-fonts` プラグインがダウンロードを検証し、バージョン固定に対応するようになりました。従来は各プラグインが upstream の `latest` 成果物を整合性チェックなしで取得してインストーラを実行しており、upstream リリースや CDN が汚染されると `docker build` 中に root で任意コード実行が起き得ました。3 つとも `version_capable` になり、他の versioned プラグインと同様に `[plugins.versions]` で固定できます。`aws-cli` は install スクリプトに同梱した署名鍵で AWS の detached PGP 署名を検証します（AWS は SHA256 を公開していないため）。`aws-sam-cli` と `nerd-fonts` は `[plugins.versions]` に `checksum_amd64` / `checksum_arm64` を指定すると SHA256 チェックサムを検証します。
+- `cocoon gen` が、install スクリプトに CRLF（または単独の CR）改行を含むプラグインを拒否するようになりました。従来はそのまま install heredoc に埋め込んでいたため、混入した復帰文字が `docker build` 中に各コマンドを静かに壊していました。エラーはプラグイン名を示し、スクリプトを LF 改行で保存し直すよう促します。影響を受けるのは Windows で作成したカスタムプラグインのみで、同梱の catalog プラグインはすべて LF です。
+- `cocoon gen` がプラグインの衝突を決定論的に報告するようになりました。有効なプラグインの衝突ペアが複数あるとき、毎回同じペアを報告します（プラグイン id をソート順に走査）。従来は Go のランダム化されたマップ反復順に依存しており、同じ `workspace.toml` でも実行のたびに異なる衝突メッセージが出ることがありました。
+- `cocoon init --plugins` が重複したプラグイン id（例: `--plugins go,go`）を明確なエラーで拒否するようになった。従来は `[plugins].enable` が重複した `workspace.toml` を書き出し、後続の `cocoon gen` で初めて拒否されていた。
+- `cocoon plugin pin` が `version_capable` でないプラグインを明確なエラーで拒否するようになった。従来は `cocoon gen` が後で拒否する `[plugins.versions]` エントリを出力していた。
+
 ## [0.5.0] - 2026-05-16
 
 ### 追加
@@ -149,7 +165,8 @@ cocoon の主要な変更を記録します。フォーマットは
 - `COMPOSE_PROJECT_NAME` をプロジェクトディレクトリの basename から導出するように変更。docker compose の namespace がホストディレクトリと一致する。
 - 国際化 (英語 / 日本語) カタログを追加。CLI プロンプト・エラーメッセージ・`workspace.toml` インラインコメントすべてを `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` で切替可能。
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/sukekyo26/cocoon/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/sukekyo26/cocoon/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/sukekyo26/cocoon/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/sukekyo26/cocoon/compare/v0.3.0...v0.3.1

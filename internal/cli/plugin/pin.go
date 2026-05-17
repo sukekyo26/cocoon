@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
 	"github.com/sukekyo26/cocoon/internal/config"
 	"github.com/sukekyo26/cocoon/internal/logx"
 	"github.com/sukekyo26/cocoon/internal/plugin"
@@ -25,7 +26,9 @@ target line are preserved verbatim.
 
 Use the --amd64-checksum / --arm64-checksum flags when the upstream
 release ships per-arch SHA256 sums you want the install script to
-verify.
+verify. Plugins that declare verify = "pgp" in plugin.toml verify
+downloads against a bundled signature instead; passing checksum flags
+to those plugins is rejected.
 
 Pass --method <name> for plugins that declare two or more entries under
 [install.methods] in their plugin.toml — the pin then writes (or prints)
@@ -67,19 +70,39 @@ func newPinCmd(stdout, stderr io.Writer) *cobra.Command {
 
 func runPin(stdout, stderr io.Writer, id, ref, amd64sum, arm64sum, method string, write bool) error {
 	if id == "" || ref == "" {
-		return fmt.Errorf("%w: both <id> and <ref> are required", ErrUsage)
+		return fmt.Errorf("%w: both <id> and <ref> are required", clihelpers.ErrUsage)
 	}
 	layered, err := resolveLayered()
 	if err != nil {
 		return err
 	}
 	if layered.Source(id) == "" {
-		return fmt.Errorf("%w: plugin %q is not in any layer (cocoon plugin list)", ErrUsage, id)
+		return fmt.Errorf("%w: plugin %q is not in any layer (cocoon plugin list)", clihelpers.ErrUsage, id)
+	}
+	p, lErr := loadPluginFromLayer(layered, id)
+	if lErr != nil {
+		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, lErr)
+	}
+	// A pin only means something for a version_capable plugin: cocoon gen
+	// hard-rejects a [plugins.versions] entry for any other plugin. Fail fast
+	// here so `plugin pin` never emits a config that cannot generate.
+	if !p.Version.VersionCapable {
+		return fmt.Errorf(
+			"%w: plugin %q is not version_capable; it cannot be pinned "+
+				"([plugins.versions] entries for it are rejected by cocoon gen)",
+			clihelpers.ErrUsage, id)
 	}
 	if method != "" {
-		if mErr := validateMethodForPin(layered, id, method); mErr != nil {
+		if mErr := validateMethodForPin(p, id, method); mErr != nil {
 			return mErr
 		}
+	}
+	if (amd64sum != "" || arm64sum != "") && !p.Version.VerifiesByChecksum() {
+		return fmt.Errorf(
+			"%w: plugin %q declares verify = %q in plugin.toml; it verifies downloads "+
+				"in-script and takes no per-workspace checksum — drop --amd64-checksum / "+
+				"--arm64-checksum and pin the version only",
+			clihelpers.ErrUsage, id, p.Version.Verify)
 	}
 	if write {
 		return runPinWrite(stdout, stderr, id, ref, amd64sum, arm64sum, method)
@@ -96,22 +119,22 @@ func runPin(stdout, stderr io.Writer, id, ref, amd64sum, arm64sum, method string
 func runPinWrite(stdout, stderr io.Writer, id, ref, amd64sum, arm64sum, method string) error {
 	cwd, cwdErr := os.Getwd()
 	if cwdErr != nil {
-		return fmt.Errorf("%w: getwd: %w", ErrFailure, cwdErr)
+		return fmt.Errorf("%w: getwd: %w", clihelpers.ErrFailure, cwdErr)
 	}
 	wsPath, dErr := config.Discover(cwd)
 	if dErr != nil {
-		return fmt.Errorf("%w: discover workspace.toml: %w", ErrFailure, dErr)
+		return fmt.Errorf("%w: discover workspace.toml: %w", clihelpers.ErrFailure, dErr)
 	}
 	if wsPath == "" {
 		return fmt.Errorf(
 			"%w: --write needs a discoverable workspace.toml (run inside a cocoon project)",
-			ErrUsage)
+			clihelpers.ErrUsage)
 	}
 	if uErr := plugin.UpsertPinAndMethod(wsPath, id, ref, amd64sum, arm64sum, method); uErr != nil {
 		if errors.Is(uErr, plugin.ErrLegacyPinSubsection) {
-			return fmt.Errorf("%w: %w (in %s)", ErrUsage, uErr, wsPath)
+			return fmt.Errorf("%w: %w (in %s)", clihelpers.ErrUsage, uErr, wsPath)
 		}
-		return fmt.Errorf("%w: %w", ErrFailure, uErr)
+		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, uErr)
 	}
 	log := logx.New(stdout, stderr)
 	log.Successf("Updated %s: [plugins.versions] %s", wsPath, id)
@@ -143,28 +166,23 @@ func renderPinSnippet(id, ref, amd64sum, arm64sum, method string) string {
 	return b.String()
 }
 
-// validateMethodForPin loads the resolved plugin and confirms the requested
-// method name exists under [install.methods]. Returns ErrUsage for the
-// user-correctable failures (no methods declared / method name not declared)
-// and ErrFailure when the manifest itself cannot be read.
+// validateMethodForPin confirms the requested method name exists under the
+// plugin's [install.methods]. Returns clihelpers.ErrUsage for the
+// user-correctable failures (no methods declared / method name not declared).
 //
-// loadPluginFromLayer only runs strict unmarshal — it skips
-// validateMethodScripts and plugin.Validate — so a user-overlay plugin
-// without [install.methods] reaches this function with an empty
+// p comes from loadPluginFromLayer, which runs strict unmarshal only — it
+// skips validateMethodScripts and plugin.Validate — so a user-overlay
+// plugin without [install.methods] reaches this function with an empty
 // Install.Methods map. Handle that case explicitly rather than falling
 // through into the "method not declared (declared: )" branch, which
 // would surface an empty declared list and obscure the real fix.
-func validateMethodForPin(layered *plugin.LayeredFS, id, method string) error {
-	p, err := loadPluginFromLayer(layered, id)
-	if err != nil {
-		return fmt.Errorf("%w: %w", ErrFailure, err)
-	}
+func validateMethodForPin(p *plugin.Plugin, id, method string) error {
 	if len(p.Install.Methods) == 0 {
 		return fmt.Errorf(
 			"%w: plugin %q declares no [install.methods] in plugin.toml; "+
 				"--method is only meaningful when the plugin offers two or more "+
 				"install variants — drop --method to pin only the version",
-			ErrUsage, id)
+			clihelpers.ErrUsage, id)
 	}
 	if _, ok := p.Install.Methods[method]; !ok {
 		declared := make([]string, 0, len(p.Install.Methods))
@@ -174,7 +192,7 @@ func validateMethodForPin(layered *plugin.LayeredFS, id, method string) error {
 		sort.Strings(declared)
 		return fmt.Errorf(
 			"%w: plugin %q has no method %q in [install.methods] (declared: %s)",
-			ErrUsage, id, method, strings.Join(declared, ", "))
+			clihelpers.ErrUsage, id, method, strings.Join(declared, ", "))
 	}
 	return nil
 }

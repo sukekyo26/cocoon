@@ -302,3 +302,94 @@ func TestValidate_MethodsEmptyMapIgnored(t *testing.T) {
 	}
 	require.NoError(t, p.Validate("test/plugin.toml"))
 }
+
+// TestValidate_VerifyAccepted pins that the recognised [version].verify
+// values pass validation, including the omitted (empty) default.
+func TestValidate_VerifyAccepted(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name   string
+		verify string
+	}{
+		{"omitted", ""},
+		{"checksum", "checksum"},
+		{"pgp", "pgp"},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			p := &plugin.Plugin{
+				Metadata: validMetadata(),
+				Version:  plugin.Version{VersionCapable: true, Verify: tc.verify},
+			}
+			require.NoError(t, p.Validate("test/plugin.toml"))
+		})
+	}
+}
+
+// TestValidate_VerifyBadValue covers rejection of unrecognised
+// [version].verify values across input categories (wrong algorithm /
+// wrong case / near-miss spelling).
+func TestValidate_VerifyBadValue(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name   string
+		verify string
+	}{
+		{"wrong_algorithm", "sha256"},
+		{"uppercase", "PGP"},
+		{"near_miss", "gpg"},
+		{"arbitrary", "none"},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			p := &plugin.Plugin{
+				Metadata: validMetadata(),
+				Version:  plugin.Version{VersionCapable: true, Verify: tc.verify},
+			}
+			err := p.Validate("test/plugin.toml")
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "is not one of")
+		})
+	}
+}
+
+// TestValidate_VerifyWithoutVersionCapable pins that a verify value is
+// rejected unless version_capable = true, so a misleading declaration
+// cannot sit silently in plugin.toml.
+func TestValidate_VerifyWithoutVersionCapable(t *testing.T) {
+	t.Parallel()
+	p := &plugin.Plugin{
+		Metadata: validMetadata(),
+		Version:  plugin.Version{VersionCapable: false, Verify: "pgp"},
+	}
+	err := p.Validate("test/plugin.toml")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "verify requires version_capable = true")
+}
+
+// TestVersion_VerifiesByChecksum pins that the omitted and "checksum"
+// values mean checksum verification, and "pgp" does not.
+func TestVersion_VerifiesByChecksum(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name   string
+		verify string
+		want   bool
+	}{
+		{"omitted", "", true},
+		{"checksum", "checksum", true},
+		{"pgp", "pgp", false},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			v := plugin.Version{VersionCapable: true, Verify: tc.verify}
+			require.Equal(t, tc.want, v.VerifiesByChecksum())
+		})
+	}
+}

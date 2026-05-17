@@ -1,6 +1,10 @@
 package generate_test
 
 import (
+	"bytes"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -31,5 +35,26 @@ func TestManageScript_ShebangAndCommands(t *testing.T) {
 		if !strings.Contains(s, want) {
 			t.Errorf("manage.sh missing %q", want)
 		}
+	}
+}
+
+// TestManageScript_BashSyntax runs `bash -n` over the embedded manage.sh.
+// The string-contains tests above cannot catch a parse error, which would
+// otherwise only surface when a user runs ./.devcontainer/manage.sh.
+func TestManageScript_BashSyntax(t *testing.T) {
+	t.Parallel()
+	bashPath, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("bash not on PATH")
+	}
+	scriptPath := filepath.Join(t.TempDir(), "manage.sh")
+	if writeErr := os.WriteFile(scriptPath, []byte(generate.ManageScript()), 0o600); writeErr != nil {
+		t.Fatalf("write script: %v", writeErr)
+	}
+	cmd := exec.CommandContext(t.Context(), bashPath, "-n", scriptPath)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if runErr := cmd.Run(); runErr != nil {
+		t.Fatalf("bash -n rejected manage.sh: %v\n%s", runErr, stderr.String())
 	}
 }

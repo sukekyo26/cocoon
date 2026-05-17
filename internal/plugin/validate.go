@@ -16,99 +16,86 @@ var (
 	rxMethodName   = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
 )
 
-// accumulator is a trimmed copy of internal/config's errAccumulator so
-// the plugin package stays self-contained without exporting that type.
-type accumulator struct {
-	base []string
-	errs *[]config.FieldError
-}
-
-func newAccumulator() *accumulator {
-	errs := make([]config.FieldError, 0)
-	return &accumulator{base: nil, errs: &errs}
-}
-
-func (a *accumulator) at(seg ...string) *accumulator {
-	out := make([]string, 0, len(a.base)+len(seg))
-	out = append(out, a.base...)
-	out = append(out, seg...)
-	return &accumulator{base: out, errs: a.errs}
-}
-
-func (a *accumulator) add(msg string, seg ...string) {
-	loc := make([]string, 0, len(a.base)+len(seg))
-	loc = append(loc, a.base...)
-	loc = append(loc, seg...)
-	*a.errs = append(*a.errs, config.FieldError{Loc: loc, Message: msg})
-}
-
 // Validate returns a *config.ValidationError on failure so the CLI's error
 // renderer treats it identically to a workspace.toml failure.
 func (p *Plugin) Validate(path string) error {
-	a := newAccumulator()
+	a := config.NewAccumulator()
 	p.runValidate(a)
-	if len(*a.errs) == 0 {
+	errs := a.Errors()
+	if len(errs) == 0 {
 		return nil
 	}
-	return &config.ValidationError{Path: path, Errors: *a.errs}
+	return &config.ValidationError{Path: path, Errors: errs}
 }
 
-func (p *Plugin) runValidate(a *accumulator) {
-	p.Metadata.validate(a.at("metadata"))
-	p.Install.validate(a.at("install"))
+func (p *Plugin) runValidate(a *config.Accumulator) {
+	p.Metadata.validate(a.At("metadata"))
+	p.Install.validate(a.At("install"))
+	p.Version.validate(a.At("version"))
 }
 
-func (m *Metadata) validate(a *accumulator) {
+func (v *Version) validate(a *config.Accumulator) {
+	switch v.Verify {
+	case "", VerifyChecksum, VerifyPGP:
+	default:
+		a.Add(fmt.Sprintf("verify %q is not one of %q, %q", v.Verify, VerifyChecksum, VerifyPGP), "verify")
+	}
+	if v.Verify != "" && !v.VersionCapable {
+		a.Add("verify requires version_capable = true", "verify")
+	}
+}
+
+func (m *Metadata) validate(a *config.Accumulator) {
 	if m.Name == "" {
-		a.add("name must not be empty", "name")
+		a.Add("name must not be empty", "name")
 	}
 	if m.Description == "" {
-		a.add("description must not be empty", "description")
+		a.Add("description must not be empty", "description")
 	}
 	if m.URL == "" {
-		a.add("url must not be empty", "url")
+		a.Add("url must not be empty", "url")
 	} else if !rxPluginURL.MatchString(m.URL) {
-		a.add("url must start with https:// and contain no whitespace", "url")
+		a.Add("url must start with https:// and contain no whitespace", "url")
 	}
-	if hasDuplicates(m.Conflicts) {
-		a.add("metadata.conflicts contains duplicate entries", "conflicts")
+	if config.HasDuplicates(m.Conflicts) {
+		a.Add("metadata.conflicts contains duplicate entries", "conflicts")
 	}
 }
 
-func (i *Install) validate(a *accumulator) {
+func (i *Install) validate(a *config.Accumulator) {
 	if i.Env != nil {
-		checkMapKeys(a.at("env"), i.Env, rxEnvKey, "install.env")
+		config.CheckMapKeys(a.At("env"), i.Env, rxEnvKey, "install.env")
 	}
-	if hasDuplicates(i.BuildArgs) {
-		a.add("install.build_args contains duplicate entries", "build_args")
+	if config.HasDuplicates(i.BuildArgs) {
+		a.Add("install.build_args contains duplicate entries", "build_args")
 	}
 	for idx, b := range i.BuildArgs {
 		if !rxBuildArg.MatchString(b) {
-			a.add("build_arg does not match "+rxBuildArg.String(), "build_args", fmt.Sprintf("%d", idx))
+			a.Add("build_arg does not match "+rxBuildArg.String(), "build_args", fmt.Sprintf("%d", idx))
 		}
 	}
-	if hasDuplicates(i.Volumes) {
-		a.add("install.volumes contains duplicate entries", "volumes")
+	if config.HasDuplicates(i.Volumes) {
+		a.Add("install.volumes contains duplicate entries", "volumes")
 	}
 	for idx, v := range i.Volumes {
 		if !rxPluginVolume.MatchString(v) {
-			a.add("volume does not match "+rxPluginVolume.String(), "volumes", fmt.Sprintf("%d", idx))
+			a.Add("volume does not match "+rxPluginVolume.String(), "volumes", fmt.Sprintf("%d", idx))
 		}
 	}
 	i.validateMethods(a)
 }
 
-func (i *Install) validateMethods(a *accumulator) {
+func (i *Install) validateMethods(a *config.Accumulator) {
 	if len(i.Methods) == 0 {
 		if i.DefaultMethod != "" {
-			a.add("default_method requires at least one [install.methods.<name>] entry", "default_method")
+			a.Add("default_method requires at least one [install.methods.<name>] entry", "default_method")
 		}
 		return
 	}
 	if i.DefaultMethod == "" {
-		a.add("default_method must be set when [install.methods] is declared", "default_method")
+		a.Add("default_method must be set when [install.methods] is declared", "default_method")
 	} else if _, ok := i.Methods[i.DefaultMethod]; !ok {
-		a.add(fmt.Sprintf("default_method %q is not declared in [install.methods]", i.DefaultMethod), "default_method")
+		a.Add(fmt.Sprintf("default_method %q is not declared in [install.methods]", i.DefaultMethod), "default_method")
 	}
 	// Sort method names so ValidationError.Error()'s "first error"
 	// summary stays stable across runs (map iteration is randomised).
@@ -120,29 +107,10 @@ func (i *Install) validateMethods(a *accumulator) {
 	for _, name := range names {
 		m := i.Methods[name]
 		if !rxMethodName.MatchString(name) {
-			a.add("method name does not match "+rxMethodName.String(), "methods", name)
+			a.Add("method name does not match "+rxMethodName.String(), "methods", name)
 		}
 		if m.Description == "" {
-			a.add("description must not be empty", "methods", name, "description")
+			a.Add("description must not be empty", "methods", name, "description")
 		}
 	}
-}
-
-func checkMapKeys(a *accumulator, m map[string]string, rx *regexp.Regexp, label string) {
-	for k := range m {
-		if !rx.MatchString(k) {
-			a.add(fmt.Sprintf("%s key %q does not match pattern %q", label, k, rx.String()), k)
-		}
-	}
-}
-
-func hasDuplicates[T comparable](items []T) bool {
-	seen := make(map[T]struct{}, len(items))
-	for _, v := range items {
-		if _, dup := seen[v]; dup {
-			return true
-		}
-		seen[v] = struct{}{}
-	}
-	return false
 }

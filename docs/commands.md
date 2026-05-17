@@ -248,14 +248,14 @@ OK: scaffolded /home/alice/projects/myapp/.cocoon/plugins/gh-cli (2 files)
 | `--requires-root` | The install script runs as root. |
 | `--version-capable` | Generate `$PIN` / `$CHECKSUM_*` boilerplate. |
 | `--template <kind>` | `installer` \| `binary` \| `apt` \| `archive`. |
-| `--with-install-user` | Also generate `install_user.sh` (runs as the unprivileged user after `install.sh`). |
+| `--with-install-user` | Also generate `install_user.sh` (runs as the unprivileged user after `install.<category>.sh`). |
 | `--non-interactive` | Skip prompts; require all fields above. |
 | `--force` | Overwrite `<plugins-dir>/<id>/` if it already exists. |
 
 **Gotchas:**
 
 - Without `--plugins-dir` and outside a cocoon project (no discoverable `workspace.toml`), scaffold refuses with an actionable error rather than silently writing to `./plugins/<id>/`.
-- `--template tarball` implies `--version-capable`; the scaffold rejects the combination of `tarball` without `--version-capable`.
+- `--template binary` implies `--version-capable`; the scaffold rejects `binary` without `--version-capable`.
 - After scaffolding, the generated `plugin.toml` is reloaded under the same strict validator the runtime uses; if it fails (bad name, missing or malformed `url`, etc.), the directory is rolled back.
 - Like overlays from `add`, a scaffolded plugin still needs to be listed in `[plugins].enable` to take effect at `gen` time.
 

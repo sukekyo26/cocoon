@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
 	"github.com/sukekyo26/cocoon/internal/i18n"
 )
 
@@ -41,7 +42,7 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 	cmd.SetOut(stdout)
 	cmd.SetErr(stderr)
 	cmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
-		return fmt.Errorf("%w: %w", ErrUsage, err)
+		return fmt.Errorf("%w: %w", clihelpers.ErrUsage, err)
 	})
 	cmd.AddCommand(
 		newListCmd(stdout, stderr),
@@ -52,13 +53,13 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 	return cmd
 }
 
-// rejectUnknownSubcommand returns an ErrUsage-wrapped error when a stray
+// rejectUnknownSubcommand returns a clihelpers.ErrUsage-wrapped error when a stray
 // positional appears under a parent that only carries subcommands.
 func rejectUnknownSubcommand(_ *cobra.Command, args []string) error {
 	if len(args) == 0 {
 		return nil
 	}
-	return fmt.Errorf("%w: unknown subcommand %q", ErrUsage, args[0])
+	return fmt.Errorf("%w: unknown subcommand %q", clihelpers.ErrUsage, args[0])
 }
 
 func newScaffoldCmd(stdout, stderr io.Writer) *cobra.Command {
@@ -75,7 +76,7 @@ func newScaffoldCmd(stdout, stderr io.Writer) *cobra.Command {
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 1 {
-				return fmt.Errorf("%w: scaffold accepts at most one positional <id>, got %d", ErrUsage, len(args))
+				return fmt.Errorf("%w: scaffold accepts at most one positional <id>, got %d", clihelpers.ErrUsage, len(args))
 			}
 			if len(args) == 1 {
 				opts.id = args[0]
@@ -108,7 +109,7 @@ func newScaffoldCmd(stdout, stderr io.Writer) *cobra.Command {
 		"skip interactive prompts; require all fields above")
 	cmd.Flags().BoolVar(&opts.force, "force", false, "overwrite <plugins-dir>/<id>/ if it already exists")
 	cmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
-		return fmt.Errorf("%w: %w", ErrUsage, err)
+		return fmt.Errorf("%w: %w", clihelpers.ErrUsage, err)
 	})
 	return cmd
 }

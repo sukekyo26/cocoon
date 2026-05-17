@@ -6,6 +6,22 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-05-18
+
+### Added
+
+- `plugin.toml` gains an optional `[version].verify` field that selects how a `version_capable` plugin verifies its downloads: `"checksum"` (the default — the install script checks `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64`) or `"pgp"` (the script verifies a bundled signature in-script and takes no per-workspace checksum). Setting `checksum_amd64` / `checksum_arm64` in `[plugins.versions]` for a `verify = "pgp"` plugin — or passing `cocoon plugin pin --amd64-checksum` / `--arm64-checksum` to one — is rejected with an actionable error.
+- **Security**: Release binaries (`cocoon-linux-amd64`, `cocoon-linux-arm64`, `cocoon-darwin-amd64`, `cocoon-darwin-arm64`) and their `SHA256SUMS` now carry a signed build provenance attestation produced by the release workflow (SLSA provenance via Sigstore). After downloading an asset, confirm it was built by cocoon's GitHub Actions release pipeline — and not rebuilt or swapped elsewhere — with `gh attestation verify <file> --repo sukekyo26/cocoon`.
+
+### Fixed
+
+- **Security**: Pin every download in the `install.sh` bootstrap installer to HTTPS (`curl --proto '=https' --tlsv1.2`), matching the cocoon plugin install scripts. Previously the release-metadata and asset downloads accepted any protocol, so a network attacker could downgrade or redirect a request to plaintext HTTP and swap the `SHA256SUMS` list the integrity check verifies against.
+- **Security**: The `aws-cli`, `aws-sam-cli`, and `nerd-fonts` plugins now verify their downloads and support version pinning. Previously each fetched the upstream `latest` artifact with no integrity check and ran its installer, so a poisoned upstream release or CDN meant arbitrary code execution as root during `docker build`. All three are now `version_capable` — pin them under `[plugins.versions]` like any other versioned plugin. `aws-cli` verifies the installer zip against AWS's detached PGP signature using a signing key bundled in the install script (AWS publishes no SHA256 sums); `aws-sam-cli` and `nerd-fonts` verify a SHA256 checksum against `checksum_amd64` / `checksum_arm64` when those are provided in `[plugins.versions]`.
+- `cocoon gen` now rejects a plugin whose install script has CRLF (or bare CR) line endings, instead of embedding it in the install heredoc where the stray carriage returns silently corrupt every command during `docker build`. The error names the plugin and tells you to re-save the script with LF line endings. Only custom plugins authored on Windows are affected — the bundled catalog plugins all use LF.
+- `cocoon gen` now reports plugin conflicts deterministically. When more than one pair of enabled plugins conflict, the same pair is named on every run (plugin ids are scanned in sorted order); previously the reported pair depended on Go's randomised map iteration, so repeated runs over the same `workspace.toml` could surface different conflict messages.
+- `cocoon init --plugins` now rejects a duplicate plugin id (e.g. `--plugins go,go`) with a clear error, instead of writing a `workspace.toml` whose `[plugins].enable` list `cocoon gen` would later reject.
+- `cocoon plugin pin` now rejects a plugin that is not `version_capable` with a clear error, instead of printing or writing a `[plugins.versions]` entry that `cocoon gen` would later hard-reject.
+
 ## [0.5.0] - 2026-05-16
 
 ### Added
@@ -149,7 +165,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Add `COMPOSE_PROJECT_NAME` derivation from the project directory basename so docker compose namespacing matches the host directory.
 - Add i18n catalog (English / Japanese) covering every CLI prompt, error message, and inline `workspace.toml` comment, switched via `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG`.
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/sukekyo26/cocoon/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/sukekyo26/cocoon/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/sukekyo26/cocoon/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/sukekyo26/cocoon/compare/v0.3.0...v0.3.1

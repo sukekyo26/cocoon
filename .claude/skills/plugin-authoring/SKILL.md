@@ -96,6 +96,7 @@ cocoon plugin scaffold my-tool \
 | `apt`       | `internal/plugin/catalog/google-chrome/` | `.deb` を `apt-get install` |
 | `archive`   | `internal/plugin/catalog/go/`          | `version_capable`、ARCH 切替、`/usr/local/go` ツリー展開 |
 | `archive`   | `internal/plugin/catalog/zig/`         | 上流 `index.json` 経由でアセット名解決 |
+| `archive`   | `internal/plugin/catalog/aws-cli/`     | `verify = "pgp"`、同梱署名鍵で in-script PGP 検証（SHA256 非公開の上流向け） |
 
 `copilot-cli` は同一プラグインが `installer` (gh.io) と `binary`
 (GitHub Release) の **2 method** を提供する catalog 唯一の例。Zscaler 等で

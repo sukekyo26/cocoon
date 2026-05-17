@@ -52,7 +52,26 @@ type InstallMethod struct {
 	Description string `toml:"description"`
 }
 
+// Verification methods for [version].verify.
+const (
+	// VerifyChecksum verifies downloads against $CHECKSUM_AMD64 /
+	// $CHECKSUM_ARM64 recorded per workspace in [plugins.versions].
+	VerifyChecksum = "checksum"
+	// VerifyPGP verifies downloads in-script against a bundled signing
+	// key; it takes no per-workspace checksum.
+	VerifyPGP = "pgp"
+)
+
 // Version mirrors plugin.toml [version].
 type Version struct {
-	VersionCapable bool `toml:"version_capable"`
+	VersionCapable bool   `toml:"version_capable"`
+	Verify         string `toml:"verify,omitempty"`
+}
+
+// VerifiesByChecksum reports whether the plugin's install script verifies
+// downloads against $CHECKSUM_AMD64 / $CHECKSUM_ARM64. An empty Verify
+// defaults to the checksum mechanism; VerifyPGP plugins verify in-script
+// against a bundled signing key and take no per-workspace checksum.
+func (v Version) VerifiesByChecksum() bool {
+	return v.Verify == "" || v.Verify == VerifyChecksum
 }

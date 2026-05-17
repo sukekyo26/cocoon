@@ -16,7 +16,7 @@ import (
 
 // installHeredocDelim must match the literal in installRunTmpl. A plugin
 // script line equal to this would silently truncate the heredoc, hence
-// the up-front check in checkHeredocCollision.
+// the up-front check in checkScriptBody.
 const installHeredocDelim = "COCOON_PLUGIN_EOF"
 
 // ErrHeredocCollision is returned when a plugin install script
@@ -24,6 +24,11 @@ const installHeredocDelim = "COCOON_PLUGIN_EOF"
 // a sentinel so external callers (and tests) can match the failure
 // class with errors.Is without scraping the message.
 var ErrHeredocCollision = errors.New("dockerfile: plugin install script collides with heredoc delimiter")
+
+// ErrCRLFScript is returned when a plugin install script uses CRLF (or
+// bare CR) line endings. Exposed as a sentinel so callers (and tests)
+// can match the failure class with errors.Is without scraping the message.
+var ErrCRLFScript = errors.New("dockerfile: plugin install script has CRLF line endings")
 
 // fileExistsInFS returns (false, nil) for missing entries / directories,
 // (false, err) for permission / I/O failures so the caller surfaces them
@@ -39,12 +44,19 @@ func fileExistsInFS(fsys fs.FS, name string) (bool, error) {
 	return !st.IsDir(), nil
 }
 
-// checkHeredocCollision rejects scripts containing a line that exactly
-// matches installHeredocDelim. The heredoc form `bash <<'EOF' … EOF`
-// truncates at the first matching line, so a third-party plugin with
-// that literal would silently be cut off mid-build.
-func checkHeredocCollision(pluginID string, scriptBody []byte) error {
-	for _, line := range strings.Split(string(scriptBody), "\n") {
+// checkScriptBody rejects a plugin install script that cannot be embedded
+// safely in the install heredoc. CRLF (or bare CR) line endings leave a
+// stray \r on every command and silently corrupt the build; a line equal
+// to installHeredocDelim would terminate the `bash <<'COCOON_PLUGIN_EOF'`
+// heredoc early. CRLF is checked first: a \r-terminated delimiter line
+// would otherwise slip past the exact-line comparison below.
+func checkScriptBody(pluginID string, scriptBody []byte) error {
+	body := string(scriptBody)
+	if strings.Contains(body, "\r") {
+		return fmt.Errorf("%w: plugin %q contains a carriage return; re-save the install script with LF line endings",
+			ErrCRLFScript, pluginID)
+	}
+	for _, line := range strings.Split(body, "\n") {
 		if line == installHeredocDelim {
 			return fmt.Errorf("%w: plugin %q contains the literal %s; rename it in the script",
 				ErrHeredocCollision, pluginID, installHeredocDelim)
@@ -178,6 +190,7 @@ func buildPluginSnippets(
 		pluginsFS:      pluginsFS,
 		envBlock:       envBlock,
 		versionCapable: p.Version.VersionCapable,
+		checksumVerify: p.Version.VerifiesByChecksum(),
 		hasOverride:    hasOverride,
 		override:       override,
 		buildArgs:      install.BuildArgs,
@@ -217,6 +230,7 @@ type runSpec struct {
 	pluginsFS      fs.FS
 	envBlock       string
 	versionCapable bool
+	checksumVerify bool
 	hasOverride    bool
 	override       config.PluginVersionOverride
 	buildArgs      []string
@@ -247,11 +261,14 @@ func renderInstallSnippet(rs runSpec, hasInstall bool, installPath string) (stri
 		if err != nil {
 			return "", err
 		}
-		if err := checkHeredocCollision(rs.id, body); err != nil {
+		if err = checkScriptBody(rs.id, body); err != nil {
 			return "", err
 		}
-		snippet := renderInstallRun(rs.id, "# Install "+rs.comment, rs.argLines, body,
-			rs.versionCapable, rs.hasOverride, rs.override, rs.buildArgs, rs.method, rs.sh)
+		snippet, err := renderInstallRun(rs.id, "# Install "+rs.comment, rs.argLines, body,
+			rs.versionCapable, rs.checksumVerify, rs.hasOverride, rs.override, rs.buildArgs, rs.method, rs.sh)
+		if err != nil {
+			return "", err
+		}
 		if rs.envBlock != "" {
 			snippet = snippet + "\n" + rs.envBlock
 		}
@@ -272,11 +289,11 @@ func renderUserInstallSnippet(rs runSpec, userPath string, argLines []string) (s
 	if err != nil {
 		return "", err
 	}
-	if err := checkHeredocCollision(rs.id, body); err != nil {
+	if err := checkScriptBody(rs.id, body); err != nil {
 		return "", err
 	}
 	return renderInstallRun(rs.id, "# Configure "+rs.comment+" (user)", argLines, body,
-		rs.versionCapable, rs.hasOverride, rs.override, rs.buildArgs, rs.method, rs.sh), nil
+		rs.versionCapable, rs.checksumVerify, rs.hasOverride, rs.override, rs.buildArgs, rs.method, rs.sh)
 }
 
 func renderEnvBlock(env map[string]string, pluginsFS fs.FS, id string) (string, error) {
@@ -380,7 +397,10 @@ func generatePluginInstalls(
 		}
 	}
 
-	dirBlock := generateUserDirsBlock(collectAllUserDirs(plugins, enabled, extraUserDirs))
+	dirBlock, err := generateUserDirsBlock(collectAllUserDirs(plugins, enabled, extraUserDirs))
+	if err != nil {
+		return "", err
+	}
 	g, err := collectPluginSnippets(plugins, enabled, pluginsFS, overrides, methods, sh)
 	if err != nil {
 		return "", err
@@ -445,14 +465,13 @@ func renderInstallRun(
 	pluginID, comment string,
 	argLines []string,
 	scriptBody []byte,
-	versionCapable, hasOverride bool,
+	versionCapable, checksumVerify, hasOverride bool,
 	override config.PluginVersionOverride,
 	buildArgs []string,
 	method string,
 	sh shellEnv,
-) string {
-	_ = pluginID
-	envPairs := buildInstallEnvPairs(versionCapable, hasOverride, override, buildArgs, method, sh)
+) (string, error) {
+	envPairs := buildInstallEnvPairs(versionCapable, checksumVerify, hasOverride, override, buildArgs, method, sh)
 	body := string(scriptBody)
 	if !strings.HasSuffix(body, "\n") {
 		body += "\n"
@@ -464,14 +483,13 @@ func renderInstallRun(
 		ScriptBody: body,
 	})
 	if err != nil {
-		// Static template, well-formed input — unreachable in practice.
-		return ""
+		return "", fmt.Errorf("dockerfile: render install run for plugin %q: %w", pluginID, err)
 	}
-	return out
+	return out, nil
 }
 
 func buildInstallEnvPairs(
-	versionCapable, hasOverride bool,
+	versionCapable, checksumVerify, hasOverride bool,
 	override config.PluginVersionOverride,
 	buildArgs []string,
 	method string,
@@ -490,22 +508,28 @@ func buildInstallEnvPairs(
 	}
 	if versionCapable {
 		pin := ""
-		amd64 := ""
-		arm64 := ""
 		if hasOverride {
 			pin = override.Pin
-			if override.ChecksumAmd64 != nil {
-				amd64 = *override.ChecksumAmd64
-			}
-			if override.ChecksumArm64 != nil {
-				arm64 = *override.ChecksumArm64
-			}
 		}
-		pairs = append(pairs,
-			fmt.Sprintf(`PIN="%s"`, pin),
-			fmt.Sprintf(`CHECKSUM_AMD64="%s"`, amd64),
-			fmt.Sprintf(`CHECKSUM_ARM64="%s"`, arm64),
-		)
+		pairs = append(pairs, fmt.Sprintf(`PIN="%s"`, pin))
+		// CHECKSUM_* is injected only for checksum-verified plugins.
+		// pgp plugins verify in-script and take no per-workspace checksum.
+		if checksumVerify {
+			amd64 := ""
+			arm64 := ""
+			if hasOverride {
+				if override.ChecksumAmd64 != nil {
+					amd64 = *override.ChecksumAmd64
+				}
+				if override.ChecksumArm64 != nil {
+					arm64 = *override.ChecksumArm64
+				}
+			}
+			pairs = append(pairs,
+				fmt.Sprintf(`CHECKSUM_AMD64="%s"`, amd64),
+				fmt.Sprintf(`CHECKSUM_ARM64="%s"`, arm64),
+			)
+		}
 	}
 	for _, a := range buildArgs {
 		pairs = append(pairs, fmt.Sprintf(`%s="${%s}"`, a, a))
@@ -536,24 +560,43 @@ func validateVersionOverrides(
 				" version_capable = false (version pinning is unsupported by this plugin's install method)",
 				ErrInvalidVersionOverride, id, id)
 		}
-		if override.Pin != "" {
-			var missing []string
-			if override.ChecksumAmd64 == nil {
-				missing = append(missing, "checksum_amd64")
-			}
-			if override.ChecksumArm64 == nil {
-				missing = append(missing, "checksum_arm64")
-			}
-			if len(missing) > 0 && warnings != nil {
-				fmt.Fprintf(warnings,
-					"WARNING: [plugins.versions.%s] sets pin=\"%s\" without %s; "+
-						"the install step will skip SHA256 verification. "+
-						"Provide the checksum(s) in workspace.toml to enable integrity checking.\n",
-					id, override.Pin, strings.Join(missing, ", "))
-			}
+		if !p.Version.VerifiesByChecksum() && (override.ChecksumAmd64 != nil || override.ChecksumArm64 != nil) {
+			return fmt.Errorf("%w: [plugins.versions.%s] sets checksum_amd64/checksum_arm64, but plugin '%s'"+
+				" declares verify = %q and verifies downloads in-script (not against a per-workspace checksum);"+
+				" remove checksum_amd64/checksum_arm64 from [plugins.versions.%s]",
+				ErrInvalidVersionOverride, id, id, p.Version.Verify, id)
+		}
+		// The missing-checksum warning applies only to checksum-verified
+		// plugins; a pgp plugin pinned without a checksum is fully verified.
+		if override.Pin != "" && p.Version.VerifiesByChecksum() {
+			warnMissingChecksum(warnings, id, override)
 		}
 	}
 	return nil
+}
+
+// warnMissingChecksum emits the "pin without checksum" advisory for a
+// checksum-verified plugin whose [plugins.versions] entry omits one or both
+// checksums. No-op when warnings is nil or both checksums are present.
+func warnMissingChecksum(warnings io.Writer, id string, override config.PluginVersionOverride) {
+	if warnings == nil {
+		return
+	}
+	var missing []string
+	if override.ChecksumAmd64 == nil {
+		missing = append(missing, "checksum_amd64")
+	}
+	if override.ChecksumArm64 == nil {
+		missing = append(missing, "checksum_arm64")
+	}
+	if len(missing) == 0 {
+		return
+	}
+	fmt.Fprintf(warnings,
+		"WARNING: [plugins.versions.%s] sets pin=\"%s\" without %s; "+
+			"the install step will skip SHA256 verification. "+
+			"Provide the checksum(s) in workspace.toml to enable integrity checking.\n",
+		id, override.Pin, strings.Join(missing, ", "))
 }
 
 // userDirsBlockTmpl omits the trailing `USER ${USERNAME}`: the caller
@@ -568,18 +611,18 @@ RUN mkdir -p {{ .Dirs }} && \
 	nil,
 )
 
-func generateUserDirsBlock(userDirs []string) string {
+func generateUserDirsBlock(userDirs []string) (string, error) {
 	if len(userDirs) == 0 {
-		return ""
+		return "", nil
 	}
 	dirs := expandUserDirs(userDirs)
 	out, err := tmplx.Render(userDirsBlockTmpl, struct{ Dirs string }{
 		Dirs: strings.Join(dirs, " "),
 	})
 	if err != nil {
-		return ""
+		return "", fmt.Errorf("dockerfile: render user dirs block: %w", err)
 	}
-	return out
+	return out, nil
 }
 
 // expandUserDirs emits every intermediate dir under /home/${USERNAME}/ so

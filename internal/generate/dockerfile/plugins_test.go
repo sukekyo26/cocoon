@@ -108,9 +108,9 @@ func TestRenderInstallRun_InlineHeredoc(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			got := renderInstallRun(
+			got, err := renderInstallRun(
 				"my-plugin", "# Install Stuff", nil, tc.script,
-				false, false, config.PluginVersionOverride{},
+				false, true, false, config.PluginVersionOverride{},
 				nil,
 				"",
 				shellEnv{
@@ -119,6 +119,9 @@ func TestRenderInstallRun_InlineHeredoc(t *testing.T) {
 					loginShell: "bash",
 				},
 			)
+			if err != nil {
+				t.Fatalf("renderInstallRun: %v", err)
+			}
 			if strings.Contains(got, "--mount=type=bind,from=plugins") {
 				t.Errorf("output still references the old bind-mount build context:\n%s", got)
 			}
@@ -445,33 +448,83 @@ func TestFileExistsInFS_Contract(t *testing.T) {
 	})
 }
 
-// TestBuildPluginSnippets_HeredocCollisionFails covers the
-// checkHeredocCollision contract: an install script containing a line
-// that exactly matches the COCOON_PLUGIN_EOF terminator would silently
-// truncate the heredoc at docker build time, so the renderer must
-// reject it up front. Three input shapes lock the detection:
-//   - a delimiter-only line in the middle of the script (the actual
-//     truncation case)
-//   - a delimiter as the very last line, no trailing newline (boundary
-//     case the renderer normalises elsewhere)
-//   - a near-miss (delimiter prefix only) must NOT trip — the helper
-//     compares full lines, not substrings, so legitimate scripts that
-//     reference the literal in a comment or echo do not regress.
-func TestBuildPluginSnippets_HeredocCollisionFails(t *testing.T) {
+// TestCheckScriptBody pins the checkScriptBody contract: a plugin install
+// script is rejected when it has CRLF / bare-CR line endings (ErrCRLFScript)
+// or a line that exactly matches the COCOON_PLUGIN_EOF heredoc terminator
+// (ErrHeredocCollision). Legitimate scripts — the literal inside a comment,
+// a near-miss with leading whitespace, empty or newline-free bodies — pass.
+// crlf_delimiter_line locks the check order: a \r-terminated delimiter line
+// must surface as ErrCRLFScript, not slip past the exact-line comparison.
+func TestCheckScriptBody(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name    string
+		body    string
+		wantErr error
+		wantMsg string // substring of err.Error() when wantErr != nil
+	}{
+		{name: "clean_lf_body", body: "set -e\necho hi\n"},
+		{name: "empty_body", body: ""},
+		{name: "no_trailing_newline", body: "echo hi"},
+		{name: "delimiter_in_comment", body: "# see COCOON_PLUGIN_EOF below\necho hi\n"},
+		{name: "delimiter_with_leading_space", body: "echo a\n COCOON_PLUGIN_EOF\necho b\n"},
+		{name: "delimiter_exact_line", body: "echo a\nCOCOON_PLUGIN_EOF\necho b\n", wantErr: ErrHeredocCollision, wantMsg: "COCOON_PLUGIN_EOF"},
+		{name: "delimiter_as_last_line", body: "echo a\nCOCOON_PLUGIN_EOF", wantErr: ErrHeredocCollision, wantMsg: "COCOON_PLUGIN_EOF"},
+		{name: "crlf_mid_script", body: "set -e\r\necho hi\r\n", wantErr: ErrCRLFScript, wantMsg: "LF"},
+		{name: "crlf_at_eof", body: "echo hi\r\n", wantErr: ErrCRLFScript, wantMsg: "LF"},
+		{name: "bare_cr", body: "set -e\recho hi\n", wantErr: ErrCRLFScript, wantMsg: "LF"},
+		{name: "crlf_delimiter_line", body: "set -e\nCOCOON_PLUGIN_EOF\r\necho hi\n", wantErr: ErrCRLFScript, wantMsg: "LF"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := checkScriptBody("my-plugin", []byte(tc.body))
+			if tc.wantErr == nil {
+				if err != nil {
+					t.Fatalf("checkScriptBody() = %v, want nil", err)
+				}
+				return
+			}
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("checkScriptBody() = %v, want errors.Is(.., %v)", err, tc.wantErr)
+			}
+			if !strings.Contains(err.Error(), "my-plugin") {
+				t.Errorf("error must name the plugin: %v", err)
+			}
+			if !strings.Contains(err.Error(), tc.wantMsg) {
+				t.Errorf("error must contain %q: %v", tc.wantMsg, err)
+			}
+		})
+	}
+}
+
+// TestBuildPluginSnippets_RejectsUnsafeScript covers checkScriptBody wired
+// through the full generatePluginInstalls path: an install script that
+// cannot be embedded safely in the COCOON_PLUGIN_EOF heredoc is rejected
+// up front. The cases lock both failure classes — a bare delimiter line
+// (mid-script or trailing) that would truncate the heredoc, and CRLF line
+// endings that would corrupt every command — while a near-miss (the
+// literal inside a comment) still passes.
+func TestBuildPluginSnippets_RejectsUnsafeScript(t *testing.T) {
 	t.Parallel()
 
 	good := "set -e\n# mentions COCOON_PLUGIN_EOF in a comment, fine\necho hi\n"
 	collidingMiddle := "set -e\nCOCOON_PLUGIN_EOF\necho hi\n"
 	collidingTrailing := "set -e\necho hi\nCOCOON_PLUGIN_EOF"
+	crlf := "set -e\r\necho hi\r\n"
 
 	cases := []struct {
-		name      string
-		body      string
-		wantError bool
+		name    string
+		body    string
+		wantErr error
 	}{
-		{name: "no_collision_passes", body: good, wantError: false},
-		{name: "delimiter_in_middle_fails", body: collidingMiddle, wantError: true},
-		{name: "delimiter_as_last_line_fails", body: collidingTrailing, wantError: true},
+		{name: "no_collision_passes", body: good, wantErr: nil},
+		{name: "delimiter_in_middle_fails", body: collidingMiddle, wantErr: ErrHeredocCollision},
+		{name: "delimiter_as_last_line_fails", body: collidingTrailing, wantErr: ErrHeredocCollision},
+		{name: "crlf_line_endings_fail", body: crlf, wantErr: ErrCRLFScript},
 	}
 
 	for _, tc := range cases {
@@ -494,12 +547,9 @@ func TestBuildPluginSnippets_HeredocCollisionFails(t *testing.T) {
 				&bytes.Buffer{},
 				shellEnv{rcFileAbs: "/home/${USERNAME}/.bashrc", rcSyntax: "posix", loginShell: "bash"},
 			)
-			if tc.wantError {
-				if !errors.Is(err, ErrHeredocCollision) {
-					t.Fatalf("err = %v, want errors.Is(.., ErrHeredocCollision)", err)
-				}
-				if !strings.Contains(err.Error(), "COCOON_PLUGIN_EOF") {
-					t.Errorf("error message must name the colliding literal: %v", err)
+			if tc.wantErr != nil {
+				if !errors.Is(err, tc.wantErr) {
+					t.Fatalf("err = %v, want errors.Is(.., %v)", err, tc.wantErr)
 				}
 				return
 			}
@@ -645,6 +695,123 @@ func TestGeneratePluginInstalls_LegacyPluginNoMethodEnv(t *testing.T) {
 	}
 	if strings.Contains(out, "COCOON_INSTALL_METHOD") {
 		t.Errorf("legacy plugin must not carry COCOON_INSTALL_METHOD env:\n%s", out)
+	}
+}
+
+// TestBuildInstallEnvPairs_VerifyGatesChecksum pins that CHECKSUM_AMD64 /
+// CHECKSUM_ARM64 are injected only for checksum-verified version_capable
+// plugins. A pgp plugin gets PIN but no CHECKSUM_* (it verifies in-script);
+// a non-version_capable plugin gets neither.
+func TestBuildInstallEnvPairs_VerifyGatesChecksum(t *testing.T) {
+	t.Parallel()
+	csum := "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+	override := config.PluginVersionOverride{Pin: "1.2.3", ChecksumAmd64: &csum, ChecksumArm64: &csum}
+	sh := shellEnv{rcFileAbs: "/home/${USERNAME}/.bashrc", rcSyntax: "posix", loginShell: "bash"}
+	cases := []struct {
+		name           string
+		versionCapable bool
+		checksumVerify bool
+		wantPIN        bool
+		wantChecksum   bool
+	}{
+		{"checksum_plugin_gets_pin_and_checksum", true, true, true, true},
+		{"pgp_plugin_gets_pin_only", true, false, true, false},
+		{"not_version_capable_gets_neither", false, true, false, false},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			pairs := buildInstallEnvPairs(tc.versionCapable, tc.checksumVerify, true, override, nil, "", sh)
+			joined := strings.Join(pairs, " ")
+			if gotPIN := strings.Contains(joined, `PIN="1.2.3"`); gotPIN != tc.wantPIN {
+				t.Errorf("PIN present = %v, want %v\n%s", gotPIN, tc.wantPIN, joined)
+			}
+			gotChecksum := strings.Contains(joined, "CHECKSUM_AMD64=") || strings.Contains(joined, "CHECKSUM_ARM64=")
+			if gotChecksum != tc.wantChecksum {
+				t.Errorf("CHECKSUM_* present = %v, want %v\n%s", gotChecksum, tc.wantChecksum, joined)
+			}
+		})
+	}
+}
+
+// TestValidateVersionOverrides_ChecksumRejectedForPGP pins that setting
+// checksum_amd64 / checksum_arm64 for a pgp-verified plugin is a hard
+// ErrInvalidVersionOverride: the checksum vocabulary does not apply.
+func TestValidateVersionOverrides_ChecksumRejectedForPGP(t *testing.T) {
+	t.Parallel()
+	csum := "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+	cases := []struct {
+		name     string
+		override config.PluginVersionOverride
+	}{
+		{"amd64_only", config.PluginVersionOverride{Pin: "2.0.0", ChecksumAmd64: &csum}},
+		{"arm64_only", config.PluginVersionOverride{Pin: "2.0.0", ChecksumArm64: &csum}},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			plugins := map[string]*plugin.Plugin{
+				"awscli": {
+					Metadata: plugin.Metadata{Name: "aws-cli", URL: "https://example.com/x"},
+					Install:  plugin.Install{},
+					Version:  plugin.Version{VersionCapable: true, Verify: plugin.VerifyPGP},
+				},
+			}
+			err := validateVersionOverrides(
+				plugins,
+				map[string]config.PluginVersionOverride{"awscli": tc.override},
+				&bytes.Buffer{},
+			)
+			if !errors.Is(err, ErrInvalidVersionOverride) {
+				t.Fatalf("err = %v, want errors.Is(.., ErrInvalidVersionOverride)", err)
+			}
+			if !strings.Contains(err.Error(), "remove checksum_amd64/checksum_arm64") {
+				t.Errorf("error must tell the user what to do: %v", err)
+			}
+		})
+	}
+}
+
+// TestValidateVersionOverrides_PinWithoutChecksumWarning pins that the
+// missing-checksum WARNING fires for a checksum plugin pinned without a
+// checksum, but is suppressed for a pgp plugin (which is fully verified
+// in-script regardless of checksum fields).
+func TestValidateVersionOverrides_PinWithoutChecksumWarning(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name     string
+		verify   string
+		wantWarn bool
+	}{
+		{"checksum_plugin_warns", plugin.VerifyChecksum, true},
+		{"pgp_plugin_silent", plugin.VerifyPGP, false},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			plugins := map[string]*plugin.Plugin{
+				"p": {
+					Metadata: plugin.Metadata{Name: "p", URL: "https://example.com/x"},
+					Install:  plugin.Install{},
+					Version:  plugin.Version{VersionCapable: true, Verify: tc.verify},
+				},
+			}
+			var warnings bytes.Buffer
+			err := validateVersionOverrides(
+				plugins,
+				map[string]config.PluginVersionOverride{"p": {Pin: "1.0.0"}},
+				&warnings,
+			)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if gotWarn := strings.Contains(warnings.String(), "WARNING"); gotWarn != tc.wantWarn {
+				t.Errorf("warning emitted = %v, want %v\n%s", gotWarn, tc.wantWarn, warnings.String())
+			}
+		})
 	}
 }
 

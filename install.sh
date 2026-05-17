@@ -89,10 +89,10 @@ if [ "$VERSION" = "latest" ]; then
   # status (POSIX sh has no `pipefail`).
   releases_url="$API_BASE/repos/$REPO/releases/latest"
   if [ -n "$API_TOKEN" ]; then
-    api_response=$(curl -fsSL -H "Authorization: Bearer $API_TOKEN" "$releases_url") ||
+    api_response=$(curl -fsSL --proto '=https' --tlsv1.2 -H "Authorization: Bearer $API_TOKEN" "$releases_url") ||
       die "failed to fetch release metadata: $releases_url"
   else
-    api_response=$(curl -fsSL "$releases_url") ||
+    api_response=$(curl -fsSL --proto '=https' --tlsv1.2 "$releases_url") ||
       die "failed to fetch release metadata: $releases_url"
   fi
   tag=$(printf '%s' "$api_response" |
@@ -116,8 +116,8 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
 err "downloading $asset@$version"
-curl -fsSL "$base/$asset" -o "$tmp/$asset" || die "download failed: $base/$asset"
-curl -fsSL "$base/SHA256SUMS" -o "$tmp/SHA256SUMS" || die "download failed: $base/SHA256SUMS"
+curl -fsSL --proto '=https' --tlsv1.2 "$base/$asset" -o "$tmp/$asset" || die "download failed: $base/$asset"
+curl -fsSL --proto '=https' --tlsv1.2 "$base/SHA256SUMS" -o "$tmp/SHA256SUMS" || die "download failed: $base/SHA256SUMS"
 
 expected=$(grep "  $asset\$" "$tmp/SHA256SUMS" | awk '{print $1}')
 [ -n "$expected" ] || die "$asset not listed in SHA256SUMS"

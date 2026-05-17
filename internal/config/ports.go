@@ -4,9 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net"
 	"regexp"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -235,24 +236,24 @@ func LongFormKeyOrder() []string {
 }
 
 // validatePortsForward keeps the per-entry parsing alongside the normalizer.
-func validatePortsForward(a *errAccumulator, forward []any) {
+func validatePortsForward(a *Accumulator, forward []any) {
 	for i, raw := range forward {
 		idx := strconv.Itoa(i)
 		switch v := raw.(type) {
 		case string:
 			if msg, ok := shortFormReason(v); !ok {
-				a.add(msg, "forward", idx)
+				a.Add(msg, "forward", idx)
 			}
 		case map[string]any:
 			validateLongForm(a, v, idx)
 		case int, int64, float64:
-			a.add(
+			a.Add(
 				"int form was removed; use a string (\"3000:3000\") "+
 					"or table ({ target = 3000 })",
 				"forward", idx,
 			)
 		default:
-			a.add(fmt.Sprintf("must be string or table (got %T)", raw),
+			a.Add(fmt.Sprintf("must be string or table (got %T)", raw),
 				"forward", idx)
 		}
 	}
@@ -300,12 +301,12 @@ func shortFormReason(s string) (string, bool) {
 	return "", true
 }
 
-func validateLongForm(a *errAccumulator, m map[string]any, idx string) {
+func validateLongForm(a *Accumulator, m map[string]any, idx string) {
 	if rejectUnknownLongFormKeys(a, m, idx) {
 		return
 	}
 	if _, present := m["target"]; !present {
-		a.add("target is required", "forward", idx, "target")
+		a.Add("target is required", "forward", idx, "target")
 	}
 	validateLongFormPortFields(a, m, idx)
 	validateLongFormStringField(a, m, idx, "host_ip", validateHostIP)
@@ -313,10 +314,10 @@ func validateLongForm(a *errAccumulator, m map[string]any, idx string) {
 	validateLongFormStringField(a, m, idx, "mode", validateEnum("mode", allowedModes))
 }
 
-func rejectUnknownLongFormKeys(a *errAccumulator, m map[string]any, idx string) bool {
+func rejectUnknownLongFormKeys(a *Accumulator, m map[string]any, idx string) bool {
 	for k := range m {
 		if _, ok := allowedLongFormKeys[k]; !ok {
-			a.add(fmt.Sprintf(
+			a.Add(fmt.Sprintf(
 				"unknown key %q (allowed: %s)",
 				k, strings.Join(longFormKeyOrder, ", ")),
 				"forward", idx)
@@ -326,7 +327,7 @@ func rejectUnknownLongFormKeys(a *errAccumulator, m map[string]any, idx string) 
 	return false
 }
 
-func validateLongFormPortFields(a *errAccumulator, m map[string]any, idx string) {
+func validateLongFormPortFields(a *Accumulator, m map[string]any, idx string) {
 	if v, ok := m["target"]; ok {
 		validateIntPortField(a, v, idx, "target")
 	}
@@ -335,14 +336,14 @@ func validateLongFormPortFields(a *errAccumulator, m map[string]any, idx string)
 	}
 }
 
-func validateIntPortField(a *errAccumulator, v any, idx, key string) {
+func validateIntPortField(a *Accumulator, v any, idx, key string) {
 	n, parsed := intField(v)
 	if !parsed {
-		a.add(fmt.Sprintf("%s must be an integer", key), "forward", idx, key)
+		a.Add(fmt.Sprintf("%s must be an integer", key), "forward", idx, key)
 		return
 	}
 	if n < portMin || n > portMax {
-		a.add(fmt.Sprintf("%s must be in [%d,%d]", key, portMin, portMax),
+		a.Add(fmt.Sprintf("%s must be in [%d,%d]", key, portMin, portMax),
 			"forward", idx, key)
 	}
 }
@@ -350,18 +351,18 @@ func validateIntPortField(a *errAccumulator, v any, idx, key string) {
 // validateLongFormPublished accepts an integer or string matching
 // `\d+(?:-\d+)?` (docker-compose's range form `published = "8000-8010"`).
 // Each numeric component is bounded by [portMin, portMax].
-func validateLongFormPublished(a *errAccumulator, v any, idx string) {
+func validateLongFormPublished(a *Accumulator, v any, idx string) {
 	if _, ok := intField(v); ok {
 		validateIntPortField(a, v, idx, "published")
 		return
 	}
 	s, ok := v.(string)
 	if !ok {
-		a.add("published must be an integer or a string", "forward", idx, "published")
+		a.Add("published must be an integer or a string", "forward", idx, "published")
 		return
 	}
 	if !rxLongFormPublishedString.MatchString(s) {
-		a.add(fmt.Sprintf(
+		a.Add(fmt.Sprintf(
 			"published string %q must be a port or numeric range like \"8000-8010\"", s),
 			"forward", idx, "published")
 		return
@@ -369,7 +370,7 @@ func validateLongFormPublished(a *errAccumulator, v any, idx string) {
 	for _, part := range strings.Split(s, "-") {
 		n, err := strconv.Atoi(part)
 		if err != nil || n < portMin || n > portMax {
-			a.add(fmt.Sprintf("published port must be in [%d,%d] (got %q)",
+			a.Add(fmt.Sprintf("published port must be in [%d,%d] (got %q)",
 				portMin, portMax, part),
 				"forward", idx, "published")
 			return
@@ -380,19 +381,19 @@ func validateLongFormPublished(a *errAccumulator, v any, idx string) {
 // validateLongFormStringField is a no-op when the key is absent. The
 // `check` callback returns the message to emit (or "" to accept).
 func validateLongFormStringField(
-	a *errAccumulator,
+	a *Accumulator,
 	m map[string]any,
 	idx, name string,
 	check func(string) string,
 ) {
 	if v, ok := stringField(m, name); ok {
 		if msg := check(v); msg != "" {
-			a.add(msg, "forward", idx, name)
+			a.Add(msg, "forward", idx, name)
 		}
 		return
 	}
 	if _, present := m[name]; present {
-		a.add(name+" must be a string", "forward", idx, name)
+		a.Add(name+" must be a string", "forward", idx, name)
 	}
 }
 
@@ -408,7 +409,7 @@ func validateEnum(field string, allowed map[string]struct{}) func(string) string
 		if _, ok := allowed[v]; ok {
 			return ""
 		}
-		return fmt.Sprintf("%s must be one of %s (got %q)", field, sortedKeys(allowed), v)
+		return fmt.Sprintf("%s must be one of %s (got %q)", field, strings.Join(slices.Sorted(maps.Keys(allowed)), "/"), v)
 	}
 }
 
@@ -433,13 +434,4 @@ func stringField(m map[string]any, k string) (string, bool) {
 		}
 	}
 	return "", false
-}
-
-func sortedKeys(m map[string]struct{}) string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return strings.Join(keys, "/")
 }

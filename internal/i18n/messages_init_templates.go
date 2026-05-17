@@ -76,7 +76,7 @@ var messagesEN_initTemplates = map[string]string{
 
 	// [plugins.versions] (rendered immediately after [plugins.methods]).
 	"init_toml_template_plugins_versions": "# [plugins.versions] — pin specific versions for version_capable plugins.\n" +
-		"#   Optional checksum_amd64 / checksum_arm64 (64 lowercase hex chars) verify install tarballs.\n" +
+		"#   For verify = \"checksum\" plugins, checksum_amd64 / checksum_arm64 (64 lowercase hex chars) verify downloads.\n" +
 		"# [plugins.versions]\n" +
 		"# go = { pin = \"1.22.5\" }\n" +
 		"# uv = { pin = \"0.5.7\", checksum_amd64 = \"<sha256>\" }",
@@ -224,7 +224,7 @@ var messagesJA_initTemplates = map[string]string{
 
 	// [plugins.versions]
 	"init_toml_template_plugins_versions": "# [plugins.versions] — version_capable プラグインのバージョン固定。\n" +
-		"#   checksum_amd64 / checksum_arm64 (64 文字の小文字 hex) で tarball を検証可。\n" +
+		"#   verify = \"checksum\" のプラグインは checksum_amd64 / checksum_arm64（64 文字の小文字 hex）でダウンロードを検証可。\n" +
 		"# [plugins.versions]\n" +
 		"# go = { pin = \"1.22.5\" }\n" +
 		"# uv = { pin = \"0.5.7\", checksum_amd64 = \"<sha256>\" }",

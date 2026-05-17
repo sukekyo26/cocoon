@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
 	plugincli "github.com/sukekyo26/cocoon/internal/cli/plugin"
 )
 
@@ -104,7 +105,7 @@ func TestScaffoldRejectsInvalidID(t *testing.T) {
 		"--description", "x",
 		"--url", "https://x.example.com",
 	)
-	if !errors.Is(err, plugincli.ErrUsage) {
+	if !errors.Is(err, clihelpers.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage", err)
 	}
 	if !strings.Contains(stderr, "Invalid plugin id") &&
@@ -162,7 +163,7 @@ func TestScaffoldRequiresPluginsDirOrWorkspace(t *testing.T) {
 		"--description", "Demo",
 		"--url", "https://example.com",
 	)
-	if !errors.Is(err, plugincli.ErrUsage) {
+	if !errors.Is(err, clihelpers.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage", err)
 	}
 	if !strings.Contains(stderr, "--plugins-dir") {
@@ -178,7 +179,7 @@ func TestScaffoldRequiresIDArg(t *testing.T) {
 		"--plugins-dir", dir,
 		"--non-interactive",
 	)
-	if !errors.Is(err, plugincli.ErrUsage) {
+	if !errors.Is(err, clihelpers.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage", err)
 	}
 	if stderr == "" {
@@ -200,7 +201,7 @@ func TestScaffoldRequiresForceOnExistingDir(t *testing.T) {
 		"--description", "Demo",
 		"--url", "https://example.com",
 	)
-	if !errors.Is(err, plugincli.ErrFailure) {
+	if !errors.Is(err, clihelpers.ErrFailure) {
 		t.Fatalf("err = %v, want ErrFailure", err)
 	}
 	if !strings.Contains(stderr, "--force") {
@@ -249,7 +250,7 @@ func TestScaffoldRejectsBinaryWithoutVersionCapable(t *testing.T) {
 		"--description", "Demo",
 		"--url", "https://example.com",
 	)
-	if !errors.Is(err, plugincli.ErrUsage) {
+	if !errors.Is(err, clihelpers.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage", err)
 	}
 	if !strings.Contains(stderr, "binary") {
@@ -269,7 +270,7 @@ func TestScaffoldRejectsUnknownTemplate(t *testing.T) {
 		"--description", "Demo",
 		"--url", "https://example.com",
 	)
-	if !errors.Is(err, plugincli.ErrUsage) {
+	if !errors.Is(err, clihelpers.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage", err)
 	}
 }
@@ -284,7 +285,7 @@ func TestScaffoldRequiresName(t *testing.T) {
 		"--description", "Demo",
 		"--url", "https://example.com",
 	)
-	if !errors.Is(err, plugincli.ErrUsage) {
+	if !errors.Is(err, clihelpers.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage", err)
 	}
 	if !strings.Contains(stderr, "name") {
@@ -317,7 +318,7 @@ func TestPluginUsage(t *testing.T) {
 func TestPluginUnknownSubcommand(t *testing.T) {
 	t.Parallel()
 	_, _, err := runCmd(t, "frobnicate")
-	if !errors.Is(err, plugincli.ErrUsage) {
+	if !errors.Is(err, clihelpers.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage", err)
 	}
 	if !strings.Contains(err.Error(), "unknown subcommand") {
@@ -344,7 +345,7 @@ func TestScaffoldRejectsExistingFileTarget(t *testing.T) {
 		"--url", "https://example.com",
 		"--template", "apt",
 	)
-	if !errors.Is(err, plugincli.ErrFailure) {
+	if !errors.Is(err, clihelpers.ErrFailure) {
 		t.Fatalf("err = %v, want ErrFailure", err)
 	}
 	if !strings.Contains(stderr, "demo") {
@@ -363,7 +364,7 @@ func TestScaffoldDescriptionMissing(t *testing.T) {
 		"--name", "Demo",
 		// no --description
 	)
-	if !errors.Is(err, plugincli.ErrUsage) {
+	if !errors.Is(err, clihelpers.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage", err)
 	}
 }
@@ -382,7 +383,7 @@ func TestScaffoldNonInteractiveRejectsWhitespaceName(t *testing.T) {
 		"--description", "Demo",
 		"--url", "https://example.com",
 	)
-	if !errors.Is(err, plugincli.ErrUsage) {
+	if !errors.Is(err, clihelpers.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage", err)
 	}
 	if !strings.Contains(stderr, "--name") {
@@ -403,7 +404,7 @@ func TestScaffoldNonInteractiveRejectsMissingURL(t *testing.T) {
 		"--description", "Demo",
 		// no --url
 	)
-	if !errors.Is(err, plugincli.ErrUsage) {
+	if !errors.Is(err, clihelpers.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage", err)
 	}
 	if !strings.Contains(stderr, "--url") {
@@ -424,7 +425,7 @@ func TestScaffoldNonInteractiveRejectsMalformedURL(t *testing.T) {
 		"--description", "Demo",
 		"--url", "http://insecure.example.com",
 	)
-	if !errors.Is(err, plugincli.ErrUsage) {
+	if !errors.Is(err, clihelpers.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage", err)
 	}
 	if !strings.Contains(stderr, "--url") {
@@ -445,7 +446,7 @@ func TestScaffoldNonInteractiveRejectsWhitespaceDescription(t *testing.T) {
 		"--description", "   ",
 		"--url", "https://example.com",
 	)
-	if !errors.Is(err, plugincli.ErrUsage) {
+	if !errors.Is(err, clihelpers.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage", err)
 	}
 	if !strings.Contains(stderr, "--description") {

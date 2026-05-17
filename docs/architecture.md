@@ -42,7 +42,7 @@ flowchart LR
 
 ## Plugin system
 
-cocoon ships 20 plugins inside the binary at build time. Each plugin lives under `internal/plugin/catalog/<id>/{plugin.toml, install.sh}` and is loaded through a 3-layer overlay so users can override or add plugins by dropping files under `~/.cocoon/plugins/` or `<project>/.cocoon/plugins/`.
+cocoon ships its plugin catalog inside the binary at build time. Each plugin lives under `internal/plugin/catalog/<id>/{plugin.toml, install.<category>.sh}` and is loaded through a 3-layer overlay so users can override or add plugins by dropping files under `~/.cocoon/plugins/` or `<project>/.cocoon/plugins/`.
 
 ```mermaid
 flowchart TB
@@ -55,7 +55,7 @@ flowchart TB
     embedded --> dockerfile
 ```
 
-The generator reads each enabled plugin's `install.sh` (and `install_user.sh`, when present) directly from the LayeredFS and inlines the verbatim contents into the Dockerfile under a single-quoted heredoc (`bash <<'COCOON_PLUGIN_EOF' … COCOON_PLUGIN_EOF`). Per-script env vars (PIN / CHECKSUM_* / RC_FILE / etc.) live on the same `RUN` line so they stay scoped to that step. No host cache directory is created — the build needs nothing beyond the project tree itself, which is what makes `cocoon gen` work the same way from inside the dev container as from the host.
+The generator reads each enabled plugin's `install.<category>.sh` (and `install_user.sh`, when present) directly from the LayeredFS and inlines the verbatim contents into the Dockerfile under a single-quoted heredoc (`bash <<'COCOON_PLUGIN_EOF' … COCOON_PLUGIN_EOF`). Per-script env vars (PIN / CHECKSUM_* / RC_FILE / etc.) live on the same `RUN` line so they stay scoped to that step. No host cache directory is created — the build needs nothing beyond the project tree itself, which is what makes `cocoon gen` work the same way from inside the dev container as from the host.
 
 ## Generator pipeline
 
@@ -69,7 +69,7 @@ sequenceDiagram
     cfg-->>cli: WorkspaceContext
     cli->>fs: build LayeredFS (project ∪ user ∪ embedded)
     fs-->>cli: fs.FS
-    cli->>gen: dockerfile / compose / devcontainerjson / envfile / shellrc (read install.sh through fs.FS)
+    cli->>gen: dockerfile / compose / devcontainerjson / envfile / shellrc (read install.<category>.sh through fs.FS)
     gen-->>cli: artifacts
     cli->>cli: write to .devcontainer/
 ```
@@ -80,7 +80,7 @@ Each artifact is rendered into memory first, then written atomically through `in
 
 ```text
 .devcontainer/
-├── Dockerfile               # Multi-stage build referencing the plugin cache
+├── Dockerfile               # Container build; plugin install scripts inlined as heredocs
 ├── docker-compose.yml       # Compose file for the dev container + sidecars
 ├── docker-entrypoint.sh     # Remaps the user to the host UID/GID, then syncs image-baked ~/.local into the named volume
 ├── .env                     # COMPOSE_PROJECT_NAME, CONTAINER_SERVICE_NAME, USERNAME, IMAGE, IMAGE_VERSION (host-independent)
