@@ -9,6 +9,7 @@ cocoon の主要な変更を記録します。フォーマットは
 ### 追加
 
 - `plugin.toml` にオプションの `[version].verify` フィールドを追加しました。`version_capable` プラグインがダウンロードをどう検証するかを選びます: `"checksum"`（既定 — install スクリプトが `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` を検証）または `"pgp"`（スクリプトが同梱署名鍵で in-script 検証し、workspace 単位の checksum を取らない）。`verify = "pgp"` のプラグインに `[plugins.versions]` で `checksum_amd64` / `checksum_arm64` を設定する、または `cocoon plugin pin --amd64-checksum` / `--arm64-checksum` を渡すと、対処方法を示すエラーで拒否されます。
+- **セキュリティ**: リリースバイナリ（`cocoon-linux-amd64` / `cocoon-linux-arm64` / `cocoon-darwin-amd64` / `cocoon-darwin-arm64`）と `SHA256SUMS` に、リリースワークフローが生成する署名付きの build provenance attestation（SLSA provenance、Sigstore 経由）が付与されるようになりました。ダウンロードしたアセットは `gh attestation verify <file> --repo sukekyo26/cocoon` で、cocoon の GitHub Actions リリースパイプラインでビルドされ別の場所で再ビルド・差し替えされていないことを確認できます。
 
 ### 修正
 
