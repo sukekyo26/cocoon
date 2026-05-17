@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"net/http"
@@ -97,6 +98,7 @@ type mockRelease struct {
 
 type mockServer struct {
 	srv      *httptest.Server
+	caBundle string // CA cert PEM path passed to the install.sh subprocess as CURL_CA_BUNDLE
 	apiHits  *int32
 	dlHits   *int32
 	sumsHits *int32
@@ -159,16 +161,34 @@ func newMockServer(t *testing.T, m mockRelease) *mockServer {
 			writeMock(w, []byte(m.sumsRaw))
 		})
 
-	srv := httptest.NewServer(mux)
+	srv := httptest.NewTLSServer(mux)
 	t.Cleanup(srv.Close)
 	return &mockServer{
 		srv:         srv,
+		caBundle:    writeServerCA(t, srv),
 		apiHits:     &apiHits,
 		dlHits:      &dlHits,
 		sumsHits:    &sumsHits,
 		authMu:      &authMu,
 		lastAPIAuth: &lastAPIAuth,
 	}
+}
+
+// writeServerCA writes the httptest TLS server's self-signed certificate to a
+// temp PEM file and returns its path, so the install.sh subprocess can trust
+// the mock via CURL_CA_BUNDLE. install.sh passes curl --proto '=https', which
+// refuses the cleartext fallback, so the mock must serve real TLS.
+func writeServerCA(t *testing.T, srv *httptest.Server) string {
+	t.Helper()
+	pemBytes := pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: srv.Certificate().Raw,
+	})
+	path := filepath.Join(t.TempDir(), "ca.pem")
+	if err := os.WriteFile(path, pemBytes, 0o600); err != nil {
+		t.Fatalf("write CA bundle: %v", err)
+	}
+	return path
 }
 
 // runInstallSh executes `sh install.sh` with the supplied env overrides
@@ -229,6 +249,7 @@ func TestInstallSh_LatestHappyPath(t *testing.T) {
 		"COCOON_API_BASE":     srv.baseURL(),
 		"COCOON_RELEASE_BASE": srv.baseURL(),
 		"COCOON_INSTALL_DIR":  dst,
+		"CURL_CA_BUNDLE":      srv.caBundle,
 	})
 	if exit != 0 {
 		t.Fatalf("exit=%d, stderr=%q", exit, stderr)
@@ -267,6 +288,7 @@ func TestInstallSh_PinnedVersion(t *testing.T) {
 	stderr, exit := runInstallSh(t, map[string]string{
 		"COCOON_REPO":         mockRepo,
 		"COCOON_VERSION":      "0.2.0", // no leading v
+		"CURL_CA_BUNDLE":      srv.caBundle,
 		"COCOON_API_BASE":     srv.baseURL(),
 		"COCOON_RELEASE_BASE": srv.baseURL(),
 		"COCOON_INSTALL_DIR":  dst,
@@ -290,6 +312,7 @@ func TestInstallSh_PinnedVersion_VPrefix(t *testing.T) {
 	stderr, exit := runInstallSh(t, map[string]string{
 		"COCOON_REPO":         mockRepo,
 		"COCOON_VERSION":      "v0.2.0", // already has v prefix; must not double up
+		"CURL_CA_BUNDLE":      srv.caBundle,
 		"COCOON_API_BASE":     srv.baseURL(),
 		"COCOON_RELEASE_BASE": srv.baseURL(),
 		"COCOON_INSTALL_DIR":  dst,
@@ -312,6 +335,7 @@ func TestInstallSh_DefaultInstallDir(t *testing.T) {
 		"COCOON_REPO":         mockRepo,
 		"COCOON_API_BASE":     srv.baseURL(),
 		"COCOON_RELEASE_BASE": srv.baseURL(),
+		"CURL_CA_BUNDLE":      srv.caBundle,
 		// COCOON_INSTALL_DIR deliberately unset → defaults to $HOME/.local/bin
 	})
 	if exit != 0 {
@@ -333,6 +357,7 @@ func TestInstallSh_APIError404(t *testing.T) {
 		"COCOON_API_BASE":     srv.baseURL(),
 		"COCOON_RELEASE_BASE": srv.baseURL(),
 		"COCOON_INSTALL_DIR":  dst,
+		"CURL_CA_BUNDLE":      srv.caBundle,
 	})
 	if exit == 0 {
 		t.Fatalf("expected non-zero exit, got 0; stderr=%q", stderr)
@@ -359,6 +384,7 @@ func TestInstallSh_TagParseFailure(t *testing.T) {
 		"COCOON_API_BASE":     srv.baseURL(),
 		"COCOON_RELEASE_BASE": srv.baseURL(),
 		"COCOON_INSTALL_DIR":  dst,
+		"CURL_CA_BUNDLE":      srv.caBundle,
 	})
 	if exit == 0 {
 		t.Fatalf("expected non-zero exit, got 0; stderr=%q", stderr)
@@ -382,6 +408,7 @@ func TestInstallSh_AssetMissingFromSums(t *testing.T) {
 		"COCOON_API_BASE":     srv.baseURL(),
 		"COCOON_RELEASE_BASE": srv.baseURL(),
 		"COCOON_INSTALL_DIR":  dst,
+		"CURL_CA_BUNDLE":      srv.caBundle,
 	})
 	if exit == 0 {
 		t.Fatalf("expected non-zero exit, got 0; stderr=%q", stderr)
@@ -402,6 +429,7 @@ func TestInstallSh_APITokenForwarded(t *testing.T) {
 		"COCOON_API_BASE":     srv.baseURL(),
 		"COCOON_RELEASE_BASE": srv.baseURL(),
 		"COCOON_API_TOKEN":    token,
+		"CURL_CA_BUNDLE":      srv.caBundle,
 		"COCOON_INSTALL_DIR":  dst,
 	})
 	if exit != 0 {
@@ -425,6 +453,7 @@ func TestInstallSh_NoTokenNoAuthHeader(t *testing.T) {
 		"COCOON_API_BASE":     srv.baseURL(),
 		"COCOON_RELEASE_BASE": srv.baseURL(),
 		"COCOON_INSTALL_DIR":  dst,
+		"CURL_CA_BUNDLE":      srv.caBundle,
 		// COCOON_API_TOKEN deliberately unset
 	})
 	if exit != 0 {
@@ -448,6 +477,7 @@ func TestInstallSh_TrailingSlashOnBases(t *testing.T) {
 		"COCOON_REPO":         mockRepo,
 		"COCOON_API_BASE":     srv.baseURL() + "/",
 		"COCOON_RELEASE_BASE": srv.baseURL() + "/",
+		"CURL_CA_BUNDLE":      srv.caBundle,
 		"COCOON_INSTALL_DIR":  dst,
 	})
 	if exit != 0 {
@@ -487,8 +517,9 @@ func TestInstallSh_GHESPathPrefix(t *testing.T) {
 		func(w http.ResponseWriter, _ *http.Request) { writeMock(w, binary) })
 	mux.HandleFunc(fmt.Sprintf("/%s/releases/download/%s/SHA256SUMS", mockRepo, mockTag),
 		func(w http.ResponseWriter, _ *http.Request) { writeMock(w, []byte(sumsBody)) })
-	srv := httptest.NewServer(mux)
+	srv := httptest.NewTLSServer(mux)
 	t.Cleanup(srv.Close)
+	caBundle := writeServerCA(t, srv)
 
 	dst := t.TempDir()
 	stderr, exit := runInstallSh(t, map[string]string{
@@ -496,6 +527,7 @@ func TestInstallSh_GHESPathPrefix(t *testing.T) {
 		"COCOON_API_BASE":     srv.URL + "/api/v3",
 		"COCOON_RELEASE_BASE": srv.URL,
 		"COCOON_INSTALL_DIR":  dst,
+		"CURL_CA_BUNDLE":      caBundle,
 	})
 	if exit != 0 {
 		t.Fatalf("exit=%d, stderr=%q", exit, stderr)
@@ -528,6 +560,7 @@ func TestInstallSh_ChecksumMismatch(t *testing.T) {
 		"COCOON_API_BASE":     srv.baseURL(),
 		"COCOON_RELEASE_BASE": srv.baseURL(),
 		"COCOON_INSTALL_DIR":  dst,
+		"CURL_CA_BUNDLE":      srv.caBundle,
 	})
 	if exit == 0 {
 		t.Fatalf("expected non-zero exit, got 0; stderr=%q", stderr)

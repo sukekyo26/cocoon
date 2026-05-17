@@ -12,12 +12,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **Security**: Pin every download in the `install.sh` bootstrap installer to HTTPS (`curl --proto '=https' --tlsv1.2`), matching the cocoon plugin install scripts. Previously the release-metadata and asset downloads accepted any protocol, so a network attacker could downgrade or redirect a request to plaintext HTTP and swap the `SHA256SUMS` list the integrity check verifies against.
+- **Security**: The `aws-cli`, `aws-sam-cli`, and `nerd-fonts` plugins now verify their downloads and support version pinning. Previously each fetched the upstream `latest` artifact with no integrity check and ran its installer, so a poisoned upstream release or CDN meant arbitrary code execution as root during `docker build`. All three are now `version_capable` — pin them under `[plugins.versions]` like any other versioned plugin. `aws-cli` verifies the installer zip against AWS's detached PGP signature using a signing key bundled in the install script (AWS publishes no SHA256 sums); `aws-sam-cli` and `nerd-fonts` verify a SHA256 checksum against `checksum_amd64` / `checksum_arm64` when those are provided in `[plugins.versions]`.
 - `cocoon init --plugins` now rejects a duplicate plugin id (e.g. `--plugins go,go`) with a clear error, instead of writing a `workspace.toml` whose `[plugins].enable` list `cocoon gen` would later reject.
 - `cocoon plugin pin` now rejects a plugin that is not `version_capable` with a clear error, instead of printing or writing a `[plugins.versions]` entry that `cocoon gen` would later hard-reject.
-
-### Security
-
-- The `aws-cli`, `aws-sam-cli`, and `nerd-fonts` plugins now verify their downloads and support version pinning. Previously each fetched the upstream `latest` artifact with no integrity check and ran its installer, so a poisoned upstream release or CDN meant arbitrary code execution as root during `docker build`. All three are now `version_capable` — pin them under `[plugins.versions]` like any other versioned plugin. `aws-cli` verifies the installer zip against AWS's detached PGP signature using a signing key bundled in the install script (AWS publishes no SHA256 sums); `aws-sam-cli` and `nerd-fonts` verify a SHA256 checksum against `checksum_amd64` / `checksum_arm64` when those are provided in `[plugins.versions]`.
 
 ## [0.5.0] - 2026-05-16
 
