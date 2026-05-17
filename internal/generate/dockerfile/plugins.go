@@ -261,11 +261,14 @@ func renderInstallSnippet(rs runSpec, hasInstall bool, installPath string) (stri
 		if err != nil {
 			return "", err
 		}
-		if err := checkScriptBody(rs.id, body); err != nil {
+		if err = checkScriptBody(rs.id, body); err != nil {
 			return "", err
 		}
-		snippet := renderInstallRun(rs.id, "# Install "+rs.comment, rs.argLines, body,
+		snippet, err := renderInstallRun(rs.id, "# Install "+rs.comment, rs.argLines, body,
 			rs.versionCapable, rs.checksumVerify, rs.hasOverride, rs.override, rs.buildArgs, rs.method, rs.sh)
+		if err != nil {
+			return "", err
+		}
 		if rs.envBlock != "" {
 			snippet = snippet + "\n" + rs.envBlock
 		}
@@ -290,7 +293,7 @@ func renderUserInstallSnippet(rs runSpec, userPath string, argLines []string) (s
 		return "", err
 	}
 	return renderInstallRun(rs.id, "# Configure "+rs.comment+" (user)", argLines, body,
-		rs.versionCapable, rs.checksumVerify, rs.hasOverride, rs.override, rs.buildArgs, rs.method, rs.sh), nil
+		rs.versionCapable, rs.checksumVerify, rs.hasOverride, rs.override, rs.buildArgs, rs.method, rs.sh)
 }
 
 func renderEnvBlock(env map[string]string, pluginsFS fs.FS, id string) (string, error) {
@@ -394,7 +397,10 @@ func generatePluginInstalls(
 		}
 	}
 
-	dirBlock := generateUserDirsBlock(collectAllUserDirs(plugins, enabled, extraUserDirs))
+	dirBlock, err := generateUserDirsBlock(collectAllUserDirs(plugins, enabled, extraUserDirs))
+	if err != nil {
+		return "", err
+	}
 	g, err := collectPluginSnippets(plugins, enabled, pluginsFS, overrides, methods, sh)
 	if err != nil {
 		return "", err
@@ -464,8 +470,7 @@ func renderInstallRun(
 	buildArgs []string,
 	method string,
 	sh shellEnv,
-) string {
-	_ = pluginID
+) (string, error) {
 	envPairs := buildInstallEnvPairs(versionCapable, checksumVerify, hasOverride, override, buildArgs, method, sh)
 	body := string(scriptBody)
 	if !strings.HasSuffix(body, "\n") {
@@ -478,10 +483,9 @@ func renderInstallRun(
 		ScriptBody: body,
 	})
 	if err != nil {
-		// Static template, well-formed input — unreachable in practice.
-		return ""
+		return "", fmt.Errorf("dockerfile: render install run for plugin %q: %w", pluginID, err)
 	}
-	return out
+	return out, nil
 }
 
 func buildInstallEnvPairs(
@@ -607,18 +611,18 @@ RUN mkdir -p {{ .Dirs }} && \
 	nil,
 )
 
-func generateUserDirsBlock(userDirs []string) string {
+func generateUserDirsBlock(userDirs []string) (string, error) {
 	if len(userDirs) == 0 {
-		return ""
+		return "", nil
 	}
 	dirs := expandUserDirs(userDirs)
 	out, err := tmplx.Render(userDirsBlockTmpl, struct{ Dirs string }{
 		Dirs: strings.Join(dirs, " "),
 	})
 	if err != nil {
-		return ""
+		return "", fmt.Errorf("dockerfile: render user dirs block: %w", err)
 	}
-	return out
+	return out, nil
 }
 
 // expandUserDirs emits every intermediate dir under /home/${USERNAME}/ so

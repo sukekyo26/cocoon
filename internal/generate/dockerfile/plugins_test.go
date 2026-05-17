@@ -108,7 +108,7 @@ func TestRenderInstallRun_InlineHeredoc(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			got := renderInstallRun(
+			got, err := renderInstallRun(
 				"my-plugin", "# Install Stuff", nil, tc.script,
 				false, true, false, config.PluginVersionOverride{},
 				nil,
@@ -119,6 +119,9 @@ func TestRenderInstallRun_InlineHeredoc(t *testing.T) {
 					loginShell: "bash",
 				},
 			)
+			if err != nil {
+				t.Fatalf("renderInstallRun: %v", err)
+			}
 			if strings.Contains(got, "--mount=type=bind,from=plugins") {
 				t.Errorf("output still references the old bind-mount build context:\n%s", got)
 			}
