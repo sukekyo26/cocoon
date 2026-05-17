@@ -6,6 +6,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- `cocoon init --plugins` now rejects a duplicate plugin id (e.g. `--plugins go,go`) with a clear error, instead of writing a `workspace.toml` whose `[plugins].enable` list `cocoon gen` would later reject.
+
 ## [0.5.0] - 2026-05-16
 
 ### Added
