@@ -6,6 +6,8 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-05-18
+
 ### 追加
 
 - `plugin.toml` にオプションの `[version].verify` フィールドを追加しました。`version_capable` プラグインがダウンロードをどう検証するかを選びます: `"checksum"`（既定 — install スクリプトが `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` を検証）または `"pgp"`（スクリプトが同梱署名鍵で in-script 検証し、workspace 単位の checksum を取らない）。`verify = "pgp"` のプラグインに `[plugins.versions]` で `checksum_amd64` / `checksum_arm64` を設定する、または `cocoon plugin pin --amd64-checksum` / `--arm64-checksum` を渡すと、対処方法を示すエラーで拒否されます。
@@ -163,7 +165,8 @@ cocoon の主要な変更を記録します。フォーマットは
 - `COMPOSE_PROJECT_NAME` をプロジェクトディレクトリの basename から導出するように変更。docker compose の namespace がホストディレクトリと一致する。
 - 国際化 (英語 / 日本語) カタログを追加。CLI プロンプト・エラーメッセージ・`workspace.toml` インラインコメントすべてを `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` で切替可能。
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/sukekyo26/cocoon/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/sukekyo26/cocoon/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/sukekyo26/cocoon/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/sukekyo26/cocoon/compare/v0.3.0...v0.3.1

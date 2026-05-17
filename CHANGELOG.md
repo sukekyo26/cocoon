@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-05-18
+
 ### Added
 
 - `plugin.toml` gains an optional `[version].verify` field that selects how a `version_capable` plugin verifies its downloads: `"checksum"` (the default — the install script checks `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64`) or `"pgp"` (the script verifies a bundled signature in-script and takes no per-workspace checksum). Setting `checksum_amd64` / `checksum_arm64` in `[plugins.versions]` for a `verify = "pgp"` plugin — or passing `cocoon plugin pin --amd64-checksum` / `--arm64-checksum` to one — is rejected with an actionable error.
@@ -163,7 +165,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Add `COMPOSE_PROJECT_NAME` derivation from the project directory basename so docker compose namespacing matches the host directory.
 - Add i18n catalog (English / Japanese) covering every CLI prompt, error message, and inline `workspace.toml` comment, switched via `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG`.
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/sukekyo26/cocoon/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/sukekyo26/cocoon/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/sukekyo26/cocoon/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/sukekyo26/cocoon/compare/v0.3.0...v0.3.1
