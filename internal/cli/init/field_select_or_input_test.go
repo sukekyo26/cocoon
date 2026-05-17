@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"testing"
 
@@ -695,5 +696,23 @@ func TestSelectOrInputField_NoKeymapInert(t *testing.T) {
 				t.Errorf("cmd = %v, want nil with an empty keymap", cmd)
 			}
 		})
+	}
+}
+
+// TestSelectOrInputField_RunAccessibleEOFBeforeAnswer pins the contract at
+// RunAccessible's EOF branch: a stdin that closes before any answer yields
+// an error wrapping io.EOF. It is asserted directly on the field because
+// huh.Form.runAccessible discards a field's RunAccessible error, so this
+// contract is invisible through the `cocoon init` cobra path.
+func TestSelectOrInputField_RunAccessibleEOFBeforeAnswer(t *testing.T) {
+	t.Parallel()
+	var target string
+	f := newSelectOrInputField("image_version", &target, []string{"26.04", "24.04"}, "Other").
+		Validate(func(string) error { return nil })
+
+	var buf bytes.Buffer
+	err := f.RunAccessible(&buf, strings.NewReader(""))
+	if !errors.Is(err, io.EOF) {
+		t.Fatalf("RunAccessible(empty stdin) err = %v, want an error wrapping io.EOF", err)
 	}
 }
