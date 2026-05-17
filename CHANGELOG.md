@@ -9,6 +9,7 @@ adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 
 - `plugin.toml` gains an optional `[version].verify` field that selects how a `version_capable` plugin verifies its downloads: `"checksum"` (the default — the install script checks `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64`) or `"pgp"` (the script verifies a bundled signature in-script and takes no per-workspace checksum). Setting `checksum_amd64` / `checksum_arm64` in `[plugins.versions]` for a `verify = "pgp"` plugin — or passing `cocoon plugin pin --amd64-checksum` / `--arm64-checksum` to one — is rejected with an actionable error.
+- **Security**: Release binaries (`cocoon-linux-amd64`, `cocoon-linux-arm64`, `cocoon-darwin-amd64`, `cocoon-darwin-arm64`) and their `SHA256SUMS` now carry a signed build provenance attestation produced by the release workflow (SLSA provenance via Sigstore). After downloading an asset, confirm it was built by cocoon's GitHub Actions release pipeline — and not rebuilt or swapped elsewhere — with `gh attestation verify <file> --repo sukekyo26/cocoon`.
 
 ### Fixed
 
