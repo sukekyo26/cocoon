@@ -30,9 +30,11 @@ jobs:
           go-version-file: go.mod
           cache: true
       - uses: taiki-e/install-action@b1fb785e72add1aaabe1e13115c2292ca8925d3f # just
+      # install.sh pinned to the golangci-lint v2.11.4 commit so the fetched
+      # script is immutable; the script itself SHA256-verifies the binary.
       - name: Install golangci-lint v2.11.4
         run: |
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | \
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/8f3b0c7ed018e57905fbd873c697e0b1ede605a5/install.sh | \
             sh -s -- -b "$(go env GOPATH)/bin" v2.11.4
       - run: just lint
       - run: just fmt-check
