@@ -74,10 +74,16 @@ j+c7Kg92pDx2uQ==
 -----END PGP PUBLIC KEY BLOCK-----
 AWS_CLI_PGP_KEY
 
-# Fail closed if the bundled key block is ever mangled or replaced.
-if ! gpg --batch --with-colons --fingerprint 2>/dev/null |
+# Fail closed if the bundled key block is ever mangled or replaced. A gpg
+# failure here aborts via set -e with gpg's own stderr intact; only a
+# successful listing that lacks the expected fingerprint reaches the
+# mismatch branch, so the two failure modes stay distinguishable.
+fpr_listing="$(gpg --batch --with-colons --fingerprint)"
+if ! printf '%s\n' "$fpr_listing" |
   grep -q '^fpr:::::::::FB5DB77FD5C118B80511ADA8A6310ACC4672475C:'; then
-  echo "ERROR: bundled AWS CLI signing key has an unexpected fingerprint" >&2
+  echo "ERROR: bundled AWS CLI signing key did not yield the expected fingerprint" >&2
+  echo "       (want FB5DB77FD5C118B80511ADA8A6310ACC4672475C); gpg --fingerprint gave:" >&2
+  printf '%s\n' "$fpr_listing" >&2
   exit 1
 fi
 
