@@ -236,7 +236,6 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 	if root == "" {
 		root = ctx.ProjectDir
 	}
-	configDir := filepath.Join(root, "config")
 
 	customVols := ctx.CustomVolumes()
 	customVolPaths := make([]string, 0, len(customVols))
@@ -264,7 +263,7 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 
 	mirrorRewritePre, mirrorRewrite, proxyConfPre := splitAptSetupForBootstrap(ctx)
 
-	aptBase := readAptPackages(configDir)
+	aptBase := baseAptPackagesBlock()
 	basePkgNames := parseBasePackages(aptBase)
 	aptPlugin := collectPluginAptPackages(opts.Plugins, enabled, basePkgNames)
 
@@ -272,9 +271,9 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 	for _, pkg := range aptExtraPkgs {
 		if _, dup := basePkgNames[pkg]; dup && opts.Warnings != nil {
 			fmt.Fprintf(opts.Warnings,
-				"WARNING: [apt] packages contains '%s', which is already in "+
-					"apt-base-packages.conf. Remove duplicates from [apt] packages "+
-					"in workspace.toml to avoid redundant installs.\n", pkg)
+				"WARNING: [apt] packages contains '%s', which cocoon already installs "+
+					"as a base package. Remove it from [apt] packages in workspace.toml "+
+					"to avoid redundant installs.\n", pkg)
 		}
 	}
 	aptExtra := formatAptContinuations(aptExtraPkgs)
@@ -664,16 +663,8 @@ func buildDockerfileHooks(ctx *generate.WorkspaceContext, warnings io.Writer) (p
 		wrap(ctx.DockerfilePostPlugins(), "post_plugins")
 }
 
-// readAptPackages reads config/apt-base-packages.conf and formats each
-// non-blank, non-comment line as a Dockerfile continuation.
-//
-// The configDir argument is retained for compatibility with the v1
-// caller signature; cocoon ignores it because the base apt set is
-// now hardcoded in internal/setup.MinimalBasePackages. Users add the
-// rest through [apt] packages (cocoon init's AptCategories picker
-// pre-fills common groups).
-func readAptPackages(configDir string) string {
-	_ = configDir
+// baseAptPackagesBlock formats aptbase.MinimalBasePackages as indented Dockerfile continuation lines.
+func baseAptPackagesBlock() string {
 	pkgs := aptbase.MinimalBasePackages
 	if len(pkgs) == 0 {
 		return ""
