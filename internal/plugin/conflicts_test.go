@@ -111,6 +111,7 @@ func TestCheckConflicts_Deterministic(t *testing.T) {
 	for range iterations {
 		err := plugin.CheckConflicts(plugins)
 		require.Error(t, err)
+		require.ErrorIs(t, err, plugin.ErrConflict)
 		require.Contains(t, err.Error(), want)
 	}
 }
