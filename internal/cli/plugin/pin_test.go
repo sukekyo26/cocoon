@@ -346,6 +346,73 @@ func TestPin_MethodUnknownNameFails(t *testing.T) {
 	}
 }
 
+// seedPGPPlugin drops a user-overlay plugin declaring verify = "pgp" so
+// pin can reject the checksum flags against it.
+func seedPGPPlugin(t *testing.T, home string) {
+	t.Helper()
+	dir := filepath.Join(home, ".cocoon", "plugins", "pgp-plugin")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	body := `[metadata]
+name = "pgp-plugin"
+description = "fixture verified by a bundled pgp signature"
+url = "https://example.test"
+default = false
+
+[install]
+requires_root = false
+default_method = "archive"
+
+[install.methods.archive]
+description = "Extract a signed archive"
+
+[version]
+version_capable = true
+verify = "pgp"
+`
+	if err := os.WriteFile(filepath.Join(dir, "plugin.toml"), []byte(body), 0o600); err != nil {
+		t.Fatalf("write plugin.toml: %v", err)
+	}
+}
+
+// --amd64-checksum / --arm64-checksum against a verify = "pgp" plugin must
+// fail with ErrUsage (the checksum vocabulary does not apply), while a
+// plain pin of the same plugin still succeeds.
+//
+//nolint:paralleltest // t.Chdir + t.Setenv mutate process state.
+func TestPin_ChecksumRejectedForPGPPlugin(t *testing.T) {
+	home := withIsolatedHome(t)
+	seedPGPPlugin(t, home)
+	dir := t.TempDir()
+	seedWorkspace(t, dir, "[plugins]\nenable = [\"pgp-plugin\"]\n")
+	t.Chdir(dir)
+
+	sha := "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+	for _, flag := range []string{"--amd64-checksum", "--arm64-checksum"} {
+		flag := flag
+		t.Run("rejects_"+flag, func(t *testing.T) {
+			_, _, err := runPinCmd(t, "pgp-plugin", "2.0.0", flag, sha)
+			if !errors.Is(err, clihelpers.ErrUsage) {
+				t.Fatalf("err = %v, want ErrUsage", err)
+			}
+			if !strings.Contains(err.Error(), `verify = "pgp"`) {
+				t.Errorf("err should name the pgp verify method: %v", err)
+			}
+		})
+	}
+
+	t.Run("plain_pin_succeeds", func(t *testing.T) {
+		stdout, stderr, err := runPinCmd(t, "pgp-plugin", "2.0.0")
+		if err != nil {
+			t.Fatalf("pin: err=%v stderr=%s", err, stderr)
+		}
+		if !strings.Contains(stdout, `pgp-plugin = { pin = "2.0.0" }`) {
+			t.Errorf("stdout missing pin line:\n%s", stdout)
+		}
+	})
+}
+
 // --method on a user-overlay plugin whose plugin.toml declares no
 // [install.methods] section at all: validateMethodForPin loads via
 // loadPluginFromLayer (strict unmarshal only — the loader's catalog-wide

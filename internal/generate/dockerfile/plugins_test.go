@@ -110,7 +110,7 @@ func TestRenderInstallRun_InlineHeredoc(t *testing.T) {
 			t.Parallel()
 			got := renderInstallRun(
 				"my-plugin", "# Install Stuff", nil, tc.script,
-				false, false, config.PluginVersionOverride{},
+				false, true, false, config.PluginVersionOverride{},
 				nil,
 				"",
 				shellEnv{
@@ -645,6 +645,123 @@ func TestGeneratePluginInstalls_LegacyPluginNoMethodEnv(t *testing.T) {
 	}
 	if strings.Contains(out, "COCOON_INSTALL_METHOD") {
 		t.Errorf("legacy plugin must not carry COCOON_INSTALL_METHOD env:\n%s", out)
+	}
+}
+
+// TestBuildInstallEnvPairs_VerifyGatesChecksum pins that CHECKSUM_AMD64 /
+// CHECKSUM_ARM64 are injected only for checksum-verified version_capable
+// plugins. A pgp plugin gets PIN but no CHECKSUM_* (it verifies in-script);
+// a non-version_capable plugin gets neither.
+func TestBuildInstallEnvPairs_VerifyGatesChecksum(t *testing.T) {
+	t.Parallel()
+	csum := "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+	override := config.PluginVersionOverride{Pin: "1.2.3", ChecksumAmd64: &csum, ChecksumArm64: &csum}
+	sh := shellEnv{rcFileAbs: "/home/${USERNAME}/.bashrc", rcSyntax: "posix", loginShell: "bash"}
+	cases := []struct {
+		name           string
+		versionCapable bool
+		checksumVerify bool
+		wantPIN        bool
+		wantChecksum   bool
+	}{
+		{"checksum_plugin_gets_pin_and_checksum", true, true, true, true},
+		{"pgp_plugin_gets_pin_only", true, false, true, false},
+		{"not_version_capable_gets_neither", false, true, false, false},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			pairs := buildInstallEnvPairs(tc.versionCapable, tc.checksumVerify, true, override, nil, "", sh)
+			joined := strings.Join(pairs, " ")
+			if gotPIN := strings.Contains(joined, `PIN="1.2.3"`); gotPIN != tc.wantPIN {
+				t.Errorf("PIN present = %v, want %v\n%s", gotPIN, tc.wantPIN, joined)
+			}
+			gotChecksum := strings.Contains(joined, "CHECKSUM_AMD64=") || strings.Contains(joined, "CHECKSUM_ARM64=")
+			if gotChecksum != tc.wantChecksum {
+				t.Errorf("CHECKSUM_* present = %v, want %v\n%s", gotChecksum, tc.wantChecksum, joined)
+			}
+		})
+	}
+}
+
+// TestValidateVersionOverrides_ChecksumRejectedForPGP pins that setting
+// checksum_amd64 / checksum_arm64 for a pgp-verified plugin is a hard
+// ErrInvalidVersionOverride: the checksum vocabulary does not apply.
+func TestValidateVersionOverrides_ChecksumRejectedForPGP(t *testing.T) {
+	t.Parallel()
+	csum := "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+	cases := []struct {
+		name     string
+		override config.PluginVersionOverride
+	}{
+		{"amd64_only", config.PluginVersionOverride{Pin: "2.0.0", ChecksumAmd64: &csum}},
+		{"arm64_only", config.PluginVersionOverride{Pin: "2.0.0", ChecksumArm64: &csum}},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			plugins := map[string]*plugin.Plugin{
+				"awscli": {
+					Metadata: plugin.Metadata{Name: "aws-cli", URL: "https://example.com/x"},
+					Install:  plugin.Install{},
+					Version:  plugin.Version{VersionCapable: true, Verify: plugin.VerifyPGP},
+				},
+			}
+			err := validateVersionOverrides(
+				plugins,
+				map[string]config.PluginVersionOverride{"awscli": tc.override},
+				&bytes.Buffer{},
+			)
+			if !errors.Is(err, ErrInvalidVersionOverride) {
+				t.Fatalf("err = %v, want errors.Is(.., ErrInvalidVersionOverride)", err)
+			}
+			if !strings.Contains(err.Error(), "remove checksum_amd64/checksum_arm64") {
+				t.Errorf("error must tell the user what to do: %v", err)
+			}
+		})
+	}
+}
+
+// TestValidateVersionOverrides_PinWithoutChecksumWarning pins that the
+// missing-checksum WARNING fires for a checksum plugin pinned without a
+// checksum, but is suppressed for a pgp plugin (which is fully verified
+// in-script regardless of checksum fields).
+func TestValidateVersionOverrides_PinWithoutChecksumWarning(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name     string
+		verify   string
+		wantWarn bool
+	}{
+		{"checksum_plugin_warns", plugin.VerifyChecksum, true},
+		{"pgp_plugin_silent", plugin.VerifyPGP, false},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			plugins := map[string]*plugin.Plugin{
+				"p": {
+					Metadata: plugin.Metadata{Name: "p", URL: "https://example.com/x"},
+					Install:  plugin.Install{},
+					Version:  plugin.Version{VersionCapable: true, Verify: tc.verify},
+				},
+			}
+			var warnings bytes.Buffer
+			err := validateVersionOverrides(
+				plugins,
+				map[string]config.PluginVersionOverride{"p": {Pin: "1.0.0"}},
+				&warnings,
+			)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if gotWarn := strings.Contains(warnings.String(), "WARNING"); gotWarn != tc.wantWarn {
+				t.Errorf("warning emitted = %v, want %v\n%s", gotWarn, tc.wantWarn, warnings.String())
+			}
+		})
 	}
 }
 

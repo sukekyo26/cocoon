@@ -31,6 +31,18 @@ func (p *Plugin) Validate(path string) error {
 func (p *Plugin) runValidate(a *config.Accumulator) {
 	p.Metadata.validate(a.At("metadata"))
 	p.Install.validate(a.At("install"))
+	p.Version.validate(a.At("version"))
+}
+
+func (v *Version) validate(a *config.Accumulator) {
+	switch v.Verify {
+	case "", VerifyChecksum, VerifyPGP:
+	default:
+		a.Add(fmt.Sprintf("verify %q is not one of %q, %q", v.Verify, VerifyChecksum, VerifyPGP), "verify")
+	}
+	if v.Verify != "" && !v.VersionCapable {
+		a.Add("verify has no effect unless version_capable = true", "verify")
+	}
 }
 
 func (m *Metadata) validate(a *config.Accumulator) {
