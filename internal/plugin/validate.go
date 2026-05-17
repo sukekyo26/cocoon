@@ -41,7 +41,7 @@ func (v *Version) validate(a *config.Accumulator) {
 		a.Add(fmt.Sprintf("verify %q is not one of %q, %q", v.Verify, VerifyChecksum, VerifyPGP), "verify")
 	}
 	if v.Verify != "" && !v.VersionCapable {
-		a.Add("verify has no effect unless version_capable = true", "verify")
+		a.Add("verify requires version_capable = true", "verify")
 	}
 }
 

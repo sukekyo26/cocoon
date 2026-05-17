@@ -368,7 +368,7 @@ func TestValidate_VerifyWithoutVersionCapable(t *testing.T) {
 	}
 	err := p.Validate("test/plugin.toml")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "verify has no effect unless version_capable = true")
+	require.Contains(t, err.Error(), "verify requires version_capable = true")
 }
 
 // TestVersion_VerifiesByChecksum pins that the omitted and "checksum"
