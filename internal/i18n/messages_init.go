@@ -84,7 +84,7 @@ var messagesEN_init = map[string]string{
 	"init_toml_section_plugins_methods": "# [plugins.methods] — install method picked for plugins that declare multiple methods.\n" +
 		"#   Plugins with a single declared method ignore this section.",
 	"init_toml_section_plugins_versions": "# [plugins.versions] — pinned versions for the enabled plugins above.\n" +
-		"#   checksum_amd64 / checksum_arm64 (64 lowercase hex chars) verify install tarballs — verify = \"checksum\" plugins only.",
+		"#   checksum_amd64 / checksum_arm64 (64 lowercase hex chars) verify downloads — verify = \"checksum\" plugins only.",
 	"init_toml_section_apt": "# [apt] — extra apt packages installed on top of cocoon's minimal base + selected categories.\n" +
 		"#   Re-run `cocoon init --force` to change category checkboxes, or edit this list directly.",
 	"init_toml_section_certificates": "# [certificates] — TLS certificate auto-bake from ~/.cocoon/certs/ on the host.\n" +
@@ -197,7 +197,7 @@ var messagesJA_init = map[string]string{
 	"init_toml_section_plugins_methods": "# [plugins.methods] — 複数のインストール方式を提供するプラグインに対する選択。\n" +
 		"#   方式を 1 つしか持たないプラグインはこのセクションを無視。",
 	"init_toml_section_plugins_versions": "# [plugins.versions] — 上で有効化したプラグインに対するバージョン固定。\n" +
-		"#   verify = \"checksum\" のプラグインは checksum_amd64 / checksum_arm64（64 文字小文字 hex）で install tarball を検証できる。",
+		"#   verify = \"checksum\" のプラグインは checksum_amd64 / checksum_arm64（64 文字小文字 hex）でダウンロードを検証できる。",
 	"init_toml_section_certificates": "# [certificates] — ホスト側 ~/.cocoon/certs/ の TLS 証明書をコンテナイメージに自動取り込み (opt-in)。\n" +
 		"#   enable = true のときジェネレータが docker-compose の additional_contexts と Dockerfile の\n" +
 		"#   RUN --mount=type=bind を配線し、ホスト側 *.crt が build 時にトラストストアへマージされる。\n" +

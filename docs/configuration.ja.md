@@ -238,7 +238,7 @@ enable = ["go", "uv", "github-cli"]
 
 ### `[plugins.versions]`
 
-`version_capable` プラグインのバージョン固定。チェックサム (64 文字の小文字 hex) で install tarball を検証可能 (任意)。`verify = "pgp"` のプラグイン (例: `aws-cli`) は同梱署名でダウンロードを検証するため、`pin` のみで固定する — その種のプラグインに `checksum_amd64` / `checksum_arm64` を付けると `gen` 時に拒否される。
+`version_capable` プラグインのバージョン固定。チェックサム (64 文字の小文字 hex) でダウンロード (tarball・zip など) を検証可能 (任意)。`verify = "pgp"` のプラグイン (例: `aws-cli`) は同梱署名でダウンロードを検証するため、`pin` のみで固定する — その種のプラグインに `checksum_amd64` / `checksum_arm64` を付けると `gen` 時に拒否される。
 
 ```toml
 [plugins.versions]

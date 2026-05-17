@@ -27,7 +27,7 @@ case "$ARCH" in
     CHECKSUM="$CHECKSUM_AMD64"
     ;;
   arm64)
-    DOWNLOAD_ARCH="aarch64"
+    DOWNLOAD_ARCH="arm64"
     CHECKSUM="$CHECKSUM_ARM64"
     ;;
   *)
