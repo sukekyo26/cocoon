@@ -106,7 +106,7 @@ enable = [
 # <plugin-id> = "<method-name>"
 
 # [plugins.versions] — pinned versions for the enabled plugins above.
-#   Add checksum_amd64 / checksum_arm64 (64 lowercase hex chars) per entry to verify install tarballs.
+#   checksum_amd64 / checksum_arm64 (64 lowercase hex chars) verify downloads — verify = "checksum" plugins only.
 [plugins.versions]
 go = { pin = "1.23.4" }
 uv = { pin = "0.5.7" }

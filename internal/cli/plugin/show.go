@@ -10,6 +10,7 @@ import (
 
 	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
 	"github.com/sukekyo26/cocoon/internal/logx"
+	"github.com/sukekyo26/cocoon/internal/plugin"
 )
 
 const showLong = `cocoon plugin show — print the resolved plugin manifest for <id>
@@ -62,6 +63,13 @@ func runShow(stdout, stderr io.Writer, id string) error {
 	}
 	row("requires_root: ", fmt.Sprintf("%t", p.Install.RequiresRoot))
 	row("version_capable: ", fmt.Sprintf("%t", p.Version.VersionCapable))
+	if p.Version.VersionCapable {
+		verify := p.Version.Verify
+		if verify == "" {
+			verify = plugin.VerifyChecksum
+		}
+		row("verify:       ", verify)
+	}
 	if p.Apt != nil && len(p.Apt.Packages) > 0 {
 		pkgs := append([]string(nil), p.Apt.Packages...)
 		sort.Strings(pkgs)

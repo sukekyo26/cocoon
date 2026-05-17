@@ -133,7 +133,8 @@ of the install phase and the named-volume declaration in
 | `[install]`  | `volumes`         | list of strings    | `[]`  |   | Per-user paths under `/home/${USERNAME}/<dir>`; each one is `mkdir -p`'d, `chown`'d, and declared as a docker named volume so its contents persist across rebuilds. |
 | `[install]`  | `default_method`  | string             | —     | ✓ | Name of the method picked when `workspace.toml`'s `[plugins.methods]` does not pin one. Must be a key under `[install.methods]`. Required because `[install.methods]` is now mandatory (single-method plugins still declare one entry). |
 | `[install.methods.<name>]` | `description` | string | — | ✓ | One-line description shown in `cocoon init`'s method picker. `<name>` matches `^[a-z][a-z0-9_-]*$` and must have a matching `install.<name>.sh` file on disk. **At least one method entry is required** per plugin; the legacy `install.sh` shape is no longer supported. Pick `<name>` from the 4 category words (see "Method name categories"). |
-| `[version]`  | `version_capable` | bool               | —     | ✓ | If true, the install script accepts `$PIN` and optionally `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` (see "Versioned plugins" below). |
+| `[version]`  | `version_capable` | bool               | —     | ✓ | If true, the install script accepts `$PIN` for version pinning (see "Versioned plugins" below). |
+| `[version]`  | `verify`          | string             | `"checksum"` |   | Integrity mechanism: `"checksum"` (the install script verifies `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64`) or `"pgp"` (the script verifies a bundled signature in-script and takes no per-workspace checksum). Only meaningful when `version_capable = true`. |
 
 Strict unmarshal: unknown top-level fields and unknown keys inside
 known sections are rejected loud. If you see `unknown field "foo"`
@@ -273,7 +274,7 @@ bash's environment for that step is composed from two sources:
 | `LOGIN_SHELL`    | per-RUN env, always | `bash`, `zsh`, or `fish`. |
 | `USERNAME`       | Dockerfile `ARG`, always | The unprivileged container user name (declared via `ARG USERNAME` near the top of the generated Dockerfile and promoted to env by BuildKit). |
 | `PIN`            | per-RUN env, only when `[version].version_capable = true` | Version string from `[plugins.versions]`'s `<id> = { pin = "..." }` entry in `workspace.toml`. Empty means "use upstream latest". |
-| `CHECKSUM_AMD64` | per-RUN env, only when `[version].version_capable = true` | `sha256` of the amd64 artifact, or empty (script must skip verification with a warning). |
+| `CHECKSUM_AMD64` | per-RUN env, only when `version_capable = true` and `verify = "checksum"` | `sha256` of the amd64 artifact, or empty (script must skip verification with a warning). Not passed to `verify = "pgp"` plugins. |
 | `CHECKSUM_ARM64` | same as above | `sha256` of the arm64 artifact. |
 | `<BUILD_ARG>`    | per-RUN env (also declared as `ARG`), only when listed in `[install].build_args` | The generator emits one `ARG <name>` line per plugin (next to whichever hook runs first) and threads `<name>="${<name>}"` into the per-RUN prefix of every hook. The Dockerfile substitutes the value on each prefix line at build time. No catalog plugin currently declares one; the mechanism is for custom plugins. |
 
@@ -292,25 +293,37 @@ A versioned plugin agrees to:
 
 - Read `$PIN` and use it as the version. If `$PIN` is empty, fall
   back to upstream "latest" (curl-redirect, GitHub API, etc.).
-- Verify the downloaded artifact against `$CHECKSUM_AMD64` /
-  `$CHECKSUM_ARM64` when those are non-empty, and **warn loudly**
-  when they are empty (do not silently skip).
 - Use `dpkg --print-architecture` (or equivalent) to choose the
-  right artifact and the right checksum variable.
+  right artifact.
+- Verify the download. The `[version].verify` field picks how:
+  - `verify = "checksum"` (the default) — verify the artifact against
+    the architecture-matching checksum variable (`$CHECKSUM_AMD64` on
+    amd64, `$CHECKSUM_ARM64` on arm64; an architecture-independent
+    artifact may consult either) when it is non-empty, and **warn
+    loudly** when it is empty (do not silently skip).
+  - `verify = "pgp"` — for upstreams that publish a detached signature
+    but no SHA256 (e.g. AWS CLI). The script verifies the download
+    in-script against a signing key bundled in the install script;
+    `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` are not passed, and setting
+    `checksum_amd64` / `checksum_arm64` in `[plugins.versions]` for
+    such a plugin is rejected at `gen` time.
 
 Users record pins in `workspace.toml` under a single
-`[plugins.versions]` section, one inline-table line per plugin:
+`[plugins.versions]` section, one inline-table line per plugin.
+Checksums apply to `verify = "checksum"` plugins only:
 
 ```toml
 [plugins.versions]
 go = { pin = "1.23.4", checksum_amd64 = "abc...", checksum_arm64 = "def..." }
+aws-cli = { pin = "2.34.48" }   # verify = "pgp" — no checksum fields
 ```
 
 `cocoon plugin pin <id> <ref> --write` upserts this line for you.
 See `docs/commands.md` for the full flag list.
 
-Plugins where `version_capable = false` ignore `$PIN` entirely;
-the pin entry has no effect at `gen` time for those.
+A plugin where `version_capable = false` cannot be pinned: `cocoon gen`
+rejects any `[plugins.versions]` entry for it, and `cocoon plugin pin`
+refuses to emit one.
 
 ## Catalog tour
 

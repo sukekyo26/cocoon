@@ -346,14 +346,117 @@ func TestPin_MethodUnknownNameFails(t *testing.T) {
 	}
 }
 
+// seedPGPPlugin drops a user-overlay plugin declaring verify = "pgp" so
+// pin can reject the checksum flags against it.
+func seedPGPPlugin(t *testing.T, home string) {
+	t.Helper()
+	dir := filepath.Join(home, ".cocoon", "plugins", "pgp-plugin")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	body := `[metadata]
+name = "pgp-plugin"
+description = "fixture verified by a bundled pgp signature"
+url = "https://example.test"
+default = false
+
+[install]
+requires_root = false
+default_method = "archive"
+
+[install.methods.archive]
+description = "Extract a signed archive"
+
+[version]
+version_capable = true
+verify = "pgp"
+`
+	if err := os.WriteFile(filepath.Join(dir, "plugin.toml"), []byte(body), 0o600); err != nil {
+		t.Fatalf("write plugin.toml: %v", err)
+	}
+}
+
+// --amd64-checksum / --arm64-checksum against a verify = "pgp" plugin must
+// fail with ErrUsage (the checksum vocabulary does not apply), while a
+// plain pin of the same plugin still succeeds.
+//
+//nolint:paralleltest // t.Chdir + t.Setenv mutate process state.
+func TestPin_ChecksumRejectedForPGPPlugin(t *testing.T) {
+	home := withIsolatedHome(t)
+	seedPGPPlugin(t, home)
+	dir := t.TempDir()
+	seedWorkspace(t, dir, "[plugins]\nenable = [\"pgp-plugin\"]\n")
+	t.Chdir(dir)
+
+	sha := "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+	for _, flag := range []string{"--amd64-checksum", "--arm64-checksum"} {
+		flag := flag
+		t.Run("rejects_"+flag, func(t *testing.T) {
+			_, _, err := runPinCmd(t, "pgp-plugin", "2.0.0", flag, sha)
+			if !errors.Is(err, clihelpers.ErrUsage) {
+				t.Fatalf("err = %v, want ErrUsage", err)
+			}
+			if !strings.Contains(err.Error(), `verify = "pgp"`) {
+				t.Errorf("err should name the pgp verify method: %v", err)
+			}
+		})
+	}
+
+	t.Run("plain_pin_succeeds", func(t *testing.T) {
+		stdout, stderr, err := runPinCmd(t, "pgp-plugin", "2.0.0")
+		if err != nil {
+			t.Fatalf("pin: err=%v stderr=%s", err, stderr)
+		}
+		if !strings.Contains(stdout, `pgp-plugin = { pin = "2.0.0" }`) {
+			t.Errorf("stdout missing pin line:\n%s", stdout)
+		}
+	})
+}
+
+// pin against a plugin that is not version_capable must fail with ErrUsage
+// rather than emit a [plugins.versions] entry that cocoon gen would later
+// hard-reject. Covered with and without a checksum flag, since a plain pin
+// of a non-versioned plugin is just as invalid. docker-cli is an embedded
+// non-versioned plugin.
+//
+//nolint:paralleltest // t.Chdir mutates process cwd.
+func TestPin_RejectsNonVersionCapablePlugin(t *testing.T) {
+	withIsolatedHome(t)
+	dir := t.TempDir()
+	seedWorkspace(t, dir, "[plugins]\nenable = [\"docker-cli\"]\n")
+	t.Chdir(dir)
+
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{"plain_pin", []string{"docker-cli", "1.0.0"}},
+		{"with_checksum_flag", []string{
+			"docker-cli", "1.0.0", "--amd64-checksum",
+			"deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+		}},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			_, _, err := runPinCmd(t, tc.args...)
+			if !errors.Is(err, clihelpers.ErrUsage) {
+				t.Fatalf("err = %v, want ErrUsage", err)
+			}
+			if !strings.Contains(err.Error(), "not version_capable") {
+				t.Errorf("err should explain the plugin is not version_capable: %v", err)
+			}
+		})
+	}
+}
+
 // --method on a user-overlay plugin whose plugin.toml declares no
-// [install.methods] section at all: validateMethodForPin loads via
-// loadPluginFromLayer (strict unmarshal only — the loader's catalog-wide
-// `[install.methods]` enforcement is bypassed for user overlays at this
-// call site), so an empty Methods map reaches the validator. The user
-// must see an actionable ErrUsage that explains --method is meaningless
-// here rather than the misleading "declared: " empty-list message the
-// next branch would produce.
+// [install.methods] section at all: runPin loads it via loadPluginFromLayer
+// (strict unmarshal only — the loader's catalog-wide `[install.methods]`
+// enforcement is bypassed for user overlays at this call site), so an empty
+// Methods map reaches validateMethodForPin. The user must see an actionable
+// ErrUsage that explains --method is meaningless here rather than the
+// misleading "declared: " empty-list message the next branch would produce.
 //
 //nolint:paralleltest // t.Chdir + t.Setenv mutate process state.
 func TestPin_MethodFailsWhenPluginDeclaresNoMethods(t *testing.T) {
@@ -372,7 +475,7 @@ default = false
 requires_root = false
 
 [version]
-version_capable = false
+version_capable = true
 `
 	if err := os.WriteFile(filepath.Join(pluginDir, "plugin.toml"), []byte(body), 0o600); err != nil {
 		t.Fatalf("write plugin.toml: %v", err)

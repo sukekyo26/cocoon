@@ -97,6 +97,8 @@ default = "bash"
 enable = [
     "docker-cli",
     "docker-buildx",
+    "aws-cli",
+    "aws-sam-cli",
     "github-cli",
     "claude-code",
     "copilot-cli",
@@ -124,8 +126,10 @@ enable = [
 # <plugin-id> = "<method-name>"
 
 # [plugins.versions] — pinned versions for the enabled plugins above.
-#   Add checksum_amd64 / checksum_arm64 (64 lowercase hex chars) per entry to verify install tarballs.
+#   checksum_amd64 / checksum_arm64 (64 lowercase hex chars) verify downloads — verify = "checksum" plugins only.
 [plugins.versions]
+aws-cli = { pin = "2.34.48" }
+aws-sam-cli = { pin = "1.160.1" }
 bun = { pin = "1.3.3" }
 copilot-cli = { pin = "1.0.47" }
 deno = { pin = "2.7.14" }
@@ -134,6 +138,7 @@ go = { pin = "1.23.4" }
 helm = { pin = "3.16.0" }
 kubectl = { pin = "1.31.0" }
 mise = { pin = "2025.12.0" }
+nerd-fonts = { pin = "3.4.0" }
 node = { pin = "24.15.0" }
 opentofu = { pin = "1.9.0" }
 proto = { pin = "0.46.1" }

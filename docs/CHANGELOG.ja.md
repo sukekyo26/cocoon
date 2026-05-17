@@ -6,9 +6,18 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+### 追加
+
+- `plugin.toml` にオプションの `[version].verify` フィールドを追加しました。`version_capable` プラグインがダウンロードをどう検証するかを選びます: `"checksum"`（既定 — install スクリプトが `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` を検証）または `"pgp"`（スクリプトが同梱署名鍵で in-script 検証し、workspace 単位の checksum を取らない）。`verify = "pgp"` のプラグインに `[plugins.versions]` で `checksum_amd64` / `checksum_arm64` を設定する、または `cocoon plugin pin --amd64-checksum` / `--arm64-checksum` を渡すと、対処方法を示すエラーで拒否されます。
+
 ### 修正
 
 - `cocoon init --plugins` が重複したプラグイン id（例: `--plugins go,go`）を明確なエラーで拒否するようになった。従来は `[plugins].enable` が重複した `workspace.toml` を書き出し、後続の `cocoon gen` で初めて拒否されていた。
+- `cocoon plugin pin` が `version_capable` でないプラグインを明確なエラーで拒否するようになった。従来は `cocoon gen` が後で拒否する `[plugins.versions]` エントリを出力していた。
+
+### セキュリティ
+
+- `aws-cli` / `aws-sam-cli` / `nerd-fonts` プラグインがダウンロードを検証し、バージョン固定に対応するようになりました。従来は各プラグインが upstream の `latest` 成果物を整合性チェックなしで取得してインストーラを実行しており、upstream リリースや CDN が汚染されると `docker build` 中に root で任意コード実行が起き得ました。3 つとも `version_capable` になり、他の versioned プラグインと同様に `[plugins.versions]` で固定できます。`aws-cli` は install スクリプトに同梱した署名鍵で AWS の detached PGP 署名を検証します（AWS は SHA256 を公開していないため）。`aws-sam-cli` と `nerd-fonts` は `[plugins.versions]` に `checksum_amd64` / `checksum_arm64` を指定すると SHA256 チェックサムを検証します。
 
 ## [0.5.0] - 2026-05-16
 

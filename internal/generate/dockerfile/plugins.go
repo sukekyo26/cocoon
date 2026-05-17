@@ -178,6 +178,7 @@ func buildPluginSnippets(
 		pluginsFS:      pluginsFS,
 		envBlock:       envBlock,
 		versionCapable: p.Version.VersionCapable,
+		checksumVerify: p.Version.VerifiesByChecksum(),
 		hasOverride:    hasOverride,
 		override:       override,
 		buildArgs:      install.BuildArgs,
@@ -217,6 +218,7 @@ type runSpec struct {
 	pluginsFS      fs.FS
 	envBlock       string
 	versionCapable bool
+	checksumVerify bool
 	hasOverride    bool
 	override       config.PluginVersionOverride
 	buildArgs      []string
@@ -251,7 +253,7 @@ func renderInstallSnippet(rs runSpec, hasInstall bool, installPath string) (stri
 			return "", err
 		}
 		snippet := renderInstallRun(rs.id, "# Install "+rs.comment, rs.argLines, body,
-			rs.versionCapable, rs.hasOverride, rs.override, rs.buildArgs, rs.method, rs.sh)
+			rs.versionCapable, rs.checksumVerify, rs.hasOverride, rs.override, rs.buildArgs, rs.method, rs.sh)
 		if rs.envBlock != "" {
 			snippet = snippet + "\n" + rs.envBlock
 		}
@@ -276,7 +278,7 @@ func renderUserInstallSnippet(rs runSpec, userPath string, argLines []string) (s
 		return "", err
 	}
 	return renderInstallRun(rs.id, "# Configure "+rs.comment+" (user)", argLines, body,
-		rs.versionCapable, rs.hasOverride, rs.override, rs.buildArgs, rs.method, rs.sh), nil
+		rs.versionCapable, rs.checksumVerify, rs.hasOverride, rs.override, rs.buildArgs, rs.method, rs.sh), nil
 }
 
 func renderEnvBlock(env map[string]string, pluginsFS fs.FS, id string) (string, error) {
@@ -445,14 +447,14 @@ func renderInstallRun(
 	pluginID, comment string,
 	argLines []string,
 	scriptBody []byte,
-	versionCapable, hasOverride bool,
+	versionCapable, checksumVerify, hasOverride bool,
 	override config.PluginVersionOverride,
 	buildArgs []string,
 	method string,
 	sh shellEnv,
 ) string {
 	_ = pluginID
-	envPairs := buildInstallEnvPairs(versionCapable, hasOverride, override, buildArgs, method, sh)
+	envPairs := buildInstallEnvPairs(versionCapable, checksumVerify, hasOverride, override, buildArgs, method, sh)
 	body := string(scriptBody)
 	if !strings.HasSuffix(body, "\n") {
 		body += "\n"
@@ -471,7 +473,7 @@ func renderInstallRun(
 }
 
 func buildInstallEnvPairs(
-	versionCapable, hasOverride bool,
+	versionCapable, checksumVerify, hasOverride bool,
 	override config.PluginVersionOverride,
 	buildArgs []string,
 	method string,
@@ -490,22 +492,28 @@ func buildInstallEnvPairs(
 	}
 	if versionCapable {
 		pin := ""
-		amd64 := ""
-		arm64 := ""
 		if hasOverride {
 			pin = override.Pin
-			if override.ChecksumAmd64 != nil {
-				amd64 = *override.ChecksumAmd64
-			}
-			if override.ChecksumArm64 != nil {
-				arm64 = *override.ChecksumArm64
-			}
 		}
-		pairs = append(pairs,
-			fmt.Sprintf(`PIN="%s"`, pin),
-			fmt.Sprintf(`CHECKSUM_AMD64="%s"`, amd64),
-			fmt.Sprintf(`CHECKSUM_ARM64="%s"`, arm64),
-		)
+		pairs = append(pairs, fmt.Sprintf(`PIN="%s"`, pin))
+		// CHECKSUM_* is injected only for checksum-verified plugins.
+		// pgp plugins verify in-script and take no per-workspace checksum.
+		if checksumVerify {
+			amd64 := ""
+			arm64 := ""
+			if hasOverride {
+				if override.ChecksumAmd64 != nil {
+					amd64 = *override.ChecksumAmd64
+				}
+				if override.ChecksumArm64 != nil {
+					arm64 = *override.ChecksumArm64
+				}
+			}
+			pairs = append(pairs,
+				fmt.Sprintf(`CHECKSUM_AMD64="%s"`, amd64),
+				fmt.Sprintf(`CHECKSUM_ARM64="%s"`, arm64),
+			)
+		}
 	}
 	for _, a := range buildArgs {
 		pairs = append(pairs, fmt.Sprintf(`%s="${%s}"`, a, a))
@@ -536,24 +544,43 @@ func validateVersionOverrides(
 				" version_capable = false (version pinning is unsupported by this plugin's install method)",
 				ErrInvalidVersionOverride, id, id)
 		}
-		if override.Pin != "" {
-			var missing []string
-			if override.ChecksumAmd64 == nil {
-				missing = append(missing, "checksum_amd64")
-			}
-			if override.ChecksumArm64 == nil {
-				missing = append(missing, "checksum_arm64")
-			}
-			if len(missing) > 0 && warnings != nil {
-				fmt.Fprintf(warnings,
-					"WARNING: [plugins.versions.%s] sets pin=\"%s\" without %s; "+
-						"the install step will skip SHA256 verification. "+
-						"Provide the checksum(s) in workspace.toml to enable integrity checking.\n",
-					id, override.Pin, strings.Join(missing, ", "))
-			}
+		if !p.Version.VerifiesByChecksum() && (override.ChecksumAmd64 != nil || override.ChecksumArm64 != nil) {
+			return fmt.Errorf("%w: [plugins.versions.%s] sets checksum_amd64/checksum_arm64, but plugin '%s'"+
+				" declares verify = %q and verifies downloads in-script (not against a per-workspace checksum);"+
+				" remove checksum_amd64/checksum_arm64 from [plugins.versions.%s]",
+				ErrInvalidVersionOverride, id, id, p.Version.Verify, id)
+		}
+		// The missing-checksum warning applies only to checksum-verified
+		// plugins; a pgp plugin pinned without a checksum is fully verified.
+		if override.Pin != "" && p.Version.VerifiesByChecksum() {
+			warnMissingChecksum(warnings, id, override)
 		}
 	}
 	return nil
+}
+
+// warnMissingChecksum emits the "pin without checksum" advisory for a
+// checksum-verified plugin whose [plugins.versions] entry omits one or both
+// checksums. No-op when warnings is nil or both checksums are present.
+func warnMissingChecksum(warnings io.Writer, id string, override config.PluginVersionOverride) {
+	if warnings == nil {
+		return
+	}
+	var missing []string
+	if override.ChecksumAmd64 == nil {
+		missing = append(missing, "checksum_amd64")
+	}
+	if override.ChecksumArm64 == nil {
+		missing = append(missing, "checksum_arm64")
+	}
+	if len(missing) == 0 {
+		return
+	}
+	fmt.Fprintf(warnings,
+		"WARNING: [plugins.versions.%s] sets pin=\"%s\" without %s; "+
+			"the install step will skip SHA256 verification. "+
+			"Provide the checksum(s) in workspace.toml to enable integrity checking.\n",
+		id, override.Pin, strings.Join(missing, ", "))
 }
 
 // userDirsBlockTmpl omits the trailing `USER ${USERNAME}`: the caller
