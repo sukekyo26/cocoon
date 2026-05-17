@@ -134,6 +134,7 @@ go = { pin = "1.23.4" }
 helm = { pin = "3.16.0" }
 kubectl = { pin = "1.31.0" }
 mise = { pin = "2025.12.0" }
+nerd-fonts = { pin = "3.4.0" }
 node = { pin = "24.15.0" }
 opentofu = { pin = "1.9.0" }
 proto = { pin = "0.46.1" }

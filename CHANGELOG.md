@@ -6,9 +6,17 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `plugin.toml` gains an optional `[version].verify` field that selects how a `version_capable` plugin verifies its downloads: `"checksum"` (the default — the install script checks `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64`) or `"pgp"` (the script verifies a bundled signature in-script and takes no per-workspace checksum). Setting `checksum_amd64` / `checksum_arm64` in `[plugins.versions]` for a `verify = "pgp"` plugin — or passing `cocoon plugin pin --amd64-checksum` / `--arm64-checksum` to one — is rejected with an actionable error.
+
 ### Fixed
 
 - `cocoon init --plugins` now rejects a duplicate plugin id (e.g. `--plugins go,go`) with a clear error, instead of writing a `workspace.toml` whose `[plugins].enable` list `cocoon gen` would later reject.
+
+### Security
+
+- The `aws-cli`, `aws-sam-cli`, and `nerd-fonts` plugins now verify their downloads and support version pinning. Previously each fetched the upstream `latest` artifact with no integrity check and ran its installer, so a poisoned upstream release or CDN meant arbitrary code execution as root during `docker build`. All three are now `version_capable` — pin them under `[plugins.versions]` like any other versioned plugin. `aws-cli` verifies the installer zip against AWS's detached PGP signature using a signing key bundled in the install script (AWS publishes no SHA256 sums); `aws-sam-cli` and `nerd-fonts` verify a SHA256 checksum against `checksum_amd64` / `checksum_arm64` when those are provided in `[plugins.versions]`.
 
 ## [0.5.0] - 2026-05-16
 

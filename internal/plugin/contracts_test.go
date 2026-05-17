@@ -70,6 +70,7 @@ func TestPluginContracts(t *testing.T) {
 		name           string
 		requiresRoot   bool
 		versionCapable bool
+		verify         string // [version].verify; empty = checksum default
 		firstVolume    string // empty = no volume to assert
 		mustContain    []string
 		mustNotContain []string
@@ -83,8 +84,9 @@ func TestPluginContracts(t *testing.T) {
 	specs := []spec{
 		{
 			id: "aws-cli", name: "AWS CLI v2",
-			requiresRoot: false, firstVolume: "aws",
-			mustContain: []string{"AWS", "retry 3", "tlsv1.2"},
+			requiresRoot: false, versionCapable: true, verify: "pgp", firstVolume: "aws",
+			mustContain:    []string{"AWS", "retry 3", "tlsv1.2", "gpg --batch --verify", "PIN"},
+			mustNotContain: []string{"sha256sum -c -"},
 		},
 		{
 			id: "bun", name: "bun",
@@ -98,8 +100,10 @@ func TestPluginContracts(t *testing.T) {
 		},
 		{
 			id: "aws-sam-cli", name: "AWS SAM CLI",
-			requiresRoot: false,
-			mustContain:  []string{"SAM", "retry 3", "dpkg --print-architecture", "tlsv1.2"},
+			requiresRoot: false, versionCapable: true,
+			mustContain: []string{
+				"SAM", "retry 3", "dpkg --print-architecture", "tlsv1.2", "sha256sum -c -", "PIN",
+			},
 		},
 		{
 			id: "claude-code", name: "Claude Code",
@@ -158,8 +162,10 @@ func TestPluginContracts(t *testing.T) {
 		},
 		{
 			id: "nerd-fonts", name: "Nerd Fonts",
-			requiresRoot: false, firstVolume: "fonts",
-			mustContain: []string{"Meslo", "retry 3", "fc-cache", "tlsv1.2", ".fonts"},
+			requiresRoot: false, versionCapable: true, firstVolume: "fonts",
+			mustContain: []string{
+				"Meslo", "retry 3", "fc-cache", "tlsv1.2", ".fonts", "sha256sum -c -", "PIN",
+			},
 		},
 		{
 			id: "node", name: "Node.js",
@@ -323,6 +329,9 @@ func TestPluginContracts(t *testing.T) {
 			}
 			if p.Version.VersionCapable != s.versionCapable {
 				t.Errorf("version.version_capable = %v, want %v", p.Version.VersionCapable, s.versionCapable)
+			}
+			if p.Version.Verify != s.verify {
+				t.Errorf("version.verify = %q, want %q", p.Version.Verify, s.verify)
 			}
 			if s.firstVolume != "" {
 				vols := plugin.GetVolumes([]string{s.id}, map[string]*plugin.Plugin{s.id: p})
