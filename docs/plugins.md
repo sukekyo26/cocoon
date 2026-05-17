@@ -297,8 +297,10 @@ A versioned plugin agrees to:
   right artifact.
 - Verify the download. The `[version].verify` field picks how:
   - `verify = "checksum"` (the default) — verify the artifact against
-    `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` when those are non-empty, and
-    **warn loudly** when they are empty (do not silently skip).
+    the architecture-matching checksum variable (`$CHECKSUM_AMD64` on
+    amd64, `$CHECKSUM_ARM64` on arm64; an architecture-independent
+    artifact may consult either) when it is non-empty, and **warn
+    loudly** when it is empty (do not silently skip).
   - `verify = "pgp"` — for upstreams that publish a detached signature
     but no SHA256 (e.g. AWS CLI). The script verifies the download
     in-script against a signing key bundled in the install script;
@@ -319,8 +321,9 @@ aws-cli = { pin = "2.34.48" }   # verify = "pgp" — no checksum fields
 `cocoon plugin pin <id> <ref> --write` upserts this line for you.
 See `docs/commands.md` for the full flag list.
 
-Plugins where `version_capable = false` ignore `$PIN` entirely;
-the pin entry has no effect at `gen` time for those.
+A plugin where `version_capable = false` cannot be pinned: `cocoon gen`
+rejects any `[plugins.versions]` entry for it, and `cocoon plugin pin`
+refuses to emit one.
 
 ## Catalog tour
 

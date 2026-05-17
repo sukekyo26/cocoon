@@ -279,9 +279,10 @@ versioned プラグインは次の契約を守る:
 - `dpkg --print-architecture` 等でアーキを判定し、対応するアーティファクト
   を選ぶ。
 - ダウンロードを検証する。方式は `[version].verify` で選ぶ:
-  - `verify = "checksum"`（既定）— `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64`
-    が非空なら sha256 検証し、空のときは **明示的に WARNING を出力**
-    する（無言でスキップしない）。
+  - `verify = "checksum"`（既定）— アーキに対応する checksum 変数
+    （amd64 なら `$CHECKSUM_AMD64`、arm64 なら `$CHECKSUM_ARM64`。
+    アーキ非依存アセットはどちらを参照してもよい）が非空なら sha256
+    検証し、空のときは **明示的に WARNING を出力** する（無言でスキップしない）。
   - `verify = "pgp"` — SHA256 を公開せず detached 署名のみ配布する
     upstream 向け（例: AWS CLI）。スクリプトは install スクリプトに
     同梱した署名鍵で in-script 検証する。`$CHECKSUM_AMD64` /
@@ -301,8 +302,9 @@ aws-cli = { pin = "2.34.48" }   # verify = "pgp" — checksum フィールドは
 `cocoon plugin pin <id> <ref> --write` がこの行を upsert する。
 フラグ詳細は `docs/commands.ja.md` 参照。
 
-`version_capable = false` のプラグインは `$PIN` を完全に無視するため、
-pin エントリを書いても `gen` 時に意味を持たない。
+`version_capable = false` のプラグインは pin できない。`cocoon gen` は
+そのプラグインの `[plugins.versions]` エントリを拒否し、`cocoon plugin pin`
+もエントリを出力しない。
 
 ## Catalog ツアー
 
