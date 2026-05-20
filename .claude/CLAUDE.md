@@ -1,55 +1,48 @@
-# Project instructions
+# CLAUDE.md
 
-## 設計原則
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-- **シンプルな実装を最優先する** — 読んで即座に意図が伝わるコードを書く。巧妙なテクニックより明快さを選ぶ。
-- **DRY原則** — 同じロジックを2箇所以上に書かない。`lib/` の共通関数を活用し、なければそこに追加する。
-- **後方互換性のために実装を複雑にしない** — 非推奨パスや分岐を積み重ねるくらいなら、破壊的変更+マイグレーション手順を選ぶ。互換レイヤーは一時的な措置に留める。
-- **べき等性を保つ** — セットアップ・生成スクリプトは何度実行しても同じ結果になること。既に存在するリソースの再作成や上書きを避ける。
-- **早期失敗と明確なエラー** — 異常は検出した時点で `die()` や `return 1` で即座に中断する。エラーメッセージにはユーザーが次に何をすべきかを含める。
-- **既存の共通基盤を使う** — `lib/` のログ関数・TOML パーサー・バリデーションを再利用する。車輪の再発明をしない。
+## コマンド
 
-## テストとリントのチェック
+- `just ci` — push 前ゲート（`fmt-check + vet + lint + test + cover-check + vuln + mod-verify + shellcheck + shfmt-check`）。
+- `just regen-snapshots` — golden / fixture（dockerfile / compose / devcontainerjson / plugin / init）を一括再生成。ジェネレータ・プラグインミューテータ・`cocoon init` 出力を意図的に変えたら走らせ、`testdata/` をソース変更と同じコミットに入れる。CI は `-update-golden` なしで走るためドリフトは即落ちる。
+- 単一テスト: `go test ./internal/cli/init -run TestInitInteractive`
+- カバレッジ閾値は 80%（`MIN_COVERAGE` で上書き可、`just cover-check`）。
+- 個別レシピは `just --list` 参照。
 
- - **コミット前に必ずローカルでテストとリントを通す** — push 後に CI
-で初めて失敗を検知するのは避ける。Go / シェルコードを変更したら `just ci`（= `fmt-check` + `vet`
-+ `lint` + `test` + `vuln` + `mod-verify` + `shellcheck` + `shfmt-check`）を実行し、グリーンを確認してからコミットする。
- - **修正したら再実行する** — 失敗を直したら無関係な箇所を壊していないか `just ci`
-を再実行して検証する。「あとで CI が拾うから」と未確認のままコミットしない。
- - **CI ワークフロー（`.github/workflows/`）を変更した場合** —
-参照しているスクリプト・ファイルが実在することを確認する。Bash → Go
-移行のように削除済みのパス（例: `lib/generators.sh`）が残っていないか grep で点検する。
- - **CI 失敗の修正コミットを積み上げない** — 同じ PR 内で「ci:
-fix」コミットが連続するのは push
-前チェックを怠っているサイン。失敗の根本原因をローカルで再現してからコミットする。
+## CHANGELOG
 
-## コメントの方針
+`CHANGELOG.md`（英）と `docs/CHANGELOG.ja.md`（日）を同期する。
 
-- **デフォルトは書かない** — WHAT が識別子から明らかなら不要。書くのは WHY が非自明 (順序依存・呼び出し契約・workaround・bug 履歴) な時だけ、1〜2 行で。
-- **避ける** — 「Foo returns the foo」式の言い換え / 「Earlier revisions …」式の墓標 / 手順の逐次解説 / PR description の再述。
-- **既存の冗長は引きずらない** — 新規・改修は短く。気付いた既存冗長は別 PR で刈り込み。
+- **記載する ✓**: `workspace.toml` フィールド / プラグイン仕様（`install.sh`, `plugin.toml`）/ `cocoon` サブコマンド・フラグ / BREAKING / セキュリティ修正。
+- **記載しない ✗**: テスト用 DI ヘルパ / `just` レシピ追加 / lint・フォーマット設定 / 内部リファクタ。
 
-## Context7 MCP の利用
+## アーキテクチャ
 
-- **Context7 MCP を利用する** — タスクの実行や情報の取得に Context7 MCP を活用する。必要な情報があれば、Context7 MCP 経由で取得できないかをまず検討する。
+cocoon は純粋なジェネレータ。`workspace.toml` → `.devcontainer/`（Dockerfile + compose + devcontainer.json + entrypoint + .env + manage.sh）。ライフサイクルは `docker compose` / VS Code Dev Containers に委譲。詳細は [`docs/architecture.md`](../docs/architecture.md)。
 
-## CHANGELOG の更新
+**`cocoon gen` パイプライン**: `internal/config/discovery.go`（cwd → `.cocoon/` → 親、`.git` / `$HOME` で停止）→ `internal/plugin/layered.go`（3 層オーバーレイ）→ `internal/generate/{dockerfile,compose,devcontainerjson,envfile,shellrc}` がインメモリ描画 → `internal/cli/generate/WriteArtifacts` がアトミック書き込み。
 
-- **コード変更時は必ず CHANGELOG を同時に更新する** — 機能追加・バグ修正・変更を行った場合、コミット前に `CHANGELOG.md` と `docs/CHANGELOG.ja.md` の両方を更新する
-- **判断基準**: 「エンドユーザーまたはプラグイン作者の操作・設定・動作が変わるか？」→ No なら記載しない
-- **記載する** ✓: 新しい `workspace.toml` フィールド・セクション / 新しいプラグイン / 新しい CLI サブコマンド・フラグ / ユーザーが体験していたバグの修正 / BREAKING changes（設定形式変更・オプション削除等）/ セキュリティ修正 / 体感できるパフォーマンス改善
-- **記載しない** ✗: テスト追加・カバレッジ閾値変更 / CI ワークフロー変更（GitHub Actions・SHA pin 等）/ テスト用内部 API 追加（`RunWithRunner` 等の DI ヘルパ）/ 外部動作が変わらないリファクタリング / 開発者向け `just` レシピ追加 / lint・フォーマット設定変更
+**プラグイン LayeredFS（優先順位 project > user > embedded）**:
+- project: `<workspace>/.cocoon/plugins/<id>/`
+- user: `~/.cocoon/plugins/<id>/`
+- embedded: `internal/plugin/catalog/<id>/`（`go:embed`）
 
-## ブランチと PR のワークフロー
+**プラグイン契約**（詳細は [`docs/plugins.md`](../docs/plugins.md) と `plugin-authoring` スキル）:
+- `install.<category>.sh`（`installer` / `binary` / `apt` / `archive`）+ 任意の `install_user.sh`。Dockerfile に `bash <<'COCOON_PLUGIN_EOF' … COCOON_PLUGIN_EOF` で verbatim 埋め込み、ホスト側キャッシュは作らない。
+- `version_capable = true` のプラグインは `$PIN` と（`binary` / `archive` で）`$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` を同一 `RUN` で受け取る。値は `[plugins.versions]` のインラインテーブル行から供給。
+- バージョン選択は LATEST + フリーテキストのみ（ホワイトリスト非保持）。
 
-- **機能単位で `feature/` ブランチを切る** — `develop` に直接コミットせず、関連する変更のまとまりごとに `feature/<short-name>` ブランチを作成して作業する。複数の独立した機能を1つのブランチに混ぜない。
-- **ブランチ単位で `develop` への PR を出す** — 各 `feature/` ブランチは作業完了後に `develop` をベースとした PR を作成してマージする。`main` への直接 PR は行わない（リリース時のみ `develop` → `main`）。
-- **粒度の目安**: 1つの機能追加・1つのバグ修正・1つのリファクタリング = 1ブランチ・1PR。レビューしやすい粒度を優先する。
+**CLI**: `cmd/cocoon/main.go` がエントリ。exit code は `ErrCanceled → 130`、`ErrUsage → 2`、その他 → 1。cobra は `SilenceErrors=true` なのでエラー出力は `main.go` の責務。サブコマンド: `init` / `gen` / `plugin {list,show,pin,scaffold}` / `self-update` / `version` / `completion`。
 
-## Git コミットのワークフロー
+**リリース**: `VERSION` ファイル変更を含む `main` への PR がマージされるとタグ・クロスコンパイル・`SHA256SUMS`・`gh release` が走る（`.github/workflows/release.yml`）。
 
-- **タスク完了時は必ず変更をコミットする** — ユーザーが明示的に指示しなくても、タスクが完了したら自動的に `git add` + `git commit` を実行する
-- **関連する修正単位でコミットする** — 1つのタスクで複数の変更がある場合、論理的にまとまった単位（例: 機能追加とそのテスト、設定ファイルとドキュメント）でコミットを分ける
-- **Conventional Commits 形式で英語1文のメッセージ** — `feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:` などのプレフィックスを付ける
-- **コミット前に必ず `git status` で確認** — コミット漏れがないよう、全ての変更がステージング・コミット済みであることを検証する。`working tree clean` を確認してからタスク完了を宣言する
-- **`.gitignore` で無視されているファイルはコミットしない** — `git add` 時に `.gitignore` 対象のファイルを明示的に追加しない。`git status --ignored` で確認できる
+## プロジェクト固有の規約
+
+`~/.claude/CLAUDE.md` と `.claude/rules/{testing,defensive-coding,refactor-discipline}.md`（自動ロード）を補完する。
+
+- `[plugins.versions]` はインラインテーブル（`go = { pin = "..." }`）。`[plugins.versions.go]` サブセクションは禁止（`cocoon plugin pin --write` が usage error で停止する）。
+- Sentinel error は `var ErrXxx = errors.New(...)` で export し、`%w` でラップする（err113 lint）。wrap は呼び出し連鎖で 1 回のみ — helper は生の sentinel を返し caller が context を付ける。
+- `docs/<topic>.md` と `docs/<topic>.ja.md` は常に同期。
+- ドキュメントに件数（プラグイン数等）をハードコードしない。ドリフトしたら修正ではなく数字自体を削除。
+- `.github/workflows/*.yml` を編集したら、Bash → Go 移行で削除済みのパス（例: `lib/generators.sh`）が残っていないか grep する。
