@@ -6,6 +6,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `[workspace]` accepts a new optional `dir` field that overrides the in-container workdir parent directory under `/home/<user>/` (defaults to `workspace`). Slashes are allowed for nested paths (e.g. `dir = "work/myproject"`), so the in-container layout can mirror a specific host path — useful for tools like AWS SAM that key off absolute paths. The value flows through to `docker-compose.yml`'s bind mount + `working_dir`, `devcontainer.json`'s `workspaceFolder`, and the generated `Dockerfile`'s `WORKDIR`. `cocoon init` asks for it (or read `--dir` for non-interactive runs) and always writes `dir = "..."` into the generated `workspace.toml`.
+
 ## [0.6.0] - 2026-05-18
 
 ### Added

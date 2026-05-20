@@ -90,19 +90,8 @@ func promptIdentityAndImage(ans *initAnswers, cat *i18n.Catalog) error {
 // promptWorkspaceOptions prompts for alias bundles, mount root, the
 // devcontainer / certificates toggles, ports, and apt categories.
 func promptWorkspaceOptions(ans *initAnswers, cat *i18n.Catalog) error {
-	if !ans.AliasBundlesSet {
-		ans.AliasBundles = aliasbundles.DefaultAliasBundleIDs()
-		if err := runSingleFieldForm(aliasBundlesMultiSelect(cat, &ans.AliasBundles)); err != nil {
-			return err
-		}
-		ans.AliasBundlesSet = true
-	}
-	if !ans.MountRootSet {
-		ans.MountRoot = "."
-		if err := runSingleFieldForm(mountRootSelect(cat, &ans.MountRoot)); err != nil {
-			return err
-		}
-		ans.MountRootSet = true
+	if err := promptMountAndDir(ans, cat); err != nil {
+		return err
 	}
 	if !ans.DevcontainerSet {
 		ans.Devcontainer = true
@@ -238,6 +227,46 @@ func runStrictIdentForm(cat *i18n.Catalog, titleKey, descKey, charsKey string,
 	pattern *regexp.Regexp, target *string,
 ) error {
 	return runSingleFieldForm(identInput(cat, titleKey, descKey, charsKey, pattern, target))
+}
+
+// promptMountAndDir prompts for alias bundles, mount_root and [workspace].dir
+// as one step so the parent promptWorkspaceOptions stays under gocognit.
+func promptMountAndDir(ans *initAnswers, cat *i18n.Catalog) error {
+	if !ans.AliasBundlesSet {
+		ans.AliasBundles = aliasbundles.DefaultAliasBundleIDs()
+		if err := runSingleFieldForm(aliasBundlesMultiSelect(cat, &ans.AliasBundles)); err != nil {
+			return err
+		}
+		ans.AliasBundlesSet = true
+	}
+	if !ans.MountRootSet {
+		ans.MountRoot = "."
+		if err := runSingleFieldForm(mountRootSelect(cat, &ans.MountRoot)); err != nil {
+			return err
+		}
+		ans.MountRootSet = true
+	}
+	if !ans.DirSet {
+		if err := promptDir(ans, cat); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// promptDir reads [workspace].dir from a free-text Input. Blank input
+// falls back to the "workspace" default; non-blank values are validated
+// in dirInput so init never accepts a string `cocoon gen` would reject.
+func promptDir(ans *initAnswers, cat *i18n.Catalog) error {
+	var raw string
+	if err := runSingleFieldForm(dirInput(cat, &raw)); err != nil {
+		return err
+	}
+	if raw == "" {
+		raw = "workspace"
+	}
+	ans.Dir, ans.DirSet = raw, true
+	return nil
 }
 
 // promptForPorts returns (nil, nil) on blank input — the renderer then

@@ -153,6 +153,32 @@ func TestApplyFlags_InvalidMountRoot(t *testing.T) {
 	}
 }
 
+func TestApplyFlags_DirAccepted(t *testing.T) {
+	t.Parallel()
+	plugins := loadPluginsForTest(t)
+	for _, dir := range []string{"workspace", "myapp", "work/myapp", "a/b/c"} {
+		ans, err := applyFlags(&initFlags{Dir: dir}, plugins)
+		if err != nil {
+			t.Errorf("--dir %q rejected: %v", dir, err)
+			continue
+		}
+		if ans.Dir != dir || !ans.DirSet {
+			t.Errorf("Dir = %q DirSet=%v want %q true", ans.Dir, ans.DirSet, dir)
+		}
+	}
+}
+
+func TestApplyFlags_DirRejected(t *testing.T) {
+	t.Parallel()
+	plugins := loadPluginsForTest(t)
+	for _, dir := range []string{"/abs", "trail/", "a/../b", "a b", ".."} {
+		_, err := applyFlags(&initFlags{Dir: dir}, plugins)
+		if !errors.Is(err, clihelpers.ErrUsage) {
+			t.Errorf("--dir %q: expected ErrUsage, got %v", dir, err)
+		}
+	}
+}
+
 func TestApplyFlags_DevcontainerExclusivity(t *testing.T) {
 	t.Parallel()
 	plugins := loadPluginsForTest(t)

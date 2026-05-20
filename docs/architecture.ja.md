@@ -95,8 +95,10 @@ sequenceDiagram
 
 | 値 | ホスト側 | コンテナ側 | 用途 |
 |---|---|---|---|
-| `"."` (デフォルト) | cwd | `/home/$USER/workspace/<service>` | 単一リポジトリ開発 |
-| `".."` | cwd の親 | `/home/$USER/workspace` | 兄弟リポジトリも見える Fat ワークスペース |
+| `"."` (デフォルト) | cwd | `/home/$USER/<dir>/<service>` | 単一リポジトリ開発 |
+| `".."` | cwd の親 | `/home/$USER/<dir>` | 兄弟リポジトリも見える Fat ワークスペース |
+
+`<dir>` は既定で `workspace`、`[workspace] dir` で上書きできます (例: `dir = "work/myproject"`)。AWS SAM などコンテナ内パスをホスト構成に合わせたいツール向け。スラッシュで多段階層も可で、値は `/home/$USER/` 配下にそのまま展開されます。
 
 `devcontainer.json::workspaceFolder` も同じ選択に追従するので、VS Code が正しいディレクトリで開きます。
 

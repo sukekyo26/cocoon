@@ -22,7 +22,7 @@ The first match wins. Pass `--workspace <path>` to `cocoon gen` to override disc
 
 | Section | Required? | Purpose |
 |---|---|---|
-| `[workspace]` | optional | Generation-wide knobs (mount range, Dev Container toggle) |
+| `[workspace]` | optional | Generation-wide knobs (mount range, in-container workdir parent, Dev Container toggle) |
 | `[container]` | **required** | Image identity (service name, username, OS / version) |
 | `[container.resources]` | optional | Compose resource limits |
 | `[container.shell]` | optional | Login shell + per-shell rc injection |
@@ -60,13 +60,17 @@ Generation-wide knobs. All fields optional; defaults apply when omitted.
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `mount_root` | string | `"."` | `"."` mounts cwd as the project, `".."` mounts the parent directory so sibling repos are visible. |
+| `dir` | string | `"workspace"` | In-container workdir parent under `/home/<user>/`. Slashes allowed for nested paths (e.g. `"work/myproject"`). Useful when a tool like AWS SAM expects a specific in-container path. Allowed chars: `[A-Za-z0-9._-]` per segment; no leading/trailing slash, no `.` or `..` segments. |
 | `devcontainer` | bool | `true` | Emit `.devcontainer/devcontainer.json` for VS Code Reopen-in-Container. |
 
 ```toml
 [workspace]
 mount_root = "."
+dir = "workspace"
 devcontainer = true
 ```
+
+With `mount_root = "."` (default) the in-container path is `/home/<user>/<dir>/<service>`; with `mount_root = ".."` it is `/home/<user>/<dir>`.
 
 ---
 

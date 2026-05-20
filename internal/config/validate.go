@@ -74,6 +74,15 @@ var (
 	// that contract so tags like `_internal` or `2.7.14` are accepted and
 	// `.hidden` / `-foo` / `library/node` / `node:24` are rejected.
 	rxImageVersion = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._-]*$`)
+	// rxWorkspaceDir validates [workspace].dir: one or more portable filename
+	// segments joined by `/`. Each segment is the same POSIX portable charset
+	// rxHomeFilesSegment uses so the value can flow into Dockerfile WORKDIR /
+	// docker-compose mount targets / docker-entrypoint.sh chown loops without
+	// shell-special characters reaching those contexts. Absolute paths
+	// (leading `/`), trailing slashes, `..` segments, and empty segments are
+	// rejected by the regex shape; that lets the field stay relative to
+	// /home/<user>/ and avoids container-escape paths.
+	rxWorkspaceDir = regexp.MustCompile(`^[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$`)
 )
 
 // portMin and portMax bound ports forwarded into the dev container.
@@ -86,6 +95,21 @@ const (
 // mirroring the [plugins].enable regex.
 func IsValidPluginID(id string) bool {
 	return rxPluginID.MatchString(id)
+}
+
+// IsValidWorkspaceDir lets `cocoon init` reject bad [workspace].dir input
+// before the toml is written. Mirrors WorkspaceSpec.validate's two-step
+// check (charset + "no `.`/`..` segment").
+func IsValidWorkspaceDir(s string) bool {
+	if !rxWorkspaceDir.MatchString(s) {
+		return false
+	}
+	for _, seg := range strings.Split(s, "/") {
+		if seg == "." || seg == ".." {
+			return false
+		}
+	}
+	return true
 }
 
 // Accumulator collects FieldError rows scoped under a base path. The zero
@@ -192,6 +216,26 @@ func (w *Workspace) runValidate(a *Accumulator) {
 func (w *WorkspaceSpec) validate(a *Accumulator) {
 	if w.MountRoot != "" && w.MountRoot != "." && w.MountRoot != ".." {
 		a.Add(`mount_root must be "." or ".."`, "mount_root")
+	}
+	if w.Dir == "" {
+		return
+	}
+	if !rxWorkspaceDir.MatchString(w.Dir) {
+		a.Add(
+			`dir must be one or more path segments of [A-Za-z0-9._-] joined by "/", `+
+				`with no leading/trailing slash (e.g. "workspace" or "work/myproject")`,
+			"dir",
+		)
+		return
+	}
+	// Each segment matches [A-Za-z0-9._-]+ so "." and ".." sneak through the
+	// regex — reject them explicitly to keep dir relative and inside the
+	// container home.
+	for _, seg := range strings.Split(w.Dir, "/") {
+		if seg == "." || seg == ".." {
+			a.Add(`dir must not contain "." or ".." path segments`, "dir")
+			return
+		}
 	}
 }
 

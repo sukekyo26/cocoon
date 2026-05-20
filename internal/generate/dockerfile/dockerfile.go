@@ -74,6 +74,7 @@ type templateData struct {
 	DockerfilePostPlugins  string
 	CocoonWorkspace        string
 	CocoonBindPaths        string
+	WorkspaceDir           string
 }
 
 //nolint:lll // Dockerfile RUN/echo lines cannot be wrapped without changing semantics.
@@ -227,7 +228,7 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["sleep", "infinity"]
 
-WORKDIR /home/${USERNAME}/workspace
+WORKDIR /home/${USERNAME}/{{ .WorkspaceDir }}
 `, nil)
 
 // Generate produces Dockerfile contents.
@@ -323,6 +324,7 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 		DockerfilePostPlugins:  postPlugins,
 		CocoonWorkspace:        cocoonWorkspace,
 		CocoonBindPaths:        cocoonBindPaths,
+		WorkspaceDir:           ctx.WS.Workspace.DirOrDefault(),
 	}
 
 	out, err := tmplx.Render(tmpl, data)
@@ -349,7 +351,7 @@ func pickRepoDir(override, root string) string {
 func cocoonEntrypointPaths(ctx *generate.WorkspaceContext) (workspace, bindPaths string) {
 	user := ctx.Username()
 	home := "/home/" + user
-	workspace = home + "/workspace"
+	workspace = home + "/" + ctx.WS.Workspace.DirOrDefault()
 	if ctx.WS.Workspace.MountRootOrDefault() != ".." {
 		workspace += "/" + ctx.ServiceName()
 	}

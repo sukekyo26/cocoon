@@ -3,9 +3,11 @@
 
 # [workspace] — generation-wide knobs.
 #   mount_root: how much of your filesystem to expose. "." = cwd only, ".." = parent (siblings visible).
+#   dir: in-container workdir parent under /home/<user>/. Default "workspace"; slashes allowed for nested paths.
 #   devcontainer: emit .devcontainer/devcontainer.json for VS Code Reopen-in-Container.
 [workspace]
 mount_root = "."
+dir = "workspace"
 devcontainer = false
 
 # [container] — image identity.

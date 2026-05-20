@@ -92,13 +92,14 @@ docker compose -f .devcontainer/docker-compose.yml up -d # or VS Code → "Reope
 4. **Login shell** — `bash`, `zsh`, or `fish`
 5. **Alias bundles** — `git`, `ls`, `docker` shortcut sets (multi-select)
 6. **Mount range** — cwd only, or its parent (for fat workspaces where sibling repos must be visible)
-7. **VS Code Dev Containers** support — emit `devcontainer.json` or skip
-8. **Corporate CA auto-bake** — opt in to picking up `.crt` files from `~/.cocoon/certs/` at build time (off by default; see below)
-9. **Port forwards** — comma-separated docker-compose short forms (e.g. `3000:3000,5432:5432`); blank to skip and the `[ports]` template stays as a commented-out hint
-10. **apt categories** — text-editors, vcs, utilities, build, network, … (multi-select)
-11. **Plugins** to enable from the embedded catalog (multi-select, 26 to choose from)
+7. **Container workdir name** — the parent directory under `/home/<user>/` (defaults to `workspace`; slashes allowed for nested paths like `work/myproject`, useful when a tool such as AWS SAM expects the in-container path to mirror a specific host layout)
+8. **VS Code Dev Containers** support — emit `devcontainer.json` or skip
+9. **Corporate CA auto-bake** — opt in to picking up `.crt` files from `~/.cocoon/certs/` at build time (off by default; see below)
+10. **Port forwards** — comma-separated docker-compose short forms (e.g. `3000:3000,5432:5432`); blank to skip and the `[ports]` template stays as a commented-out hint
+11. **apt categories** — text-editors, vcs, utilities, build, network, … (multi-select)
+12. **Plugins** to enable from the embedded catalog (multi-select)
 
-Each answer becomes a self-documenting line in `workspace.toml`. Pass `--yes` together with the value flags (`--service-name`, `--username`, `--image`, `--plugins`, `--certificates`, `--ports`, …) to drive it from CI without a TTY.
+Each answer becomes a self-documenting line in `workspace.toml`. Pass `--yes` together with the value flags (`--service-name`, `--username`, `--image`, `--dir`, `--plugins`, `--certificates`, `--ports`, …) to drive it from CI without a TTY.
 
 ## Plugins
 
