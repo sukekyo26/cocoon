@@ -75,6 +75,8 @@ var messagesEN_init = map[string]string{
 		"#   default: bash | zsh | fish. The generator picks ~/.bashrc / ~/.zshrc / ~/.config/fish/config.fish.\n" +
 		"#   aliases / env: appended to the rc file inside the image at build time.\n" +
 		"#   bash & zsh use POSIX syntax (alias k='v', export K=V); fish translation is automatic.\n" +
+		"#   env values are expanded by the target shell when the rc is sourced, so $HOME, $PATH, $(cmd) work\n" +
+		"#   (e.g. NPM_CONFIG_PREFIX = \"$HOME/.local\"). Alias bodies stay literal until the alias is invoked.\n" +
 		"#\n" +
 		"# env example (uncomment + edit):\n" +
 		"#   env = { EDITOR = \"vim\", PAGER = \"less -R\" }\n" +
@@ -192,6 +194,8 @@ var messagesJA_init = map[string]string{
 		"#   default: bash | zsh | fish。生成系が ~/.bashrc / ~/.zshrc / ~/.config/fish/config.fish を選ぶ。\n" +
 		"#   aliases / env: イメージビルド時に rc ファイルへ追記される。\n" +
 		"#   bash と zsh は POSIX 記法 (alias k='v', export K=V)、fish は自動翻訳。\n" +
+		"#   env の値は rc を source する時にシェルが展開する。$HOME / $PATH / $(cmd) をそのまま書ける\n" +
+		"#   (例: NPM_CONFIG_PREFIX = \"$HOME/.local\")。alias の本文は呼び出し時まで展開されない。\n" +
 		"#\n" +
 		"# env の設定例（コメントアウトを外して編集）:\n" +
 		"#   env = { EDITOR = \"vim\", PAGER = \"less -R\" }\n" +

@@ -10,6 +10,10 @@ cocoon の主要な変更を記録します。フォーマットは
 
 - `[workspace]` にオプションの `dir` フィールドを追加しました。コンテナ内 workdir の親ディレクトリ (`/home/<user>/` 配下) を上書きできます (既定 `workspace`)。スラッシュで多段階層も可 (例: `dir = "work/myproject"`)。AWS SAM などコンテナ内パスをホスト構成に合わせたいツール向け。値は `docker-compose.yml` の bind mount と `working_dir`、`devcontainer.json` の `workspaceFolder`、生成 `Dockerfile` の `WORKDIR` に反映されます。`cocoon init` で対話入力を取り (非対話なら `--dir`)、既定値でも `dir = "..."` を `workspace.toml` に必ず書き出します。
 
+### 修正
+
+- `cocoon gen` が `[container.shell].env` の値をダブルクォート整形で出力するようになり、rc を source した時点で `$HOME` / `$PATH` / `$(cmd)` がシェルにより展開されるようになりました。従来はシングルクォートで囲んでいたため `export NPM_CONFIG_PREFIX='$HOME/.local'` となり、`$HOME` がリテラル文字列のまま残って `npm install -g` などが存在しないパスに書き込もうとしていました。fish 側 (`set -gx K "$HOME/..."`) も同じ修正を反映しています。alias の本文は呼び出し時にシェルが再パースするため、これまでどおりシングルクォートのまま出力します (`$1` や `$HOME` を含めても呼び出し時に正しく展開されます)。
+
 ## [0.6.0] - 2026-05-18
 
 ### 追加

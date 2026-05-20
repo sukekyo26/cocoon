@@ -10,6 +10,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 - `[workspace]` accepts a new optional `dir` field that overrides the in-container workdir parent directory under `/home/<user>/` (defaults to `workspace`). Slashes are allowed for nested paths (e.g. `dir = "work/myproject"`), so the in-container layout can mirror a specific host path — useful for tools like AWS SAM that key off absolute paths. The value flows through to `docker-compose.yml`'s bind mount + `working_dir`, `devcontainer.json`'s `workspaceFolder`, and the generated `Dockerfile`'s `WORKDIR`. `cocoon init` asks for it (or accepts `--dir` for non-interactive runs) and always writes `dir = "..."` into the generated `workspace.toml`.
 
+### Fixed
+
+- `cocoon gen` now emits `[container.shell].env` values with double-quote semantics so `$HOME`, `$PATH`, and `$(cmd)` are expanded by the shell when the rc file is sourced. Previously every value was wrapped in single quotes (e.g. `export NPM_CONFIG_PREFIX='$HOME/.local'`), so `$HOME` stayed literal and tools like `npm install -g` ended up writing to a path that did not exist. The same fix applies to the fish translation (`set -gx K "$HOME/..."`). Alias bodies keep POSIX single-quote semantics because the shell re-parses them on invocation, so `$1` and `$HOME` inside an alias still resolve at call time.
+
 ## [0.6.0] - 2026-05-18
 
 ### Added
