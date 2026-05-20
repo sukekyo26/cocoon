@@ -6,6 +6,10 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+### 追加
+
+- `[workspace]` にオプションの `dir` フィールドを追加しました。コンテナ内 workdir の親ディレクトリ (`/home/<user>/` 配下) を上書きできます (既定 `workspace`)。スラッシュで多段階層も可 (例: `dir = "work/myproject"`)。AWS SAM などコンテナ内パスをホスト構成に合わせたいツール向け。値は `docker-compose.yml` の bind mount と `working_dir`、`devcontainer.json` の `workspaceFolder`、生成 `Dockerfile` の `WORKDIR` に反映されます。`cocoon init` で対話入力を取り (非対話なら `--dir`)、既定値でも `dir = "..."` を `workspace.toml` に必ず書き出します。
+
 ## [0.6.0] - 2026-05-18
 
 ### 追加

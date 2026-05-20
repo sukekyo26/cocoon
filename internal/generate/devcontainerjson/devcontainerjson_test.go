@@ -180,6 +180,57 @@ func TestGenerateMinimalDefaults(t *testing.T) {
 	}
 }
 
+// TestGenerateWorkspaceDirOverride locks the path expansion of
+// [workspace].dir into workspaceFolder. The cwd-mount branch ("." default)
+// must append the service segment after the configured dir; multi-segment
+// dirs flow through verbatim.
+func TestGenerateWorkspaceDirOverride(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name   string
+		spec   *config.WorkspaceSpec
+		svc    string
+		expect string
+	}{
+		{
+			name:   "single_segment_cwd_mount",
+			spec:   &config.WorkspaceSpec{MountRoot: ".", Dir: "myapp"},
+			svc:    "svc",
+			expect: `"workspaceFolder": "/home/developer/myapp/svc"`,
+		},
+		{
+			name:   "nested_segment_cwd_mount",
+			spec:   &config.WorkspaceSpec{MountRoot: ".", Dir: "work/myapp"},
+			svc:    "svc",
+			expect: `"workspaceFolder": "/home/developer/work/myapp/svc"`,
+		},
+		{
+			name:   "single_segment_parent_mount",
+			spec:   &config.WorkspaceSpec{MountRoot: "..", Dir: "myapp"},
+			svc:    "svc",
+			expect: `"workspaceFolder": "/home/developer/myapp"`,
+		},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			ctx := &generate.WorkspaceContext{WS: &config.Workspace{
+				Workspace: tc.spec,
+				Container: config.ContainerSpec{ServiceName: tc.svc},
+			}}
+			got, err := devcontainerjson.Generate(ctx)
+			if err != nil {
+				t.Fatalf("generate: %v", err)
+			}
+			if !strings.Contains(got, tc.expect) {
+				t.Errorf("missing %q in output:\n%s", tc.expect, got)
+			}
+		})
+	}
+}
+
 // TestGenerateForwardPortsFromOverrideOnly verifies the key is emitted
 // when devcontainer.forward_ports supplies values but [ports] is absent —
 // the override path is the sole source.

@@ -22,7 +22,7 @@
 
 | セクション | 必須? | 役割 |
 |---|---|---|
-| `[workspace]` | optional | 生成全体の挙動 (マウント範囲、Dev Container 出力切替) |
+| `[workspace]` | optional | 生成全体の挙動 (マウント範囲、コンテナ内 workdir 親、Dev Container 出力切替) |
 | `[container]` | **required** | イメージの素性 (サービス名、ユーザー名、OS / バージョン) |
 | `[container.resources]` | optional | Compose のリソース上限 |
 | `[container.shell]` | optional | ログインシェル + シェル別 rc 注入 |
@@ -60,13 +60,17 @@
 | フィールド | 型 | デフォルト | 説明 |
 |---|---|---|---|
 | `mount_root` | string | `"."` | `"."` は cwd をプロジェクトとしてマウント、`".."` は親ディレクトリをマウントして兄弟リポジトリも見える状態にする。 |
+| `dir` | string | `"workspace"` | コンテナ内 workdir の親ディレクトリ (`/home/<user>/` 配下)。スラッシュで多段階層も可 (例: `"work/myproject"`)。AWS SAM などコンテナ内パスをホスト構成に合わせたいツール向け。許容文字はセグメントごとに `[A-Za-z0-9._-]`。先頭/末尾スラッシュ・`.`/`..` セグメント禁止。 |
 | `devcontainer` | bool | `true` | VS Code Reopen-in-Container 用の `.devcontainer/devcontainer.json` を生成。 |
 
 ```toml
 [workspace]
 mount_root = "."
+dir = "workspace"
 devcontainer = true
 ```
+
+`mount_root = "."` (デフォルト) ではコンテナ内パスは `/home/<user>/<dir>/<service>`、`mount_root = ".."` では `/home/<user>/<dir>`。
 
 ---
 

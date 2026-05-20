@@ -39,6 +39,15 @@ type WorkspaceSpec struct {
 	// nothing else; loaders enforce the same constraint.
 	MountRoot string `toml:"mount_root,omitempty"`
 
+	// Dir overrides the in-container workdir parent directory under
+	// /home/<user>/. Empty falls back to "workspace". Multi-segment paths
+	// (e.g. "work/myproject") are accepted so callers can match a host
+	// path layout that tools like AWS SAM expect. Validation lives in
+	// rxWorkspaceDir plus a per-segment check; together they reject
+	// absolute paths, "." and ".." segments, and any non-portable filename
+	// character.
+	Dir string `toml:"dir,omitempty"`
+
 	// DevContainer toggles emission of .devcontainer/devcontainer.json.
 	// Pointer so the loader can distinguish "field omitted" (defaults true)
 	// from an explicit `devcontainer = false`.
@@ -51,6 +60,15 @@ func (w *WorkspaceSpec) MountRootOrDefault() string {
 		return "."
 	}
 	return w.MountRoot
+}
+
+// DirOrDefault falls back to "workspace" when [workspace] is omitted or
+// the field is empty.
+func (w *WorkspaceSpec) DirOrDefault() string {
+	if w == nil || w.Dir == "" {
+		return "workspace"
+	}
+	return w.Dir
 }
 
 // DevContainerOrDefault is true unless explicitly set false.

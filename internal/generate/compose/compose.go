@@ -234,11 +234,12 @@ type volPair struct {
 // hint v1 used to set in the override compose file; keeping it in the
 // generated output preserves that behaviour.
 func workspaceBindMount(ctx *generate.WorkspaceContext) string {
+	dir := ctx.WS.Workspace.DirOrDefault()
 	switch ctx.WS.Workspace.MountRootOrDefault() {
 	case "..":
-		return "../..:/home/${USERNAME}/workspace:cached"
+		return "../..:/home/${USERNAME}/" + dir + ":cached"
 	default:
-		return "..:/home/${USERNAME}/workspace/" + ctx.ServiceName() + ":cached"
+		return "..:/home/${USERNAME}/" + dir + "/" + ctx.ServiceName() + ":cached"
 	}
 }
 
@@ -344,11 +345,13 @@ func buildService(ctx *generate.WorkspaceContext, mounts []*yaml.Node) *yaml.Nod
 		// `mount_root = "."` mounts only the project so the host bind point
 		// already includes the project basename. Emit a matching
 		// working_dir so `cocoon exec` lands inside the project tree
-		// rather than at the parent /home/<user>/workspace WORKDIR baked
+		// rather than at the parent /home/<user>/<dir> WORKDIR baked
 		// into the image.
 		pairs = append(pairs, yamlx.Pair{
-			Key:   "working_dir",
-			Value: yamlx.QuotedIfSpecial("/home/${USERNAME}/workspace/" + ctx.ServiceName()),
+			Key: "working_dir",
+			Value: yamlx.QuotedIfSpecial(
+				"/home/${USERNAME}/" + ctx.WS.Workspace.DirOrDefault() + "/" + ctx.ServiceName(),
+			),
 		})
 	}
 	pairs = append(pairs, yamlx.Pair{Key: "tty", Value: yamlx.Bool(true)})

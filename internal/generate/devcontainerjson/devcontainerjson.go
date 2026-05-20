@@ -56,7 +56,7 @@ func buildConfig(ctx *generate.WorkspaceContext) *orderedMap {
 	if cmd := initializeCommand(ctx); cmd != "" {
 		base.set("initializeCommand", cmd)
 	}
-	workspaceFolder := "/home/" + ctx.Username() + "/workspace"
+	workspaceFolder := "/home/" + ctx.Username() + "/" + ctx.WS.Workspace.DirOrDefault()
 	if ctx.WS.Workspace.MountRootOrDefault() == "." {
 		// Match the compose working_dir so VS Code opens the same
 		// directory `cocoon exec` lands in.

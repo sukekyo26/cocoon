@@ -95,8 +95,10 @@ Each artifact is rendered into memory first, then written atomically through `in
 
 | Value | Host source | Container target | Use case |
 |---|---|---|---|
-| `"."` (default) | cwd | `/home/$USER/workspace/<service>` | Single-repo development |
-| `".."` | parent of cwd | `/home/$USER/workspace` | Fat workspace where sibling repos must be visible |
+| `"."` (default) | cwd | `/home/$USER/<dir>/<service>` | Single-repo development |
+| `".."` | parent of cwd | `/home/$USER/<dir>` | Fat workspace where sibling repos must be visible |
+
+`<dir>` defaults to `workspace` and can be overridden via `[workspace] dir` (e.g. `dir = "work/myproject"`) when the in-container path needs to mirror a specific host layout — useful for tools like AWS SAM that key off absolute paths. Multi-segment values land verbatim under `/home/$USER/`.
 
 `devcontainer.json::workspaceFolder` follows the same choice so VS Code lands in the right directory.
 

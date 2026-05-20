@@ -37,8 +37,8 @@ scrolled under it.)
 
 Use --yes plus --service-name / --username (both required when --yes
 is set) and any of --image / --image-version / --shell / --mount-root /
---devcontainer / --apt-categories / --plugins / --alias-bundles to drive
-non-interactively from CI.`
+--dir / --devcontainer / --apt-categories / --plugins / --alias-bundles
+to drive non-interactively from CI.`
 
 // NewCommand returns the cobra command for `cocoon init`.
 func NewCommand(stdout, stderr io.Writer) *cobra.Command {
@@ -64,6 +64,9 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 	cmd.Flags().StringVar(&flags.Shell, "shell", "",
 		fmt.Sprintf("container login shell: %s (default: bash)", strings.Join(config.SupportedShells, ", ")))
 	cmd.Flags().StringVar(&flags.MountRoot, "mount-root", "", `mount range: "." (cwd, default) or ".." (parent)`)
+	cmd.Flags().StringVar(&flags.Dir, "dir", "",
+		`container workdir parent under /home/<user>/ `+
+			`(default "workspace"; slashes allowed for nested paths, e.g. "work/myproject")`)
 	cmd.Flags().BoolVar(&flags.Devcontainer, "devcontainer", false, "force-enable .devcontainer/devcontainer.json output")
 	cmd.Flags().BoolVar(&flags.NoDevcontainer, "no-devcontainer", false, "skip .devcontainer/devcontainer.json output")
 	cmd.Flags().BoolVar(&flags.Certificates, "certificates", false,
@@ -151,6 +154,7 @@ func runInit(cmd *cobra.Command, stdout, stderr io.Writer, flags *initFlags) err
 		Shell:          ans.Shell,
 		Aliases:        aliases,
 		MountRoot:      ans.MountRoot,
+		Dir:            ans.Dir,
 		Devcontainer:   ans.Devcontainer,
 		Certificates:   ans.Certificates,
 		Packages:       pkgs,
