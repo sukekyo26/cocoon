@@ -43,8 +43,9 @@ type WorkspaceSpec struct {
 	// /home/<user>/. Empty falls back to "workspace". Multi-segment paths
 	// (e.g. "work/myproject") are accepted so callers can match a host
 	// path layout that tools like AWS SAM expect. Validation lives in
-	// rxWorkspaceDir and rejects absolute paths, ".." segments, and any
-	// non-portable filename character.
+	// rxWorkspaceDir plus a per-segment check; together they reject
+	// absolute paths, "." and ".." segments, and any non-portable filename
+	// character.
 	Dir string `toml:"dir,omitempty"`
 
 	// DevContainer toggles emission of .devcontainer/devcontainer.json.

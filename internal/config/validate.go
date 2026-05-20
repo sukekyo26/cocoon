@@ -75,13 +75,15 @@ var (
 	// `.hidden` / `-foo` / `library/node` / `node:24` are rejected.
 	rxImageVersion = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._-]*$`)
 	// rxWorkspaceDir validates [workspace].dir: one or more portable filename
-	// segments joined by `/`. Each segment is the same POSIX portable charset
-	// rxHomeFilesSegment uses so the value can flow into Dockerfile WORKDIR /
-	// docker-compose mount targets / docker-entrypoint.sh chown loops without
-	// shell-special characters reaching those contexts. Absolute paths
-	// (leading `/`), trailing slashes, `..` segments, and empty segments are
-	// rejected by the regex shape; that lets the field stay relative to
-	// /home/<user>/ and avoids container-escape paths.
+	// segments joined by `/`. Each segment uses the same POSIX portable
+	// charset rxHomeFilesSegment uses so the value can flow into Dockerfile
+	// WORKDIR / docker-compose mount targets / docker-entrypoint.sh chown
+	// loops without shell-special characters reaching those contexts. The
+	// regex rejects absolute paths (leading `/`), trailing slashes, and
+	// empty segments, but `.` and `..` slip through it because both consist
+	// of charset chars — IsValidWorkspaceDir / WorkspaceSpec.validate strip
+	// those with an explicit per-segment check so the field stays relative
+	// to /home/<user>/ and cannot encode container-escape paths.
 	rxWorkspaceDir = regexp.MustCompile(`^[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$`)
 )
 
