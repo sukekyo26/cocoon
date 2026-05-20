@@ -58,3 +58,52 @@ func FishQuote(s string) string {
 	b.WriteByte('\'')
 	return b.String()
 }
+
+// PosixExportValue quotes s for use as the right-hand side of `export K=V`
+// in bash/zsh, deliberately preserving $-expansion so the shell expands
+// $VAR / ${VAR} / $(cmd) when the rc file is sourced. Empty becomes ""; a
+// string made up entirely of safe characters is returned unquoted; anything
+// else is wrapped in double quotes with \, ", and ` escaped as \<c>. $ is
+// left verbatim so callers can write `NPM_CONFIG_PREFIX = "$HOME/.local"`
+// and have $HOME resolve at shell start-up. Command substitution is the
+// caller's responsibility — they wrote it.
+func PosixExportValue(s string) string {
+	if s == "" {
+		return `""`
+	}
+	if isSafe(s) {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s) + 2)
+	b.WriteByte('"')
+	for _, r := range s {
+		if r == '\\' || r == '"' || r == '`' {
+			b.WriteByte('\\')
+		}
+		b.WriteRune(r)
+	}
+	b.WriteByte('"')
+	return b.String()
+}
+
+// FishExportValue quotes s for use as the value of `set -gx K V` in fish,
+// deliberately preserving $-expansion. fish single quotes block expansion
+// and fish double quotes expand $VAR, so the value is always wrapped in
+// double quotes with \ and " escaped as \<c>. Empty becomes "".
+func FishExportValue(s string) string {
+	if s == "" {
+		return `""`
+	}
+	var b strings.Builder
+	b.Grow(len(s) + 2)
+	b.WriteByte('"')
+	for _, r := range s {
+		if r == '\\' || r == '"' {
+			b.WriteByte('\\')
+		}
+		b.WriteRune(r)
+	}
+	b.WriteByte('"')
+	return b.String()
+}

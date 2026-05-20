@@ -5,8 +5,11 @@
 //
 // The env/aliases are appended directly to ~/.{shell}rc inside the image so no
 // host-side companion artifact is written. Bash and zsh share POSIX-style
-// `export K=V` / `alias k='v'` syntax (anchored on shellx.ShellQuote); fish
-// uses `set -gx K V` / `alias k 'v'` (anchored on shellx.FishQuote).
+// `export K=V` / `alias k='v'` syntax; fish uses `set -gx K V` / `alias k 'v'`.
+// Env values are double-quoted via shellx.{Posix,Fish}ExportValue so $HOME /
+// $PATH / $(cmd) expand when the shell sources the rc file. Alias bodies use
+// single quotes (shellx.{Shell,Fish}Quote) because they are re-parsed by the
+// shell at invocation time, so embedded $-references resolve there.
 //
 // The persistent shellrc bootstrap is appended after the env/aliases so that
 // users can override anything cocoon sets by editing ~/.cocoon/.shellrc.
@@ -78,9 +81,9 @@ func renderEnvLines(env map[string]string, syntax string) []string {
 	out := make([]string, len(keys))
 	for i, k := range keys {
 		if syntax == "fish" {
-			out[i] = "set -gx " + k + " " + shellx.FishQuote(env[k])
+			out[i] = "set -gx " + k + " " + shellx.FishExportValue(env[k])
 		} else {
-			out[i] = "export " + k + "=" + shellx.ShellQuote(env[k])
+			out[i] = "export " + k + "=" + shellx.PosixExportValue(env[k])
 		}
 	}
 	return out
