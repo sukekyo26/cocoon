@@ -6,10 +6,13 @@
 // The env/aliases are appended directly to ~/.{shell}rc inside the image so no
 // host-side companion artifact is written. Bash and zsh share POSIX-style
 // `export K=V` / `alias k='v'` syntax; fish uses `set -gx K V` / `alias k 'v'`.
-// Env values are double-quoted via shellx.{Posix,Fish}ExportValue so $HOME /
-// $PATH / $(cmd) expand when the shell sources the rc file. Alias bodies use
-// single quotes (shellx.{Shell,Fish}Quote) because they are re-parsed by the
-// shell at invocation time, so embedded $-references resolve there.
+// Env values are emitted with double-quote semantics via
+// shellx.{Posix,Fish}ExportValue (fully-safe values stay unquoted; anything
+// else is wrapped in "...") so $HOME / $PATH expand when the shell sources
+// the rc file. POSIX `$(cmd)` command substitution also expands on bash/zsh
+// and on fish 3.4+; older fish needs the native `(cmd)` form. Alias bodies
+// use single quotes (shellx.{Shell,Fish}Quote) because they are re-parsed by
+// the shell at invocation time, so embedded $-references resolve there.
 //
 // The persistent shellrc bootstrap is appended after the env/aliases so that
 // users can override anything cocoon sets by editing ~/.cocoon/.shellrc.

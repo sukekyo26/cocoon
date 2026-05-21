@@ -133,7 +133,7 @@ COCOON_RC
 COCOON_RC_BLOCK
 ```
 
-Env values are wrapped in double quotes (with `$` left intact) so references like `$HOME` / `$PATH` / `$(cmd)` are expanded by the shell when the rc file is sourced. Alias bodies use single quotes because the shell re-parses them on invocation, so `$1` and `$HOME` inside an alias still resolve at call time.
+Env values are emitted with double-quote semantics (fully-safe values stay unquoted; anything else is wrapped in `"..."`, with `$` left intact) so references like `$HOME` / `$PATH` are expanded by the shell when the rc file is sourced. `$(cmd)` command substitution works on bash/zsh and on fish 3.4+ (cocoon's supported base images all ship that or newer); older fish needs the native `(cmd)` form. A literal `$` can be written as `\$`. Alias bodies use single quotes because the shell re-parses them on invocation, so `$1` and `$HOME` inside an alias still resolve at call time.
 
 Bash / zsh source `~/.cocoon/.shellrc`; fish sources `~/.cocoon/.shellrc.fish`. The bootstrap is unconditional (it always emits, even when `[container.shell]` is unset), so the user can always edit the persistent file without re-generating.
 

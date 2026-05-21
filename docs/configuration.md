@@ -145,7 +145,7 @@ Compose resource limits. Omit any field to inherit Docker defaults (unlimited).
 
 ### `[container.shell]`
 
-Login shell plus per-shell rc injection. Aliases / env are appended to the rc file inside the image at build time; bash and zsh share POSIX syntax (`alias k='v'`, `export K=V`), and fish is translated automatically. Env values are double-quoted on emission so `$HOME`, `$PATH`, and `$(cmd)` are expanded by the shell when the rc is sourced (e.g. `NPM_CONFIG_PREFIX = "$HOME/.local"` resolves to `/home/<user>/.local`). Alias bodies stay single-quoted because the shell re-parses them on invocation, so a `$1` / `$HOME` inside an alias still resolves at call time.
+Login shell plus per-shell rc injection. Aliases / env are appended to the rc file inside the image at build time; bash and zsh share POSIX syntax (`alias k='v'`, `export K=V`), and fish is translated automatically. Env values are emitted with double-quote semantics — fully-safe values stay unquoted (`export EDITOR=vim`), anything else is wrapped in `"..."` — so `$HOME` / `$PATH` are expanded by the shell when the rc is sourced (e.g. `NPM_CONFIG_PREFIX = "$HOME/.local"` resolves to `/home/<user>/.local`). POSIX `$(cmd)` command substitution also expands on bash/zsh and on fish 3.4+ (the version shipped with cocoon's supported base images); older fish requires the native `(cmd)` form. Prefix `$` with `\` (`\$RAW`) to keep the dollar sign literal. Alias bodies stay single-quoted because the shell re-parses them on invocation, so a `$1` / `$HOME` inside an alias still resolves at call time.
 
 | Field | Type | Default | Notes |
 |---|---|---|---|
