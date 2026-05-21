@@ -206,3 +206,137 @@ func TestIsValidWorkspaceDir(t *testing.T) {
 		})
 	}
 }
+
+func TestIsValidCodeWorkspaceName(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		in   string
+		want bool
+	}{
+		// Single-segment names with portable filename chars are accepted.
+		{"workspace", true},
+		{"my-stack", true},
+		{"with.dot_under-dash", true},
+		{"A1", true},
+		// Empty, traversal, and path separators must all be rejected.
+		{"", false},
+		{".", false},
+		{"..", false},
+		{"a/b", false},
+		{"a\\b", false},
+		{"a:b", false},
+		{"with space", false},
+		{"~tilde", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.in, func(t *testing.T) {
+			t.Parallel()
+			if got := config.IsValidCodeWorkspaceName(tc.in); got != tc.want {
+				t.Fatalf("IsValidCodeWorkspaceName(%q) = %v, want %v", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestWorkspace_ValidateRejectsBadCodeWorkspaceName runs the [code_workspace]
+// validator end-to-end through Workspace.Validate so the FieldError loc
+// path ("code_workspace.name") is also exercised, not just the name regex.
+func TestWorkspace_ValidateRejectsBadCodeWorkspaceName(t *testing.T) {
+	t.Parallel()
+
+	bads := []string{"a/b", "..", ".", "with space", "name:colon"}
+	for _, name := range bads {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			ws := &config.Workspace{
+				Container: config.ContainerSpec{
+					ServiceName:  "dev",
+					Username:     "shogo",
+					Image:        "ubuntu",
+					ImageVersion: "24.04",
+				},
+				CodeWorkspace: &config.CodeWorkspaceSpec{Name: name},
+			}
+			err := ws.Validate("test.toml")
+			if err == nil {
+				t.Fatalf("expected validation error for name=%q", name)
+			}
+			if !strings.Contains(err.Error(), "code_workspace") {
+				t.Fatalf("error did not mention code_workspace for %q: %v", name, err)
+			}
+		})
+	}
+}
+
+// TestWorkspace_ValidateRejectsEmptyFolderPath pins the structural
+// folders[].path == "" check. Empty paths would otherwise reach the
+// generator where they fail with ErrInvalidFolderPath; catching at
+// validate-time gives a cleaner FieldError trail.
+func TestWorkspace_ValidateRejectsEmptyFolderPath(t *testing.T) {
+	t.Parallel()
+
+	ws := &config.Workspace{
+		Container: config.ContainerSpec{
+			ServiceName:  "dev",
+			Username:     "shogo",
+			Image:        "ubuntu",
+			ImageVersion: "24.04",
+		},
+		CodeWorkspace: &config.CodeWorkspaceSpec{
+			Folders: []config.CodeWorkspaceFolder{{Path: ""}},
+		},
+	}
+	err := ws.Validate("test.toml")
+	if err == nil {
+		t.Fatal("expected validation error for empty folder path")
+	}
+	if !strings.Contains(err.Error(), "folders") {
+		t.Fatalf("error did not mention folders: %v", err)
+	}
+}
+
+// TestWorkspace_ValidateAcceptsValidCodeWorkspace ensures the full set of
+// supported shapes — empty section, name only, folders only, all features
+// — passes validation. Mirrors the AcceptsValid pattern for Dir / MountRoot.
+func TestWorkspace_ValidateAcceptsValidCodeWorkspace(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		spec *config.CodeWorkspaceSpec
+	}{
+		{"omitted", nil},
+		{"empty section", &config.CodeWorkspaceSpec{}},
+		{"name only", &config.CodeWorkspaceSpec{Name: "my-stack"}},
+		{"folders only", &config.CodeWorkspaceSpec{
+			Folders: []config.CodeWorkspaceFolder{{Path: "."}, {Path: "~/.claude"}},
+		}},
+		{"all features", &config.CodeWorkspaceSpec{
+			Name: "stack",
+			Folders: []config.CodeWorkspaceFolder{
+				{Path: "."},
+				{Path: "~/.config/nvim", Name: "Neovim"},
+			},
+			Settings:   map[string]any{"editor.tabSize": int64(2)},
+			Extensions: &config.CodeWorkspaceExtSpec{Recommendations: []string{"golang.go"}},
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			ws := &config.Workspace{
+				Container: config.ContainerSpec{
+					ServiceName:  "dev",
+					Username:     "shogo",
+					Image:        "ubuntu",
+					ImageVersion: "24.04",
+				},
+				CodeWorkspace: tc.spec,
+			}
+			if err := ws.Validate("test.toml"); err != nil {
+				t.Fatalf("unexpected validation error: %v", err)
+			}
+		})
+	}
+}

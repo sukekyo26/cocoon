@@ -127,6 +127,12 @@ var messagesEN_init = map[string]string{
 	"gen_home_files_in_container_warning":   "WARNING: cocoon gen is running inside a container (/.dockerenv detected); [home_files] entries will be touched in this container's HOME, not the Docker host's. Run `cocoon gen` on the host before `docker compose up`.",
 	"gen_home_files_is_directory":           "%s exists as a directory (likely auto-created by a previous `docker compose up` when the file was missing); remove it with `rm -rf %s` and re-run `cocoon gen`",
 	"gen_docker_cli_without_socket_warning": "WARNING: the docker-cli plugin is enabled but [container].docker_socket is not enabled (unset or false); the in-container docker client has no daemon socket to reach, so `docker ...` will fail with \"cannot connect to the Docker daemon\". Add `docker_socket = true` under [container] in workspace.toml, or remove the docker-cli plugin. Ignore this if the container talks to a remote DOCKER_HOST.",
+	// gen workspace (.code-workspace generator)
+	"gen_workspace_wrote":        "wrote %s",
+	"gen_workspace_no_folders":   "no folders configured: add entries to [code_workspace].folders in workspace.toml, or pass one or more --folder flags",
+	"gen_workspace_invalid_name": "invalid --name %q: must be a single path segment of [A-Za-z0-9._-] (no \"/\", \"\\\\\", \":\", whitespace)",
+	"gen_workspace_next_header":  "Next steps:",
+	"gen_workspace_next_step":    "  Open in VS Code: code %s",
 }
 
 // messagesJA_init mirrors messagesEN_init in Japanese. Untranslated keys
@@ -249,4 +255,10 @@ var messagesJA_init = map[string]string{
 	"gen_home_files_in_container_warning":   "警告: cocoon gen がコンテナ内 (/.dockerenv を検出) で実行されています。[home_files] エントリは Docker ホストではなくこのコンテナの HOME に対して touch されます。`docker compose up` の前にホスト側で `cocoon gen` を実行してください。",
 	"gen_home_files_is_directory":           "%s がディレクトリとして存在します (以前の `docker compose up` がファイル不在時に自動作成した可能性)。`rm -rf %s` で削除してから `cocoon gen` を再実行してください",
 	"gen_docker_cli_without_socket_warning": "警告: docker-cli プラグインは有効ですが [container].docker_socket が有効化されていません (未設定または false)。コンテナ内の docker クライアントが接続できる daemon ソケットが無いため、`docker ...` は \"cannot connect to the Docker daemon\" で失敗します。workspace.toml の [container] に `docker_socket = true` を追加するか、docker-cli プラグインを外してください。リモートの DOCKER_HOST に接続する構成ならこの警告は無視して構いません。",
+	// gen workspace (.code-workspace ジェネレータ)
+	"gen_workspace_wrote":        "%s を書き出しました",
+	"gen_workspace_no_folders":   "folders が空です: workspace.toml の [code_workspace].folders にエントリを追加するか、--folder フラグを 1 つ以上指定してください",
+	"gen_workspace_invalid_name": "--name %q が不正です: 単一のパスセグメント ([A-Za-z0-9._-]) で指定してください (\"/\", \"\\\\\", \":\", 空白は使用不可)",
+	"gen_workspace_next_header":  "次のステップ:",
+	"gen_workspace_next_step":    "  VS Code で開く: code %s",
 }

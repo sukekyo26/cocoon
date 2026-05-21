@@ -83,36 +83,54 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 		"project root to write generated artifacts under (default: directory of workspace.toml)",
 	)
 	clihelpers.AttachHelpAlias(cmd)
+	cmd.AddCommand(newWorkspaceCmd(stdout, stderr))
 	return cmd
 }
 
-func runGen(stdout, stderr io.Writer, workspaceFlag, outputFlag string) error {
-	cat := i18n.New(i18n.Detect())
-	log := logx.New(stdout, stderr)
+// loadGenContext resolves workspace.toml from workspaceFlag (falling back
+// to discovery from cwd), determines the output directory (defaulting to
+// the workspace.toml directory), assembles the layered plugin FS
+// (embedded < user < project), and returns a loaded WorkspaceContext.
+// Shared by `cocoon gen` and `cocoon gen workspace` so the discovery
+// rules stay in lockstep.
+func loadGenContext(stderr io.Writer, workspaceFlag, outputFlag string) (
+	outDir string,
+	ctx *generate.WorkspaceContext,
+	err error,
+) {
 	wsPath, err := resolveWorkspace(workspaceFlag)
 	if err != nil {
-		return err
+		return "", nil, err
 	}
-	outDir := outputFlag
+	outDir = outputFlag
 	if outDir == "" {
 		outDir = filepath.Dir(wsPath)
 	}
-
 	catalog, err := plugin.CatalogFS()
 	if err != nil {
-		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+		return "", nil, fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
 	}
 	userPluginDir, err := userPluginsDir()
 	if err != nil {
-		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+		return "", nil, fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
 	}
 	projectPluginDir := filepath.Join(filepath.Dir(wsPath), ".cocoon", "plugins")
 	layered := plugin.NewLayeredFS(catalog, userPluginDir, projectPluginDir)
 	layered.LogOverrides(stderr)
 
-	ctx, err := generatecli.LoadContext(wsPath, layered, "", stderr)
+	ctx, err = generatecli.LoadContext(wsPath, layered, "", stderr)
 	if err != nil {
-		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+		return "", nil, fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+	}
+	return outDir, ctx, nil
+}
+
+func runGen(stdout, stderr io.Writer, workspaceFlag, outputFlag string) error {
+	cat := i18n.New(i18n.Detect())
+	log := logx.New(stdout, stderr)
+	outDir, ctx, err := loadGenContext(stderr, workspaceFlag, outputFlag)
+	if err != nil {
+		return err
 	}
 	arts, err := generatecli.BuildArtifacts(ctx, stderr)
 	if err != nil {

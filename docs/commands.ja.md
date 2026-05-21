@@ -11,6 +11,7 @@
 |---|---|
 | `cocoon init` | `workspace.toml` を対話で生成 |
 | `cocoon gen` | `.devcontainer/` 配下の成果物を生成 |
+| `cocoon gen workspace` | プロジェクトルートに `<name>.code-workspace` を生成 |
 | `cocoon plugin list` | 利用可能な全プラグインを表示 (埋め込み + 上書き) |
 | `cocoon plugin show <id>` | 解決後の plugin マニフェストを表示 |
 | `cocoon plugin pin <id> <ref>` | `[plugins.versions]` 配下の inline-table 行を生成 (stdout / `--write` で in-place) |
@@ -108,6 +109,36 @@ cocoon gen --workspace ./infra/workspace.toml --output ./infra
 ### TLS 証明書
 
 生成される `Dockerfile` / `docker-compose.yml` / `devcontainer.json` に cert 自動取り込み配線が乗るのは、ワークスペースが `[certificates] enable = true` (または `cocoon init --certificates`) で opt-in したときのみ。cert を扱わないワークスペースは cert-free 成果物 (`additional_contexts` なし、`RUN --mount=type=bind` なし、`initializeCommand` なし) を commit する。opt-in 時は `~/.cocoon/certs/*.crt` が build 時にトラストストアへマージされる。詳細は [`configuration.ja.md` の `[certificates]`](configuration.ja.md#certificates) を参照。
+
+### `cocoon gen workspace`
+
+`workspace.toml` の `[code_workspace]` セクションから VS Code `.code-workspace` ファイルを生成します。出力先は **プロジェクトルート** (`workspace.toml` と同じ階層、`.devcontainer/` 配下ではない) なので、`code <name>.code-workspace` で開いてプロジェクトのエントリポイントとして扱えます。`folders[]` 内のパスは `~` 展開とプロジェクトディレクトリ起点の相対化を行うため、`"~/.claude"` のようなエントリが VS Code 側で上方向に辿れる相対パスへ解決されます。
+
+`cocoon gen` 本体はこのファイルを生成しません。サブコマンドは opt-in です。
+
+#### フラグ
+
+| フラグ | 型 | 説明 |
+|---|---|---|
+| `--workspace <path>` | string | `workspace.toml` のパス (デフォルト: cwd から探索)。 |
+| `--output <dir>` | string | `.code-workspace` を書き出すプロジェクトルート (デフォルト: `workspace.toml` のディレクトリ)。 |
+| `--name <basename>` | string | 出力ファイル名 (拡張子 `.code-workspace` を除く)。デフォルト: `[code_workspace].name` またはプロジェクトディレクトリの basename。単一のパスセグメントとしてバリデーションされます。 |
+| `--folder <path>[=<name>]` | 反復可 | `[code_workspace].folders` の後ろにフォルダを追加。`~` 展開対応。`=<name>` で自動導出された display name を上書き可能。 |
+
+#### 例
+
+```bash
+# workspace.toml の [code_workspace] をそのまま使う
+cocoon gen workspace
+
+# workspace.toml を編集せず一時的にフォルダを足す
+cocoon gen workspace --folder ~/.config/nvim --folder ../sibling-repo=Sibling
+
+# 出力ファイル名を上書き
+cocoon gen workspace --name my-stack
+```
+
+TOML スキーマとパス解決ルールは [`configuration.ja.md` の `[code_workspace]`](configuration.ja.md#code_workspace) を参照。
 
 ---
 

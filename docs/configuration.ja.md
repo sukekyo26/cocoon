@@ -493,6 +493,52 @@ extensions = [
 
 ---
 
+## `[code_workspace]`
+
+VS Code の `.code-workspace` ファイルを定義します。`cocoon gen workspace` がプロジェクトルート (`workspace.toml` と同じ階層、`.devcontainer/` 配下ではない) に書き出します。ジェネレータは `~` を展開し、すべての folder path をプロジェクトディレクトリ起点に相対化します。これにより `"~/.claude"` のようなエントリで VS Code が `$HOME` 隣接ディレクトリへ上方向に辿れます。
+
+このセクションは `cocoon gen` 本体には影響しません。`.code-workspace` は `cocoon gen workspace` を明示的に実行したときだけ書き出されます。
+
+```toml
+[code_workspace]
+# 出力ファイル名 (拡張子 ".code-workspace" は除く) — 省略時はプロジェクトディレクトリの basename。
+name = "my-stack"
+
+# inline table の配列。name は省略可で、省略時は path の basename を採用。
+folders = [
+    { path = "." },
+    { path = "~/.claude" },
+    { path = "../sibling-repo" },
+    { path = "~/.config/nvim", name = "Neovim" },
+]
+
+[code_workspace.settings]
+"editor.tabSize" = 2
+"files.autoSave" = "afterDelay"
+
+[code_workspace.extensions]
+recommendations = ["golang.go", "ms-azuretools.vscode-docker"]
+```
+
+### パス解決
+
+| 入力                | 解決結果 (project = `/home/u/proj`, `$HOME=/home/u`) |
+|---|---|
+| `.`                  | `.`                                                       |
+| `../sibling-repo`    | `../sibling-repo`                                         |
+| `~/.claude`          | `../.claude`                                              |
+| `~/.config/nvim`     | `../.config/nvim`                                         |
+| `/etc/nginx`         | `../../../etc/nginx`                                      |
+
+- `name` は省略可。省略時は解決済みパスの basename (`.` の場合はプロジェクトディレクトリの basename) を使用。
+- `~user` (他ユーザーの home 展開) は拒否。サポート対象は現ユーザーの `~` と `~/<rest>` のみ。
+- `settings` はそのまま `.code-workspace` の `"settings"` オブジェクトに流し込まれます。空の場合はキーごと省略。
+- `extensions.recommendations` は `"extensions": { "recommendations": [...] }` ブロックになります。空配列なら `"extensions"` 自体を省略。
+
+CLI 側のフラグについては [`cocoon gen workspace`](commands.ja.md#cocoon-gen-workspace) を参照。
+
+---
+
 ## 廃止セクション
 
 下記セクションは後方互換のためパーサが受理しますが、将来のメジャーリリースで削除される可能性があります。
