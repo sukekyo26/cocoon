@@ -130,7 +130,7 @@ var messagesEN_init = map[string]string{
 	// gen workspace (.code-workspace generator)
 	"gen_workspace_wrote":        "wrote %s",
 	"gen_workspace_no_folders":   "no folders configured: add entries to [code_workspace].folders in workspace.toml, or pass one or more --folder flags",
-	"gen_workspace_invalid_name": "invalid --name %q: must be a single path segment of [A-Za-z0-9._-] (no \"/\", \"\\\\\", \":\", whitespace)",
+	"gen_workspace_invalid_name": "invalid --name %q: must be a single path segment of [A-Za-z0-9._-] (no slash, backslash, colon, or whitespace)",
 	"gen_workspace_next_header":  "Next steps:",
 	"gen_workspace_next_step":    "  Open in VS Code: code %s",
 }
@@ -258,7 +258,7 @@ var messagesJA_init = map[string]string{
 	// gen workspace (.code-workspace ジェネレータ)
 	"gen_workspace_wrote":        "%s を書き出しました",
 	"gen_workspace_no_folders":   "folders が空です: workspace.toml の [code_workspace].folders にエントリを追加するか、--folder フラグを 1 つ以上指定してください",
-	"gen_workspace_invalid_name": "--name %q が不正です: 単一のパスセグメント ([A-Za-z0-9._-]) で指定してください (\"/\", \"\\\\\", \":\", 空白は使用不可)",
+	"gen_workspace_invalid_name": "--name %q が不正です: 単一のパスセグメント ([A-Za-z0-9._-]) で指定してください (スラッシュ・バックスラッシュ・コロン・空白は使用不可)",
 	"gen_workspace_next_header":  "次のステップ:",
 	"gen_workspace_next_step":    "  VS Code で開く: code %s",
 }

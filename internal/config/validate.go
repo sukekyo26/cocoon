@@ -249,7 +249,7 @@ func (c *CodeWorkspaceSpec) validate(a *Accumulator) {
 		switch {
 		case !rxCodeWorkspaceName.MatchString(c.Name):
 			a.Add(
-				`name must be a single path segment of [A-Za-z0-9._-] (no "/", "\", ":", whitespace)`,
+				`name must be a single path segment of [A-Za-z0-9._-] (no slash, backslash, colon, or whitespace)`,
 				"name",
 			)
 		case c.Name == "." || c.Name == "..":
