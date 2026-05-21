@@ -89,9 +89,10 @@ var (
 	// filename segment used verbatim as the output file basename
 	// (<name>.code-workspace). Slash, backslash, colon, and whitespace are
 	// rejected so the name cannot escape the project directory or break
-	// filesystem semantics. ".", "..", and ".code-workspace" itself are
-	// filtered with an explicit per-string check (they all pass the charset
-	// regex but would produce a broken output path).
+	// filesystem semantics. "." and ".." pass the charset regex (both
+	// consist of allowed chars) but would produce a broken output path, so
+	// IsValidCodeWorkspaceName / CodeWorkspaceSpec.validate strip them with
+	// an explicit per-string check.
 	rxCodeWorkspaceName = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
 )
 
@@ -236,10 +237,13 @@ func (w *Workspace) runValidate(a *Accumulator) {
 	}
 }
 
-// validate checks [code_workspace] structurally. Path-level semantics ("~user
-// rejected", "must resolve to a real directory") are enforced by the
-// generator in internal/generate/codeworkspace — validation here only ensures
-// the workspace.toml can be safely consumed.
+// validate checks [code_workspace] structurally. Path-level semantics — "~"
+// expansion against $HOME, "~user" rejection, relativization against the
+// project directory — are enforced by the generator in
+// internal/generate/codeworkspace. The generator does NOT stat each path
+// (cocoon is a pure generator and a path that does not exist yet on the
+// current host is still a legal entry), so validation here only ensures the
+// workspace.toml can be safely consumed.
 func (c *CodeWorkspaceSpec) validate(a *Accumulator) {
 	if c.Name != "" {
 		switch {
