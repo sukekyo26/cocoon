@@ -93,14 +93,18 @@ func runGenWorkspace(
 	if err != nil {
 		return fmt.Errorf("%w: resolve home dir: %w", clihelpers.ErrFailure, err)
 	}
+	target := filepath.Join(outDir, name+".code-workspace")
+	// The .code-workspace file resolves relative paths from its own
+	// directory, so anchor relativization on filepath.Dir(target) — which
+	// matches outDir but stays explicit if a future tweak nests deeper.
 	body, err := codeworkspace.Generate(ctx, codeworkspace.Options{
 		ExtraFolders: extras,
 		HomeDir:      home,
+		OutputDir:    filepath.Dir(target),
 	})
 	if err != nil {
 		return mapWorkspaceErr(err, cat)
 	}
-	target := filepath.Join(outDir, name+".code-workspace")
 	if mkErr := os.MkdirAll(filepath.Dir(target), 0o755); mkErr != nil {
 		return fmt.Errorf("%w: mkdir %s: %w", clihelpers.ErrFailure, target, mkErr)
 	}

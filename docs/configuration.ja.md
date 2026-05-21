@@ -495,7 +495,7 @@ extensions = [
 
 ## `[code_workspace]`
 
-VS Code の `.code-workspace` ファイルを定義します。`cocoon gen workspace` がプロジェクトルート (`workspace.toml` と同じ階層、`.devcontainer/` 配下ではない) に書き出します。ジェネレータは `~` を展開し、すべての folder path をプロジェクトディレクトリ起点に相対化します。これにより `"~/.claude"` のようなエントリで VS Code が `$HOME` 隣接ディレクトリへ上方向に辿れます。
+VS Code の `.code-workspace` ファイルを定義します。`cocoon gen workspace` が既定では `workspace.toml` と同階層 (`.devcontainer/` 配下ではない) に書き出します。出力先は `--output <dir>` で変更でき、ジェネレータは folder path を **実際に書き出されるディレクトリ** 起点で相対化するため、出力先が変わっても VS Code が正しく解決できます。`~` 展開にも対応するので、`"~/.claude"` のようなエントリで VS Code が `$HOME` 隣接ディレクトリへ上方向に辿れます。
 
 このセクションは `cocoon gen` 本体には影響しません。`.code-workspace` は `cocoon gen workspace` を明示的に実行したときだけ書き出されます。
 
@@ -522,13 +522,17 @@ recommendations = ["golang.go", "ms-azuretools.vscode-docker"]
 
 ### パス解決
 
-| 入力                | 解決結果 (project = `/home/u/proj`, `$HOME=/home/u`) |
+folder path は **`.code-workspace` ファイルが実際に置かれるディレクトリ** を起点に相対化されます。デフォルトでは workspace.toml と同階層が起点ですが、`--output` 指定時はそちらに切り替わります。
+
+| 入力                | 解決結果 (出力先デフォルト, project = `/home/u/proj`, `$HOME=/home/u`) |
 |---|---|
 | `.`                  | `.`                                                       |
 | `../sibling-repo`    | `../sibling-repo`                                         |
 | `~/.claude`          | `../.claude`                                              |
 | `~/.config/nvim`     | `../.config/nvim`                                         |
 | `/etc/nginx`         | `../../../etc/nginx`                                      |
+
+`../sibling-repo` のような相対エントリは「workspace.toml のディレクトリから見た」意味で解釈されます (`--output` の有無で値の意味が変わらない)。そのうえで結果のパスを出力先ディレクトリ起点に再相対化して VS Code に渡します。
 
 - `name` は省略可。省略時は解決済みパスの basename (`.` の場合はプロジェクトディレクトリの basename) を使用。
 - `~user` (他ユーザーの home 展開) は拒否。サポート対象は現ユーザーの `~` と `~/<rest>` のみ。

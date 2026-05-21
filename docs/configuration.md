@@ -511,7 +511,7 @@ extensions = [
 
 ## `[code_workspace]`
 
-Defines a VS Code `.code-workspace` file that `cocoon gen workspace` writes at the project root (next to `workspace.toml`, **not** under `.devcontainer/`). The generator expands `~` and relativizes every folder path against the project directory, so a `"~/.claude"` entry lets VS Code traverse upward to `$HOME`-adjacent directories from the same window.
+Defines a VS Code `.code-workspace` file that `cocoon gen workspace` writes alongside `workspace.toml` by default (**not** under `.devcontainer/`). The output directory can be redirected with `--output <dir>`; the generator always relativizes folder paths against the directory the file is actually written to, so VS Code resolves them correctly regardless of where the file lands. The generator expands `~` as well, so a `"~/.claude"` entry lets VS Code traverse upward to `$HOME`-adjacent directories from the same window.
 
 This section has no effect on `cocoon gen` itself — the `.code-workspace` file is only written when you explicitly run `cocoon gen workspace`.
 
@@ -539,13 +539,17 @@ recommendations = ["golang.go", "ms-azuretools.vscode-docker"]
 
 ### Path resolution
 
-| Input                | Resolves to (project at `/home/u/proj`, `$HOME=/home/u`) |
+Folder paths are relativized against the **directory the `.code-workspace` file lives in** — by default that is the workspace.toml directory, but it shifts when `--output` is passed.
+
+| Input                | Resolves to (default output, project at `/home/u/proj`, `$HOME=/home/u`) |
 |---|---|
 | `.`                  | `.`                                                       |
 | `../sibling-repo`    | `../sibling-repo`                                         |
 | `~/.claude`          | `../.claude`                                              |
 | `~/.config/nvim`     | `../.config/nvim`                                         |
 | `/etc/nginx`         | `../../../etc/nginx`                                      |
+
+Relative entries like `../sibling-repo` are interpreted from the workspace.toml directory (so the value keeps the same meaning whether or not `--output` is set); the result is then re-anchored on the output directory for VS Code to consume.
 
 - `name` is optional. When omitted, the basename of the resolved path is used (`.` falls back to the project directory's basename).
 - `~user` (other-user home expansion) is rejected; only the current user's `~` and `~/<rest>` are supported.

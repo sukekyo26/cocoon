@@ -302,6 +302,66 @@ folders = [{ path = "~/.claude" }]
 	}
 }
 
+// TestGenWorkspace_OutputFlagAnchorsRelPathsOnTargetDir verifies that
+// passing `--output <dir>` writes the .code-workspace under that dir AND
+// relativizes folder paths against it. The previous implementation
+// anchored on the workspace.toml directory regardless of --output, which
+// produced broken paths whenever the two diverged.
+func TestGenWorkspace_OutputFlagAnchorsRelPathsOnTargetDir(t *testing.T) {
+	root := t.TempDir()
+	project := filepath.Join(root, "ws", "proj")
+	out := filepath.Join(root, "elsewhere")
+	home := filepath.Join(root, "home", "alice")
+	for _, d := range []string{project, out, home} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", d, err)
+		}
+	}
+	t.Setenv("HOME", home)
+	pinEnglish(t)
+	t.Chdir(project)
+
+	const minimal = `[container]
+service_name = "demo"
+username = "alice"
+image = "ubuntu"
+image_version = "24.04"
+
+[plugins]
+enable = []
+
+[code_workspace]
+name = "stack"
+folders = [{ path = "~/.claude" }]
+`
+	if err := os.WriteFile(filepath.Join(project, "workspace.toml"), []byte(minimal), 0o600); err != nil {
+		t.Fatalf("write workspace.toml: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	cmd := gencli.NewCommand(&stdout, &stderr)
+	cmd.SetArgs([]string{"workspace", "--output", out})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("gen workspace --output: %v\nstderr:\n%s", err, stderr.String())
+	}
+
+	target := filepath.Join(out, "stack.code-workspace")
+	raw, err := os.ReadFile(target) //nolint:gosec
+	if err != nil {
+		t.Fatalf("expected %s: %v", target, err)
+	}
+	// project = <root>/ws/proj, out = <root>/elsewhere, ~/.claude = <root>/home/alice/.claude.
+	// filepath.Rel(out, "~/.claude") = ../home/alice/.claude.
+	if !strings.Contains(string(raw), `"path": "../home/alice/.claude"`) {
+		t.Errorf("expected rel path anchored on --output dir; got:\n%s", string(raw))
+	}
+	// The buggy form (anchored on project, two more "../") would be
+	// "../../../home/alice/.claude". Make sure that did not slip through.
+	if strings.Contains(string(raw), `"../../../home/alice/.claude"`) {
+		t.Errorf("rel path is still anchored on workspace.toml directory; got:\n%s", string(raw))
+	}
+}
+
 // TestGenWorkspace_NoCodeWorkspaceSectionWithFolderFlagSucceeds covers the
 // "TOML has no [code_workspace] at all, but --folder is passed" path: the
 // CLI must accept the flag-only input without complaint.

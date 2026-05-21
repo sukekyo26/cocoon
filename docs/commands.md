@@ -112,7 +112,7 @@ The generated `Dockerfile` / `docker-compose.yml` / `devcontainer.json` carry ce
 
 ### `cocoon gen workspace`
 
-Generate a VS Code `.code-workspace` file from the `[code_workspace]` section of `workspace.toml`. The file is written at the project root (next to `workspace.toml`, **not** under `.devcontainer/`) so VS Code can open it with `code <name>.code-workspace` and treat it as the project's entry point. Paths in `folders[]` are `~`-expanded and relativized against the project directory, which is what lets entries like `"~/.claude"` resolve to a path VS Code can traverse upward.
+Generate a VS Code `.code-workspace` file from the `[code_workspace]` section of `workspace.toml`. By default the file is written next to `workspace.toml` (**not** under `.devcontainer/`), so VS Code can open it with `code <name>.code-workspace` and treat it as the project's entry point. Pass `--output <dir>` to redirect the file elsewhere — folder paths are always relativized against the directory the file is actually written to, so VS Code resolves them correctly from that location. Paths in `folders[]` are `~`-expanded as well, which is what lets entries like `"~/.claude"` resolve to a path VS Code can traverse upward.
 
 `cocoon gen` itself does **not** emit this file — the subcommand is opt-in.
 

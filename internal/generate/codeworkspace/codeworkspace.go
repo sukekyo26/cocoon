@@ -7,11 +7,13 @@
 // foo.code-workspace`) rather than container infrastructure.
 //
 // Path resolution: every folders[].path is "~"-expanded against opts.HomeDir
-// and then relativized against ctx.ProjectDir via filepath.Rel. The result
-// is what VS Code interprets when opening the workspace, so writing
-// "~/.claude" in workspace.toml from /home/u/proj produces "../.claude" in
-// the output and lets VS Code traverse upward to $HOME-adjacent
-// directories.
+// and then relativized against opts.OutputDir (the directory the
+// .code-workspace file is actually written to). When OutputDir is empty
+// the resolver falls back to ctx.ProjectDir, which matches the default
+// `cocoon gen workspace` invocation where the file lands next to
+// workspace.toml. VS Code resolves the result from wherever the
+// .code-workspace file lives, so anchoring on OutputDir keeps the paths
+// correct even when callers pass `--output` to write the file elsewhere.
 package codeworkspace
 
 import (
@@ -57,10 +59,14 @@ var (
 // Options controls Generate. ExtraFolders is appended after the
 // workspace.toml folders so CLI --folder flags supplement the declarative
 // config. HomeDir is injected for testability — production callers pass
-// os.UserHomeDir().
+// os.UserHomeDir(). OutputDir is the directory the .code-workspace file
+// will live in; folder paths are relativized against it so VS Code can
+// resolve them from that location. When empty it defaults to
+// ctx.ProjectDir (the common "next to workspace.toml" case).
 type Options struct {
 	ExtraFolders []config.CodeWorkspaceFolder
 	HomeDir      string
+	OutputDir    string
 }
 
 // Generate produces the JSON body for a .code-workspace file from ctx and
@@ -82,9 +88,13 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 	if len(folders) == 0 {
 		return "", ErrNoFolders
 	}
+	outputDir := opts.OutputDir
+	if outputDir == "" {
+		outputDir = ctx.ProjectDir
+	}
 	rendered := make([]renderedFolder, 0, len(folders))
 	for i, f := range folders {
-		rel, name, err := resolveFolder(f, ctx.ProjectDir, opts.HomeDir)
+		rel, name, err := resolveFolder(f, ctx.ProjectDir, outputDir, opts.HomeDir)
 		if err != nil {
 			return "", fmt.Errorf("folders[%d]: %w", i, err)
 		}
@@ -137,12 +147,15 @@ func collectFolders(spec *config.CodeWorkspaceSpec, extra []config.CodeWorkspace
 	return out
 }
 
-// resolveFolder expands ~, joins relative paths against projectDir, then
-// relativizes against projectDir. The returned (rel, name) is the final
-// JSON form. name follows the precedence: explicit f.Name > basename of
-// resolved abs path > projectDir basename when the folder *is* projectDir
-// itself > "workspace" as the last resort.
-func resolveFolder(f config.CodeWorkspaceFolder, projectDir, home string) (rel, name string, err error) {
+// resolveFolder expands ~, joins relative paths against projectDir (so
+// "../sibling" stays semantically tied to where workspace.toml lives), then
+// relativizes against outputDir (where the .code-workspace file lands).
+// The two anchors differ only when the caller passes a custom output
+// directory; in the default flow they're the same path. The returned
+// (rel, name) is the final JSON form. name follows the precedence:
+// explicit f.Name > basename of resolved abs path > projectDir basename
+// when the folder *is* projectDir itself > "workspace" as the last resort.
+func resolveFolder(f config.CodeWorkspaceFolder, projectDir, outputDir, home string) (rel, name string, err error) {
 	if f.Path == "" {
 		return "", "", fmt.Errorf("%w: empty path", ErrInvalidFolderPath)
 	}
@@ -150,7 +163,7 @@ func resolveFolder(f config.CodeWorkspaceFolder, projectDir, home string) (rel, 
 	if err != nil {
 		return "", "", err
 	}
-	rel, err = filepath.Rel(projectDir, abs)
+	rel, err = filepath.Rel(outputDir, abs)
 	if err != nil {
 		return "", "", fmt.Errorf("%w: rel %s: %w", ErrInvalidFolderPath, expanded, err)
 	}

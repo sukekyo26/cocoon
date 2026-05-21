@@ -112,7 +112,7 @@ cocoon gen --workspace ./infra/workspace.toml --output ./infra
 
 ### `cocoon gen workspace`
 
-`workspace.toml` の `[code_workspace]` セクションから VS Code `.code-workspace` ファイルを生成します。出力先は **プロジェクトルート** (`workspace.toml` と同じ階層、`.devcontainer/` 配下ではない) なので、`code <name>.code-workspace` で開いてプロジェクトのエントリポイントとして扱えます。`folders[]` 内のパスは `~` 展開とプロジェクトディレクトリ起点の相対化を行うため、`"~/.claude"` のようなエントリが VS Code 側で上方向に辿れる相対パスへ解決されます。
+`workspace.toml` の `[code_workspace]` セクションから VS Code `.code-workspace` ファイルを生成します。出力先は既定で `workspace.toml` と同階層 (`.devcontainer/` 配下ではない) なので、`code <name>.code-workspace` で開いてプロジェクトのエントリポイントとして扱えます。`--output <dir>` で出力先を切り替えた場合、folder path は **実際に書き出されるディレクトリ** 起点で相対化されるため、移動先からでも VS Code がパスを正しく解決します。`~` 展開にも対応するので、`"~/.claude"` のようなエントリが VS Code 側で上方向に辿れる相対パスへ解決されます。
 
 `cocoon gen` 本体はこのファイルを生成しません。サブコマンドは opt-in です。
 

@@ -346,6 +346,52 @@ func TestGeneratePathVariations(t *testing.T) {
 	}
 }
 
+// TestGenerateOutputDirOverridesRelAnchor pins the contract that
+// opts.OutputDir — when set — becomes the relativization anchor instead of
+// ctx.ProjectDir. This matters whenever the .code-workspace file is
+// written outside the project directory (CLI `--output` flag), because VS
+// Code resolves the JSON's paths from the file's own directory.
+func TestGenerateOutputDirOverridesRelAnchor(t *testing.T) {
+	t.Parallel()
+	projectDir, home := fixedDirs() // /tmp/cw-fixture/project, /tmp/cw-fixture/home
+	// Pretend the CLI ran with `--output /tmp/cw-fixture/out/nested`. The
+	// .code-workspace lives two levels under /tmp/cw-fixture/, so
+	// "~/.claude" must come out as "../../home/.claude" — three "../"
+	// segments would point at /tmp/, not /tmp/cw-fixture/home/.
+	outputDir := "/tmp/cw-fixture/out/nested"
+	spec := &config.CodeWorkspaceSpec{
+		Folders: []config.CodeWorkspaceFolder{
+			{Path: "."},
+			{Path: "~/.claude"},
+		},
+	}
+	got, err := codeworkspace.Generate(
+		&generate.WorkspaceContext{
+			WS:         &config.Workspace{CodeWorkspace: spec},
+			ProjectDir: projectDir,
+		},
+		codeworkspace.Options{HomeDir: home, OutputDir: outputDir},
+	)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	// "." (projectDir) seen from /tmp/cw-fixture/out/nested = ../../project
+	if !strings.Contains(got, `"path": "../../project"`) {
+		t.Errorf("expected projectDir entry relativized against OutputDir\n--- got ---\n%s", got)
+	}
+	// "~/.claude" = /tmp/cw-fixture/home/.claude seen from
+	// /tmp/cw-fixture/out/nested = ../../home/.claude
+	if !strings.Contains(got, `"path": "../../home/.claude"`) {
+		t.Errorf("expected ~/.claude entry relativized against OutputDir\n--- got ---\n%s", got)
+	}
+	// The legacy anchor would have produced "../home/.claude" (one less
+	// "../"). Assert the buggy form is absent so a future regression to
+	// ctx.ProjectDir-based relativization fails here.
+	if strings.Contains(got, `"path": "../home/.claude"`) {
+		t.Errorf("output still anchors on ctx.ProjectDir (legacy buggy shape)\n--- got ---\n%s", got)
+	}
+}
+
 // TestGenerateSettingsEmptyKeyAbsent pins the docstring claim that an empty
 // Settings map elides the "settings" key entirely (vs. emitting "{}").
 func TestGenerateSettingsEmptyKeyAbsent(t *testing.T) {
