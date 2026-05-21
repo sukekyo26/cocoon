@@ -123,7 +123,8 @@ The same heredoc also appends a final line that sources the user's persistent sh
 RUN <<COCOON_RC_BLOCK
 cat >>"$HOME/.bashrc" <<'COCOON_RC'
 # Auto-generated from [container.shell] of workspace.toml.
-export EDITOR='vim'
+export EDITOR=vim
+export NPM_CONFIG_PREFIX="$HOME/.local"
 alias gs='git status'
 
 # Source persistent user shellrc from the cocoon named volume
@@ -131,6 +132,8 @@ alias gs='git status'
 COCOON_RC
 COCOON_RC_BLOCK
 ```
+
+Env values are emitted with double-quote semantics (fully-safe values stay unquoted; anything else is wrapped in `"..."`, with `$` left intact) so references like `$HOME` / `$PATH` are expanded by the shell when the rc file is sourced. `$(cmd)` command substitution works on bash/zsh and on fish 3.4+; older fish needs the native `(cmd)` form. A literal `$` requires the value to contain `\$` — write that in TOML as a basic string `"\\$RAW"` or a literal string `'\$RAW'`. Alias bodies use single quotes because the shell re-parses them on invocation, so `$1` and `$HOME` inside an alias still resolve at call time.
 
 Bash / zsh source `~/.cocoon/.shellrc`; fish sources `~/.cocoon/.shellrc.fish`. The bootstrap is unconditional (it always emits, even when `[container.shell]` is unset), so the user can always edit the persistent file without re-generating.
 

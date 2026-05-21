@@ -123,7 +123,8 @@ sequenceDiagram
 RUN <<COCOON_RC_BLOCK
 cat >>"$HOME/.bashrc" <<'COCOON_RC'
 # Auto-generated from [container.shell] of workspace.toml.
-export EDITOR='vim'
+export EDITOR=vim
+export NPM_CONFIG_PREFIX="$HOME/.local"
 alias gs='git status'
 
 # Source persistent user shellrc from the cocoon named volume
@@ -131,6 +132,8 @@ alias gs='git status'
 COCOON_RC
 COCOON_RC_BLOCK
 ```
+
+env の値はダブルクォートのセマンティクスで出力します (安全文字のみの値はクォート無し、それ以外は `"..."` で囲み `$` はそのまま残す) ため、rc を source する時点で `$HOME` / `$PATH` などがシェルにより展開されます。`$(cmd)` コマンド置換は bash/zsh と fish 3.4+ で動作します。それ以前の fish では fish 固有の `(cmd)` 記法を使ってください。リテラルの `$` は値が `\$` を含む必要があり、TOML では通常文字列 `"\\$RAW"` かリテラル文字列 `'\$RAW'` と書きます。alias の本文はシングルクォートで出力します。alias は呼び出し時にシェルが本文を再パースするので、`$1` や `$HOME` を含めても呼び出し時に正しく解釈されます。
 
 bash / zsh は `~/.cocoon/.shellrc`、fish は `~/.cocoon/.shellrc.fish` を source します。`[container.shell]` 未設定でも常に出力されるので、ユーザーは再生成なしで永続ファイルを編集できます。
 
