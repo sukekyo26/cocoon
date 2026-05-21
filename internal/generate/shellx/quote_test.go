@@ -75,7 +75,15 @@ func TestPosixExportValue(t *testing.T) {
 		// Backticks become \` so an accidental command substitution does not fire.
 		{"backtick", "`whoami`", "\"\\`whoami\\`\""},
 		{"double quote", `a"b`, `"a\"b"`},
-		{"backslash", `a\b`, `"a\\b"`},
+		// Standalone \ is doubled so bash reads it back as a literal backslash.
+		{"backslash mid", `a\b`, `"a\\b"`},
+		{"double backslash", `a\\b`, `"a\\\\b"`},
+		{"backslash before quote", `a\"b`, `"a\\\"b"`},
+		{"backslash before backtick", "a\\`b", "\"a\\\\\\`b\""},
+		{"trailing backslash", `foo\`, `"foo\\"`},
+		// \$ stays verbatim so callers can spell a literal $ via `\$RAW`.
+		{"escape dollar", `\$RAW`, `"\$RAW"`},
+		{"escape dollar in path", `\$HOME/literal`, `"\$HOME/literal"`},
 		{"single quote inside", "it's", `"it's"`},
 		{"newline", "line1\nline2", "\"line1\nline2\""},
 		{"unicode", "日本語", `"日本語"`},
@@ -122,11 +130,17 @@ func TestFishExportValue(t *testing.T) {
 		{"dollar in path", "$HOME/.local", `"$HOME/.local"`},
 		{"command sub", "$(whoami)", `"$(whoami)"`},
 		// fish has no backtick command substitution, so backticks are literal —
-		// but we still escape neither (no special meaning) and double quote stays
-		// the escape target.
+		// fish only treats \, ", \n inside "..." as escape targets, so the
+		// backtick is left untouched here.
 		{"backtick", "`whoami`", "\"`whoami`\""},
 		{"double quote", `a"b`, `"a\"b"`},
-		{"backslash", `a\b`, `"a\\b"`},
+		// Standalone \ is doubled so fish reads it back as a literal backslash.
+		{"backslash mid", `a\b`, `"a\\b"`},
+		{"double backslash", `a\\b`, `"a\\\\b"`},
+		{"backslash before quote", `a\"b`, `"a\\\"b"`},
+		{"trailing backslash", `foo\`, `"foo\\"`},
+		// \$ stays verbatim so callers can spell a literal $ via `\$RAW`.
+		{"escape dollar", `\$RAW`, `"\$RAW"`},
 		{"single quote inside", "it's", `"it's"`},
 		{"newline", "line1\nline2", "\"line1\nline2\""},
 		{"unicode", "日本語", `"日本語"`},

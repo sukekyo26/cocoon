@@ -169,8 +169,9 @@ func TestFishQuotingPolicy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RenderDockerfileBlock: %v", err)
 	}
-	// fish double quotes expand $VAR (parity with bash/zsh) and escape only
-	// \ and ". Single quotes inside double quotes are literal.
+	// fish double quotes expand $VAR (parity with bash/zsh) and escape \ and
+	// ". \$ stays verbatim so callers can spell a literal $. Single quotes
+	// inside double quotes are literal.
 	wants := []string{
 		`set -gx DOLLAR "$HOME"`,
 		`set -gx EMPTY ""`,

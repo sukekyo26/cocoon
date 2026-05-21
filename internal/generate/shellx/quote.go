@@ -60,13 +60,22 @@ func FishQuote(s string) string {
 }
 
 // PosixExportValue quotes s for use as the right-hand side of `export K=V`
-// in bash/zsh, deliberately preserving $-expansion so the shell expands
-// $VAR / ${VAR} / $(cmd) when the rc file is sourced. Empty becomes ""; a
-// string made up entirely of safe characters is returned unquoted; anything
-// else is wrapped in double quotes with \, ", and ` escaped as \<c>. $ is
-// left verbatim so callers can write `NPM_CONFIG_PREFIX = "$HOME/.local"`
-// and have $HOME resolve at shell start-up. Command substitution is the
-// caller's responsibility — they wrote it.
+// in bash/zsh with double-quote semantics — meaning the shell expands $VAR
+// / ${VAR} / $(cmd) when the rc file is sourced. Empty becomes ""; a string
+// made up entirely of safe characters is returned unquoted; anything else
+// is wrapped in double quotes. Inside the double quotes:
+//
+//   - $ passes through verbatim so callers can write
+//     `NPM_CONFIG_PREFIX = "$HOME/.local"` and have $HOME resolve at shell
+//     start-up.
+//   - \ before $ also passes through verbatim so callers can write
+//     `\$RAW` for a literal $ — the bash escape stays intact.
+//   - every other \ is doubled to \\ so the user's backslash survives bash's
+//     "..." parsing (which would otherwise consume \\, \", \`, or trailing
+//     \ as escape sequences).
+//   - " and ` are escaped to \" and \`.
+//
+// Command substitution is the caller's responsibility — they wrote it.
 func PosixExportValue(s string) string {
 	if s == "" {
 		return `""`
@@ -77,11 +86,21 @@ func PosixExportValue(s string) string {
 	var b strings.Builder
 	b.Grow(len(s) + 2)
 	b.WriteByte('"')
-	for _, r := range s {
-		if r == '\\' || r == '"' || r == '`' {
+	runes := []rune(s)
+	for i, r := range runes {
+		switch r {
+		case '\\':
+			if i+1 < len(runes) && runes[i+1] == '$' {
+				b.WriteRune(r)
+			} else {
+				b.WriteString(`\\`)
+			}
+		case '"', '`':
 			b.WriteByte('\\')
+			b.WriteRune(r)
+		default:
+			b.WriteRune(r)
 		}
-		b.WriteRune(r)
 	}
 	b.WriteByte('"')
 	return b.String()
@@ -90,7 +109,17 @@ func PosixExportValue(s string) string {
 // FishExportValue quotes s for use as the value of `set -gx K V` in fish,
 // deliberately preserving $-expansion. fish single quotes block expansion
 // and fish double quotes expand $VAR, so the value is always wrapped in
-// double quotes with \ and " escaped as \<c>. Empty becomes "".
+// double quotes. Inside the double quotes:
+//
+//   - $ passes through verbatim for fish variable expansion.
+//   - \ before $ passes through verbatim so callers can write `\$RAW` for
+//     a literal $ (the fish escape stays intact).
+//   - every other \ is doubled to \\ so the user's backslash survives
+//     fish's "..." parsing (fish recognises \\, \", \<newline> as escape
+//     sequences).
+//   - " is escaped to \".
+//
+// Empty becomes "".
 func FishExportValue(s string) string {
 	if s == "" {
 		return `""`
@@ -98,11 +127,21 @@ func FishExportValue(s string) string {
 	var b strings.Builder
 	b.Grow(len(s) + 2)
 	b.WriteByte('"')
-	for _, r := range s {
-		if r == '\\' || r == '"' {
+	runes := []rune(s)
+	for i, r := range runes {
+		switch r {
+		case '\\':
+			if i+1 < len(runes) && runes[i+1] == '$' {
+				b.WriteRune(r)
+			} else {
+				b.WriteString(`\\`)
+			}
+		case '"':
 			b.WriteByte('\\')
+			b.WriteRune(r)
+		default:
+			b.WriteRune(r)
 		}
-		b.WriteRune(r)
 	}
 	b.WriteByte('"')
 	return b.String()
