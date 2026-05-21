@@ -84,7 +84,9 @@ image_version = "22.04"
 #   bash & zsh use POSIX syntax (alias k='v', export K=V); fish translation is automatic.
 #   env values are expanded by the target shell when the rc is sourced, so $HOME / $PATH work
 #   (e.g. NPM_CONFIG_PREFIX = "$HOME/.local"). $(cmd) command substitution works on bash/zsh
-#   and on fish 3.4+; older fish needs the native (cmd) form. Write \$ for a literal $.
+#   and on fish 3.4+; older fish needs the native (cmd) form. For a literal $, the value
+#   passed to the generator must contain \$ — in TOML that's a basic string "\\$RAW"
+#   or a literal string '\$RAW'.
 #   Alias bodies stay literal until the alias is invoked.
 #
 # env example (uncomment + edit):
