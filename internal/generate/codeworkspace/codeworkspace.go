@@ -44,6 +44,14 @@ var (
 	// one folder used "~" expansion. Caller must inject os.UserHomeDir()
 	// (or a test stub) before invoking Generate when "~" paths are in play.
 	ErrMissingHomeDir = errors.New("code_workspace: home directory required for ~ expansion")
+
+	// ErrNilContext signals that Generate was invoked with a nil
+	// *WorkspaceContext (or one whose WS pointer is nil). This is a
+	// programmer error — the CLI builds the context via
+	// generatecli.LoadContext before calling here — so it is kept distinct
+	// from the user-facing ErrNoFolders that the caller maps to an
+	// actionable usage hint. Mirrors envfile.ErrNilContext.
+	ErrNilContext = errors.New("code_workspace: nil workspace context")
 )
 
 // Options controls Generate. ExtraFolders is appended after the
@@ -62,12 +70,13 @@ type Options struct {
 // verbatim.
 //
 // Failure modes (all classifiable via errors.Is):
-//   - ErrNoFolders     — no folders in WS.CodeWorkspace and no opts.ExtraFolders.
+//   - ErrNilContext        — ctx or ctx.WS is nil (programmer error, not user input).
+//   - ErrNoFolders         — no folders in WS.CodeWorkspace and no opts.ExtraFolders.
 //   - ErrInvalidFolderPath — empty path, "~user" form, or rel computation failure.
-//   - ErrMissingHomeDir — a folder uses "~" but opts.HomeDir is empty.
+//   - ErrMissingHomeDir    — a folder uses "~" but opts.HomeDir is empty.
 func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 	if ctx == nil || ctx.WS == nil {
-		return "", fmt.Errorf("%w: nil workspace context", ErrNoFolders)
+		return "", ErrNilContext
 	}
 	folders := collectFolders(ctx.WS.CodeWorkspace, opts.ExtraFolders)
 	if len(folders) == 0 {

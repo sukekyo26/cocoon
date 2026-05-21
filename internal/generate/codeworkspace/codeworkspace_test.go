@@ -185,6 +185,33 @@ func TestGenerateProducesValidJSON(t *testing.T) {
 	}
 }
 
+// TestGenerateNilContextErrors pins the programmer-error path: a nil
+// *WorkspaceContext (or one with a nil WS pointer) must surface as the
+// dedicated ErrNilContext sentinel, not the user-facing ErrNoFolders. Keeping
+// these distinct prevents the CLI's "no folders configured: add entries..."
+// hint from firing on a legitimate internal bug.
+func TestGenerateNilContextErrors(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name string
+		ctx  *generate.WorkspaceContext
+	}{
+		{"nil pointer", nil},
+		{"nil WS field", &generate.WorkspaceContext{WS: nil}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := codeworkspace.Generate(tc.ctx, codeworkspace.Options{})
+			if !errors.Is(err, codeworkspace.ErrNilContext) {
+				t.Fatalf("err = %v, want errors.Is ErrNilContext", err)
+			}
+			if errors.Is(err, codeworkspace.ErrNoFolders) {
+				t.Fatalf("err = %v must not also classify as ErrNoFolders", err)
+			}
+		})
+	}
+}
+
 // TestGenerateErrors exercises every sentinel exported by the package. Each
 // case must classify via errors.Is — string-matching the message would tie
 // tests to the wording instead of the contract.
@@ -258,8 +285,6 @@ func TestGenerateErrors(t *testing.T) {
 // lives, so this is the failure-surface to pin.
 func TestGeneratePathVariations(t *testing.T) {
 	t.Parallel()
-	projectDir, _ := fixedDirs()
-	parentBase := filepath.Base(filepath.Dir(projectDir))
 	cases := []struct {
 		name   string
 		folder config.CodeWorkspaceFolder
@@ -304,11 +329,6 @@ func TestGeneratePathVariations(t *testing.T) {
 			wantName: `"name": "Sibling"`,
 		},
 	}
-	// Touch parentBase to silence "declared and not used" if the test grows
-	// to inspect it later. Today the cases above bake the expected strings
-	// directly because they read better at the call-site than a derived
-	// template.
-	_ = parentBase
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()

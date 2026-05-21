@@ -74,7 +74,10 @@ func TestGenWorkspace_DefaultRun(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read .code-workspace: %v", err)
 	}
-	if !bytes.HasSuffix(raw, []byte{'\n'}) {
+	switch {
+	case len(raw) == 0:
+		t.Fatalf("expected non-empty .code-workspace, got 0 bytes")
+	case !bytes.HasSuffix(raw, []byte{'\n'}):
 		t.Errorf("expected trailing newline; last byte = %x", raw[len(raw)-1])
 	}
 
