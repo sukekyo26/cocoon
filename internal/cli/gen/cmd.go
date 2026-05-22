@@ -38,30 +38,16 @@ var errCertsPathNotDirectory = errors.New("cocoon certs path exists but is not a
 // reach; warnDockerCLIWithoutSocket flags that combination.
 const dockerCLIPluginID = "docker-cli"
 
-const genLong = `cocoon gen — generate .devcontainer/{Dockerfile, docker-compose.yml, devcontainer.json}
-
-Discovers workspace.toml from the current directory (walking parent
-directories until a .git boundary or $HOME), assembles the layered
-plugin catalog (embedded < user < project), and writes the generated
-artifacts under .devcontainer/. Plugin install scripts are inlined into
-the generated Dockerfile, so the build needs no external context
-beyond the project tree.
-
-After generation, start the container yourself:
-
-  docker compose -f .devcontainer/docker-compose.yml up -d
-
-…or open the project in VS Code and pick "Reopen in Container".`
-
 func NewCommand(stdout, stderr io.Writer) *cobra.Command {
+	cat := i18n.New(i18n.Detect())
 	var (
 		workspaceFlag string
 		outputFlag    string
 	)
 	cmd := &cobra.Command{
 		Use:           "gen",
-		Short:         "Generate .devcontainer/ artifacts from workspace.toml",
-		Long:          genLong,
+		Short:         cat.Msg("cmd_gen_short"),
+		Long:          cat.Msg("cmd_gen_long"),
 		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -69,18 +55,8 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 			return runGen(stdout, stderr, workspaceFlag, outputFlag)
 		},
 	}
-	cmd.Flags().StringVar(
-		&workspaceFlag,
-		"workspace",
-		"",
-		"path to workspace.toml (default: discovered from cwd)",
-	)
-	cmd.Flags().StringVar(
-		&outputFlag,
-		"output",
-		"",
-		"project root to write generated artifacts under (default: directory of workspace.toml)",
-	)
+	cmd.Flags().StringVar(&workspaceFlag, "workspace", "", cat.Msg("flag_gen_workspace_usage"))
+	cmd.Flags().StringVar(&outputFlag, "output", "", cat.Msg("flag_gen_output_usage"))
 	clihelpers.AttachHelpAlias(cmd)
 	cmd.AddCommand(newWorkspaceCmd(stdout, stderr))
 	return cmd

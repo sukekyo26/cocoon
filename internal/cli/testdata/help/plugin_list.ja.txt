@@ -1,0 +1,14 @@
+cocoon plugin list — 利用可能なプラグインを一覧表示
+
+組み込みカタログに加えて、任意のユーザーオーバーレイ (`~/.cocoon/plugins`) と
+プロジェクトオーバーレイ (`<project>/.cocoon/plugins`) を統合した一覧を表示します。
+同じ id のディレクトリはマージされず、最も優先度の高いレイヤーが採用されます
+(project > user > embedded)。SOURCE 列は各 id が現在どのレイヤーから読まれているか
+を示します。
+
+使い方:
+  cocoon plugin list [flags]
+
+フラグ:
+  -h, --help            list のヘルプを表示
+      --source string   指定したレイヤーのみ表示 (embedded / user / project)

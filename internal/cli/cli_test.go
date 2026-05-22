@@ -30,12 +30,16 @@ func TestExecuteVersion(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // t.Setenv pins the locale; the test must stay non-parallel.
 func TestExecuteUsage(t *testing.T) {
-	t.Parallel()
-
 	for _, args := range [][]string{nil, {"help"}, {"--help"}, {"-h"}} {
 		t.Run(strings.Join(append([]string{"args"}, args...), "_"), func(t *testing.T) {
-			t.Parallel()
+			// Pin English so the banner check is stable on hosts where
+			// LANG / LC_ALL select a non-English catalog.
+			for _, k := range []string{"WORKSPACE_LANG", "LC_ALL", "LC_MESSAGES", "LANG"} {
+				t.Setenv(k, "")
+			}
+			t.Setenv("WORKSPACE_LANG", "en")
 			var stdout, stderr bytes.Buffer
 			app := cli.New("dev", &stdout, &stderr)
 			if err := app.Execute(args); err != nil {

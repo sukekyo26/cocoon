@@ -1,0 +1,28 @@
+cocoon gen — .devcontainer/{Dockerfile, docker-compose.yml, devcontainer.json} を生成
+
+カレントディレクトリから親方向に workspace.toml を探索し（.git 境界または $HOME で停止）、
+レイヤー化されたプラグインカタログ（embedded < user < project）を組み立てて、
+生成物を .devcontainer/ 配下に書き出します。プラグインの install スクリプトは
+生成済み Dockerfile に直接埋め込まれるため、ビルドにプロジェクトツリー外の
+外部コンテキストは不要です。
+
+生成後はコンテナを自分で起動してください:
+
+  docker compose -f .devcontainer/docker-compose.yml up -d
+
+…または VS Code でプロジェクトを開き「Reopen in Container」を選びます。
+
+使い方:
+  cocoon gen [flags]
+  cocoon gen [command]
+
+サブコマンド:
+  help        このコマンドの使い方を表示
+  workspace   workspace.toml から <name>.code-workspace をプロジェクトルートに生成
+
+フラグ:
+  -h, --help               gen のヘルプを表示
+      --output string      生成物の出力先プロジェクトルート（既定: workspace.toml のあるディレクトリ）
+      --workspace string   workspace.toml のパス（既定: cwd から探索）
+
+各サブコマンドの詳細は "cocoon gen [command] --help" で確認できます。

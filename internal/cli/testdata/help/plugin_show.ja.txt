@@ -1,0 +1,11 @@
+cocoon plugin show — <id> の解決済みプラグインマニフェストを表示
+
+`cocoon plugin list` と同じ project > user > embedded のレイヤービューで
+<id> を解決し、メタデータ / インストールヒント / apt パッケージ / 読み込み元の
+source レイヤーを表示します。
+
+使い方:
+  cocoon plugin show <id> [flags]
+
+フラグ:
+  -h, --help   show のヘルプを表示

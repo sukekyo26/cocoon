@@ -1,0 +1,16 @@
+指定したシェル向けの cocoon 補完スクリプトを生成します。
+生成スクリプトの使い方は各サブコマンドのヘルプを参照してください。
+
+使い方:
+  cocoon completion [command]
+
+サブコマンド:
+  bash        bash 向けの補完スクリプトを生成
+  fish        fish 向けの補完スクリプトを生成
+  powershell  powershell 向けの補完スクリプトを生成
+  zsh         zsh 向けの補完スクリプトを生成
+
+フラグ:
+  -h, --help   completion のヘルプを表示
+
+各サブコマンドの詳細は "cocoon completion [command] --help" で確認できます。

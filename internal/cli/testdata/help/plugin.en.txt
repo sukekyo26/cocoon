@@ -1,0 +1,30 @@
+cocoon plugin — inspect and author cocoon plugins
+
+Subcommands:
+  list       list every plugin available in the layered view (project > user > embedded)
+  show       print the resolved manifest for one plugin id
+  pin        print a workspace.toml [plugins.versions.<id>] block
+  scaffold   create a new <id>/ directory from a template
+
+To use a plugin, add its id to [plugins].enable in workspace.toml — the
+embedded catalog is picked up automatically. To customise an embedded
+plugin, the supported workflow is "cocoon plugin scaffold <new-id>" and
+adapting the logic. If you have a clone of the cocoon source repo (or an
+unpacked source tarball), copying the embedded source from
+internal/plugin/catalog/<id>/ into ~/.cocoon/plugins/<id>/ is a shortcut;
+single-binary installs do not include the embedded source on disk.
+
+Usage:
+  cocoon plugin [flags]
+  cocoon plugin [command]
+
+Available Commands:
+  list        List available plugins with their source (embedded / user / project)
+  pin         Emit inline-table pin lines for workspace.toml (stdout, or in-place with --write)
+  scaffold    Create a new <id>/ plugin directory (default <workspace>/.cocoon/plugins; --plugins-dir overrides)
+  show        Print the resolved manifest for a single plugin
+
+Flags:
+  -h, --help   help for plugin
+
+Use "cocoon plugin [command] --help" for more information about a command.

@@ -1,0 +1,46 @@
+cocoon init — generate workspace.toml in the current directory
+
+Asks (when running interactively) for the container service name, the
+inside-the-container username, the base image / version, the mount range,
+whether to emit .devcontainer/devcontainer.json, and which categories
+of common apt packages to install. service_name and username have no
+default — you must type them — because cocoon refuses to bake either
+the cwd basename or your host $USER into a file you may commit.
+
+The interactive flow asks each question on its own screen. Empty
+service-name / username are rejected on submission. shift+tab does
+not navigate back across questions — re-run cocoon init to fix an
+earlier answer. (Each prompt being its own form sidesteps a class of
+viewport-sizing bugs in huh's multi-Group + OptionsFunc combination
+that caused the cursor indicator to stay pinned while options
+scrolled under it.)
+
+Use --yes plus --service-name / --username (both required when --yes
+is set) and any of --image / --image-version / --shell / --mount-root /
+--dir / --devcontainer / --apt-categories / --plugins / --alias-bundles
+to drive non-interactively from CI.
+
+Usage:
+  cocoon init [flags]
+
+Flags:
+      --alias-bundles string     comma-separated shell-alias bundle IDs (skips the bundles multi-select prompt; e.g. git,ls)
+      --apt-categories string    comma-separated apt category IDs (skips the multi-select prompt)
+      --certificates             force-enable [certificates] auto-bake from ~/.cocoon/certs/
+      --devcontainer             force-enable .devcontainer/devcontainer.json output
+      --dir string               container workdir parent under /home/<user>/ (default "workspace"; slashes allowed for nested paths, e.g. "work/myproject")
+      --force                    overwrite an existing workspace.toml
+  -h, --help                     help for init
+      --image string             base image: ubuntu, debian, node, python, golang, rust, denoland/deno
+      --image-version string     base image tag — any well-formed Docker tag is accepted; --image must also be set
+      --mount-root string        mount range: "." (cwd, default) or ".." (parent)
+      --no-certificates          skip the [certificates] section (default off)
+      --no-devcontainer          skip .devcontainer/devcontainer.json output
+      --plugin-methods string    comma-separated <id>=<method> picks for plugins that declare multiple [install.methods] (each <id> must also appear in --plugins; <method> must be a declared key)
+      --plugin-versions string   comma-separated <id>=<ref> pins for version_capable plugins (each <id> must also appear in --plugins)
+      --plugins string           comma-separated plugin IDs to enable (skips the plugin multi-select prompt)
+      --ports string             comma-separated docker-compose short-form port mappings — [HOST_IP:][HOST:]CONTAINER[/PROTOCOL]; numeric ranges (N-M) and tcp|udp are accepted (e.g. 3000,3000-3005,8000:8000,127.0.0.1:5432:5432/tcp,6060:6060/udp); skips the ports prompt
+      --service-name string      compose service name (required with --yes)
+      --shell string             container login shell: bash, zsh, fish (default: bash)
+      --username string          in-container user (required with --yes)
+      --yes                      skip optional prompts; --service-name and --username then required
