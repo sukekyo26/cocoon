@@ -214,15 +214,12 @@ type layeredRootFile struct {
 	pos     int
 }
 
-// Stat returns the synthetic root info.
 func (*layeredRootFile) Stat() (fs.FileInfo, error) { return layeredRootInfo{}, nil }
 
-// Read always reports "is a directory".
 func (*layeredRootFile) Read(_ []byte) (int, error) {
 	return 0, &fs.PathError{Op: "read", Path: ".", Err: errIsDirectory}
 }
 
-// Close is a no-op (no resources to release).
 func (*layeredRootFile) Close() error { return nil }
 
 // ReadDir implements [fs.ReadDirFile]. n <= 0 returns every remaining entry
@@ -257,20 +254,9 @@ func (r *layeredRootFile) ReadDir(n int) ([]fs.DirEntry, error) {
 // [fs.ModeDir] so callers see a directory.
 type layeredRootInfo struct{}
 
-// Name returns ".".
-func (layeredRootInfo) Name() string { return "." }
-
-// Size returns 0.
-func (layeredRootInfo) Size() int64 { return 0 }
-
-// Mode returns ModeDir | 0o555.
-func (layeredRootInfo) Mode() fs.FileMode { return fs.ModeDir | 0o555 }
-
-// ModTime returns the zero time.
+func (layeredRootInfo) Name() string       { return "." }
+func (layeredRootInfo) Size() int64        { return 0 }
+func (layeredRootInfo) Mode() fs.FileMode  { return fs.ModeDir | 0o555 }
 func (layeredRootInfo) ModTime() time.Time { return time.Time{} }
-
-// IsDir returns true.
-func (layeredRootInfo) IsDir() bool { return true }
-
-// Sys returns nil.
-func (layeredRootInfo) Sys() any { return nil }
+func (layeredRootInfo) IsDir() bool        { return true }
+func (layeredRootInfo) Sys() any           { return nil }
