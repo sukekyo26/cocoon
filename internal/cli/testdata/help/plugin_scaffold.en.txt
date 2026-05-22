@@ -1,0 +1,29 @@
+cocoon plugin scaffold — create a new <id>/ directory under the project plugins overlay
+
+By default the new directory is created under <workspace>/.cocoon/plugins/<id>/,
+auto-discovered from the nearest workspace.toml. Pass --plugins-dir <path> to
+override (the path is taken as-is, joined with <id>).
+
+The new directory contains a plugin.toml declaring a single
+[install.methods.<category>] entry and an install.<category>.sh skeleton
+matching the chosen template — installer (curl|bash), binary (single
+binary download), apt (apt repo / .deb), or archive (multi-file
+extract). With --with-install-user a second install_user.sh hook is
+emitted (kept plugin-scoped, not per-method).
+
+Usage:
+  cocoon plugin scaffold <id> [flags]
+
+Flags:
+      --default              mark plugin enabled by default
+      --description string   short description (no URL)
+      --force                overwrite <plugins-dir>/<id>/ if it already exists
+  -h, --help                 help for scaffold
+      --name string          display name (e.g. "GitHub CLI")
+      --non-interactive      skip interactive prompts; require all fields above
+      --plugins-dir string   output directory (default: <workspace>/.cocoon/plugins, auto-discovered from workspace.toml)
+      --requires-root        install script runs as root
+      --template string      install method category: installer | binary | apt | archive (catalog-canonical names — see docs/plugins.md) (default "installer")
+      --url string           upstream URL (e.g. https://github.com/owner/repo)
+      --version-capable      generate $PIN / $CHECKSUM_* boilerplate
+      --with-install-user    also generate install_user.sh

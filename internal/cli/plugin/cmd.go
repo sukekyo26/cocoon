@@ -10,27 +10,12 @@ import (
 	"github.com/sukekyo26/cocoon/internal/i18n"
 )
 
-const pluginLong = `cocoon plugin — inspect and author cocoon plugins
-
-Subcommands:
-  list       list every plugin available in the layered view (project > user > embedded)
-  show       print the resolved manifest for one plugin id
-  pin        print a workspace.toml [plugins.versions.<id>] block
-  scaffold   create a new <id>/ directory from a template
-
-To use a plugin, add its id to [plugins].enable in workspace.toml — the
-embedded catalog is picked up automatically. To customise an embedded
-plugin, the supported workflow is "cocoon plugin scaffold <new-id>" and
-adapting the logic. If you have a clone of the cocoon source repo (or an
-unpacked source tarball), copying the embedded source from
-internal/plugin/catalog/<id>/ into ~/.cocoon/plugins/<id>/ is a shortcut;
-single-binary installs do not include the embedded source on disk.`
-
 func NewCommand(stdout, stderr io.Writer) *cobra.Command {
+	cat := i18n.New(i18n.Detect())
 	cmd := &cobra.Command{
 		Use:           "plugin",
-		Short:         "Inspect and author cocoon plugins (list / show / pin / scaffold)",
-		Long:          pluginLong,
+		Short:         cat.Msg("cmd_plugin_short"),
+		Long:          cat.Msg("cmd_plugin_long"),
 		Args:          rejectUnknownSubcommand,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -49,6 +34,12 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 		newPinCmd(stdout, stderr),
 		newScaffoldCmd(stdout, stderr),
 	)
+	// Mirror `cocoon gen`'s legacy positional help alias so `cocoon plugin help`
+	// keeps printing the parent usage instead of being intercepted by
+	// rejectUnknownSubcommand. The recursive addLeafHelpAlias in root only
+	// attaches the alias on leaf commands, so non-leaf parents like `plugin`
+	// need to attach explicitly.
+	clihelpers.AttachHelpAlias(cmd)
 	return cmd
 }
 
@@ -62,6 +53,7 @@ func rejectUnknownSubcommand(_ *cobra.Command, args []string) error {
 }
 
 func newScaffoldCmd(stdout, stderr io.Writer) *cobra.Command {
+	cat := i18n.New(i18n.Detect())
 	//nolint:exhaustruct // setX flags populated post-parse from cmd.Flags().Changed
 	opts := &scaffoldOpts{
 		pluginsDir: "",
@@ -69,8 +61,8 @@ func newScaffoldCmd(stdout, stderr io.Writer) *cobra.Command {
 	}
 	cmd := &cobra.Command{
 		Use:           "scaffold <id>",
-		Short:         "Create a new <id>/ plugin directory (default <workspace>/.cocoon/plugins; --plugins-dir overrides)",
-		Long:          scaffoldLong,
+		Short:         cat.Msg("cmd_plugin_scaffold_cmd_short"),
+		Long:          cat.Msg("cmd_plugin_scaffold_cmd_long"),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -93,38 +85,26 @@ func newScaffoldCmd(stdout, stderr io.Writer) *cobra.Command {
 			return runScaffoldFlow(opts, stdout, stderr)
 		},
 	}
-	cmd.Flags().StringVar(&opts.pluginsDir, "plugins-dir", "",
-		"output directory (default: <workspace>/.cocoon/plugins, auto-discovered from workspace.toml)")
-	cmd.Flags().StringVar(&opts.name, "name", "", "display name (e.g. \"GitHub CLI\")")
-	cmd.Flags().StringVar(&opts.description, "description", "", "short description (no URL)")
-	cmd.Flags().StringVar(&opts.url, "url", "", "upstream URL (e.g. https://github.com/owner/repo)")
-	cmd.Flags().BoolVar(&opts.defaultEnabled, "default", false, "mark plugin enabled by default")
-	cmd.Flags().BoolVar(&opts.requiresRoot, "requires-root", false, "install script runs as root")
-	cmd.Flags().BoolVar(&opts.versionCapable, "version-capable", false, "generate $PIN / $CHECKSUM_* boilerplate")
-	cmd.Flags().Var(&templateFlag{kind: &opts.template}, "template",
-		"install method category: installer | binary | apt | archive (catalog-canonical names — see docs/plugins.md)")
-	cmd.Flags().BoolVar(&opts.withInstallUser, "with-install-user", false, "also generate install_user.sh")
+	cmd.Flags().StringVar(&opts.pluginsDir, "plugins-dir", "", cat.Msg("flag_plugin_scaffold_cmd_plugins_dir_usage"))
+	cmd.Flags().StringVar(&opts.name, "name", "", cat.Msg("flag_plugin_scaffold_cmd_name_usage"))
+	cmd.Flags().StringVar(&opts.description, "description", "", cat.Msg("flag_plugin_scaffold_cmd_description_usage"))
+	cmd.Flags().StringVar(&opts.url, "url", "", cat.Msg("flag_plugin_scaffold_cmd_url_usage"))
+	cmd.Flags().BoolVar(&opts.defaultEnabled, "default", false, cat.Msg("flag_plugin_scaffold_cmd_default_usage"))
+	cmd.Flags().BoolVar(&opts.requiresRoot, "requires-root", false,
+		cat.Msg("flag_plugin_scaffold_cmd_requires_root_usage"))
+	cmd.Flags().BoolVar(&opts.versionCapable, "version-capable", false,
+		cat.Msg("flag_plugin_scaffold_cmd_version_capable_usage"))
+	cmd.Flags().Var(&templateFlag{kind: &opts.template}, "template", cat.Msg("flag_plugin_scaffold_cmd_template_usage"))
+	cmd.Flags().BoolVar(&opts.withInstallUser, "with-install-user", false,
+		cat.Msg("flag_plugin_scaffold_cmd_with_install_user_usage"))
 	cmd.Flags().BoolVar(&opts.nonInteractive, "non-interactive", false,
-		"skip interactive prompts; require all fields above")
-	cmd.Flags().BoolVar(&opts.force, "force", false, "overwrite <plugins-dir>/<id>/ if it already exists")
+		cat.Msg("flag_plugin_scaffold_cmd_non_interactive_usage"))
+	cmd.Flags().BoolVar(&opts.force, "force", false, cat.Msg("flag_plugin_scaffold_cmd_force_usage"))
 	cmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		return fmt.Errorf("%w: %w", clihelpers.ErrUsage, err)
 	})
 	return cmd
 }
-
-const scaffoldLong = `cocoon plugin scaffold — create a new <id>/ directory under the project plugins overlay
-
-By default the new directory is created under <workspace>/.cocoon/plugins/<id>/,
-auto-discovered from the nearest workspace.toml. Pass --plugins-dir <path> to
-override (the path is taken as-is, joined with <id>).
-
-The new directory contains a plugin.toml declaring a single
-[install.methods.<category>] entry and an install.<category>.sh skeleton
-matching the chosen template — installer (curl|bash), binary (single
-binary download), apt (apt repo / .deb), or archive (multi-file
-extract). With --with-install-user a second install_user.sh hook is
-emitted (kept plugin-scoped, not per-method).`
 
 func runScaffoldFlow(opts *scaffoldOpts, stdout, stderr io.Writer) error {
 	cat := i18n.New(i18n.Detect())

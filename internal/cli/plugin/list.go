@@ -9,22 +9,17 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
+	"github.com/sukekyo26/cocoon/internal/i18n"
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
 
-const listLong = `cocoon plugin list — show every available plugin
-
-The list combines the embedded catalog with optional user (` + "`~/.cocoon/plugins`" + `)
-and project (` + "`<project>/.cocoon/plugins`" + `) overlays. Same-id directories are
-not merged; the highest-priority layer wins (project > user > embedded). The
-SOURCE column shows which layer each id is currently served from.`
-
 func newListCmd(stdout, stderr io.Writer) *cobra.Command {
+	cat := i18n.New(i18n.Detect())
 	var sourceFilter string
 	cmd := &cobra.Command{
 		Use:           "list",
-		Short:         "List available plugins with their source (embedded / user / project)",
-		Long:          listLong,
+		Short:         cat.Msg("cmd_plugin_list_short"),
+		Long:          cat.Msg("cmd_plugin_list_long"),
 		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -32,12 +27,9 @@ func newListCmd(stdout, stderr io.Writer) *cobra.Command {
 			return runList(stdout, stderr, sourceFilter)
 		},
 	}
-	cmd.Flags().StringVar(
-		&sourceFilter,
-		"source",
-		"",
-		`only show this layer (`+plugin.SourceEmbedded+`, `+plugin.SourceUser+`, `+plugin.SourceProject+`)`,
-	)
+	cmd.Flags().StringVar(&sourceFilter, "source", "",
+		cat.Msg("flag_plugin_list_source_usage",
+			plugin.SourceEmbedded, plugin.SourceUser, plugin.SourceProject))
 	return cmd
 }
 

@@ -1,0 +1,31 @@
+cocoon plugin pin — emit pin lines for [plugins.versions] (and optionally [plugins.methods])
+
+By default a `<id> = { pin = "<ref>" }` line is printed to stdout for you
+to paste under the [plugins.versions] section in workspace.toml. With
+--write the line is upserted in place (inserted, or the existing
+<id> = { ... } line is replaced); comments and blank lines outside the
+target line are preserved verbatim.
+
+Use the --amd64-checksum / --arm64-checksum flags when the upstream
+release ships per-arch SHA256 sums you want the install script to
+verify. Plugins that declare verify = "pgp" in plugin.toml verify
+downloads against a bundled signature instead; passing checksum flags
+to those plugins is rejected.
+
+Pass --method <name> for plugins that declare two or more entries under
+[install.methods] in their plugin.toml — the pin then writes (or prints)
+both lines together: `<id> = "<method>"` for [plugins.methods] and
+the inline-table line for [plugins.versions]. Checksums are workspace-
+scoped (not per-method); when switching methods, refresh
+--amd64-checksum / --arm64-checksum so the install script's SHA256
+verification still matches the new artifact.
+
+Usage:
+  cocoon plugin pin <id> <ref> [flags]
+
+Flags:
+      --amd64-checksum string   sha256 of the amd64 artifact (optional)
+      --arm64-checksum string   sha256 of the arm64 artifact (optional)
+  -h, --help                    help for pin
+      --method string           install method name; only meaningful for plugins that declare [install.methods]. When set, the command pins both [plugins.methods] and [plugins.versions] in a single workspace.toml read-write. When omitted, only [plugins.versions] is updated (the existing [plugins.methods] entry — or the plugin's default_method — stays in effect).
+      --write                   upsert the inline-table line in workspace.toml (auto-discovered from cwd)

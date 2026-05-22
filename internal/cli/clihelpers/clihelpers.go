@@ -4,6 +4,8 @@ package clihelpers
 
 import (
 	"github.com/spf13/cobra"
+
+	"github.com/sukekyo26/cocoon/internal/i18n"
 )
 
 // AttachHelpAlias adds a hidden ` + "`help`" + ` subcommand whose RunE prints the
@@ -18,9 +20,10 @@ func AttachHelpAlias(cmd *cobra.Command) {
 			return
 		}
 	}
+	cat := i18n.New(i18n.Detect())
 	cmd.AddCommand(&cobra.Command{
 		Use:           "help",
-		Short:         "Show usage for this command",
+		Short:         cat.Msg("cmd_help_alias_short"),
 		Hidden:        true,
 		SilenceUsage:  true,
 		SilenceErrors: true,

@@ -1,0 +1,23 @@
+cocoon — プロジェクト連動のコンテナ ワークスペース生成ツール
+
+プロジェクトディレクトリで cocoon を実行すると workspace.toml を読み取り、
+そのリポジトリ専用の Dev Container または docker-compose スタックを生成します。
+
+使い方:
+  cocoon [flags]
+  cocoon [command]
+
+サブコマンド:
+  completion  指定したシェル向けの補完スクリプトを生成
+  gen         workspace.toml から .devcontainer/ の成果物を生成
+  help        任意のコマンドのヘルプを表示
+  init        カレントディレクトリに workspace.toml を生成
+  plugin      cocoon プラグインを参照・作成 (list / show / pin / scaffold)
+  self-update このバイナリを最新リリースで置き換える
+  version     cocoon バイナリのバージョンを表示
+
+フラグ:
+  -h, --help      cocoon のヘルプを表示
+  -v, --version   cocoon のバージョンを表示
+
+各サブコマンドの詳細は "cocoon [command] --help" で確認できます。

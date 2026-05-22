@@ -1,0 +1,19 @@
+cocoon self-update — 現在のバイナリを最新リリースで置き換える
+
+sukekyo26/cocoon の GitHub Releases API に問い合わせ、リリースタグと
+ビルドに焼き込まれたバージョン文字列を比較します。更新がある場合は
+cocoon-<os>-<arch> アセットを SHA-256 検証付きでダウンロードし、
+このバイナリをアトミックに置き換えます。
+
+終了コード:
+  0   既に最新、または置換成功
+  100 (--check-only 時のみ) より新しいバージョンが存在
+  1   その他の失敗
+
+使い方:
+  cocoon self-update [flags]
+
+フラグ:
+      --check-only   最新なら exit 0、新しいリリースがあれば exit 100。ダウンロードはしない
+      --force        ローカルが最新でも再インストール
+  -h, --help         self-update のヘルプを表示

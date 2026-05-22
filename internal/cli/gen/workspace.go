@@ -18,27 +18,8 @@ import (
 	"github.com/sukekyo26/cocoon/internal/logx"
 )
 
-const workspaceLong = `cocoon gen workspace — generate a VS Code .code-workspace file
-
-Reads [code_workspace] from workspace.toml and writes <name>.code-workspace
-at the project root (not under .devcontainer/). Folder paths are "~"-expanded
-and relativized against the directory the .code-workspace file is written to
-(the workspace.toml directory by default, or --output when set), so an entry
-like "~/.claude" resolves to a relative path that VS Code can traverse from
-that location.
-
-Use --folder to add ad-hoc folders without editing workspace.toml; flag
-entries are appended after the declarative [code_workspace].folders list.
-A folder name is auto-derived from the basename of the resolved path; pass
-"<path>=<name>" via --folder to override (e.g. --folder ~/.claude=Claude).
-
-Examples:
-
-  cocoon gen workspace
-  cocoon gen workspace --folder ~/.config/nvim
-  cocoon gen workspace --folder ~/.claude=Claude --name my-stack`
-
 func newWorkspaceCmd(stdout, stderr io.Writer) *cobra.Command {
+	cat := i18n.New(i18n.Detect())
 	var (
 		workspaceFlag string
 		outputFlag    string
@@ -47,8 +28,8 @@ func newWorkspaceCmd(stdout, stderr io.Writer) *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:           "workspace",
-		Short:         "Generate <name>.code-workspace at the project root from workspace.toml",
-		Long:          workspaceLong,
+		Short:         cat.Msg("cmd_gen_workspace_short"),
+		Long:          cat.Msg("cmd_gen_workspace_long"),
 		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -56,14 +37,10 @@ func newWorkspaceCmd(stdout, stderr io.Writer) *cobra.Command {
 			return runGenWorkspace(stdout, stderr, workspaceFlag, outputFlag, nameFlag, folderFlags)
 		},
 	}
-	cmd.Flags().StringVar(&workspaceFlag, "workspace", "",
-		"path to workspace.toml (default: discovered from cwd)")
-	cmd.Flags().StringVar(&outputFlag, "output", "",
-		"project root to write under (default: directory of workspace.toml)")
-	cmd.Flags().StringVar(&nameFlag, "name", "",
-		"output file basename without extension (default: [code_workspace].name or project directory basename)")
-	cmd.Flags().StringArrayVar(&folderFlags, "folder", nil,
-		`extra folder, appended after [code_workspace].folders; pass "<path>=<name>" to override the auto-derived name`)
+	cmd.Flags().StringVar(&workspaceFlag, "workspace", "", cat.Msg("flag_gen_workspace_workspace_usage"))
+	cmd.Flags().StringVar(&outputFlag, "output", "", cat.Msg("flag_gen_workspace_output_usage"))
+	cmd.Flags().StringVar(&nameFlag, "name", "", cat.Msg("flag_gen_workspace_name_usage"))
+	cmd.Flags().StringArrayVar(&folderFlags, "folder", nil, cat.Msg("flag_gen_workspace_folder_usage"))
 	cmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		return fmt.Errorf("%w: %w", clihelpers.ErrUsage, err)
 	})

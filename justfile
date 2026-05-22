@@ -76,6 +76,7 @@ regen-snapshots:
     go test ./internal/generate/codeworkspace    -update-golden
     go test ./internal/plugin                    -update-golden
     go test ./internal/cli/init                  -update-golden
+    go test ./internal/cli                       -run TestHelpGolden -update-golden
 
 # Build a cocoon binary for the host OS/arch.
 build:

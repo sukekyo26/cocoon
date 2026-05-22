@@ -1,0 +1,11 @@
+cocoon plugin show — print the resolved plugin manifest for <id>
+
+Resolves <id> through the same project > user > embedded layered view as
+`cocoon plugin list`, prints the metadata, install hints, apt packages,
+and the source layer it was read from.
+
+Usage:
+  cocoon plugin show <id> [flags]
+
+Flags:
+  -h, --help   help for show

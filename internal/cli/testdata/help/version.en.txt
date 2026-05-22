@@ -1,0 +1,7 @@
+Print the cocoon binary version
+
+Usage:
+  cocoon version [flags]
+
+Flags:
+  -h, --help   help for version

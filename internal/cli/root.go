@@ -15,6 +15,7 @@ import (
 	initcli "github.com/sukekyo26/cocoon/internal/cli/init"
 	plugincli "github.com/sukekyo26/cocoon/internal/cli/plugin"
 	selfupdatecli "github.com/sukekyo26/cocoon/internal/cli/selfupdate"
+	"github.com/sukekyo26/cocoon/internal/i18n"
 	"github.com/sukekyo26/cocoon/internal/logx"
 	"github.com/sukekyo26/cocoon/internal/updatecheck"
 )
@@ -23,33 +24,14 @@ import (
 // unreachable GitHub does not stall every invocation for release.DefaultTimeout (30s).
 const updateCheckTimeout = 2 * time.Second
 
-const rootLong = `cocoon — project-aware container workspace generator
-
-Run cocoon from any project directory to read its workspace.toml and
-materialize a Dev Container or plain docker-compose stack tailored to
-that repository.`
-
-const rootHelpTemplate = `{{.Long}}
-
-Usage:
-  {{.UseLine}}{{if .HasAvailableSubCommands}}
-
-Commands:{{range .Commands}}{{if (or .IsAvailableCommand (eq .Name "help"))}}
-  {{rpad .Name .NamePadding}} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
-
-Flags:
-{{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}
-
-Run 'cocoon <command> --help' for command-specific usage.
-`
-
 // newRootCommand builds a fresh tree per call so concurrent uses (parallel
 // tests) are safe.
 func newRootCommand(version string, stdout, stderr io.Writer) *cobra.Command {
+	cat := i18n.New(i18n.Detect())
 	root := &cobra.Command{
 		Use:           "cocoon",
-		Short:         "Project-aware container workspace generator",
-		Long:          rootLong,
+		Short:         cat.Msg("cmd_root_short"),
+		Long:          cat.Msg("cmd_root_long"),
 		Version:       version,
 		Args:          cobra.ArbitraryArgs, // RunE handles unknown args explicitly.
 		SilenceUsage:  true,
@@ -66,16 +48,24 @@ func newRootCommand(version string, stdout, stderr io.Writer) *cobra.Command {
 	}
 	root.SetOut(stdout)
 	root.SetErr(stderr)
-	root.SetVersionTemplate("{{.Version}}\n")
-	root.SetHelpTemplate(rootHelpTemplate)
 	root.AddCommand(
 		initcli.NewCommand(stdout, stderr),
 		gencli.NewCommand(stdout, stderr),
 		selfupdatecli.NewCommand(stdout, stderr),
 		plugincli.NewCommand(stdout, stderr),
-		newVersionSubcommand(version, stdout),
+		newVersionSubcommand(version, stdout, cat),
 	)
 	addLeafHelpAlias(root)
+	// Eagerly materialize cobra's auto-registered `completion` and `help`
+	// subtrees so ApplyI18nHelp can recurse through them. Cobra normally
+	// registers both lazily during Execute(); without these calls,
+	// localization would race the lazy add and leave them in cobra's
+	// English defaults.
+	root.InitDefaultCompletionCmd()
+	root.InitDefaultHelpCmd()
+	clihelpers.ApplyI18nHelp(root, cat)
+	clihelpers.LocalizeAutoCompletion(root, cat)
+	clihelpers.LocalizeAutoHelpCmd(root, cat)
 	return root
 }
 
@@ -140,10 +130,10 @@ func shouldSkipUpdateCheck(cmd *cobra.Command, stderr io.Writer) bool {
 
 // newVersionSubcommand handles the positional `cocoon version` form;
 // `--version` / `-v` flag forms are wired via SetVersionTemplate.
-func newVersionSubcommand(version string, stdout io.Writer) *cobra.Command {
+func newVersionSubcommand(version string, stdout io.Writer, cat *i18n.Catalog) *cobra.Command {
 	return &cobra.Command{
 		Use:           "version",
-		Short:         "Print the cocoon binary version",
+		Short:         cat.Msg("cmd_version_short"),
 		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,

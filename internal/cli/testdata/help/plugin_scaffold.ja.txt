@@ -1,0 +1,29 @@
+cocoon plugin scaffold — プロジェクトのプラグインオーバーレイ配下に新しい <id>/ ディレクトリを作成
+
+既定では <workspace>/.cocoon/plugins/<id>/ 配下に新規ディレクトリが作られます
+（最寄りの workspace.toml から自動探索）。--plugins-dir <path> で上書きすると、
+パスはそのまま採用され <id> が結合されます。
+
+新規ディレクトリには [install.methods.<category>] エントリを 1 つ宣言した
+plugin.toml と、選択テンプレートに合った install.<category>.sh スケルトンが
+含まれます。テンプレートは installer (curl|bash) / binary (単一バイナリ DL) /
+apt (apt repo / .deb) / archive (複数ファイル展開) のいずれかです。
+--with-install-user を付けるとさらに install_user.sh フック (プラグイン
+スコープ・メソッド非依存) も生成されます。
+
+使い方:
+  cocoon plugin scaffold <id> [flags]
+
+フラグ:
+      --default              プラグインを既定で有効に
+      --description string   短い説明（URL は含めない）
+      --force                <plugins-dir>/<id>/ が既に存在しても上書き
+  -h, --help                 scaffold のヘルプを表示
+      --name string          表示名（例: "GitHub CLI"）
+      --non-interactive      対話プロンプトをスキップ（上記フィールドの指定が必須）
+      --plugins-dir string   出力先ディレクトリ（既定: workspace.toml から自動探索した <workspace>/.cocoon/plugins）
+      --requires-root        install スクリプトを root で実行
+      --template string      install メソッドカテゴリ: installer | binary | apt | archive（カタログ正規名 — docs/plugins.md 参照） (default "installer")
+      --url string           上流の URL（例: https://github.com/owner/repo）
+      --version-capable      $PIN / $CHECKSUM_* の雛形を生成
+      --with-install-user    install_user.sh も生成
