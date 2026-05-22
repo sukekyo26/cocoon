@@ -86,8 +86,6 @@ linters:
         - name: error-return
         - name: error-naming
         - name: error-strings
-        - name: exported
-          arguments: ["checkPrivateReceivers", "sayRepetitiveInsteadOfStutters"]
         - name: receiver-naming
         - name: unused-parameter
         - name: unused-receiver
