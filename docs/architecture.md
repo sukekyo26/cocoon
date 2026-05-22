@@ -38,7 +38,7 @@ flowchart LR
 | Discovery | `internal/config/discovery.go` | Walks cwd → `.cocoon/` → parents to locate `workspace.toml`, stopping at `.git` or `$HOME`. |
 | Plugin LayeredFS | `internal/plugin/layered.go` | Overlays project / user / embedded plugin trees with priority `project > user > embedded`. |
 | Generators | `internal/generate/{dockerfile,compose,devcontainerjson,envfile,shellrc}` | Emit each artifact under `.devcontainer/`. Plugin install scripts are read directly from the LayeredFS and inlined into the generated Dockerfile via a quoted bash heredoc. |
-| Workspace generator | `internal/generate/codeworkspace` | Opt-in `cocoon gen workspace` subcommand. Reads `[code_workspace]` from `workspace.toml`, `~`-expands and relativizes folder paths against the project directory, and writes `<name>.code-workspace` at the project root (not under `.devcontainer/`). |
+| Workspace generator | `internal/generate/codeworkspace` | Opt-in `cocoon gen workspace` subcommand. Reads `[code_workspace]` from `workspace.toml`, `~`-expands folder paths and relativizes them against the directory the `.code-workspace` file is written to (the workspace.toml directory by default, or `--output` when set), and writes `<name>.code-workspace` at the project root (not under `.devcontainer/`). |
 | i18n catalog | `internal/i18n/` | Switches CLI prompts and inline `workspace.toml` comments between English and Japanese. |
 
 ## Plugin system

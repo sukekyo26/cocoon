@@ -454,7 +454,9 @@ type Devcontainer map[string]any
 //     Empty falls back to filepath.Base(projectDir).
 //   - Folders: inline-table array of {path, name}. name is optional and
 //     defaults to the basename of the resolved path. path supports "~"
-//     home expansion and is relativized against the project directory.
+//     home expansion and is relativized against the directory the
+//     .code-workspace file is written to (the workspace.toml directory by
+//     default, or `cocoon gen workspace --output <dir>` when set).
 //   - Settings: VS Code workspace "settings" object, passed through verbatim
 //     as JSON. Empty map is elided from the output.
 //   - Extensions.Recommendations: VS Code recommended extension IDs, emitted

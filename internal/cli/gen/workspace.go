@@ -22,9 +22,10 @@ const workspaceLong = `cocoon gen workspace — generate a VS Code .code-workspa
 
 Reads [code_workspace] from workspace.toml and writes <name>.code-workspace
 at the project root (not under .devcontainer/). Folder paths are "~"-expanded
-and relativized against the project directory, so an entry like
-"~/.claude" resolves to a relative path that lets VS Code traverse up to
-$HOME-adjacent directories.
+and relativized against the directory the .code-workspace file is written to
+(the workspace.toml directory by default, or --output when set), so an entry
+like "~/.claude" resolves to a relative path that VS Code can traverse from
+that location.
 
 Use --folder to add ad-hoc folders without editing workspace.toml; flag
 entries are appended after the declarative [code_workspace].folders list.

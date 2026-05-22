@@ -33,8 +33,8 @@ import (
 var (
 	// ErrInvalidFolderPath signals a structurally bad folders[].path entry:
 	// empty, a "~user" form (home expansion only supports the current
-	// user), or anything else that cannot be resolved relative to the
-	// project directory.
+	// user), or anything else that cannot be relativized against the
+	// output directory (the dir the .code-workspace file is written to).
 	ErrInvalidFolderPath = errors.New("code_workspace: invalid folder path")
 
 	// ErrNoFolders signals that neither workspace.toml nor the caller

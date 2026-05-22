@@ -159,8 +159,9 @@ var messagesEN_initTemplates = map[string]string{
 		"#   Opt-in: only emitted when you run the subcommand. Output goes to the project root\n" +
 		"#   (next to workspace.toml, not under .devcontainer/), so `code <name>.code-workspace`\n" +
 		"#   opens it directly. folders[].path supports \"~\" expansion and is relativized\n" +
-		"#   against the project directory, so \"~/.claude\" resolves to a relative path that\n" +
-		"#   VS Code can traverse upward.\n" +
+		"#   against the directory the .code-workspace file is written to (default: workspace.toml\n" +
+		"#   directory; overridable with `cocoon gen workspace --output <dir>`), so \"~/.claude\"\n" +
+		"#   resolves to a relative path that VS Code can traverse upward.\n" +
 		"# [code_workspace]\n" +
 		"# name = \"my-stack\"                                       # output file basename (default: project dir basename)\n" +
 		"# folders = [\n" +
@@ -323,8 +324,9 @@ var messagesJA_initTemplates = map[string]string{
 	"init_toml_template_code_workspace": "# [code_workspace] — `cocoon gen workspace` が生成する VS Code .code-workspace ファイル。\n" +
 		"#   opt-in。サブコマンドを実行したときだけ生成される。出力先はプロジェクトルート\n" +
 		"#   (workspace.toml と同階層、.devcontainer/ 配下ではない) なので `code <name>.code-workspace`\n" +
-		"#   でそのまま開ける。folders[].path は \"~\" 展開 + プロジェクトディレクトリ起点の相対化に\n" +
-		"#   対応するので、\"~/.claude\" のようなエントリも VS Code が上方向に辿れる相対パスへ解決される。\n" +
+		"#   でそのまま開ける。folders[].path は \"~\" 展開 + `.code-workspace` を書き出すディレクトリ\n" +
+		"#   (既定は workspace.toml と同階層、`cocoon gen workspace --output <dir>` で上書き可) 起点の\n" +
+		"#   相対化に対応するので、\"~/.claude\" のようなエントリも VS Code が上方向に辿れる相対パスへ解決される。\n" +
 		"# [code_workspace]\n" +
 		"# name = \"my-stack\"                                       # 出力ファイル名 (デフォルト: プロジェクトディレクトリ basename)\n" +
 		"# folders = [\n" +

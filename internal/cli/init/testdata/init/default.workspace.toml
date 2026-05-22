@@ -233,8 +233,9 @@ packages = [
 #   Opt-in: only emitted when you run the subcommand. Output goes to the project root
 #   (next to workspace.toml, not under .devcontainer/), so `code <name>.code-workspace`
 #   opens it directly. folders[].path supports "~" expansion and is relativized
-#   against the project directory, so "~/.claude" resolves to a relative path that
-#   VS Code can traverse upward.
+#   against the directory the .code-workspace file is written to (default: workspace.toml
+#   directory; overridable with `cocoon gen workspace --output <dir>`), so "~/.claude"
+#   resolves to a relative path that VS Code can traverse upward.
 # [code_workspace]
 # name = "my-stack"                                       # output file basename (default: project dir basename)
 # folders = [
