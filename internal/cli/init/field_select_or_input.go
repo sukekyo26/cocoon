@@ -296,13 +296,10 @@ func (f *selectOrInputField) Focus() tea.Cmd {
 	return nil
 }
 
-// Error returns the most recent validation error.
 func (f *selectOrInputField) Error() error { return f.err }
 
-// Skip always returns false.
 func (*selectOrInputField) Skip() bool { return false }
 
-// Zoom always returns false.
 func (*selectOrInputField) Zoom() bool { return false }
 
 // KeyBinds omits Prev intentionally: each prompt is its own single-field
@@ -321,10 +318,7 @@ func (f *selectOrInputField) WithAccessible(b bool) huh.Field { f.access = b; re
 // WithKeyMap pulls navigation from huh's Select profile.
 func (f *selectOrInputField) WithKeyMap(k *huh.KeyMap) huh.Field { f.keymap = k.Select; return f }
 
-// WithWidth sets the rendered width.
-func (f *selectOrInputField) WithWidth(w int) huh.Field { f.width = w; return f }
-
-// WithHeight sets the rendered height.
+func (f *selectOrInputField) WithWidth(w int) huh.Field  { f.width = w; return f }
 func (f *selectOrInputField) WithHeight(h int) huh.Field { f.height = h; return f }
 
 // WithPosition ignores huh's position info; this field's layout is
@@ -333,10 +327,8 @@ func (f *selectOrInputField) WithPosition(_ huh.FieldPosition) huh.Field {
 	return f
 }
 
-// GetKey returns the field key.
 func (f *selectOrInputField) GetKey() string { return f.key }
 
-// GetValue returns the committed value.
 func (f *selectOrInputField) GetValue() any {
 	if f.target == nil {
 		return ""

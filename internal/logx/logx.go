@@ -55,7 +55,6 @@ func NewWithMode(stdout, stderr io.Writer, mode ColorMode) *Logger {
 // Info writes to stdout (no color).
 func (l *Logger) Info(msg string) { _, _ = fmt.Fprintln(l.stdout, msg) }
 
-// Infof is the formatted variant of Info.
 func (l *Logger) Infof(format string, args ...any) {
 	_, _ = fmt.Fprintf(l.stdout, format+"\n", args...)
 }
@@ -65,7 +64,6 @@ func (l *Logger) Success(msg string) {
 	_, _ = fmt.Fprintf(l.stdout, "%s%s%s\n", l.stdoutGreen, msg, l.stdoutReset)
 }
 
-// Successf is the formatted variant of Success.
 func (l *Logger) Successf(format string, args ...any) {
 	l.Success(fmt.Sprintf(format, args...))
 }
@@ -75,7 +73,6 @@ func (l *Logger) Warn(msg string) {
 	_, _ = fmt.Fprintf(l.stderr, "%s%s%s\n", l.stderrYellow, msg, l.stderrReset)
 }
 
-// Warnf is the formatted variant of Warn.
 func (l *Logger) Warnf(format string, args ...any) {
 	l.Warn(fmt.Sprintf(format, args...))
 }
@@ -85,7 +82,6 @@ func (l *Logger) Error(msg string) {
 	_, _ = fmt.Fprintf(l.stderr, "%s%s%s\n", l.stderrRed, msg, l.stderrReset)
 }
 
-// Errorf is the formatted variant of Error.
 func (l *Logger) Errorf(format string, args ...any) {
 	l.Error(fmt.Sprintf(format, args...))
 }
@@ -95,7 +91,6 @@ func (l *Logger) Notice(msg string) {
 	_, _ = fmt.Fprintf(l.stderr, "%s%s%s\n", l.stderrCyan, msg, l.stderrReset)
 }
 
-// Noticef is the formatted variant of Notice.
 func (l *Logger) Noticef(format string, args ...any) {
 	l.Notice(fmt.Sprintf(format, args...))
 }
@@ -106,7 +101,6 @@ func (l *Logger) Progress(msg string) {
 	_, _ = fmt.Fprintf(l.stderr, "%s%s%s\n", l.stderrDim, msg, l.stderrReset)
 }
 
-// Progressf is the formatted variant of Progress.
 func (l *Logger) Progressf(format string, args ...any) {
 	l.Progress(fmt.Sprintf(format, args...))
 }

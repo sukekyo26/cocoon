@@ -40,7 +40,6 @@ Exit codes:
   100 (only with --check-only) a newer version exists
   1   any other failure`
 
-// NewCommand returns the cobra command for `cocoon self-update`.
 func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 	var checkOnly, force bool
 	cmd := &cobra.Command{
