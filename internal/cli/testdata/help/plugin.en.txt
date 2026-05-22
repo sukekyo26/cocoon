@@ -19,6 +19,7 @@ Usage:
   cocoon plugin [command]
 
 Available Commands:
+  help        Show usage for this command
   list        List available plugins with their source (embedded / user / project)
   pin         Emit inline-table pin lines for workspace.toml (stdout, or in-place with --write)
   scaffold    Create a new <id>/ plugin directory (default <workspace>/.cocoon/plugins; --plugins-dir overrides)

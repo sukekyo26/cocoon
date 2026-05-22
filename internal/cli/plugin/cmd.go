@@ -34,6 +34,12 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 		newPinCmd(stdout, stderr),
 		newScaffoldCmd(stdout, stderr),
 	)
+	// Mirror `cocoon gen`'s legacy positional help alias so `cocoon plugin help`
+	// keeps printing the parent usage instead of being intercepted by
+	// rejectUnknownSubcommand. The recursive addLeafHelpAlias in root only
+	// attaches the alias on leaf commands, so non-leaf parents like `plugin`
+	// need to attach explicitly.
+	clihelpers.AttachHelpAlias(cmd)
 	return cmd
 }
 
