@@ -1,0 +1,31 @@
+{
+  "folders": [
+    {
+      "name": "project",
+      "path": "."
+    },
+    {
+      "name": ".claude",
+      "path": "../home/.claude"
+    },
+    {
+      "name": "sibling-repo",
+      "path": "../sibling-repo"
+    },
+    {
+      "name": "Neovim",
+      "path": "../home/.config/nvim"
+    }
+  ],
+  "settings": {
+    "editor.codeLens": true,
+    "editor.tabSize": 2,
+    "files.autoSave": "afterDelay"
+  },
+  "extensions": {
+    "recommendations": [
+      "golang.go",
+      "ms-azuretools.vscode-docker"
+    ]
+  }
+}

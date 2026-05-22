@@ -493,6 +493,56 @@ extensions = [
 
 ---
 
+## `[code_workspace]`
+
+VS Code の `.code-workspace` ファイルを定義します。`cocoon gen workspace` が既定では `workspace.toml` と同階層 (`.devcontainer/` 配下ではない) に書き出します。出力先は `--output <dir>` で変更でき、ジェネレータは folder path を **実際に書き出されるディレクトリ** 起点で相対化するため、出力先が変わっても VS Code が正しく解決できます。`~` 展開にも対応するので、`"~/.claude"` のようなエントリで VS Code が `$HOME` 隣接ディレクトリへ上方向に辿れます。
+
+このセクションは `cocoon gen` 本体には影響しません。`.code-workspace` は `cocoon gen workspace` を明示的に実行したときだけ書き出されます。
+
+```toml
+[code_workspace]
+# 出力ファイル名 (拡張子 ".code-workspace" は除く) — 省略時はプロジェクトディレクトリの basename。
+name = "my-stack"
+
+# inline table の配列。name は省略可で、省略時は path の basename を採用。
+folders = [
+    { path = "." },
+    { path = "~/.claude" },
+    { path = "../sibling-repo" },
+    { path = "~/.config/nvim", name = "Neovim" },
+]
+
+[code_workspace.settings]
+"editor.tabSize" = 2
+"files.autoSave" = "afterDelay"
+
+[code_workspace.extensions]
+recommendations = ["golang.go", "ms-azuretools.vscode-docker"]
+```
+
+### パス解決
+
+folder path は **`.code-workspace` ファイルが実際に置かれるディレクトリ** を起点に相対化されます。デフォルトでは workspace.toml と同階層が起点ですが、`--output` 指定時はそちらに切り替わります。
+
+| 入力                | 解決結果 (出力先デフォルト, project = `/home/u/proj`, `$HOME=/home/u`) |
+|---|---|
+| `.`                  | `.`                                                       |
+| `../sibling-repo`    | `../sibling-repo`                                         |
+| `~/.claude`          | `../.claude`                                              |
+| `~/.config/nvim`     | `../.config/nvim`                                         |
+| `/etc/nginx`         | `../../../etc/nginx`                                      |
+
+`../sibling-repo` のような相対エントリは「workspace.toml のディレクトリから見た」意味で解釈されます (`--output` の有無で値の意味が変わらない)。そのうえで結果のパスを出力先ディレクトリ起点に再相対化して VS Code に渡します。
+
+- `name` は省略可。省略時は解決済みパスの basename (`.` の場合はプロジェクトディレクトリの basename) を使用。
+- `~user` (他ユーザーの home 展開) は拒否。サポート対象は現ユーザーの `~` と `~/<rest>` のみ。
+- `settings` はそのまま `.code-workspace` の `"settings"` オブジェクトに流し込まれます。空の場合はキーごと省略。
+- `extensions.recommendations` は `"extensions": { "recommendations": [...] }` ブロックになります。空配列なら `"extensions"` 自体を省略。
+
+CLI 側のフラグについては [`cocoon gen workspace`](commands.ja.md#cocoon-gen-workspace) を参照。
+
+---
+
 ## 廃止セクション
 
 下記セクションは後方互換のためパーサが受理しますが、将来のメジャーリリースで削除される可能性があります。

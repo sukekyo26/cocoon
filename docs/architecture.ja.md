@@ -38,6 +38,7 @@ flowchart LR
 | Discovery | `internal/config/discovery.go` | cwd → `.cocoon/` → 親ディレクトリ方向に `workspace.toml` を探索 (`.git` か `$HOME` で停止)。 |
 | Plugin LayeredFS | `internal/plugin/layered.go` | プロジェクト / ユーザー / 埋め込みプラグインツリーを `project > user > embedded` の優先度でオーバーレイ。 |
 | Generators | `internal/generate/{dockerfile,compose,devcontainerjson,envfile,shellrc}` | `.devcontainer/` 配下の各成果物を生成。プラグインの install スクリプトは LayeredFS から直接読み出し、bash heredoc で Dockerfile に埋め込む。 |
+| Workspace generator | `internal/generate/codeworkspace` | opt-in な `cocoon gen workspace` サブコマンド。`workspace.toml` の `[code_workspace]` を読み、folder path を `~` 展開後、`.code-workspace` を書き出すディレクトリ (既定は workspace.toml と同階層、`--output` 指定時はその先) 起点で相対化し、`<name>.code-workspace` をプロジェクトルート (`.devcontainer/` 配下ではない) に書き出す。 |
 | i18n catalog | `internal/i18n/` | CLI プロンプトと `workspace.toml` 内コメントを英語 / 日本語で切替。 |
 
 ## プラグインシステム

@@ -6,22 +6,23 @@ package config
 
 // Workspace mirrors workspace.toml.
 type Workspace struct {
-	Workspace    *WorkspaceSpec            `toml:"workspace,omitempty"`
-	Container    ContainerSpec             `toml:"container"`
-	Plugins      PluginsSpec               `toml:"plugins"`
-	Ports        *PortsSpec                `toml:"ports,omitempty"`
-	Apt          *AptSpec                  `toml:"apt,omitempty"`
-	Volumes      map[string]string         `toml:"volumes,omitempty"`
-	Env          map[string]string         `toml:"env,omitempty"`
-	Mounts       []Mount                   `toml:"mounts,omitempty"`
-	HomeFiles    *HomeFilesSpec            `toml:"home_files,omitempty"`
-	Locale       *LocaleSpec               `toml:"locale,omitempty"`
-	Certificates *CertificatesSpec         `toml:"certificates,omitempty"`
-	Git          *GitIdentitySpec          `toml:"git,omitempty"`
-	Dockerfile   *DockerfileSpec           `toml:"dockerfile,omitempty"`
-	Services     map[string]SidecarService `toml:"services,omitempty"`
-	Repositories *RepositoriesSpec         `toml:"repositories,omitempty"`
-	Devcontainer Devcontainer              `toml:"devcontainer,omitempty"`
+	Workspace     *WorkspaceSpec            `toml:"workspace,omitempty"`
+	Container     ContainerSpec             `toml:"container"`
+	Plugins       PluginsSpec               `toml:"plugins"`
+	Ports         *PortsSpec                `toml:"ports,omitempty"`
+	Apt           *AptSpec                  `toml:"apt,omitempty"`
+	Volumes       map[string]string         `toml:"volumes,omitempty"`
+	Env           map[string]string         `toml:"env,omitempty"`
+	Mounts        []Mount                   `toml:"mounts,omitempty"`
+	HomeFiles     *HomeFilesSpec            `toml:"home_files,omitempty"`
+	Locale        *LocaleSpec               `toml:"locale,omitempty"`
+	Certificates  *CertificatesSpec         `toml:"certificates,omitempty"`
+	Git           *GitIdentitySpec          `toml:"git,omitempty"`
+	Dockerfile    *DockerfileSpec           `toml:"dockerfile,omitempty"`
+	Services      map[string]SidecarService `toml:"services,omitempty"`
+	Repositories  *RepositoriesSpec         `toml:"repositories,omitempty"`
+	Devcontainer  Devcontainer              `toml:"devcontainer,omitempty"`
+	CodeWorkspace *CodeWorkspaceSpec        `toml:"code_workspace,omitempty"`
 }
 
 // HasDevcontainer reports whether a [devcontainer] table was present.
@@ -443,3 +444,41 @@ type RepositoriesSpec struct {
 
 // Devcontainer is a passthrough map: dump-devcontainer emits entries verbatim.
 type Devcontainer map[string]any
+
+// CodeWorkspaceSpec models the optional [code_workspace] section consumed by
+// `cocoon gen workspace`. Output is a <name>.code-workspace file written at
+// the project root (not under .devcontainer/), since VS Code's convention is
+// to keep workspace files alongside the project they describe.
+//
+//   - Name: output file basename (without the .code-workspace extension).
+//     Empty falls back to filepath.Base(projectDir).
+//   - Folders: inline-table array of {path, name}. name is optional and
+//     defaults to the basename of the resolved path. path supports "~"
+//     home expansion and is relativized against the directory the
+//     .code-workspace file is written to (the workspace.toml directory by
+//     default, or `cocoon gen workspace --output <dir>` when set).
+//   - Settings: VS Code workspace "settings" object, passed through verbatim
+//     as JSON. Empty map is elided from the output.
+//   - Extensions.Recommendations: VS Code recommended extension IDs, emitted
+//     as `"extensions": { "recommendations": [...] }`. Empty list is elided.
+type CodeWorkspaceSpec struct {
+	Name       string                `toml:"name,omitempty"`
+	Folders    []CodeWorkspaceFolder `toml:"folders,omitempty"`
+	Settings   map[string]any        `toml:"settings,omitempty"`
+	Extensions *CodeWorkspaceExtSpec `toml:"extensions,omitempty"`
+}
+
+// CodeWorkspaceFolder models one [[code_workspace.folders]] inline-table
+// entry. Path is required; Name is optional and defaults to the basename of
+// the resolved path at generation time.
+type CodeWorkspaceFolder struct {
+	Path string `toml:"path"`
+	Name string `toml:"name,omitempty"`
+}
+
+// CodeWorkspaceExtSpec models [code_workspace.extensions]. Only the
+// `recommendations` array is supported today; other VS Code extension keys
+// (e.g. `unwantedRecommendations`) can be added later if requested.
+type CodeWorkspaceExtSpec struct {
+	Recommendations []string `toml:"recommendations,omitempty"`
+}

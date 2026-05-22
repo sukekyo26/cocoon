@@ -509,6 +509,57 @@ extensions = [
 
 ---
 
+## `[code_workspace]`
+
+Defines a VS Code `.code-workspace` file that `cocoon gen workspace` writes alongside `workspace.toml` by default (**not** under `.devcontainer/`). The output directory can be redirected with `--output <dir>`; the generator always relativizes folder paths against the directory the file is actually written to, so VS Code resolves them correctly regardless of where the file lands. The generator expands `~` as well, so a `"~/.claude"` entry lets VS Code traverse upward to `$HOME`-adjacent directories from the same window.
+
+This section has no effect on `cocoon gen` itself — the `.code-workspace` file is only written when you explicitly run `cocoon gen workspace`.
+
+```toml
+[code_workspace]
+# Output file basename without ".code-workspace" (default: project directory basename).
+name = "my-stack"
+
+# Inline-table array. `name` is optional and defaults to the basename of the
+# resolved path.
+folders = [
+    { path = "." },
+    { path = "~/.claude" },
+    { path = "../sibling-repo" },
+    { path = "~/.config/nvim", name = "Neovim" },
+]
+
+[code_workspace.settings]
+"editor.tabSize" = 2
+"files.autoSave" = "afterDelay"
+
+[code_workspace.extensions]
+recommendations = ["golang.go", "ms-azuretools.vscode-docker"]
+```
+
+### Path resolution
+
+Folder paths are relativized against the **directory the `.code-workspace` file lives in** — by default that is the workspace.toml directory, but it shifts when `--output` is passed.
+
+| Input                | Resolves to (default output, project at `/home/u/proj`, `$HOME=/home/u`) |
+|---|---|
+| `.`                  | `.`                                                       |
+| `../sibling-repo`    | `../sibling-repo`                                         |
+| `~/.claude`          | `../.claude`                                              |
+| `~/.config/nvim`     | `../.config/nvim`                                         |
+| `/etc/nginx`         | `../../../etc/nginx`                                      |
+
+Relative entries like `../sibling-repo` are interpreted from the workspace.toml directory (so the value keeps the same meaning whether or not `--output` is set); the result is then re-anchored on the output directory for VS Code to consume.
+
+- `name` is optional. When omitted, the basename of the resolved path is used (`.` falls back to the project directory's basename).
+- `~user` (other-user home expansion) is rejected; only the current user's `~` and `~/<rest>` are supported.
+- `settings` is passed through verbatim to the `.code-workspace` `"settings"` object. When empty, the key is elided.
+- `extensions.recommendations` becomes the `"extensions": { "recommendations": [...] }` block. Empty list elides the whole `"extensions"` object.
+
+See [`cocoon gen workspace`](commands.md#cocoon-gen-workspace) for the CLI flags that pair with this section.
+
+---
+
 ## Deprecated sections
 
 These sections are still accepted by the parser for backward compatibility but may be removed in a future major release.

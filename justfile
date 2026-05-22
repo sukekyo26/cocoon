@@ -73,6 +73,7 @@ regen-snapshots:
     go test ./internal/generate/dockerfile       -update-golden
     go test ./internal/generate/compose          -update-golden
     go test ./internal/generate/devcontainerjson -update-golden
+    go test ./internal/generate/codeworkspace    -update-golden
     go test ./internal/plugin                    -update-golden
     go test ./internal/cli/init                  -update-golden
 

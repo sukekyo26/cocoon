@@ -201,6 +201,7 @@ func writeTrailingTemplates(sb *strings.Builder, cat *i18n.Catalog, s containerS
 	templateKeys = append(templateKeys,
 		"init_toml_template_services",
 		"init_toml_template_devcontainer",
+		"init_toml_template_code_workspace",
 	)
 	for _, key := range templateKeys {
 		emitTemplate(sb, cat, key)
