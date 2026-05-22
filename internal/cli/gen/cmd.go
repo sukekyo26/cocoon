@@ -106,6 +106,13 @@ func loadGenContext(stderr io.Writer, workspaceFlag, outputFlag string) (
 	if outDir == "" {
 		outDir = filepath.Dir(wsPath)
 	}
+	// Normalize to an absolute path so downstream callers can mix it with
+	// abs paths (filepath.Rel rejects relative + absolute) and display
+	// helpers stay deterministic regardless of cwd-at-print-time.
+	outDir, err = filepath.Abs(outDir)
+	if err != nil {
+		return "", nil, fmt.Errorf("%w: resolve --output: %w", clihelpers.ErrUsage, err)
+	}
 	catalog, err := plugin.CatalogFS()
 	if err != nil {
 		return "", nil, fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)

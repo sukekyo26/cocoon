@@ -362,6 +362,60 @@ folders = [{ path = "~/.claude" }]
 	}
 }
 
+// TestGenWorkspace_RelativeOutputResolvesToAbs guards against a regression
+// where `--output ./rel` left the anchor relative and made the generator's
+// filepath.Rel(relative, absolute) call fail. The CLI must normalize the
+// output dir to an absolute path before invoking Generate.
+func TestGenWorkspace_RelativeOutputResolvesToAbs(t *testing.T) {
+	root := t.TempDir()
+	project := filepath.Join(root, "ws", "proj")
+	home := filepath.Join(root, "home", "alice")
+	out := filepath.Join(project, "out") // resolves to <project>/out via "./out".
+	for _, d := range []string{project, home, out} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", d, err)
+		}
+	}
+	t.Setenv("HOME", home)
+	pinEnglish(t)
+	t.Chdir(project)
+
+	const minimal = `[container]
+service_name = "demo"
+username = "alice"
+image = "ubuntu"
+image_version = "24.04"
+
+[plugins]
+enable = []
+
+[code_workspace]
+name = "stack"
+folders = [{ path = "~/.claude" }]
+`
+	if err := os.WriteFile(filepath.Join(project, "workspace.toml"), []byte(minimal), 0o600); err != nil {
+		t.Fatalf("write workspace.toml: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	cmd := gencli.NewCommand(&stdout, &stderr)
+	cmd.SetArgs([]string{"workspace", "--output", "./out"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("gen workspace --output ./out: %v\nstderr:\n%s", err, stderr.String())
+	}
+
+	target := filepath.Join(out, "stack.code-workspace")
+	raw, err := os.ReadFile(target) //nolint:gosec
+	if err != nil {
+		t.Fatalf("expected %s: %v", target, err)
+	}
+	// project = <root>/ws/proj, out = <root>/ws/proj/out, ~/.claude = <root>/home/alice/.claude.
+	// filepath.Rel(out, "~/.claude") = ../../../home/alice/.claude.
+	if !strings.Contains(string(raw), `"path": "../../../home/alice/.claude"`) {
+		t.Errorf("expected rel path anchored on absolutized --output dir; got:\n%s", string(raw))
+	}
+}
+
 // TestGenWorkspace_NoCodeWorkspaceSectionWithFolderFlagSucceeds covers the
 // "TOML has no [code_workspace] at all, but --folder is passed" path: the
 // CLI must accept the flag-only input without complaint.
