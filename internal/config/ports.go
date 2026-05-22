@@ -73,7 +73,6 @@ type ComposePort struct {
 	Long map[string]any
 }
 
-// IsLong reports whether this entry should be rendered as a YAML mapping.
 func (p ComposePort) IsLong() bool { return p.Long != nil }
 
 // ComposePortEntries trusts that PortsSpec.validate has already run; it
