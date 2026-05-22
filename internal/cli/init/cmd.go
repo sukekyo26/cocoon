@@ -40,7 +40,6 @@ is set) and any of --image / --image-version / --shell / --mount-root /
 --dir / --devcontainer / --apt-categories / --plugins / --alias-bundles
 to drive non-interactively from CI.`
 
-// NewCommand returns the cobra command for `cocoon init`.
 func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 	var flags initFlags
 	cmd := &cobra.Command{

@@ -53,7 +53,6 @@ After generation, start the container yourself:
 
 …or open the project in VS Code and pick "Reopen in Container".`
 
-// NewCommand returns the cobra command for `cocoon gen`.
 func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 	var (
 		workspaceFlag string

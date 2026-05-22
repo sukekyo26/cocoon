@@ -140,7 +140,6 @@ type Accumulator struct {
 	errs *[]FieldError
 }
 
-// NewAccumulator returns an empty Accumulator rooted at no base path.
 func NewAccumulator() *Accumulator {
 	errs := make([]FieldError, 0)
 	return &Accumulator{base: nil, errs: &errs}
@@ -168,7 +167,6 @@ func (a *Accumulator) At(seg ...string) *Accumulator {
 	return &Accumulator{base: out, errs: a.errs}
 }
 
-// Add records a FieldError at base+seg with the given message.
 func (a *Accumulator) Add(msg string, seg ...string) {
 	a.ensure()
 	loc := make([]string, 0, len(a.base)+len(seg))

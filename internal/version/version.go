@@ -12,5 +12,4 @@ package version
 //	go build -ldflags "-X github.com/sukekyo26/cocoon/internal/version.Version=$(cat VERSION)"
 var Version = "0.6.0"
 
-// Get returns the cocoon version string.
 func Get() string { return Version }

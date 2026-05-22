@@ -26,7 +26,6 @@ unpacked source tarball), copying the embedded source from
 internal/plugin/catalog/<id>/ into ~/.cocoon/plugins/<id>/ is a shortcut;
 single-binary installs do not include the embedded source on disk.`
 
-// NewCommand returns the cobra subtree for ` + "`cocoon plugin`" + `.
 func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "plugin",

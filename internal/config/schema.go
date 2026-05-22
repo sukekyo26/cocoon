@@ -25,7 +25,6 @@ type Workspace struct {
 	CodeWorkspace *CodeWorkspaceSpec        `toml:"code_workspace,omitempty"`
 }
 
-// HasDevcontainer reports whether a [devcontainer] table was present.
 func (w *Workspace) HasDevcontainer() bool { return len(w.Devcontainer) > 0 }
 
 // WorkspaceSpec models the optional [workspace] section. Defaults apply when
@@ -55,7 +54,6 @@ type WorkspaceSpec struct {
 	DevContainer *bool `toml:"devcontainer,omitempty"`
 }
 
-// MountRootOrDefault falls back to "." when [workspace] is omitted or empty.
 func (w *WorkspaceSpec) MountRootOrDefault() string {
 	if w == nil || w.MountRoot == "" {
 		return "."
@@ -63,8 +61,6 @@ func (w *WorkspaceSpec) MountRootOrDefault() string {
 	return w.MountRoot
 }
 
-// DirOrDefault falls back to "workspace" when [workspace] is omitted or
-// the field is empty.
 func (w *WorkspaceSpec) DirOrDefault() string {
 	if w == nil || w.Dir == "" {
 		return "workspace"
