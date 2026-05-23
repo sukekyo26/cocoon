@@ -6,6 +6,8 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-05-24
+
 ### 修正
 
 - `cocoon init` の `--image-path-fix`（language base image 選択時に既定 on で出るプロンプト）が `[container.shell.env]` ブロックと一緒にトップレベルの `[volumes]` ブロックも書き出すようになりました。これにより image 路線でも `docker compose down && up --build` を跨いで user install (`npm install -g <pkg>` / `cargo install <pkg>` / `go install <pkg>` / `deno install <script>`) の成果が保持されます。従来は env だけ設定して書き込み先パス自体は volume 化されておらず、コンテナ再生成のたびに毎回ゼロから消えていた（PATH は通っているのに rebuild で消える、という非対称な footgun）。イメージ別の追加ブロック: `node` → `npm-global` (`$HOME/.npm-global`) + `npm` (`$HOME/.npm` キャッシュ)、`golang` → `go` (`$HOME/go`、`$GOPATH` 全体)、`rust` → `cargo` (`$HOME/.cargo`)、`denoland/deno` → `deno` (`$HOME/.deno`)。volume 名は対応する catalog plugin の `[install].volumes` と同じ `plugin.DeriveVolumeName` 規約で派生するため、image 路線とプラグイン路線で生成される compose `volumes:` キーは一致します（image⇄plugin を切替えても compose snapshot が構造的に等価）。`python` は唯一のインストール先 (`$HOME/.local/bin`) が cocoon の既定 `local:` named volume に既に含まれるため変更なし。env と volume は 1 つのトグルで連動: `--no-image-path-fix`（またはプロンプトで「いいえ」）を選ぶと両方ともスキップされます（volume だけあって env が無いと、runtime が書き込まない無意味なマウントになるため）。既存の workspace.toml で image-path-fix の `[container.shell.env]` ブロックを持っているファイルは自動マイグレーションされないので、`cocoon init --force` を再実行するか、生成された自動コメントに従って `[volumes]` ブロックを手で追記してください。
@@ -199,7 +201,8 @@ cocoon の主要な変更を記録します。フォーマットは
 - `COMPOSE_PROJECT_NAME` をプロジェクトディレクトリの basename から導出するように変更。docker compose の namespace がホストディレクトリと一致する。
 - 国際化 (英語 / 日本語) カタログを追加。CLI プロンプト・エラーメッセージ・`workspace.toml` インラインコメントすべてを `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` で切替可能。
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.7.2...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.7.3...HEAD
+[0.7.3]: https://github.com/sukekyo26/cocoon/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/sukekyo26/cocoon/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/sukekyo26/cocoon/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/sukekyo26/cocoon/compare/v0.6.0...v0.7.0
