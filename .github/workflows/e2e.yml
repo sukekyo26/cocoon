@@ -11,8 +11,10 @@ name: E2E
 #      plugins pinned. Catches plugin-vs-base-image and plugin-vs-plugin
 #      breakage; bumping a pinned version surfaces here as a deliberate diff.
 #   3. arm64  / full   — the arm64-safe subset on a native ubuntu-24.04-arm
-#      runner (no QEMU). Plugins whose install.sh hard-codes amd64 (aws-cli,
-#      aws-sam-cli, lazygit, zig, starship, google-chrome) are excluded.
+#      runner (no QEMU). Plugins excluded for one of two reasons:
+#        - install.sh hard-codes amd64 (lazygit, zig, starship, google-chrome)
+#        - install.sh fails fast on arm64 because no official Linux/arm64
+#          build exists (flutter)
 #
 # Local WSL2 cannot run any of these (gcc missing for `-race`); GitHub-hosted
 # ubuntu-latest / ubuntu-24.04-arm both ship docker + buildx out of the box.
@@ -91,8 +93,8 @@ jobs:
               methods=""
               ;;
             amd64-full)
-              plugins="docker-cli,docker-buildx,aws-cli,aws-sam-cli,github-cli,claude-code,copilot-cli,proto,mise,uv,bun,node,deno,dart,zig,rust,go,lazygit,starship,nerd-fonts,google-chrome,terraform,opentofu,kubectl,helm,shellcheck,shfmt"
-              pins="aws-cli=2.34.48,aws-sam-cli=1.160.1,bun=1.3.3,copilot-cli=1.0.47,dart=3.12.0,deno=2.7.14,docker-buildx=0.24.0,go=1.23.4,helm=3.16.0,kubectl=1.31.0,lazygit=0.44.1,mise=2025.12.0,nerd-fonts=3.4.0,node=24.15.0,opentofu=1.9.0,proto=0.46.1,shellcheck=0.10.0,shfmt=3.10.0,starship=1.21.1,terraform=1.10.5,uv=0.5.7,zig=0.13.0"
+              plugins="docker-cli,docker-buildx,aws-cli,aws-sam-cli,github-cli,claude-code,copilot-cli,proto,mise,uv,bun,node,deno,dart,flutter,zig,rust,go,lazygit,starship,nerd-fonts,google-chrome,terraform,opentofu,kubectl,helm,shellcheck,shfmt"
+              pins="aws-cli=2.34.48,aws-sam-cli=1.160.1,bun=1.3.3,copilot-cli=1.0.47,dart=3.12.0,deno=2.7.14,docker-buildx=0.24.0,flutter=3.44.0,go=1.23.4,helm=3.16.0,kubectl=1.31.0,lazygit=0.44.1,mise=2025.12.0,nerd-fonts=3.4.0,node=24.15.0,opentofu=1.9.0,proto=0.46.1,shellcheck=0.10.0,shfmt=3.10.0,starship=1.21.1,terraform=1.10.5,uv=0.5.7,zig=0.13.0"
               # Exercise the [install.methods]=binary path for copilot-cli on
               # this preset (matches the Zscaler-style use case the method
               # was added for). arm64-full keeps the default gh-cli method so
@@ -100,8 +102,8 @@ jobs:
               methods="copilot-cli=binary"
               ;;
             arm64-full)
-              # Excluded vs amd64-full (install.sh hard-codes amd64):
-              #   lazygit, zig, starship, google-chrome.
+              # Excluded vs amd64-full (install.sh hard-codes amd64 or fails fast on arm64):
+              #   lazygit, zig, starship, google-chrome, flutter.
               plugins="docker-cli,docker-buildx,aws-cli,aws-sam-cli,github-cli,claude-code,copilot-cli,proto,mise,uv,bun,node,deno,dart,rust,go,nerd-fonts,terraform,opentofu,kubectl,helm,shellcheck,shfmt"
               pins="aws-cli=2.34.48,aws-sam-cli=1.160.1,bun=1.3.3,copilot-cli=1.0.47,dart=3.12.0,deno=2.7.14,docker-buildx=0.24.0,go=1.23.4,helm=3.16.0,kubectl=1.31.0,mise=2025.12.0,nerd-fonts=3.4.0,node=24.15.0,opentofu=1.9.0,proto=0.46.1,shellcheck=0.10.0,shfmt=3.10.0,terraform=1.10.5,uv=0.5.7"
               # No --plugin-methods on arm64-full — exercises the default
