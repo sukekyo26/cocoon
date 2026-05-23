@@ -87,7 +87,7 @@ docker compose -f .devcontainer/docker-compose.yml up -d # or VS Code → "Reope
 ## What `cocoon init` asks you
 
 1. **Service name** and **username** for the container
-2. **Base image** — `ubuntu` / `debian` / `node` / `python` / `golang` / `rust` / `denoland/deno` (DockerHub canonical names)
+2. **Base image** — `ubuntu` / `debian` / `node` / `python` / `golang` / `rust` / `denoland/deno` / `dart` (DockerHub canonical names)
 3. **Image version** — pick a curated suggestion or type any Docker tag directly
 4. **Login shell** — `bash`, `zsh`, or `fish`
 5. **Alias bundles** — `git`, `ls`, `docker` shortcut sets (multi-select)

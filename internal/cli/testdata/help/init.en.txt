@@ -31,7 +31,7 @@ Flags:
       --dir string               container workdir parent under /home/<user>/ (default "workspace"; slashes allowed for nested paths, e.g. "work/myproject")
       --force                    overwrite an existing workspace.toml
   -h, --help                     help for init
-      --image string             base image: ubuntu, debian, node, python, golang, rust, denoland/deno
+      --image string             base image: ubuntu, debian, node, python, golang, rust, denoland/deno, dart
       --image-version string     base image tag — any well-formed Docker tag is accepted; --image must also be set
       --mount-root string        mount range: "." (cwd, default) or ".." (parent)
       --no-certificates          skip the [certificates] section (default off)

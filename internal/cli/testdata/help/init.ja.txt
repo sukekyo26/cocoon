@@ -30,7 +30,7 @@ CI など非対話実行では --yes に加えて --service-name / --username
       --dir string               /home/<user>/ 配下のコンテナ作業ディレクトリ親（既定 "workspace"。"work/myproject" のように "/" 区切りでネスト可）
       --force                    既存の workspace.toml を上書き
   -h, --help                     init のヘルプを表示
-      --image string             ベースイメージ: ubuntu, debian, node, python, golang, rust, denoland/deno
+      --image string             ベースイメージ: ubuntu, debian, node, python, golang, rust, denoland/deno, dart
       --image-version string     ベースイメージのタグ（任意の妥当な Docker タグを受け付け。--image も併せて指定が必要）
       --mount-root string        マウント範囲: "."（cwd、既定）または ".."（親ディレクトリ）
       --no-certificates          [certificates] セクションをスキップ（既定 off）

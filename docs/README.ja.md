@@ -87,7 +87,7 @@ docker compose -f .devcontainer/docker-compose.yml up -d # または VS Code で
 ## `cocoon init` で聞かれること
 
 1. コンテナの **サービス名** と **ユーザー名**
-2. **ベースイメージ** — `ubuntu` / `debian` / `node` / `python` / `golang` / `rust` / `denoland/deno` (DockerHub 正式名称)
+2. **ベースイメージ** — `ubuntu` / `debian` / `node` / `python` / `golang` / `rust` / `denoland/deno` / `dart` (DockerHub 正式名称)
 3. **イメージバージョン** — 推奨候補からの選択、または任意の Docker タグを直接入力
 4. **ログインシェル** — `bash` / `zsh` / `fish`
 5. **エイリアスバンドル** — `git` / `ls` / `docker` のショートカット集 (複数選択)

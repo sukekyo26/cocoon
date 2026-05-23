@@ -34,7 +34,7 @@ Generate `workspace.toml` in the current directory.
 | `--yes` | bool | Skip prompts. `--service-name` and `--username` become required. |
 | `--service-name <name>` | string | Compose service name (required with `--yes`). |
 | `--username <name>` | string | In-container user (required with `--yes`). |
-| `--image <id>` | string | Base image (DockerHub canonical name): `ubuntu` \| `debian` \| `node` \| `python` \| `golang` \| `rust` \| `denoland/deno`. |
+| `--image <id>` | string | Base image (DockerHub canonical name): `ubuntu` \| `debian` \| `node` \| `python` \| `golang` \| `rust` \| `denoland/deno` \| `dart`. |
 | `--image-version <ver>` | string | Base image tag. Any well-formed Docker tag is accepted (first character alnum or `_`; `.` / `-` allowed in trailing positions; no slash, no colon); existence in the upstream registry is left to `docker pull`. Requires `--image` to be set. |
 | `--shell <id>` | string | Container login shell: `bash` \| `zsh` \| `fish`. |
 | `--mount-root <path>` | string | Mount range: `"."` (cwd) or `".."` (parent). |

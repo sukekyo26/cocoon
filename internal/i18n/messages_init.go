@@ -21,7 +21,7 @@ var messagesEN_init = map[string]string{
 	"init_err_username_fmt":             "must start with a lowercase letter or _; only lowercase letters, digits, _ and - allowed",
 	"init_err_required":                 "required — please enter a value",
 	"init_prompt_image":                 "Base image",
-	"init_desc_image":                   "Container base image (DockerHub canonical name). Pick ubuntu/debian for plain Linux, or a language-runtime image (node, python, golang, rust, denoland/deno) to skip an apt install step. Picking golang or rust disables the matching cocoon plugin to prevent double-install.",
+	"init_desc_image":                   "Container base image (DockerHub canonical name). Pick ubuntu/debian for plain Linux, or a language-runtime image (node, python, golang, rust, denoland/deno, dart) to skip an apt install step. Picking golang, rust, node, denoland/deno, or dart disables the matching cocoon plugin to prevent double-install.",
 	"init_prompt_image_version":         "%s version",
 	"init_desc_image_version":           "Pulled as FROM %s:<version> in the generated Dockerfile.",
 	"init_prompt_image_version_static":  "Image version",
@@ -70,7 +70,7 @@ var messagesEN_init = map[string]string{
 	"init_toml_section_container": "# [container] — image identity.\n" +
 		"#   service_name: docker-compose `services:` <key>. Used by `docker compose exec <name>`.\n" +
 		"#   username / image / image_version: in-container account and FROM <image>:<image_version>.\n" +
-		"#   image candidates (DockerHub canonical names): ubuntu, debian, node, python, golang, rust, denoland/deno.",
+		"#   image candidates (DockerHub canonical names): ubuntu, debian, node, python, golang, rust, denoland/deno, dart.",
 	"init_toml_section_container_shell": "# [container.shell] — login shell + per-shell rc injection.\n" +
 		"#   default: bash | zsh | fish. The generator picks ~/.bashrc / ~/.zshrc / ~/.config/fish/config.fish.\n" +
 		"#   aliases / env: appended to the rc file inside the image at build time.\n" +
@@ -150,7 +150,7 @@ var messagesJA_init = map[string]string{
 	"init_err_username_fmt":             "英小文字または _ で始め、英小文字・数字・_・- のみ使用可です",
 	"init_err_required":                 "必須項目です。値を入力してください",
 	"init_prompt_image":                 "ベースイメージ",
-	"init_desc_image":                   "コンテナのベースイメージ (DockerHub の正式名称)。Linux のみなら ubuntu/debian を、言語ランタイム入りなら node / python / golang / rust / denoland/deno を選ぶと apt 1 ステップ省ける。golang / rust を選んだ場合は同名の cocoon プラグインが無効化される（二重インストール回避）。",
+	"init_desc_image":                   "コンテナのベースイメージ (DockerHub の正式名称)。Linux のみなら ubuntu/debian を、言語ランタイム入りなら node / python / golang / rust / denoland/deno / dart を選ぶと apt 1 ステップ省ける。golang / rust / node / denoland/deno / dart を選んだ場合は同名の cocoon プラグインが無効化される（二重インストール回避）。",
 	"init_prompt_image_version":         "%s のバージョン",
 	"init_desc_image_version":           "生成される Dockerfile の FROM %s:<version> に展開されます。",
 	"init_prompt_image_version_static":  "イメージのバージョン",
@@ -199,7 +199,7 @@ var messagesJA_init = map[string]string{
 	"init_toml_section_container": "# [container] — イメージの素性。\n" +
 		"#   service_name: docker-compose の `services:` <キー>。`docker compose exec <名前>` で使う。\n" +
 		"#   username / image / image_version: コンテナ内ユーザー名と FROM <image>:<image_version>。\n" +
-		"#   image 候補 (DockerHub 正式名称): ubuntu, debian, node, python, golang, rust, denoland/deno。",
+		"#   image 候補 (DockerHub 正式名称): ubuntu, debian, node, python, golang, rust, denoland/deno, dart。",
 	"init_toml_section_container_shell": "# [container.shell] — ログインシェル + シェル別 rc 注入。\n" +
 		"#   default: bash | zsh | fish。生成系が ~/.bashrc / ~/.zshrc / ~/.config/fish/config.fish を選ぶ。\n" +
 		"#   aliases / env: イメージビルド時に rc ファイルへ追記される。\n" +

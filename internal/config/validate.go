@@ -304,7 +304,7 @@ func (c *ContainerSpec) validate(a *Accumulator) {
 		// user fill in the missing half themselves.
 		legacyOs := c.DeprecatedOs
 		if legacyOs == "" {
-			legacyOs = "<fill in: ubuntu | debian | node | python | golang | rust | denoland/deno>"
+			legacyOs = "<fill in: ubuntu | debian | node | python | golang | rust | denoland/deno | dart>"
 		}
 		legacyVersion := c.DeprecatedOsVersion
 		if legacyVersion == "" {

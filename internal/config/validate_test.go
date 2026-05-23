@@ -257,6 +257,7 @@ func TestValidate_ImageAcceptsOffWhitelist(t *testing.T) {
 		{"python", "3.15-slim-bookworm"},
 		{"denoland/deno", "debian-2.7.99"},
 		{"ubuntu", "27.04"},
+		{"dart", "3.13.0"}, // hypothetical future minor not in the curated list
 	}
 	for _, tc := range cases {
 		tc := tc
@@ -278,9 +279,9 @@ func TestValidate_ImageAcceptsOffWhitelist(t *testing.T) {
 // image with the matching cocoon plugin. The conflict pairs come from
 // ImageProvidesPlugin (image="golang" ↔ plugin "go", image="rust" ↔
 // plugin "rust", image="node" ↔ plugin "node", image="denoland/deno" ↔
-// plugin "deno"); other combinations (image="python" + uv plugin,
-// image="ubuntu" + go plugin) must remain accepted because they
-// coexist cleanly.
+// plugin "deno", image="dart" ↔ plugin "dart"); other combinations
+// (image="python" + uv plugin, image="ubuntu" + go plugin, image="dart"
+// + flutter plugin) must remain accepted because they coexist cleanly.
 func TestValidate_ImagePluginConflict(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -320,6 +321,13 @@ func TestValidate_ImagePluginConflict(t *testing.T) {
 			mustContain: `image = "denoland/deno" already provides deno`,
 		},
 		{
+			name:  "dart_image_plus_dart_plugin",
+			image: "dart", version: "stable",
+			enable:      `["dart"]`,
+			wantErr:     true,
+			mustContain: `image = "dart" already provides dart`,
+		},
+		{
 			name:  "ubuntu_image_plus_go_plugin_ok",
 			image: "ubuntu", version: "24.04",
 			enable:  `["go"]`,
@@ -329,6 +337,12 @@ func TestValidate_ImagePluginConflict(t *testing.T) {
 			name:  "python_image_plus_uv_plugin_ok",
 			image: "python", version: "3.13-slim-bookworm",
 			enable:  `["uv"]`,
+			wantErr: false,
+		},
+		{
+			name:  "dart_image_plus_flutter_plugin_ok",
+			image: "dart", version: "stable",
+			enable:  `["flutter"]`,
 			wantErr: false,
 		},
 		{

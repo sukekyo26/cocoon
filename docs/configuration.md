@@ -80,7 +80,7 @@ Image identity. `service_name`, `username`, `image`, `image_version` are all req
 |---|---|---|---|
 | `service_name` | string | `^[a-z][a-z0-9_-]*$` | Compose `services:` key. Used as `docker compose exec <service_name>`. |
 | `username` | string | `^[a-z_][a-z0-9_-]*$` | Linux user created inside the container. |
-| `image` | string | `ubuntu` \| `debian` \| `node` \| `python` \| `golang` \| `rust` \| `denoland/deno` | Base image for `FROM`, written **verbatim** as DockerHub's canonical image name — `golang` (not `go`) and `denoland/deno` (vendor namespace) — so a reader can recreate the FROM line from workspace.toml alone, with no cocoon-side alias resolution. |
+| `image` | string | `ubuntu` \| `debian` \| `node` \| `python` \| `golang` \| `rust` \| `denoland/deno` \| `dart` | Base image for `FROM`, written **verbatim** as DockerHub's canonical image name — `golang` (not `go`) and `denoland/deno` (vendor namespace) — so a reader can recreate the FROM line from workspace.toml alone, with no cocoon-side alias resolution. |
 | `image_version` | string | plain Docker tag: first character must be alnum or `_`; trailing characters add `.` / `-`; no slash, no colon | Image tag (e.g. `26.04`, `24-bookworm-slim`, `1.26.3-bookworm`, `debian-2.7.14`). The table below is the curated suggestion list cocoon offers in `cocoon init`; **any well-formed tag the upstream registry publishes is accepted**, so you can pin a patch or new minor (e.g. `1.26.4-bookworm` the day it ships) without waiting for a cocoon release. |
 | `docker_socket` | bool | — | Mount `/var/run/docker.sock` for docker-in-docker. Pair with the `docker-cli` plugin so the container has a client to use it. Default `false`. |
 | `group_add` | `[]string` | each entry: group name (`^[a-z_][a-z0-9_-]*\$?$`) or numeric GID | Supplementary groups the container user joins (Compose `group_add:`). Required because the user runs as a numeric `UID:GID`, so groups baked into the image's `/etc/group` are not applied at runtime. A group **name** must already exist in the image's `/etc/group`; a numeric GID needs no matching entry. |
@@ -99,10 +99,11 @@ Image identity. `service_name`, `username`, `image`, `image_version` are all req
 | `golang` | `1.26.3-bookworm`, `1.26-bookworm`, `1.25-bookworm`, `1.24-bookworm` | `FROM golang:<v>` |
 | `rust` | `1.95-bookworm`, `1.94-bookworm`, `1.93-bookworm` | `FROM rust:<v>` |
 | `denoland/deno` | `debian-2.7.14`, `debian-2.6.10`, `debian-2.5.7` | `FROM denoland/deno:<v>` |
+| `dart` | `stable`, `3.12.0`, `3.11.6` | `FROM dart:<v>` |
 
 `cocoon init` exposes these as **Tab-completion suggestions** on the version input — press Tab to cycle through them or type any other tag directly. `--image-version <tag>` accepts the same set on the non-interactive path. Validation only enforces the tag format (no slash, no colon); whether the tag actually exists in the upstream registry is left to `docker pull` at build time.
 
-Every supported image is apt-based, so the existing plugin catalog works the same across all of them. `ubuntu` pulls from Ubuntu archives (archive.ubuntu.com); the other six are Debian (bookworm) variants and pull from deb.debian.org. apt-mirror rewriting branches on this in `aptMirrorOriginHosts` (see `internal/generate/dockerfile/dockerfile.go`).
+Every supported image is apt-based, so the existing plugin catalog works the same across all of them. `ubuntu` pulls from Ubuntu archives (archive.ubuntu.com); the rest are Debian variants (the bulk on bookworm; `dart` on trixie) and pull from deb.debian.org. apt-mirror rewriting branches on this distinction by consulting `ImageOSFamily` (see `internal/config/schema.go`), so adding a new Ubuntu-derived image is a one-line map edit rather than a code change in `aptMirrorOriginHosts`.
 
 **Image vs plugin (mutually exclusive pairs):** picking a language-runtime image that overlaps with an existing cocoon plugin is rejected at validation time, because the plugin would either overwrite the base layer (go) or shadow it on `$PATH` (rust). Either drop the plugin from `[plugins].enable`, or switch back to `image = "ubuntu" / "debian"` and pin the version via `[plugins.versions]`.
 
@@ -110,8 +111,12 @@ Every supported image is apt-based, so the existing plugin catalog works the sam
 |---|---|---|
 | `golang` | `go` | **rejected** — base already provides Go |
 | `rust` | `rust` | **rejected** — base already provides Rust |
+| `node` | `node` | **rejected** — base already provides Node |
+| `denoland/deno` | `deno` | **rejected** — base already provides Deno |
+| `dart` | `dart` | **rejected** — base already provides Dart |
+| `dart` | `flutter` | accepted — flutter bundles its own Dart at `/usr/local/flutter/bin/cache/dart-sdk/bin` without shadowing the base |
 | `python` | `uv` | accepted — uv adds a binary, leaves Python alone |
-| `node`, `denoland/deno`, `python` | (no matching plugin) | n/a |
+| `ubuntu`, `debian`, `python` | (no matching plugin) | n/a |
 
 ```toml
 [container]

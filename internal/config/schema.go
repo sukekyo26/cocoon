@@ -145,19 +145,20 @@ func (c *ContainerSpec) DockerSocketEnabled() bool {
 //
 //   - Linux distributions: "ubuntu" / "debian" — library/ namespace.
 //   - Language-runtime official images: "node" / "python" / "golang" / "rust"
-//     — library/ namespace. The runtime is pre-installed; cocoon plugins
-//     add tools around it.
+//     / "dart" — library/ namespace. The runtime is pre-installed; cocoon
+//     plugins add tools around it.
 //   - Vendor-published runtime: "denoland/deno" — vendor namespace,
 //     spelled out so the FROM line is unambiguous.
 //
 // Every image is apt-based so the cocoon plugin catalog works the same
-// way across all of them. ubuntu pulls its own archive (archive.ubuntu.com);
-// the other six are Debian (bookworm) variants and pull from
-// deb.debian.org. apt-mirror rewriting keys off this distinction —
-// see aptMirrorOriginHosts in internal/generate/dockerfile/dockerfile.go.
+// way across all of them. The underlying distro (Ubuntu vs Debian, and the
+// Debian suite — bookworm or trixie) varies by upstream; apt-mirror
+// rewriting keys off the **family** rather than the specific suite. The
+// family classification lives in ImageOSFamily, consumed by
+// aptMirrorOriginHosts in internal/generate/dockerfile/dockerfile.go.
 //
 //nolint:gochecknoglobals // tabular configuration data, file-scoped by design.
-var SupportedImages = []string{"ubuntu", "debian", "node", "python", "golang", "rust", "denoland/deno"}
+var SupportedImages = []string{"ubuntu", "debian", "node", "python", "golang", "rust", "denoland/deno", "dart"}
 
 // SupportedShells is the closed set of login shells `cocoon init` can pick
 // and that [container.shell].default validates against. The Dockerfile and
@@ -177,6 +178,11 @@ var SupportedShells = []string{"bash", "zsh", "fish"}
 // other tag at the prompt. The first entry per key is the default
 // `cocoon init` picks when `--image-version` is omitted.
 //
+// "dart" is the only entry whose default is a rolling tag ("stable") rather
+// than a pinned version. Dart Docker upstream documents "stable" as the
+// supported alias for the current stable SDK; cocoon honors that convention
+// for parity with how Dart users typically reference the image.
+//
 //nolint:gochecknoglobals // tabular configuration data, file-scoped by design.
 var SupportedImageVersions = map[string][]string{
 	"ubuntu":        {"26.04", "24.04", "22.04"},
@@ -186,6 +192,7 @@ var SupportedImageVersions = map[string][]string{
 	"golang":        {"1.26.3-bookworm", "1.26-bookworm", "1.25-bookworm", "1.24-bookworm"},
 	"rust":          {"1.95-bookworm", "1.94-bookworm", "1.93-bookworm"},
 	"denoland/deno": {"debian-2.7.14", "debian-2.6.10", "debian-2.5.7"},
+	"dart":          {"stable", "3.12.0", "3.11.6"},
 }
 
 // ImageProvidesPlugin marks images that already pre-install a language
@@ -193,7 +200,9 @@ var SupportedImageVersions = map[string][]string{
 // mapping is image id (= canonical DockerHub name) → conflicting plugin
 // id (= cocoon catalog id); validation rejects workspace.toml files that
 // set `image = <key>` AND enable the named plugin so users get a
-// fail-fast error instead of silently wasting docker-build time.
+// fail-fast error instead of silently wasting docker-build time. The
+// `cocoon init` plugin picker also hides the conflicting plugin when the
+// matching image is chosen.
 //
 // Why the listed pairs conflict:
 //
@@ -209,9 +218,17 @@ var SupportedImageVersions = map[string][]string{
 //     base image's /usr/local/bin/node is shadowed and never used.
 //   - "denoland/deno" → "deno": the deno plugin unzips the binary directly
 //     over /usr/local/bin/deno, overwriting the one the base image ships.
+//   - "dart" → "dart": the dart plugin installs the SDK to /usr/local/dart
+//     and prepends /usr/local/dart/bin to PATH, shadowing the base image's
+//     /usr/lib/dart toolchain so the base layer is dead weight.
 //
-// Other supported images (ubuntu, debian, python) have no matching plugin
-// in the catalog and therefore no conflict to declare here.
+// The "flutter" plugin coexists with image="dart" cleanly (it installs to
+// /usr/local/flutter with its own bundled Dart at
+// /usr/local/flutter/bin/cache/dart-sdk/bin and does not overwrite or shadow
+// the image's Dart), so it is intentionally not listed here — same precedent
+// as image="python" + the "uv" plugin. Other supported images (ubuntu,
+// debian, python) have no matching plugin in the catalog and therefore no
+// conflict to declare here.
 //
 //nolint:gochecknoglobals // tabular configuration data, file-scoped by design.
 var ImageProvidesPlugin = map[string]string{
@@ -219,6 +236,34 @@ var ImageProvidesPlugin = map[string]string{
 	"rust":          "rust",
 	"node":          "node",
 	"denoland/deno": "deno",
+	"dart":          "dart",
+}
+
+// ImageOSFamily classifies each SupportedImages entry by underlying distro
+// family so apt-related generators (currently aptMirrorOriginHosts) can
+// pick the right upstream archive hosts without hard-coding image ids.
+//
+// Values are the literal "ubuntu" and "debian" — the same names used as
+// image ids for the two plain-distro images. Sub-suite distinctions
+// (bookworm vs trixie) deliberately are not encoded here because the
+// archive host (`deb.debian.org/debian`) is the same across Debian suites.
+//
+// Every entry in SupportedImages MUST have a matching row here.
+// TestImageOSFamilyLockstep enforces the invariant in both directions:
+// missing rows would silently fall through aptMirrorOriginHosts to the
+// Debian branch and break apt-mirror rewriting for any new Ubuntu-based
+// image that gets added without updating this map.
+//
+//nolint:gochecknoglobals // tabular configuration data, file-scoped by design.
+var ImageOSFamily = map[string]string{
+	"ubuntu":        "ubuntu",
+	"debian":        "debian",
+	"node":          "debian",
+	"python":        "debian",
+	"golang":        "debian",
+	"rust":          "debian",
+	"denoland/deno": "debian",
+	"dart":          "debian",
 }
 
 // SkelEntry seeds a file from the build context into /etc/skel so useradd -m

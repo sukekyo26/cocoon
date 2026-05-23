@@ -34,7 +34,7 @@
 | `--yes` | bool | プロンプトをスキップ。`--service-name` と `--username` が必須になる。 |
 | `--service-name <name>` | string | Compose サービス名 (`--yes` 指定時必須)。 |
 | `--username <name>` | string | コンテナ内ユーザー名 (`--yes` 指定時必須)。 |
-| `--image <id>` | string | ベースイメージ (DockerHub の正式名称): `ubuntu` \| `debian` \| `node` \| `python` \| `golang` \| `rust` \| `denoland/deno`。 |
+| `--image <id>` | string | ベースイメージ (DockerHub の正式名称): `ubuntu` \| `debian` \| `node` \| `python` \| `golang` \| `rust` \| `denoland/deno` \| `dart`。 |
 | `--image-version <ver>` | string | ベースイメージのタグ。正しい形式 (先頭は英数字または `_`、2 文字目以降は `.` / `-` も可、スラッシュ・コロン禁止) なら任意の Docker タグを受理 (レジストリ実在性は `docker pull` に委ねる)。`--image` が設定されている必要あり。 |
 | `--shell <id>` | string | コンテナログインシェル: `bash` \| `zsh` \| `fish`。 |
 | `--mount-root <path>` | string | マウント範囲: `"."` (cwd) または `".."` (親)。 |

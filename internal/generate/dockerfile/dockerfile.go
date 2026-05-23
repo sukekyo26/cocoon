@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/sukekyo26/cocoon/internal/aptbase"
+	"github.com/sukekyo26/cocoon/internal/config"
 	"github.com/sukekyo26/cocoon/internal/generate"
 	"github.com/sukekyo26/cocoon/internal/generate/shellrc"
 	"github.com/sukekyo26/cocoon/internal/generate/shellx"
@@ -513,13 +514,15 @@ func buildAptMirrorRewrite(ctx *generate.WorkspaceContext) string {
 
 // aptMirrorOriginHosts returns the set of upstream archive URL prefixes the
 // generator rewrites when [apt.mirror].url is set. Ubuntu and Debian publish
-// from disjoint hosts; the list is keyed off [container].image so a Debian
-// build does not emit useless Ubuntu sed expressions (and vice versa).
+// from disjoint hosts; the family classification in config.ImageOSFamily
+// drives the branch so a Debian build does not emit useless Ubuntu sed
+// expressions (and vice versa).
 //
-// Only "ubuntu" maps to the Ubuntu archive hosts; every other supported
-// image (debian, node, python, golang, rust, denoland/deno) is
-// Debian-based and uses deb.debian.org regardless of which
-// language-runtime layer sits on top.
+// An image id missing from ImageOSFamily is a programmer error caught by
+// TestImageOSFamilyLockstep — at runtime such a miss would fall through to
+// the Debian branch and silently break apt-mirror rewriting for the new
+// image. Adding an Ubuntu-derived image (e.g. eclipse-temurin) is therefore
+// just a one-line ImageOSFamily edit; this function needs no change.
 //
 // Order matters. The slice is consumed top-down by sed -e expressions, and
 // each expression sees the line as already-rewritten by every earlier one.
@@ -530,7 +533,7 @@ func buildAptMirrorRewrite(ctx *generate.WorkspaceContext) string {
 // (different hostnames), but they are listed longest-first too so that the
 // invariant "more specific patterns precede their prefixes" stays uniform.
 func aptMirrorOriginHosts(image string) []string {
-	if image == "ubuntu" {
+	if config.ImageOSFamily[image] == "ubuntu" {
 		return []string{
 			"http://archive.ubuntu.com/ubuntu/",
 			"http://security.ubuntu.com/ubuntu/",

@@ -80,7 +80,7 @@ devcontainer = true
 |---|---|---|---|
 | `service_name` | string | `^[a-z][a-z0-9_-]*$` | Compose の `services:` キー。`docker compose exec <service_name>` で参照される。 |
 | `username` | string | `^[a-z_][a-z0-9_-]*$` | コンテナ内に作成される Linux ユーザー。 |
-| `image` | string | `ubuntu` \| `debian` \| `node` \| `python` \| `golang` \| `rust` \| `denoland/deno` | ベースイメージ。DockerHub の **正式名称** をそのまま記述します (`go` ではなく `golang`、deno は vendor namespace 込みで `denoland/deno`)。workspace.toml だけ見れば FROM 行が一意に決まり、cocoon 側のエイリアス解決は不要。 |
+| `image` | string | `ubuntu` \| `debian` \| `node` \| `python` \| `golang` \| `rust` \| `denoland/deno` \| `dart` | ベースイメージ。DockerHub の **正式名称** をそのまま記述します (`go` ではなく `golang`、deno は vendor namespace 込みで `denoland/deno`)。workspace.toml だけ見れば FROM 行が一意に決まり、cocoon 側のエイリアス解決は不要。 |
 | `image_version` | string | プレーンな Docker タグ: 先頭は英数字または `_`、2 文字目以降は `.` / `-` も可、スラッシュ・コロン禁止 | イメージタグ (例: `26.04` / `24-bookworm-slim` / `1.26.3-bookworm` / `debian-2.7.14`)。下表は `cocoon init` で提示される推奨候補で、**正しい形式であれば上流レジストリが公開している任意のタグを受理**します。パッチや新マイナーが出た日にすぐ pin できます (例: `1.26.4-bookworm` を cocoon リリースを待たずに使う)。 |
 | `docker_socket` | bool | — | `/var/run/docker.sock` をマウントして docker-in-docker を有効化。`docker-cli` プラグインと併用してコンテナ内にクライアントを用意すること。デフォルト `false`。 |
 | `group_add` | `[]string` | 各エントリはグループ名 (`^[a-z_][a-z0-9_-]*\$?$`) または数値 GID | コンテナユーザーが参加する補助グループ (Compose `group_add:`)。ユーザーは数値 `UID:GID` で動くためイメージの `/etc/group` のグループは実行時に適用されず、本フィールドが必要。グループ**名**はイメージの `/etc/group` に既存である必要があるが、数値 GID は対応するエントリ不要。 |
@@ -99,10 +99,11 @@ devcontainer = true
 | `golang` | `1.26.3-bookworm`, `1.26-bookworm`, `1.25-bookworm`, `1.24-bookworm` | `FROM golang:<v>` |
 | `rust` | `1.95-bookworm`, `1.94-bookworm`, `1.93-bookworm` | `FROM rust:<v>` |
 | `denoland/deno` | `debian-2.7.14`, `debian-2.6.10`, `debian-2.5.7` | `FROM denoland/deno:<v>` |
+| `dart` | `stable`, `3.12.0`, `3.11.6` | `FROM dart:<v>` |
 
 `cocoon init` ではこれらがバージョン入力欄の **Tab 補完候補** として並びます。Tab キーで循環するか、任意のタグを直接入力できます。`--image-version <tag>` も非対話パスで同様に任意タグを受理します。バリデーションはタグの形式 (スラッシュ・コロン禁止) のみチェックし、レジストリ上の実在性は `docker pull` (ビルド時) に委ねます。
 
-すべての候補イメージは apt ベースなので、既存のプラグインカタログがどの image でもそのまま機能します。`ubuntu` は Ubuntu archives (archive.ubuntu.com) を引き、残り 6 つは Debian (bookworm) 系で deb.debian.org を引きます。apt mirror の書き換えはこの違いで分岐 (`internal/generate/dockerfile/dockerfile.go` の `aptMirrorOriginHosts` 参照)。
+すべての候補イメージは apt ベースなので、既存のプラグインカタログがどの image でもそのまま機能します。`ubuntu` は Ubuntu archives (archive.ubuntu.com) を引き、残りは Debian 系 (主に bookworm、`dart` は trixie) で deb.debian.org を引きます。apt mirror の書き換えはこの違いを `ImageOSFamily` (`internal/config/schema.go`) で参照して分岐するので、新たに Ubuntu 系イメージを追加するときは `aptMirrorOriginHosts` のコードを触らず map に 1 行追加するだけで済みます。
 
 **image とプラグインの mutually exclusive ルール:** ベースが言語ランタイムを既に提供している場合、同名の cocoon プラグインを併用すると、プラグインがベースを上書き (go) もしくは PATH で覆い隠す (rust) ため、validation で reject します。`[plugins].enable` から外すか、`image = "ubuntu" / "debian"` に切り替えて `[plugins.versions]` でバージョン固定してください。
 
@@ -110,8 +111,12 @@ devcontainer = true
 |---|---|---|
 | `golang` | `go` | **reject** — ベースが Go を提供済み |
 | `rust` | `rust` | **reject** — ベースが Rust を提供済み |
+| `node` | `node` | **reject** — ベースが Node を提供済み |
+| `denoland/deno` | `deno` | **reject** — ベースが Deno を提供済み |
+| `dart` | `dart` | **reject** — ベースが Dart を提供済み |
+| `dart` | `flutter` | 受理 — flutter は `/usr/local/flutter/bin/cache/dart-sdk/bin` に自前 Dart を抱えるためベースを覆い隠さない |
 | `python` | `uv` | 受理 — uv はバイナリ追加のみで Python に触らない |
-| `node` / `denoland/deno` / `python` | (対応プラグインなし) | n/a |
+| `ubuntu` / `debian` / `python` | (対応プラグインなし) | n/a |
 
 ```toml
 [container]

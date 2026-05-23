@@ -211,7 +211,7 @@ func TestGenerate_AptMirrorHTTP_NoBootstrap(t *testing.T) {
 func TestGenerate_AptMirrorDebian_LongerPatternFirst(t *testing.T) {
 	t.Parallel()
 
-	got := generateDebianWithMirrorURL(t, "http://ftp.jp.debian.org/debian/")
+	got := generateWithImageAndMirrorURL(t, "debian", "12", "http://ftp.jp.debian.org/debian/")
 
 	const securityHost = "http://deb.debian.org/debian-security"
 	const mainHost = "http://deb.debian.org/debian|"
@@ -231,10 +231,30 @@ func TestGenerate_AptMirrorDebian_LongerPatternFirst(t *testing.T) {
 	}
 }
 
-// generateDebianWithMirrorURL is generateWithMirrorURL but switches the
-// fixture to image = "debian" / image_version = "12" before generating,
-// so the rewrite block emits the Debian host set.
-func generateDebianWithMirrorURL(t *testing.T, mirrorURL string) string {
+// TestGenerate_AptMirrorDart_UsesDebianHosts pins that image="dart" is
+// classified as Debian family (Dart upstream ships on Debian trixie) and
+// therefore emits deb.debian.org sed expressions — not Ubuntu ones. The
+// guard catches a future ImageOSFamily edit that wrongly flips dart to
+// "ubuntu" (which TestImageOSFamilyLockstep would not catch because
+// "ubuntu" is a valid family value).
+func TestGenerate_AptMirrorDart_UsesDebianHosts(t *testing.T) {
+	t.Parallel()
+
+	got := generateWithImageAndMirrorURL(t, "dart", "stable", "http://ftp.jp.debian.org/debian/")
+
+	if !strings.Contains(got, "http://deb.debian.org/debian") {
+		t.Errorf("dart image must rewrite Debian hosts but no deb.debian.org sed expression found:\n%s", got)
+	}
+	if strings.Contains(got, "archive.ubuntu.com") {
+		t.Errorf("dart image must not emit Ubuntu sed expressions (dart is Debian-family):\n%s", got)
+	}
+}
+
+// generateWithImageAndMirrorURL loads the snapshot fixture, switches it to
+// the given image / image_version, overrides [apt.mirror].url, and returns
+// the generated Dockerfile. Shared by tests that exercise aptMirrorOriginHosts
+// branching per OS family.
+func generateWithImageAndMirrorURL(t *testing.T, image, version, mirrorURL string) string {
 	t.Helper()
 
 	root := repoRoot(t)
@@ -248,9 +268,22 @@ func generateDebianWithMirrorURL(t *testing.T, mirrorURL string) string {
 	if ws.Apt == nil || ws.Apt.Mirror == nil {
 		t.Fatalf("snapshot fixture missing [apt.mirror]; this test relies on the fixture's mirror block")
 	}
-	ws.Container.Image = "debian"
-	ws.Container.ImageVersion = "12"
+	ws.Container.Image = image
+	ws.Container.ImageVersion = version
 	ws.Apt.Mirror.URL = mirrorURL
+	// Drop plugins that would conflict with the chosen image (and any
+	// orphan version pins) so the generator never sees an invalid workspace.
+	if conflict, hit := config.ImageProvidesPlugin[image]; hit {
+		filtered := ws.Plugins.Enable[:0]
+		for _, id := range ws.Plugins.Enable {
+			if id == conflict {
+				continue
+			}
+			filtered = append(filtered, id)
+		}
+		ws.Plugins.Enable = filtered
+		delete(ws.Plugins.Versions, conflict)
+	}
 
 	var warns bytes.Buffer
 	plugins, err := plugin.LoadEnabled(pluginsDir, ws.Plugins.Enable, &warns)
