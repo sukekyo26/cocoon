@@ -2,6 +2,7 @@ package generate_test
 
 import (
 	"bytes"
+	"errors"
 	"strings"
 	"testing"
 
@@ -209,6 +210,88 @@ func TestWorkspaceContext_ResolveLocale(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestWorkspaceContext_LocaleSedScript(t *testing.T) {
+	t.Parallel()
+	t.Run("valid", func(t *testing.T) {
+		t.Parallel()
+		cases := []struct {
+			name string
+			lang *string
+			want string
+		}{
+			{
+				"unset",
+				nil,
+				`-e 's|^# *(en_US\.UTF-8 UTF-8)$|\1|'`,
+			},
+			{
+				"en_US.UTF-8",
+				ptr("en_US.UTF-8"),
+				`-e 's|^# *(en_US\.UTF-8 UTF-8)$|\1|'`,
+			},
+			{
+				"ja_JP.UTF-8",
+				ptr("ja_JP.UTF-8"),
+				`-e 's|^# *(en_US\.UTF-8 UTF-8)$|\1|' -e 's|^# *(ja_JP\.UTF-8 UTF-8)$|\1|'`,
+			},
+			{
+				"no_dot",
+				ptr("ja_JP"),
+				`-e 's|^# *(en_US\.UTF-8 UTF-8)$|\1|' -e 's|^# *(ja_JP UTF-8)$|\1|'`,
+			},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+				ws := &config.Workspace{}
+				if tc.lang != nil {
+					ws.Locale = &config.LocaleSpec{Lang: tc.lang}
+				}
+				c := &generate.WorkspaceContext{WS: ws}
+				got, err := c.LocaleSedScript()
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if got != tc.want {
+					t.Errorf("got %q\nwant %q", got, tc.want)
+				}
+			})
+		}
+	})
+	t.Run("invalid", func(t *testing.T) {
+		t.Parallel()
+		cases := []struct {
+			name string
+			lang string
+		}{
+			{"pipe", "ja_JP|evil"},
+			{"semicolon", "ja_JP;rm"},
+			{"command_subst", "$(whoami)"},
+			{"slash", "ja_JP/UTF-8"},
+			{"backtick", "ja_JP`x`"},
+			{"single_quote", "ja_JP'evil"},
+			{"non_ascii", "日本語"},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+				ws := &config.Workspace{Locale: &config.LocaleSpec{Lang: ptr(tc.lang)}}
+				c := &generate.WorkspaceContext{WS: ws}
+				got, err := c.LocaleSedScript()
+				if err == nil {
+					t.Fatalf("expected error, got %q", got)
+				}
+				if !errors.Is(err, generate.ErrInvalidLocale) {
+					t.Errorf("err = %v, want wrap of ErrInvalidLocale", err)
+				}
+				if got != "" {
+					t.Errorf("got = %q, want empty on error", got)
+				}
+			})
+		}
+	})
 }
 
 func TestWorkspaceContext_BuildEnvironment(t *testing.T) {
