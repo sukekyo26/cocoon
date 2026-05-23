@@ -1,9 +1,14 @@
 name: E2E
 
 # Real Docker round-trip on every push / PR: build the cocoon binary,
-# init a fresh project, generate .devcontainer/, then `docker compose
-# build` + start + exec into the container so generation drift breaks
-# CI before it breaks users.
+# init a fresh project, generate .devcontainer/, then `docker buildx
+# bake` the image (via e2e/docker-roundtrip.sh, with GHA cache) and
+# `docker compose up -d` + `exec` into the running container so
+# generation drift breaks CI before it breaks users. Tear-down is
+# handled by a `trap EXIT` inside the script. Plain `docker compose
+# build` is intentionally not used — bake is what lets us inject the
+# GHA cache backend without baking CI concerns into the generated
+# docker-compose.yml.
 #
 # This workflow runs the lightweight half of the e2e coverage:
 #   - preset = minimal (0 plugins)
