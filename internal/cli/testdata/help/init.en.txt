@@ -32,10 +32,12 @@ Flags:
       --force                    overwrite an existing workspace.toml
   -h, --help                     help for init
       --image string             base image: ubuntu, debian, node, python, golang, rust, denoland/deno
+      --image-path-fix           force the language-image PATH/install-prefix auto-injection (only applies to --image=node|python|golang|rust|denoland/deno; default on for those)
       --image-version string     base image tag — any well-formed Docker tag is accepted; --image must also be set
       --mount-root string        mount range: "." (cwd, default) or ".." (parent)
       --no-certificates          skip the [certificates] section (default off)
       --no-devcontainer          skip .devcontainer/devcontainer.json output
+      --no-image-path-fix        skip the language-image PATH/install-prefix auto-injection (only applies to --image=node|python|golang|rust|denoland/deno)
       --plugin-methods string    comma-separated <id>=<method> picks for plugins that declare multiple [install.methods] (each <id> must also appear in --plugins; <method> must be a declared key)
       --plugin-versions string   comma-separated <id>=<ref> pins for version_capable plugins (each <id> must also appear in --plugins)
       --plugins string           comma-separated plugin IDs to enable (skips the plugin multi-select prompt)

@@ -154,6 +154,46 @@ func TestRunInit_CertificatesConflict(t *testing.T) {
 	}
 }
 
+// TestRunInit_ImagePathFixConflict pins the mutual-exclusion check on
+// --image-path-fix / --no-image-path-fix at the cobra wiring layer.
+//
+//nolint:paralleltest // t.Chdir
+func TestRunInit_ImagePathFixConflict(t *testing.T) {
+	pinEnglish(t)
+	work := t.TempDir()
+	t.Chdir(work)
+	cmd := NewCommand(io.Discard, io.Discard)
+	cmd.SetArgs([]string{
+		"--yes", "--service-name", "x", "--username", "y",
+		"--image", "node",
+		"--image-path-fix", "--no-image-path-fix",
+	})
+	if err := cmd.Execute(); !errors.Is(err, clihelpers.ErrUsage) {
+		t.Errorf("conflicting --image-path-fix flags should be ErrUsage, got %v", err)
+	}
+}
+
+// TestRunInit_ImagePathFixFlagAgainstNonLanguageImage pins that the
+// flag-against-ubuntu gate fires at the CLI layer, so a script that
+// misses the image guard fails fast instead of writing an inconsistent
+// workspace.toml.
+//
+//nolint:paralleltest // t.Chdir
+func TestRunInit_ImagePathFixFlagAgainstNonLanguageImage(t *testing.T) {
+	pinEnglish(t)
+	work := t.TempDir()
+	t.Chdir(work)
+	cmd := NewCommand(io.Discard, io.Discard)
+	cmd.SetArgs([]string{
+		"--yes", "--service-name", "x", "--username", "y",
+		"--image", "ubuntu", "--image-version", "22.04",
+		"--image-path-fix",
+	})
+	if err := cmd.Execute(); !errors.Is(err, clihelpers.ErrUsage) {
+		t.Errorf("--image=ubuntu --image-path-fix should be ErrUsage, got %v", err)
+	}
+}
+
 // TestRunInit_CertificatesFlag verifies that --certificates emits the
 // live [certificates] section and the absence of the flag emits the
 // commented template. Both branches sit through the same renderer so

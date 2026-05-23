@@ -104,6 +104,43 @@ func certificatesConfirm(cat *i18n.Catalog, target *bool) *huh.Confirm {
 		Value(target)
 }
 
+// imagePathFixConfirm builds the prompt that asks whether to auto-inject
+// the user-local install prefix / PATH for a language base image. The
+// description spells out the exact entries that will be added and the
+// example command they unlock so a no answer is informed, not accidental.
+func imagePathFixConfirm(cat *i18n.Catalog, image string, target *bool) *huh.Confirm {
+	fix := imagePathFixFor(image)
+	return huh.NewConfirm().
+		Title(cat.Msg("init_prompt_image_path_fix_title", image)).
+		Description(cat.Msg("init_desc_image_path_fix",
+			formatPathFixEntries(fix.Entries), fix.Command)).
+		Affirmative(cat.Msg("init_confirm_yes")).
+		Negative(cat.Msg("init_confirm_no")).
+		Value(target)
+}
+
+// formatPathFixEntries renders the entries as TOML-looking lines so the
+// prompt's preview matches what lands in workspace.toml byte-for-byte.
+// Width is padded against the longest key for legibility on multi-entry
+// images (node, rust); single-entry images (python, golang, deno) get a
+// trivial alignment that still reads cleanly.
+func formatPathFixEntries(entries []pathFixEnvEntry) string {
+	width := 0
+	for _, e := range entries {
+		if len(e.Key) > width {
+			width = len(e.Key)
+		}
+	}
+	var sb strings.Builder
+	for i, e := range entries {
+		if i > 0 {
+			sb.WriteByte('\n')
+		}
+		fmt.Fprintf(&sb, "  %-*s = %q", width, e.Key, e.Value)
+	}
+	return sb.String()
+}
+
 func aptMultiSelect(cat *i18n.Catalog, target *[]string) *huh.MultiSelect[string] {
 	options := make([]huh.Option[string], len(aptcategories.AptCategories))
 	for i, c := range aptcategories.AptCategories {

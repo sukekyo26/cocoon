@@ -25,6 +25,8 @@ type initFlags struct {
 	NoDevcontainer bool
 	Certificates   bool
 	NoCertificates bool
+	ImagePathFix   bool
+	NoImagePathFix bool
 	AptCategories  string
 	Plugins        string
 	PluginVersions string
@@ -55,6 +57,8 @@ type initAnswers struct {
 	DevcontainerSet   bool
 	Certificates      bool
 	CertificatesSet   bool
+	ImagePathFix      bool
+	ImagePathFixSet   bool
 	AptCategories     []string
 	AptSet            bool
 	Plugins           []string
@@ -99,6 +103,9 @@ func applyFlags(flags *initFlags, plugins map[string]*plugin.Plugin) (initAnswer
 		return ans, err
 	}
 	applyToggleFlags(flags, &ans)
+	if err := applyImagePathFixFlags(flags, &ans); err != nil {
+		return ans, err
+	}
 	if err := applyListFlags(flags, &ans); err != nil {
 		return ans, err
 	}
@@ -178,6 +185,10 @@ func applyImageFlags(flags *initFlags, ans *initAnswers) error {
 
 // applyToggleFlags resolves the --x / --no-x pairs. The mutual-exclusion
 // check happens earlier in runInit, so at most one of each pair is set.
+// --image-path-fix / --no-image-path-fix only takes effect when the chosen
+// image is in imagePathFixes; the gate in applyImagePathFixFlags returns
+// ErrUsage when the pair is set against an image that has no fix so a
+// silent no-op cannot hide a typo.
 func applyToggleFlags(flags *initFlags, ans *initAnswers) {
 	switch {
 	case flags.Devcontainer:
@@ -191,6 +202,32 @@ func applyToggleFlags(flags *initFlags, ans *initAnswers) {
 	case flags.NoCertificates:
 		ans.Certificates, ans.CertificatesSet = false, true
 	}
+}
+
+// applyImagePathFixFlags resolves --image-path-fix / --no-image-path-fix
+// and rejects the pair against images that have no fix entry so a
+// scripted invocation against ubuntu/debian cannot silently no-op.
+func applyImagePathFixFlags(flags *initFlags, ans *initAnswers) error {
+	switch {
+	case flags.ImagePathFix:
+		if !imagePathFixApplies(ans.Image) {
+			return imagePathFixFlagUsageErr("--image-path-fix", ans.Image)
+		}
+		ans.ImagePathFix, ans.ImagePathFixSet = true, true
+	case flags.NoImagePathFix:
+		if !imagePathFixApplies(ans.Image) {
+			return imagePathFixFlagUsageErr("--no-image-path-fix", ans.Image)
+		}
+		ans.ImagePathFix, ans.ImagePathFixSet = false, true
+	}
+	return nil
+}
+
+func imagePathFixFlagUsageErr(flag, image string) error {
+	return fmt.Errorf(
+		"%w: %s only applies to language images "+
+			"(node, python, golang, rust, denoland/deno); --image=%q has no fix",
+		clihelpers.ErrUsage, flag, image)
 }
 
 // applyListFlags parses the comma-separated list flags: --apt-categories,
@@ -267,7 +304,11 @@ func applyDefaults(ans initAnswers, plugins map[string]*plugin.Plugin) (initAnsw
 	return ans, nil
 }
 
-// applyIdentityDefaults fills the image / shell-related fields.
+// applyIdentityDefaults fills the image / shell-related fields. The
+// image-path-fix toggle defaults to true for language images so `--yes`
+// scripts inherit the same safe-by-default behavior the interactive
+// prompt uses; ubuntu/debian leave it false because imagePathFixApplies
+// is false there.
 func applyIdentityDefaults(ans *initAnswers) {
 	if !ans.ImageSet {
 		ans.Image, ans.ImageSet = "ubuntu", true
@@ -277,6 +318,10 @@ func applyIdentityDefaults(ans *initAnswers) {
 	}
 	if !ans.ShellSet {
 		ans.Shell, ans.ShellSet = "bash", true
+	}
+	if !ans.ImagePathFixSet {
+		ans.ImagePathFix = imagePathFixApplies(ans.Image)
+		ans.ImagePathFixSet = true
 	}
 }
 

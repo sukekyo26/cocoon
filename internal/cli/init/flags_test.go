@@ -286,6 +286,111 @@ func TestApplyDefaults_FillsMissingDefaults(t *testing.T) {
 	}
 }
 
+// TestApplyImagePathFixFlags_RejectsNonApplicableImage pins the gate
+// that prevents --image-path-fix / --no-image-path-fix from being a
+// silent no-op against images that have no fix entry (ubuntu, debian).
+// A scripted invocation with a typo'd image name surfaces as ErrUsage
+// instead of writing an inconsistent workspace.toml.
+func TestApplyImagePathFixFlags_RejectsNonApplicableImage(t *testing.T) {
+	t.Parallel()
+	plugins := loadPluginsForTest(t)
+	for _, image := range []string{"ubuntu", "debian"} {
+		_, err := applyFlags(&initFlags{Image: image, ImagePathFix: true}, plugins)
+		if !errors.Is(err, clihelpers.ErrUsage) {
+			t.Errorf("--image=%s --image-path-fix: want ErrUsage, got %v", image, err)
+		}
+		_, err = applyFlags(&initFlags{Image: image, NoImagePathFix: true}, plugins)
+		if !errors.Is(err, clihelpers.ErrUsage) {
+			t.Errorf("--image=%s --no-image-path-fix: want ErrUsage, got %v", image, err)
+		}
+	}
+}
+
+// TestApplyImagePathFixFlags_AcceptsLanguageImages pins that each
+// language image in imagePathFixes accepts both flag values and
+// produces the right (ImagePathFix, ImagePathFixSet) tuple.
+func TestApplyImagePathFixFlags_AcceptsLanguageImages(t *testing.T) {
+	t.Parallel()
+	plugins := loadPluginsForTest(t)
+	for _, image := range []string{"node", "python", "golang", "rust", "denoland/deno"} {
+		ans, err := applyFlags(&initFlags{Image: image, ImagePathFix: true}, plugins)
+		if err != nil {
+			t.Errorf("--image=%s --image-path-fix: %v", image, err)
+		}
+		if !ans.ImagePathFix || !ans.ImagePathFixSet {
+			t.Errorf("--image=%s --image-path-fix: got fix=%v set=%v",
+				image, ans.ImagePathFix, ans.ImagePathFixSet)
+		}
+		ans, err = applyFlags(&initFlags{Image: image, NoImagePathFix: true}, plugins)
+		if err != nil {
+			t.Errorf("--image=%s --no-image-path-fix: %v", image, err)
+		}
+		if ans.ImagePathFix || !ans.ImagePathFixSet {
+			t.Errorf("--image=%s --no-image-path-fix: got fix=%v set=%v",
+				image, ans.ImagePathFix, ans.ImagePathFixSet)
+		}
+	}
+}
+
+// TestApplyDefaults_ImagePathFix_DefaultsOnForLanguageImages pins the
+// --yes contract: language images get ImagePathFix=true (so scripts get
+// the safe-by-default behavior the interactive prompt offers), and
+// ubuntu/debian stay false.
+func TestApplyDefaults_ImagePathFix_DefaultsOnForLanguageImages(t *testing.T) {
+	t.Parallel()
+	plugins := loadPluginsForTest(t)
+	cases := []struct {
+		image string
+		want  bool
+	}{
+		{"ubuntu", false},
+		{"debian", false},
+		{"node", true},
+		{"python", true},
+		{"golang", true},
+		{"rust", true},
+		{"denoland/deno", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.image, func(t *testing.T) {
+			t.Parallel()
+			in := initAnswers{
+				ServiceName: "svc", Username: "dev",
+				Image: tc.image, ImageSet: true,
+			}
+			ans, err := applyDefaults(in, plugins)
+			if err != nil {
+				t.Fatalf("applyDefaults: %v", err)
+			}
+			if ans.ImagePathFix != tc.want || !ans.ImagePathFixSet {
+				t.Errorf("--yes --image=%s: got fix=%v set=%v, want fix=%v",
+					tc.image, ans.ImagePathFix, ans.ImagePathFixSet, tc.want)
+			}
+		})
+	}
+}
+
+// TestApplyDefaults_ImagePathFix_PreservesExplicitOptOut pins that an
+// answer pre-populated by --no-image-path-fix is not overridden by the
+// default-on behavior, so applyDefaults' "fill missing" contract holds
+// for this field too.
+func TestApplyDefaults_ImagePathFix_PreservesExplicitOptOut(t *testing.T) {
+	t.Parallel()
+	plugins := loadPluginsForTest(t)
+	in := initAnswers{
+		ServiceName: "svc", Username: "dev",
+		Image: "node", ImageSet: true,
+		ImagePathFix: false, ImagePathFixSet: true,
+	}
+	ans, err := applyDefaults(in, plugins)
+	if err != nil {
+		t.Fatalf("applyDefaults: %v", err)
+	}
+	if ans.ImagePathFix {
+		t.Errorf("explicit opt-out (false) must persist: got %v", ans.ImagePathFix)
+	}
+}
+
 func TestApplyDefaults_PreservesExplicitSettings(t *testing.T) {
 	t.Parallel()
 	plugins := loadPluginsForTest(t)

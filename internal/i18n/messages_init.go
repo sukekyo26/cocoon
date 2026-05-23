@@ -41,6 +41,8 @@ var messagesEN_init = map[string]string{
 	"init_desc_devcontainer":            "Says yes if you ever open this repo in VS Code Dev Containers; harmless otherwise.",
 	"init_prompt_certificates":          "Bake user TLS certificates from ~/.cocoon/certs/ into the container image?",
 	"init_desc_certificates":            "Enable when your build needs a corp CA inside the container (Zscaler, internal proxies, etc.). When off, no cert wiring lands in the generated artifacts.",
+	"init_prompt_image_path_fix_title":  "Auto-configure user-local install prefix for %s?",
+	"init_desc_image_path_fix":          "Adds the following to [container.shell.env] in workspace.toml so the container user can install global tools without sudo:\n\n%s\n\nLets you run %s without sudo. Skip if you never install global tools with this runtime.",
 	"init_confirm_yes":                  "Yes",
 	"init_confirm_no":                   "No",
 	"init_prompt_apt":                   "Select common apt packages to install",
@@ -89,6 +91,8 @@ var messagesEN_init = map[string]string{
 		"#   - EDITOR=code only works when launched from VS Code Dev Containers (the `code` shim is\n" +
 		"#     injected by VS Code, not by cocoon).\n" +
 		"#   - PAGER=less / less -R needs the `utilities` apt category (less is not in cocoon's minimal base).",
+	"init_toml_comment_image_path_fix_added":   "# Added by `cocoon init` so the container user can install user-local tools on the %s image.",
+	"init_toml_comment_image_path_fix_removal": "# Removing this restores the original sudo requirement for `%s`.",
 	"init_toml_section_plugins": "# [plugins] — enable cocoon plugins (run `cocoon plugin list` for the catalog).\n" +
 		"#   Pin versions in [plugins.versions] when you need reproducible builds.",
 	"init_toml_section_plugins_methods": "# [plugins.methods] — install method picked for plugins that declare multiple methods.\n" +
@@ -170,6 +174,8 @@ var messagesJA_init = map[string]string{
 	"init_desc_devcontainer":            "VS Code Dev Containers で開く可能性があれば Yes。そうでなくても害はありません。",
 	"init_prompt_certificates":          "~/.cocoon/certs/ の TLS 証明書をコンテナイメージに取り込みますか？",
 	"init_desc_certificates":            "Zscaler や社内プロキシなど、build 中に corp CA を信頼させる必要がある場合に Yes。off の場合は生成物に cert 関連の配線は一切乗りません。",
+	"init_prompt_image_path_fix_title":  "%s イメージの user-local インストール先を自動設定しますか？",
+	"init_desc_image_path_fix":          "workspace.toml の [container.shell.env] に以下を追加し、コンテナユーザーが sudo なしでグローバルツールを入れられるようにします:\n\n%s\n\n%s を sudo なしで実行できるようになります。このランタイムでグローバルツールを入れない場合はスキップ。",
 	"init_confirm_yes":                  "はい",
 	"init_confirm_no":                   "いいえ",
 	"init_prompt_apt":                   "インストールする apt パッケージのカテゴリを選択",
@@ -217,6 +223,8 @@ var messagesJA_init = map[string]string{
 		"#   - EDITOR=code は VS Code Dev Containers で開いたときのみ動く（`code` シムは\n" +
 		"#     VS Code が注入するもので、cocoon は関与しない）。\n" +
 		"#   - PAGER=less / less -R は apt カテゴリ `utilities` が前提（less は cocoon の最小ベースに含まれない）。",
+	"init_toml_comment_image_path_fix_added":   "# %s イメージで user-local ツールを sudo なしで入れられるよう `cocoon init` が追加。",
+	"init_toml_comment_image_path_fix_removal": "# 削除すると `%s` で再び sudo が必要になります。",
 	"init_toml_section_plugins": "# [plugins] — cocoon プラグインの有効化（一覧は `cocoon plugin list`）。\n" +
 		"#   再現性が必要なら [plugins.versions] でバージョン固定。",
 	"init_toml_section_plugins_methods": "# [plugins.methods] — 複数のインストール方式を提供するプラグインに対する選択。\n" +

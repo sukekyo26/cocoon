@@ -46,6 +46,8 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 	cmd.Flags().BoolVar(&flags.NoDevcontainer, "no-devcontainer", false, cat.Msg("flag_init_no_devcontainer_usage"))
 	cmd.Flags().BoolVar(&flags.Certificates, "certificates", false, cat.Msg("flag_init_certificates_usage"))
 	cmd.Flags().BoolVar(&flags.NoCertificates, "no-certificates", false, cat.Msg("flag_init_no_certificates_usage"))
+	cmd.Flags().BoolVar(&flags.ImagePathFix, "image-path-fix", false, cat.Msg("flag_init_image_path_fix_usage"))
+	cmd.Flags().BoolVar(&flags.NoImagePathFix, "no-image-path-fix", false, cat.Msg("flag_init_no_image_path_fix_usage"))
 	cmd.Flags().StringVar(&flags.AptCategories, "apt-categories", "", cat.Msg("flag_init_apt_categories_usage"))
 	cmd.Flags().StringVar(&flags.Plugins, "plugins", "", cat.Msg("flag_init_plugins_usage"))
 	cmd.Flags().StringVar(&flags.PluginVersions, "plugin-versions", "", cat.Msg("flag_init_plugin_versions_usage"))
@@ -62,6 +64,9 @@ func runInit(cmd *cobra.Command, stdout, stderr io.Writer, flags *initFlags) err
 	}
 	if flags.Certificates && flags.NoCertificates {
 		return fmt.Errorf("%w: --certificates and --no-certificates are mutually exclusive", clihelpers.ErrUsage)
+	}
+	if flags.ImagePathFix && flags.NoImagePathFix {
+		return fmt.Errorf("%w: --image-path-fix and --no-image-path-fix are mutually exclusive", clihelpers.ErrUsage)
 	}
 	cat := i18n.New(i18n.Detect())
 
@@ -97,6 +102,7 @@ func runInit(cmd *cobra.Command, stdout, stderr io.Writer, flags *initFlags) err
 		Dir:            ans.Dir,
 		Devcontainer:   ans.Devcontainer,
 		Certificates:   ans.Certificates,
+		ImagePathFix:   ans.ImagePathFix,
 		Packages:       pkgs,
 		Plugins:        ans.Plugins,
 		PluginVersions: ans.PluginVersions,
