@@ -33,6 +33,10 @@ set -euxo pipefail
 : "${IMAGE:?IMAGE unset (base image id)}"
 : "${IMAGE_VERSION:?IMAGE_VERSION unset}"
 
+# Wipe any leftover project dir before init so reruns (local debugging,
+# self-hosted runner with cached workspace) are idempotent — `cocoon
+# init` refuses to overwrite an existing workspace.toml without --force.
+rm -rf e2e/test-project
 mkdir -p e2e/test-project
 cd e2e/test-project
 git init -q
@@ -149,27 +153,11 @@ test ! -d config
 #      paths absolutely via `--set "*.context=$PWD"` and
 #      `--set "*.dockerfile=$PWD/.devcontainer/Dockerfile"`.
 #
-# Cache scope split:
-#   - minimal: per-image (`e2e-minimal-<image>`). The base FROM layer
-#     differs entirely between images, so a shared scope would have ~0%
-#     hit rate while paying the write contention. `${IMAGE//\//-}`
-#     slugifies "denoland/deno" -> "denoland-deno" so the scope is a
-#     flat string.
-#   - amd64-full / arm64-full: per-preset (`e2e-<preset>`). Both ride on
-#     ubuntu 22.04 and benefit from sharing the apt prelude across runs
-#     of the same preset.
-# GHA cache backend further isolates by branch.
-# mode=max captures all layers (within the 10GB/repo limit).
-# The subsequent `compose up -d` reuses the just-loaded image instead
-# of rebuilding.
-case "$PRESET" in
-  minimal) cache_scope="e2e-minimal-${IMAGE//\//-}" ;;
-  *) cache_scope="e2e-${PRESET}" ;;
-esac
-
 # `arch` is derived from `uname -m` with an explicit case so an
 # unexpected runner architecture fails loudly here instead of producing
-# a malformed `linux/<garbage>` platform string downstream.
+# a malformed `linux/<garbage>` platform string downstream. Decided
+# before cache_scope below because the minimal preset folds arch into
+# its scope key.
 case "$(uname -m)" in
   x86_64) arch=amd64 ;;
   aarch64) arch=arm64 ;;
@@ -177,6 +165,25 @@ case "$(uname -m)" in
     printf 'unsupported runner arch: %s\n' "$(uname -m)" >&2
     exit 1
     ;;
+esac
+
+# Cache scope split:
+#   - minimal: per-arch + per-image (`e2e-minimal-<arch>-<image>`). The
+#     base FROM layer differs entirely between images AND between
+#     architectures of the same image (amd64 ubuntu vs arm64 ubuntu both
+#     run in the push matrix), so a shared scope would have ~0% hit
+#     rate while paying the write contention. `${IMAGE//\//-}` slugifies
+#     "denoland/deno" -> "denoland-deno" so the scope is a flat string.
+#   - amd64-full / arm64-full: per-preset (`e2e-<preset>`). Both ride on
+#     ubuntu 22.04 and benefit from sharing the apt prelude across runs
+#     of the same preset; the preset name already encodes the arch.
+# GHA cache backend further isolates by branch.
+# mode=max captures all layers (within the 10GB/repo limit).
+# The subsequent `compose up -d` reuses the just-loaded image instead
+# of rebuilding.
+case "$PRESET" in
+  minimal) cache_scope="e2e-minimal-${arch}-${IMAGE//\//-}" ;;
+  *) cache_scope="e2e-${PRESET}" ;;
 esac
 
 # The generated docker-compose.yml declares
@@ -221,6 +228,12 @@ env "${env_args[@]}" docker buildx bake \
   dev
 
 docker compose -f .devcontainer/docker-compose.yml up -d
+# Always tear down (containers + volumes) on exit, including the
+# `set -e` exits from the UID/GID poll below. Without the trap a
+# mid-test failure leaves containers behind — irrelevant on
+# ephemeral GHA runners but matters for local reruns and any
+# future self-hosted runner.
+trap 'docker compose -f .devcontainer/docker-compose.yml down -v >/dev/null 2>&1 || true' EXIT
 docker compose -f .devcontainer/docker-compose.yml exec -T dev bash -lc 'echo cocoon-e2e-ok'
 
 # docker-entrypoint.sh remaps the fixed-uid/gid (1000:1000) container
@@ -252,4 +265,4 @@ test "$host_gid" = "$container_gid" ||
     echo "GID remap failed: host=$host_gid container=$container_gid" >&2
     exit 1
   }
-docker compose -f .devcontainer/docker-compose.yml down -v
+# trap EXIT (installed after `up -d` above) runs `down -v` on exit.
