@@ -3,6 +3,7 @@ package plugin_test
 import (
 	"bytes"
 	"errors"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -300,6 +301,191 @@ func writePluginDir(t *testing.T, root, id string, files map[string]string) {
 		if err := os.WriteFile(full, []byte(body), 0o644); err != nil { //nolint:gosec // testdata
 			t.Fatalf("write %s: %v", full, err)
 		}
+	}
+}
+
+// makeThreePluginLayered builds a LayeredFS whose root has three top-level
+// ids ("alpha", "bravo", "delta"), used by the synthetic-root tests below.
+func makeThreePluginLayered(t *testing.T) *plugin.LayeredFS {
+	t.Helper()
+	embedded := makeEmbedded() // alpha, bravo
+	userDir := writeUserOverlay(t)
+	return plugin.NewLayeredFS(embedded, userDir, "") // adds delta
+}
+
+func TestLayeredFS_OpenRootReturnsSyntheticDir(t *testing.T) {
+	t.Parallel()
+
+	layered := makeThreePluginLayered(t)
+
+	f, err := layered.Open(".")
+	if err != nil {
+		t.Fatalf("Open(.): %v", err)
+	}
+	t.Cleanup(func() { _ = f.Close() })
+
+	info, err := f.Stat()
+	if err != nil {
+		t.Fatalf("Stat: %v", err)
+	}
+	if !info.IsDir() {
+		t.Error("Stat().IsDir() = false, want true")
+	}
+	if info.Name() != "." {
+		t.Errorf("Stat().Name() = %q, want %q", info.Name(), ".")
+	}
+	if info.Mode()&fs.ModeDir == 0 {
+		t.Errorf("Stat().Mode() = %v, missing fs.ModeDir", info.Mode())
+	}
+	if info.Size() != 0 {
+		t.Errorf("Stat().Size() = %d, want 0 for synthetic dir", info.Size())
+	}
+	if !info.ModTime().IsZero() {
+		t.Errorf("Stat().ModTime() = %v, want zero", info.ModTime())
+	}
+	if info.Sys() != nil {
+		t.Errorf("Stat().Sys() = %v, want nil", info.Sys())
+	}
+
+	// Open(".") must satisfy fs.ReadDirFile so callers like fs.WalkDir work.
+	if _, ok := f.(fs.ReadDirFile); !ok {
+		t.Errorf("Open(.) returned %T, does not implement fs.ReadDirFile", f)
+	}
+}
+
+func TestLayeredFS_OpenRootReadIsDirectoryError(t *testing.T) {
+	t.Parallel()
+
+	layered := makeThreePluginLayered(t)
+	f, err := layered.Open(".")
+	if err != nil {
+		t.Fatalf("Open(.): %v", err)
+	}
+	t.Cleanup(func() { _ = f.Close() })
+
+	buf := make([]byte, 16)
+	_, readErr := f.Read(buf)
+	if readErr == nil {
+		t.Fatal("Read on synthetic root returned nil err, want is-a-directory PathError")
+	}
+	var pe *fs.PathError
+	if !errors.As(readErr, &pe) {
+		t.Fatalf("Read err = %T (%v), want *fs.PathError", readErr, readErr)
+	}
+	if pe.Op != "read" || pe.Path != "." {
+		t.Errorf("PathError = {Op:%q Path:%q}, want {read .}", pe.Op, pe.Path)
+	}
+	if !strings.Contains(pe.Err.Error(), "is a directory") {
+		t.Errorf("PathError.Err = %v, want substring %q", pe.Err, "is a directory")
+	}
+}
+
+func TestLayeredFS_RootReadDirPagination(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name     string
+		ns       []int
+		wantLens []int
+		wantEOF  bool
+	}{
+		{name: "one_at_a_time", ns: []int{1, 1, 1, 1}, wantLens: []int{1, 1, 1, 0}, wantEOF: true},
+		{name: "two_then_remainder", ns: []int{2, 2}, wantLens: []int{2, 1}, wantEOF: false},
+		{name: "n_zero_returns_all", ns: []int{0}, wantLens: []int{3}, wantEOF: false},
+		{name: "n_negative_returns_all", ns: []int{-1}, wantLens: []int{3}, wantEOF: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			layered := makeThreePluginLayered(t)
+			f, err := layered.Open(".")
+			if err != nil {
+				t.Fatalf("Open(.): %v", err)
+			}
+			t.Cleanup(func() { _ = f.Close() })
+			rd, ok := f.(fs.ReadDirFile)
+			if !ok {
+				t.Fatalf("Open(.) returned %T, want fs.ReadDirFile", f)
+			}
+
+			var lastErr error
+			for i, n := range tc.ns {
+				ents, err := rd.ReadDir(n)
+				lastErr = err
+				if len(ents) != tc.wantLens[i] {
+					t.Errorf("ReadDir(%d)[step %d] len = %d, want %d", n, i, len(ents), tc.wantLens[i])
+				}
+			}
+			if tc.wantEOF {
+				if !errors.Is(lastErr, io.EOF) {
+					t.Errorf("final ReadDir err = %v, want io.EOF", lastErr)
+				}
+			} else if lastErr != nil {
+				t.Errorf("final ReadDir err = %v, want nil", lastErr)
+			}
+		})
+	}
+}
+
+func TestLayeredFS_InvalidPathRejected(t *testing.T) {
+	t.Parallel()
+
+	layered := makeThreePluginLayered(t)
+
+	cases := []struct {
+		name string
+		op   string
+		path string
+	}{
+		{name: "open_parent_escape", op: "open", path: "../x"},
+		{name: "open_double_slash", op: "open", path: "foo//bar"},
+		{name: "open_absolute", op: "open", path: "/abs"},
+		{name: "readdir_parent_escape", op: "readdir", path: "../x"},
+		{name: "readdir_double_slash", op: "readdir", path: "foo//bar"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			var err error
+			switch tc.op {
+			case "open":
+				_, err = layered.Open(tc.path)
+			case "readdir":
+				_, err = layered.ReadDir(tc.path)
+			}
+			if err == nil {
+				t.Fatalf("%s(%q) err = nil, want fs.ErrInvalid", tc.op, tc.path)
+			}
+			if !errors.Is(err, fs.ErrInvalid) {
+				t.Errorf("%s(%q) err = %v, want errors.Is fs.ErrInvalid", tc.op, tc.path, err)
+			}
+		})
+	}
+}
+
+func TestLayeredFS_ReadDirUnknownPluginID(t *testing.T) {
+	t.Parallel()
+
+	layered := makeThreePluginLayered(t)
+	_, err := layered.ReadDir("ghost")
+	if err == nil {
+		t.Fatal("ReadDir(ghost) err = nil, want fs.ErrNotExist")
+	}
+	if !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("ReadDir(ghost) err = %v, want errors.Is fs.ErrNotExist", err)
+	}
+}
+
+func TestLayeredFS_RootFileClose(t *testing.T) {
+	t.Parallel()
+
+	layered := makeThreePluginLayered(t)
+	f, err := layered.Open(".")
+	if err != nil {
+		t.Fatalf("Open(.): %v", err)
+	}
+	if err := f.Close(); err != nil {
+		t.Errorf("Close() = %v, want nil", err)
 	}
 }
 
