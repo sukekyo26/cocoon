@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sukekyo26/cocoon/internal/config"
 	"github.com/sukekyo26/cocoon/internal/i18n"
 )
 
@@ -489,4 +490,188 @@ func TestRenderWorkspaceToml_ImagePathFix_CoexistWarning(t *testing.T) {
 			t.Errorf("auto-injected block must warn about inline coexistence\n--- got ---\n%s", got)
 		}
 	})
+}
+
+// TestRenderWorkspaceToml_ImagePathFix_VolumesPerImage pins the auto-emitted
+// [volumes] block: the named volume entries that persist install
+// destinations across `docker compose down && up --build`. The volume names
+// must match the catalog plugin's equivalent volumes (lockstep guard in
+// TestImagePathFix_VolumesMatchPluginCatalog) — this test pins the
+// rendered TOML shape.
+func TestRenderWorkspaceToml_ImagePathFix_VolumesPerImage(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		image        string
+		wantContains []string
+		wantAbsent   []string
+	}{
+		{
+			image: "node",
+			wantContains: []string{
+				"[volumes]\n" +
+					"npm-global = \"/home/${USERNAME}/.npm-global\"\n" +
+					"npm = \"/home/${USERNAME}/.npm\"\n",
+				"on the node image",
+				"for `npm install -g <pkg>`",
+			},
+		},
+		{
+			image: "golang",
+			wantContains: []string{
+				"[volumes]\n" +
+					"go = \"/home/${USERNAME}/go\"\n",
+			},
+		},
+		{
+			image: "rust",
+			wantContains: []string{
+				"[volumes]\n" +
+					"cargo = \"/home/${USERNAME}/.cargo\"\n",
+			},
+			wantAbsent: []string{
+				// rustup state lives at /usr/local/rustup on the rust
+				// image — never volume-mount $HOME/.rustup.
+				`rustup = "/home/${USERNAME}/.rustup"`,
+			},
+		},
+		{
+			image: "denoland/deno",
+			wantContains: []string{
+				"[volumes]\n" +
+					"deno = \"/home/${USERNAME}/.deno\"\n",
+			},
+		},
+	}
+	cat := i18n.New(i18n.LangEN)
+	for _, tc := range cases {
+		t.Run(tc.image, func(t *testing.T) {
+			t.Parallel()
+			got := renderWorkspaceToml(containerSpec{
+				ServiceName: "svc", Username: "dev",
+				Image: tc.image, ImageVersion: "x",
+				Shell: "bash", MountRoot: ".", Devcontainer: true,
+				ImagePathFix: true,
+			}, cat)
+			for _, want := range tc.wantContains {
+				if !strings.Contains(got, want) {
+					t.Errorf("%s: missing %q\n--- got ---\n%s", tc.image, want, got)
+				}
+			}
+			for _, banned := range tc.wantAbsent {
+				if strings.Contains(got, banned) {
+					t.Errorf("%s: must not contain %q", tc.image, banned)
+				}
+			}
+		})
+	}
+}
+
+// TestRenderWorkspaceToml_ImagePathFix_VolumesPython_NotEmitted pins that
+// python keeps the commented-out [volumes] template (no active block),
+// because $HOME/.local — its only install target — is already covered by
+// the reserved `local:` named volume.
+func TestRenderWorkspaceToml_ImagePathFix_VolumesPython_NotEmitted(t *testing.T) {
+	t.Parallel()
+	cat := i18n.New(i18n.LangEN)
+	got := renderWorkspaceToml(containerSpec{
+		ServiceName: "svc", Username: "dev", Image: "python", ImageVersion: "3.13-slim-bookworm",
+		Shell: "bash", MountRoot: ".", Devcontainer: true,
+		ImagePathFix: true,
+	}, cat)
+	if strings.Contains(got, "\n[volumes]\n") {
+		t.Errorf("python ImagePathFix must not emit a [volumes] block (covered by reserved `local:` volume)\n--- got ---\n%s", got)
+	}
+	// Commented template must still appear so users discover the section.
+	if !strings.Contains(got, "# [volumes]") {
+		t.Errorf("python: commented [volumes] template must remain when no active block is emitted\n--- got ---\n%s", got)
+	}
+}
+
+// TestRenderWorkspaceToml_ImagePathFix_Volumes_OffEmitsCommentedTemplate
+// pins the --no-image-path-fix path: even on an image that would otherwise
+// emit a [volumes] block, the commented template is preserved when the
+// user opts out. Mirrors TestRenderWorkspaceToml_ImagePathFix_OffEmitsNothing
+// for the env side.
+func TestRenderWorkspaceToml_ImagePathFix_Volumes_OffEmitsCommentedTemplate(t *testing.T) {
+	t.Parallel()
+	cat := i18n.New(i18n.LangEN)
+	got := renderWorkspaceToml(containerSpec{
+		ServiceName: "svc", Username: "dev", Image: "node", ImageVersion: "x",
+		Shell: "bash", MountRoot: ".", Devcontainer: true,
+		ImagePathFix: false,
+	}, cat)
+	if strings.Contains(got, "\n[volumes]\n") {
+		t.Errorf("ImagePathFix=false must not emit an active [volumes] block\n--- got ---\n%s", got)
+	}
+	if !strings.Contains(got, "# [volumes]") {
+		t.Errorf("ImagePathFix=false: commented [volumes] template must remain\n--- got ---\n%s", got)
+	}
+}
+
+// TestRenderWorkspaceToml_ImagePathFix_Volumes_RoundTripParse pins that the
+// rendered [volumes] block parses back through config.StrictUnmarshal
+// into Workspace.Volumes with the expected name→path mapping. Catches
+// regressions in TOML quoting or naming that the substring tests would
+// miss (e.g. a stray space or quote that compiles but fails to parse).
+func TestRenderWorkspaceToml_ImagePathFix_Volumes_RoundTripParse(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		image   string
+		wantVol map[string]string
+	}{
+		{
+			image: "node",
+			wantVol: map[string]string{
+				"npm-global": "/home/${USERNAME}/.npm-global",
+				"npm":        "/home/${USERNAME}/.npm",
+			},
+		},
+		{
+			image: "golang",
+			wantVol: map[string]string{
+				"go": "/home/${USERNAME}/go",
+			},
+		},
+		{
+			image: "rust",
+			wantVol: map[string]string{
+				"cargo": "/home/${USERNAME}/.cargo",
+			},
+		},
+		{
+			image:   "python",
+			wantVol: nil,
+		},
+		{
+			image: "denoland/deno",
+			wantVol: map[string]string{
+				"deno": "/home/${USERNAME}/.deno",
+			},
+		},
+	}
+	cat := i18n.New(i18n.LangEN)
+	for _, tc := range cases {
+		t.Run(tc.image, func(t *testing.T) {
+			t.Parallel()
+			got := renderWorkspaceToml(containerSpec{
+				ServiceName: "svc", Username: "dev",
+				Image: tc.image, ImageVersion: "x",
+				Shell: "bash", MountRoot: ".", Devcontainer: true,
+				ImagePathFix: true,
+			}, cat)
+			var ws config.Workspace
+			if err := config.StrictUnmarshal("(test)", []byte(got), &ws); err != nil {
+				t.Fatalf("%s: rendered TOML failed to parse: %v\n--- got ---\n%s", tc.image, err, got)
+			}
+			if len(ws.Volumes) != len(tc.wantVol) {
+				t.Errorf("%s: Volumes len=%d, want %d\n--- got map ---\n%v",
+					tc.image, len(ws.Volumes), len(tc.wantVol), ws.Volumes)
+			}
+			for name, wantPath := range tc.wantVol {
+				if got := ws.Volumes[name]; got != wantPath {
+					t.Errorf("%s: Volumes[%q]=%q, want %q", tc.image, name, got, wantPath)
+				}
+			}
+		})
+	}
 }

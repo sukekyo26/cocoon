@@ -179,10 +179,11 @@ packages = [
 # [ports]
 # forward = ["3000:3000", "5432:5432"]
 
-# [volumes] — extra named volumes mapped under the container's home.
-#   Persists state across container recreations. Format: <volume-name> = <path inside container>.
-# [volumes]
-# my-data = "/home/${USERNAME}/.my-tool"
+# Added by `cocoon init` so the golang image persists `go install <pkg>@latest` results across `docker compose down && up --build`.
+# Removing a line below loses `go install <pkg>@latest` results on the next container recreation (only `docker compose down -v` clears the volume itself).
+# Append extra named volumes under this same [volumes] block — do not open a second [volumes] section (TOML rejects duplicate tables).
+[volumes]
+go = "/home/${USERNAME}/go"
 
 # [env] — environment variables passed into the container.
 #   ${VAR} resolves against the host's env at `cocoon gen` time.
