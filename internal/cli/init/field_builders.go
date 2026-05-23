@@ -106,17 +106,35 @@ func certificatesConfirm(cat *i18n.Catalog, target *bool) *huh.Confirm {
 
 // imagePathFixConfirm builds the prompt that asks whether to auto-inject
 // the user-local install prefix / PATH for a language base image. The
-// description spells out the exact entries that will be added and the
-// example command they unlock so a no answer is informed, not accidental.
+// description spells out the exact entries (both [container.shell.env]
+// and, when applicable, the matching [volumes] block that persists install
+// destinations across rebuilds) so a no answer is informed, not accidental.
 func imagePathFixConfirm(cat *i18n.Catalog, image string, target *bool) *huh.Confirm {
 	fix := imagePathFixFor(image)
 	return huh.NewConfirm().
 		Title(cat.Msg("init_prompt_image_path_fix_title", image)).
 		Description(cat.Msg("init_desc_image_path_fix",
-			formatPathFixEntries(fix.Entries), fix.Command)).
+			formatPathFixPreview(fix), fix.Command)).
 		Affirmative(cat.Msg("init_confirm_yes")).
 		Negative(cat.Msg("init_confirm_no")).
 		Value(target)
+}
+
+// formatPathFixPreview renders the full set of TOML changes the user is
+// about to accept — section headers, env entries, and (when present)
+// named-volume entries — so the prompt mirrors the structure that lands
+// in workspace.toml. Python carries no Volumes (its install target is
+// already covered by the reserved `local:` named volume), so the
+// [volumes] block is omitted for that image.
+func formatPathFixPreview(fix imagePathFix) string {
+	var sb strings.Builder
+	sb.WriteString("  [container.shell.env]\n")
+	sb.WriteString(formatPathFixEntries(fix.Entries))
+	if len(fix.Volumes) > 0 {
+		sb.WriteString("\n\n  [volumes]\n")
+		sb.WriteString(formatPathFixVolumes(fix.Volumes))
+	}
+	return sb.String()
 }
 
 // formatPathFixEntries renders the entries as TOML-looking lines so the
@@ -139,6 +157,26 @@ func formatPathFixEntries(entries []pathFixEnvEntry) string {
 			sb.WriteByte('\n')
 		}
 		fmt.Fprintf(&sb, "  %-*s = %q", width, e.Key, e.Value)
+	}
+	return sb.String()
+}
+
+// formatPathFixVolumes mirrors formatPathFixEntries for the [volumes]
+// section so the two preview blocks line up visually. The file emit in
+// writeImagePathFixVolumes stays unpadded canonical TOML.
+func formatPathFixVolumes(volumes []pathFixVolume) string {
+	width := 0
+	for _, v := range volumes {
+		if len(v.Name) > width {
+			width = len(v.Name)
+		}
+	}
+	var sb strings.Builder
+	for i, v := range volumes {
+		if i > 0 {
+			sb.WriteByte('\n')
+		}
+		fmt.Fprintf(&sb, "  %-*s = %q", width, v.Name, v.Path)
 	}
 	return sb.String()
 }

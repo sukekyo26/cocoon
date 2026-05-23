@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-05-24
+
+### Fixed
+
+- `cocoon init`'s `--image-path-fix` (the default-on prompt for language base images) now also writes a top-level `[volumes]` block alongside the `[container.shell.env]` block so user installs survive `docker compose down && up --build` on the language image route. Previously the env was set (so `npm install -g <pkg>` / `cargo install <pkg>` / `go install <pkg>` / `deno install <script>` resolved to writable paths under `$HOME`) but the destination directories were not volume-mounted, so every container recreation wiped them — the asymmetric "PATH works but rebuild loses everything" footgun. The new block per image: `node` → `npm-global` (`$HOME/.npm-global`) + `npm` (`$HOME/.npm` cache); `golang` → `go` (`$HOME/go`, the full `$GOPATH`); `rust` → `cargo` (`$HOME/.cargo`); `denoland/deno` → `deno` (`$HOME/.deno`). Volume names follow the same `plugin.DeriveVolumeName` convention as the catalog plugins' `[install].volumes`, so the image route and the equivalent plugin route emit the same compose `volumes:` keys — swapping image⇄plugin yields a structurally equivalent compose snapshot. `python` is unchanged because its only install target (`$HOME/.local/bin`) is already covered by the unconditional `local:` named volume. The env and volume blocks are coupled to one toggle: `--no-image-path-fix` (or answering "no" at the prompt) skips both — volumes without env would mount directories the runtime never writes to. Re-run `cocoon init --force` (or hand-add a `[volumes]` block following the auto-comment format) to pick this up; existing workspace.toml files that already have an `[image-path-fix]`-generated `[container.shell.env]` block are not auto-migrated.
+
 ## [0.7.2] - 2026-05-24
 
 ### Added
@@ -195,7 +201,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Add `COMPOSE_PROJECT_NAME` derivation from the project directory basename so docker compose namespacing matches the host directory.
 - Add i18n catalog (English / Japanese) covering every CLI prompt, error message, and inline `workspace.toml` comment, switched via `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG`.
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.7.2...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.7.3...HEAD
+[0.7.3]: https://github.com/sukekyo26/cocoon/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/sukekyo26/cocoon/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/sukekyo26/cocoon/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/sukekyo26/cocoon/compare/v0.6.0...v0.7.0

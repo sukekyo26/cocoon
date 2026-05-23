@@ -141,6 +141,44 @@ func writeImagePathFixEnv(sb *strings.Builder, cat *i18n.Catalog, s containerSpe
 	sb.WriteByte('\n')
 }
 
+// imagePathFixVolumesActive reports whether the trailing [volumes] section
+// should be emitted as an active block (true) or as the commented-out
+// template (false). True only when the user opted in AND the image has
+// volume entries — python carries no Volumes because its install target
+// is already covered by the reserved `local:` named volume.
+func imagePathFixVolumesActive(s containerSpec) bool {
+	return s.ImagePathFix && imagePathFixApplies(s.Image) && len(imagePathFixFor(s.Image).Volumes) > 0
+}
+
+// writeImagePathFixVolumes emits the top-level [volumes] section that
+// pairs with writeImagePathFixEnv. No-op unless imagePathFixVolumesActive
+// returns true. Volume names are lockstepped with the equivalent catalog
+// plugin's [install].volumes so swapping image⇄plugin yields the same
+// compose volume keys.
+//
+// The three comment lines mirror writeImagePathFixEnv's pattern: why
+// (added), what removal costs (removal), and how to extend safely (extra
+// — append under the same [volumes], do not open a second one).
+func writeImagePathFixVolumes(sb *strings.Builder, cat *i18n.Catalog, s containerSpec) {
+	if !imagePathFixVolumesActive(s) {
+		return
+	}
+	fix := imagePathFixFor(s.Image)
+	sb.WriteString(cat.Msg("init_toml_section_volumes"))
+	sb.WriteByte('\n')
+	sb.WriteString(cat.Msg("init_toml_comment_image_path_fix_volumes_added", s.Image, fix.Command))
+	sb.WriteByte('\n')
+	sb.WriteString(cat.Msg("init_toml_comment_image_path_fix_volumes_removal", fix.Command))
+	sb.WriteByte('\n')
+	sb.WriteString(cat.Msg("init_toml_comment_image_path_fix_volumes_extra"))
+	sb.WriteByte('\n')
+	sb.WriteString("[volumes]\n")
+	for _, v := range fix.Volumes {
+		fmt.Fprintf(sb, "%s = %q\n", v.Name, v.Path)
+	}
+	sb.WriteByte('\n')
+}
+
 // writePluginsSection emits the [plugins] block plus the [plugins.methods]
 // and [plugins.versions] sub-blocks.
 func writePluginsSection(sb *strings.Builder, cat *i18n.Catalog, s containerSpec) {
@@ -221,9 +259,18 @@ func writePortsSection(sb *strings.Builder, cat *i18n.Catalog, s containerSpec) 
 // file. Order roughly follows "compose runtime knobs first, then host-side
 // persistence, then locale + Dockerfile hooks, then certificates, then
 // sidecars + IDE config".
+//
+// [volumes] swaps between the commented-out template and an active block
+// written by writeImagePathFixVolumes when image-path-fix is on and the
+// chosen image has volume entries (writePortsSection follows the same
+// active⇄commented pattern).
 func writeTrailingTemplates(sb *strings.Builder, cat *i18n.Catalog, s containerSpec) {
+	if imagePathFixVolumesActive(s) {
+		writeImagePathFixVolumes(sb, cat, s)
+	} else {
+		emitTemplate(sb, cat, "init_toml_template_volumes")
+	}
 	templateKeys := []string{
-		"init_toml_template_volumes",
 		"init_toml_template_env",
 		"init_toml_template_mounts",
 		"init_toml_template_home_files",

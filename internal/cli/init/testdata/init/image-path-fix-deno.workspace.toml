@@ -17,8 +17,8 @@ devcontainer = false
 [container]
 service_name = "dev"
 username = "dev"
-image = "node"
-image_version = "22-bookworm-slim"
+image = "denoland/deno"
+image_version = "debian-2.7.14"
 
 # docker_socket — bind-mount /var/run/docker.sock so an in-container docker
 #   client (e.g. the docker-cli plugin) can reach the host daemon.
@@ -102,12 +102,11 @@ image_version = "22-bookworm-slim"
 [container.shell]
 default = "bash"
 
-# Added by `cocoon init` so the container user can install user-local tools on the node image.
-# Removing this restores the default-image failure for `npm install -g <pkg>` (permission denied on root-owned prefixes, or the installed binary not being on PATH).
+# Added by `cocoon init` so the container user can install user-local tools on the denoland/deno image.
+# Removing this restores the default-image failure for `deno install <script>` (permission denied on root-owned prefixes, or the installed binary not being on PATH).
 # Append extra env keys under this subsection — the inline `env = { ... }` form under [container.shell] cannot coexist (TOML rejects two definitions of the same key).
 [container.shell.env]
-NPM_CONFIG_PREFIX = "$HOME/.npm-global"
-PATH = "$HOME/.npm-global/bin:$PATH"
+PATH = "$HOME/.deno/bin:$PATH"
 
 # [plugins] — enable cocoon plugins (run `cocoon plugin list` for the catalog).
 #   Pin versions in [plugins.versions] when you need reproducible builds.
@@ -182,12 +181,11 @@ packages = [
 
 # [volumes] — extra named volumes mapped under the container's home.
 #   Persists state across container recreations. Format: <volume-name> = <path inside container>.
-# Added by `cocoon init` so the node image persists `npm install -g <pkg>` results across `docker compose down && up --build`.
-# Removing a line below loses `npm install -g <pkg>` results on the next container recreation; to delete the volume itself, run e.g. `docker compose down -v` or `docker volume rm <name>`.
+# Added by `cocoon init` so the denoland/deno image persists `deno install <script>` results across `docker compose down && up --build`.
+# Removing a line below loses `deno install <script>` results on the next container recreation; to delete the volume itself, run e.g. `docker compose down -v` or `docker volume rm <name>`.
 # Append extra named volumes under this same [volumes] block — do not open a second [volumes] section (TOML rejects duplicate tables).
 [volumes]
-npm-global = "/home/${USERNAME}/.npm-global"
-npm = "/home/${USERNAME}/.npm"
+deno = "/home/${USERNAME}/.deno"
 
 # [env] — environment variables passed into the container.
 #   ${VAR} resolves against the host's env at `cocoon gen` time.
