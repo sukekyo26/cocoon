@@ -154,7 +154,8 @@ Any value starting with `ja` selects the Japanese catalog; everything else falls
 | Workflow | File | Triggers | Purpose |
 |---|---|---|---|
 | Go CI | [`.github/workflows/go-ci.yml`](../.github/workflows/go-ci.yml) | push / PR / `workflow_call` | `golangci-lint` + `go vet` + `go test` + `govulncheck` + cross-compile |
-| E2E | [`.github/workflows/e2e.yml`](../.github/workflows/e2e.yml) | push / PR | Real Docker round-trip (`cocoon init` → `gen` → `docker compose build/up/exec/down`) |
+| E2E | [`.github/workflows/e2e.yml`](../.github/workflows/e2e.yml) | push / PR | Real Docker round-trip with the `minimal` preset across every supported base image (`cocoon init` → `gen` → `docker buildx bake` → `docker compose up/exec`; teardown via `trap`) |
+| Scheduled E2E | [`.github/workflows/scheduled-e2e.yml`](../.github/workflows/scheduled-e2e.yml) | Mon 06:00 UTC + `workflow_dispatch` | Plugin-heavy round-trip (`amd64-full` + `arm64-full`) split off the PR critical path; `workflow_dispatch` accepts a `preset` input for verifying new plugins on demand |
 | Release | [`.github/workflows/release.yml`](../.github/workflows/release.yml) | push to `main` with `VERSION` change | Tag, build per-platform binaries, publish `gh release` with `SHA256SUMS` |
 
 The release workflow is **VERSION-bump driven**: bumping the `VERSION` file in a PR to `main` triggers tag creation and binary publication.

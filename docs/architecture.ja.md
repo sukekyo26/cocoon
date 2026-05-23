@@ -154,7 +154,8 @@ bash / zsh は `~/.cocoon/.shellrc`、fish は `~/.cocoon/.shellrc.fish` を sou
 | ワークフロー | ファイル | トリガー | 役割 |
 |---|---|---|---|
 | Go CI | [`.github/workflows/go-ci.yml`](../.github/workflows/go-ci.yml) | push / PR / `workflow_call` | `golangci-lint` + `go vet` + `go test` + `govulncheck` + クロスコンパイル |
-| E2E | [`.github/workflows/e2e.yml`](../.github/workflows/e2e.yml) | push / PR | 実 Docker でのラウンドトリップ (`cocoon init` → `gen` → `docker compose build/up/exec/down`) |
+| E2E | [`.github/workflows/e2e.yml`](../.github/workflows/e2e.yml) | push / PR | サポート対象 base image 全種に対して `minimal` プリセットの実 Docker ラウンドトリップ (`cocoon init` → `gen` → `docker buildx bake` → `docker compose up/exec`、teardown は `trap` 経由) |
+| Scheduled E2E | [`.github/workflows/scheduled-e2e.yml`](../.github/workflows/scheduled-e2e.yml) | Mon 06:00 UTC + `workflow_dispatch` | プラグイン全部入りラウンドトリップ (`amd64-full` + `arm64-full`) を PR クリティカルパスから分離。`workflow_dispatch` の `preset` 入力で新規プラグインを手動検証可能 |
 | Release | [`.github/workflows/release.yml`](../.github/workflows/release.yml) | `VERSION` 変更を含む `main` への push | タグ作成 → 各プラットフォーム向けビルド → `SHA256SUMS` 付き `gh release` 公開 |
 
 リリースは **VERSION ファイルのバンプ駆動**です。`main` 向け PR で `VERSION` を更新するとタグ作成とバイナリ公開がトリガーされます。

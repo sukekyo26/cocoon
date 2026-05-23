@@ -1,23 +1,34 @@
 name: E2E
 
-# Real Docker round-trip: build the cocoon binary, init a fresh project,
-# generate .devcontainer/, then `docker compose build` + start + exec into
-# the container so generation drift breaks CI before it breaks users.
+# Real Docker round-trip on every push / PR: build the cocoon binary,
+# init a fresh project, generate .devcontainer/, then `docker buildx
+# bake` the image (via e2e/docker-roundtrip.sh, with GHA cache) and
+# `docker compose up -d` + `exec` into the running container so
+# generation drift breaks CI before it breaks users. Tear-down is
+# handled by a `trap EXIT` inside the script. Plain `docker compose
+# build` is intentionally not used — bake is what lets us inject the
+# GHA cache backend without baking CI concerns into the generated
+# docker-compose.yml.
 #
-# The matrix exercises three axes that catch generator / plugin regressions:
-#   1. amd64 / minimal — the default-on plugin set (just docker-cli) on
-#      ubuntu-latest. Smallest, fastest job; gates the happy path.
-#   2. amd64 / full    — every shipped plugin enabled with all version_capable
-#      plugins pinned. Catches plugin-vs-base-image and plugin-vs-plugin
-#      breakage; bumping a pinned version surfaces here as a deliberate diff.
-#   3. arm64  / full   — the arm64-safe subset on a native ubuntu-24.04-arm
-#      runner (no QEMU). Plugins excluded for one of two reasons:
-#        - install.sh hard-codes amd64 (lazygit, zig, starship, google-chrome)
-#        - install.sh fails fast on arm64 because no official Linux/arm64
-#          build exists (flutter)
+# This workflow runs the lightweight half of the e2e coverage:
+#   - preset = minimal (0 plugins)
+#   - matrix axis = base image — every entry in
+#     internal/config/schema.go's SupportedImages, each at the first
+#     (default-recommended) tag from SupportedImageVersions.
+#   - amd64 for all images + arm64 for ubuntu only (single arm64 job to
+#     surface arm64-specific generator drift without exploding queue
+#     time on the PR critical path).
 #
-# Local WSL2 cannot run any of these (gcc missing for `-race`); GitHub-hosted
-# ubuntu-latest / ubuntu-24.04-arm both ship docker + buildx out of the box.
+# The heavier counterpart (plugin-full presets on amd64 + arm64) lives
+# in .github/workflows/scheduled-e2e.yml and runs weekly + on demand
+# via workflow_dispatch. Plugin-vs-image and plugin-vs-plugin breakage
+# is therefore caught at most one week late; the trade-off is ~13 min
+# off the PR critical path. New plugins should be manually verified
+# via the scheduled workflow's workflow_dispatch before merging.
+#
+# Local WSL2 cannot run these (gcc missing for `-race`); GitHub-hosted
+# ubuntu-latest / ubuntu-24.04-arm both ship docker + buildx out of the
+# box.
 
 on:
   # Push fires for in-progress branches (pre-PR feedback). develop / main
@@ -40,20 +51,43 @@ jobs:
   docker-roundtrip:
     name: ${{ matrix.label }}
     runs-on: ${{ matrix.runs-on }}
-    timeout-minutes: 30
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
         include:
-          - label: amd64 / minimal
+          - label: amd64 / ubuntu
             runs-on: ubuntu-latest
-            preset: minimal
-          - label: amd64 / full
+            image: ubuntu
+            image-version: "26.04"
+          - label: amd64 / debian
             runs-on: ubuntu-latest
-            preset: amd64-full
-          - label: arm64 / full
+            image: debian
+            image-version: "13"
+          - label: amd64 / node
+            runs-on: ubuntu-latest
+            image: node
+            image-version: "26-bookworm-slim"
+          - label: amd64 / python
+            runs-on: ubuntu-latest
+            image: python
+            image-version: "3.14-slim-bookworm"
+          - label: amd64 / golang
+            runs-on: ubuntu-latest
+            image: golang
+            image-version: "1.26.3-bookworm"
+          - label: amd64 / rust
+            runs-on: ubuntu-latest
+            image: rust
+            image-version: "1.95-bookworm"
+          - label: amd64 / denoland/deno
+            runs-on: ubuntu-latest
+            image: denoland/deno
+            image-version: "debian-2.7.14"
+          - label: arm64 / ubuntu
             runs-on: ubuntu-24.04-arm
-            preset: arm64-full
+            image: ubuntu
+            image-version: "26.04"
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
@@ -62,10 +96,11 @@ jobs:
           cache: true
       - uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
       # Exposes ACTIONS_RUNTIME_TOKEN / ACTIONS_CACHE_URL / ACTIONS_RESULTS_URL
-      # as plain env vars so the raw `docker buildx bake` invocation below can
-      # talk to the GHA cache backend. docker/build-push-action and
-      # docker/bake-action inject these automatically; a hand-written shell
-      # step does not, so we surface them explicitly here.
+      # as plain env vars so the raw `docker buildx bake` invocation in
+      # the script below can talk to the GHA cache backend.
+      # docker/build-push-action and docker/bake-action inject these
+      # automatically; a hand-written shell step does not, so we surface
+      # them explicitly here.
       - uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
       - uses: taiki-e/install-action@b1fb785e72add1aaabe1e13115c2292ca8925d3f # just
       - name: Build cocoon binary
@@ -73,197 +108,7 @@ jobs:
       - name: cocoon init + gen + docker compose round-trip
         env:
           COCOON: ${{ github.workspace }}/bin/cocoon
-          PRESET: ${{ matrix.preset }}
-        run: |
-          set -euxo pipefail
-          mkdir -p e2e/test-project
-          cd e2e/test-project
-          git init -q
-
-          # Resolve --plugins / --plugin-versions per preset. The lists are
-          # inlined (vs. a fixture TOML) so a pin bump is a one-line YAML
-          # edit. Keep this case-stmt and the testdata snapshots in
-          # internal/cli/init/testdata/init/ in lockstep — they share the
-          # same plugin sets so the goldens act as a structural check on
-          # whatever this workflow generates at runtime.
-          case "$PRESET" in
-            minimal)
-              plugins=""
-              pins=""
-              methods=""
-              ;;
-            amd64-full)
-              plugins="docker-cli,docker-buildx,aws-cli,aws-sam-cli,github-cli,claude-code,copilot-cli,proto,mise,uv,bun,node,deno,dart,flutter,zig,rust,go,lazygit,starship,nerd-fonts,google-chrome,terraform,opentofu,kubectl,helm,shellcheck,shfmt"
-              pins="aws-cli=2.34.48,aws-sam-cli=1.160.1,bun=1.3.3,copilot-cli=1.0.47,dart=3.12.0,deno=2.7.14,docker-buildx=0.24.0,flutter=3.44.0,go=1.23.4,helm=3.16.0,kubectl=1.31.0,lazygit=0.44.1,mise=2025.12.0,nerd-fonts=3.4.0,node=24.15.0,opentofu=1.9.0,proto=0.46.1,shellcheck=0.10.0,shfmt=3.10.0,starship=1.21.1,terraform=1.10.5,uv=0.5.7,zig=0.13.0"
-              # Exercise the [install.methods]=binary path for copilot-cli on
-              # this preset (matches the Zscaler-style use case the method
-              # was added for). arm64-full keeps the default gh-cli method so
-              # both install paths get real docker-build coverage per release.
-              methods="copilot-cli=binary"
-              ;;
-            arm64-full)
-              # Excluded vs amd64-full (install.sh hard-codes amd64 or fails fast on arm64):
-              #   lazygit, zig, starship, google-chrome, flutter.
-              plugins="docker-cli,docker-buildx,aws-cli,aws-sam-cli,github-cli,claude-code,copilot-cli,proto,mise,uv,bun,node,deno,dart,rust,go,nerd-fonts,terraform,opentofu,kubectl,helm,shellcheck,shfmt"
-              pins="aws-cli=2.34.48,aws-sam-cli=1.160.1,bun=1.3.3,copilot-cli=1.0.47,dart=3.12.0,deno=2.7.14,docker-buildx=0.24.0,go=1.23.4,helm=3.16.0,kubectl=1.31.0,mise=2025.12.0,nerd-fonts=3.4.0,node=24.15.0,opentofu=1.9.0,proto=0.46.1,shellcheck=0.10.0,shfmt=3.10.0,terraform=1.10.5,uv=0.5.7"
-              # No --plugin-methods on arm64-full — exercises the default
-              # method (gh-cli) end-to-end as the counterpart to amd64-full's
-              # binary path. Both real-Docker installs run per release.
-              methods=""
-              ;;
-            *)
-              echo "unknown preset: $PRESET" >&2
-              exit 1
-              ;;
-          esac
-
-          extra=()
-          [ -n "$plugins" ] && extra+=(--plugins "$plugins")
-          [ -n "$pins" ] && extra+=(--plugin-versions "$pins")
-          [ -n "$methods" ] && extra+=(--plugin-methods "$methods")
-
-          # service-name and the in-container username are kept identical
-          # ("dev") so the `docker compose exec dev` step below targets the
-          # right service. Using a different service-name (e.g. "e2e") would
-          # silently break exec because `exec <service>` resolves against
-          # the compose service id, which mirrors workspace.toml's
-          # [container].service_name.
-          # Match cocoon's full default-on apt category set so default-on
-          # plugins (e.g. docker-cli, which calls gpg in install.sh via the
-          # vcs category) build cleanly. Trimming this list in CI hides
-          # plugin-vs-category mismatches that real users would hit.
-          # --certificates opts the workspace into TLS auto-bake from
-          # ~/.cocoon/certs/. Required here because the e2e matrix
-          # exercises the cert wiring path end-to-end (docker buildx bake
-          # consuming additional_contexts, the RUN --mount=type=bind, the
-          # downstream update-ca-certificates). Cert-free flows are
-          # covered by Go unit tests; the e2e overhead of running both
-          # branches through the full matrix is not worth it.
-          "$COCOON" init --yes \
-            --service-name dev \
-            --username dev \
-            --image ubuntu \
-            --image-version 22.04 \
-            --mount-root . \
-            --no-devcontainer \
-            --certificates \
-            --apt-categories=text-editors,vcs,utilities,compression,build \
-            "${extra[@]}"
-          "$COCOON" gen
-          # Surface the generated artifacts to the CI log so PR reviewers
-          # can read exactly what cocoon emitted for this preset (matters
-          # most after generator changes — e.g. plugin install scripts now
-          # land inline in the Dockerfile via bash heredocs). The
-          # GitHub Actions group markers keep the dumps collapsed by
-          # default so they don't drown the rest of the step.
-          echo "::group::.devcontainer/Dockerfile"
-          cat .devcontainer/Dockerfile
-          echo "::endgroup::"
-          echo "::group::.devcontainer/docker-compose.yml"
-          cat .devcontainer/docker-compose.yml
-          echo "::endgroup::"
-          # The generated tree must land under .devcontainer/ exclusively;
-          # any leakage back into config/ or to the project root is a regression.
-          # The .env file is critical for compose interpolation
-          # (COMPOSE_PROJECT_NAME / CONTAINER_SERVICE_NAME / USERNAME / IMAGE /
-          # IMAGE_VERSION); without it `docker compose build` fails with
-          # `failed to parse stage name ":": invalid reference format`.
-          test -f .devcontainer/Dockerfile
-          test -f .devcontainer/docker-compose.yml
-          test -f .devcontainer/docker-entrypoint.sh
-          test -f .devcontainer/.env
-          test ! -d config
-          # Build via `docker buildx bake` to opt into BuildKit's GHA cache backend.
-          # `docker compose build` cannot pass cache-from/cache-to without baking
-          # CI concerns into the generated docker-compose.yml (which is the
-          # user-visible artifact). Bake reads the same compose file and lets
-          # us inject cache settings purely on the CI side.
-          #
-          # Two compose-side conveniences we have to replicate manually:
-          #   1. .env loading — compose auto-loads .env from the compose file's
-          #      directory; bake does not. We read .env into an array and pass
-          #      it inline to bake's child process via `env KEY=VAL ... cmd`.
-          #   2. Path resolution — compose resolves `context: ..` relative to
-          #      the compose file's directory; bake resolves it relative to
-          #      its own cwd. Without an override bake fails with
-          #      `lstat ../.devcontainer: no such file or directory`. We pin
-          #      both paths absolutely via `--set "*.context=$PWD"` and
-          #      `--set "*.dockerfile=$PWD/.devcontainer/Dockerfile"`.
-          #
-          # `scope=e2e-${PRESET}` separates minimal / amd64-full / arm64-full
-          # cache buckets; GHA cache backend further isolates by branch.
-          # mode=max captures all layers (within the 10GB/repo limit).
-          # The subsequent `compose up -d` reuses the just-loaded image
-          # instead of rebuilding.
-          # `arch` is derived from `uname -m` with an explicit case so an
-          # unexpected runner architecture fails loudly here instead of
-          # producing a malformed `linux/<garbage>` platform string downstream.
-          case "$(uname -m)" in
-            x86_64) arch=amd64 ;;
-            aarch64) arch=arm64 ;;
-            *) printf 'unsupported runner arch: %s\n' "$(uname -m)" >&2; exit 1 ;;
-          esac
-          # The generated docker-compose.yml declares
-          # `additional_contexts: cocoon_user_certs: ${HOME}/.cocoon/certs`
-          # so users can drop corp CA certs (e.g. Zscaler) into a host-side
-          # directory and have them auto-baked at build time.
-          #
-          # Two CI-side concerns we have to handle that end users don't:
-          #   1. Path existence — BuildKit resolves the named context path
-          #      before the build starts and errors if the directory does
-          #      not exist. VS Code Dev Containers users get this auto-
-          #      created via devcontainer.json's initializeCommand; bake
-          #      (this CI) and `docker compose build` directly don't run
-          #      that hook, so we mkdir explicitly. The directory stays
-          #      empty in CI, so the Dockerfile's `if find ... ; then ...
-          #      fi` branch no-ops and no certs land in the image.
-          #   2. Filesystem entitlement (bake-only) — `docker buildx bake`
-          #      treats build contexts outside the bake working dir as
-          #      privileged reads and refuses to start without an explicit
-          #      `--allow=fs.read=<path>` grant. `docker compose build`
-          #      does NOT enforce this, so end users running compose
-          #      directly are unaffected. We pass the flag below.
-          mkdir -p "$HOME/.cocoon/certs"
-          env_args=()
-          while IFS= read -r line || [ -n "$line" ]; do
-            case "$line" in
-              ''|'#'*) continue ;;
-            esac
-            env_args+=("$line")
-          done < .devcontainer/.env
-          env "${env_args[@]}" docker buildx bake \
-            -f .devcontainer/docker-compose.yml \
-            --allow="fs.read=$HOME/.cocoon/certs" \
-            --load \
-            --set "*.context=$PWD" \
-            --set "*.dockerfile=$PWD/.devcontainer/Dockerfile" \
-            --set "*.cache-from=type=gha,scope=e2e-${PRESET}" \
-            --set "*.cache-to=type=gha,scope=e2e-${PRESET},mode=max" \
-            --set "*.platform=linux/${arch}" \
-            dev
-          docker compose -f .devcontainer/docker-compose.yml up -d
-          docker compose -f .devcontainer/docker-compose.yml exec -T dev bash -lc 'echo cocoon-e2e-ok'
-          # docker-entrypoint.sh remaps the fixed-uid/gid (1000:1000) container
-          # user to the host owner of the bind-mounted workspace, then drops
-          # privileges. `up -d` returns before the entrypoint finishes, so poll
-          # until the in-container `dev` user resolves to the runner's uid AND
-          # gid — proof the committed, host-independent .devcontainer/ adapted
-          # to this host. Asserting gid catches a broken groupmod/primary-group
-          # remap that a uid-only check would miss.
-          host_uid="$(id -u)"
-          host_gid="$(id -g)"
-          container_uid=""
-          container_gid=""
-          for _ in $(seq 1 30); do
-            container_uid="$(docker compose -f .devcontainer/docker-compose.yml exec -T -u dev dev id -u 2>/dev/null | tr -d '\r\n' || true)"
-            container_gid="$(docker compose -f .devcontainer/docker-compose.yml exec -T -u dev dev id -g 2>/dev/null | tr -d '\r\n' || true)"
-            if [ "$container_uid" = "$host_uid" ] && [ "$container_gid" = "$host_gid" ]; then
-              break
-            fi
-            sleep 1
-          done
-          test "$host_uid" = "$container_uid" \
-            || { echo "UID remap failed: host=$host_uid container=$container_uid" >&2; exit 1; }
-          test "$host_gid" = "$container_gid" \
-            || { echo "GID remap failed: host=$host_gid container=$container_gid" >&2; exit 1; }
-          docker compose -f .devcontainer/docker-compose.yml down -v
+          PRESET: minimal
+          IMAGE: ${{ matrix.image }}
+          IMAGE_VERSION: ${{ matrix.image-version }}
+        run: bash "$GITHUB_WORKSPACE/e2e/docker-roundtrip.sh"
