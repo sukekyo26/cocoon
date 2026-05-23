@@ -114,6 +114,8 @@ var messagesEN_init = map[string]string{
 		"#   *.crt files placed there land in the container's trust store at build time. Default off.",
 	"init_toml_section_ports": "# [ports] — host ports forwarded into the container.\n" +
 		"#   Short form: [HOST_IP:][HOST:]CONTAINER[/PROTOCOL]. Ranges (3000-3005:3000-3005), UDP, and IPv6 [::1] binds are accepted.",
+	"init_toml_section_volumes": "# [volumes] — extra named volumes mapped under the container's home.\n" +
+		"#   Persists state across container recreations. Format: <volume-name> = <path inside container>.",
 	// init result + next steps
 	"init_wrote":             "wrote %s",
 	"init_next_header":       "Next steps:",
@@ -253,6 +255,8 @@ var messagesJA_init = map[string]string{
 		"#   カテゴリのチェックを変えるなら `cocoon init --force` を再実行、または直接このリストを編集。",
 	"init_toml_section_ports": "# [ports] — コンテナへフォワードするホストポート。\n" +
 		"#   short form: [HOST_IP:][HOST:]CONTAINER[/PROTOCOL]。範囲 (3000-3005:3000-3005)、UDP、IPv6 [::1] バインドも可。",
+	"init_toml_section_volumes": "# [volumes] — コンテナホーム配下に追加でマウントする named volume。\n" +
+		"#   コンテナ再作成をまたいで状態保持。書式: <ボリューム名> = <コンテナ内パス>。",
 	// init result + next steps
 	"init_wrote":             "%s を書き出しました",
 	"init_next_header":       "次のステップ:",

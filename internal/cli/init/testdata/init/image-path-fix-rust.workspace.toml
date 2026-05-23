@@ -180,6 +180,8 @@ packages = [
 # [ports]
 # forward = ["3000:3000", "5432:5432"]
 
+# [volumes] — extra named volumes mapped under the container's home.
+#   Persists state across container recreations. Format: <volume-name> = <path inside container>.
 # Added by `cocoon init` so the rust image persists `cargo install <pkg>` results across `docker compose down && up --build`.
 # Removing a line below loses `cargo install <pkg>` results on the next container recreation; to delete the volume itself, run e.g. `docker compose down -v` or `docker volume rm <name>`.
 # Append extra named volumes under this same [volumes] block — do not open a second [volumes] section (TOML rejects duplicate tables).

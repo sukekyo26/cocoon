@@ -164,6 +164,8 @@ func writeImagePathFixVolumes(sb *strings.Builder, cat *i18n.Catalog, s containe
 		return
 	}
 	fix := imagePathFixFor(s.Image)
+	sb.WriteString(cat.Msg("init_toml_section_volumes"))
+	sb.WriteByte('\n')
 	sb.WriteString(cat.Msg("init_toml_comment_image_path_fix_volumes_added", s.Image, fix.Command))
 	sb.WriteByte('\n')
 	sb.WriteString(cat.Msg("init_toml_comment_image_path_fix_volumes_removal", fix.Command))
