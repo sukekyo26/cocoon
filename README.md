@@ -89,15 +89,16 @@ docker compose -f .devcontainer/docker-compose.yml up -d # or VS Code → "Reope
 1. **Service name** and **username** for the container
 2. **Base image** — `ubuntu` / `debian` / `node` / `python` / `golang` / `rust` / `denoland/deno` (DockerHub canonical names)
 3. **Image version** — pick a curated suggestion or type any Docker tag directly
-4. **Login shell** — `bash`, `zsh`, or `fish`
-5. **Alias bundles** — `git`, `ls`, `docker` shortcut sets (multi-select)
-6. **Mount range** — cwd only, or its parent (for fat workspaces where sibling repos must be visible)
-7. **Container workdir name** — the parent directory under `/home/<user>/` (defaults to `workspace`; slashes allowed for nested paths like `work/myproject`, useful when a tool such as AWS SAM expects the in-container path to mirror a specific host layout)
-8. **VS Code Dev Containers** support — emit `devcontainer.json` or skip
-9. **Corporate CA auto-bake** — opt in to picking up `.crt` files from `~/.cocoon/certs/` at build time (off by default; see below)
-10. **Port forwards** — comma-separated docker-compose short forms (e.g. `3000:3000,5432:5432`); blank to skip and the `[ports]` template stays as a commented-out hint
-11. **apt categories** — text-editors, vcs, utilities, build, network, … (multi-select)
-12. **Plugins** to enable from the embedded catalog (multi-select)
+4. **User-local install prefix / PATH** (language images only) — auto-injects `[container.shell.env]` so `npm install -g` / `pip` / `go install` / `cargo install` / `deno install` work without `sudo`; defaults to yes for `node` / `python` / `golang` / `rust` / `denoland/deno`. See [`docs/configuration.md#language-image-path-auto-injection`](docs/configuration.md#language-image-path-auto-injection).
+5. **Login shell** — `bash`, `zsh`, or `fish`
+6. **Alias bundles** — `git`, `ls`, `docker` shortcut sets (multi-select)
+7. **Mount range** — cwd only, or its parent (for fat workspaces where sibling repos must be visible)
+8. **Container workdir name** — the parent directory under `/home/<user>/` (defaults to `workspace`; slashes allowed for nested paths like `work/myproject`, useful when a tool such as AWS SAM expects the in-container path to mirror a specific host layout)
+9. **VS Code Dev Containers** support — emit `devcontainer.json` or skip
+10. **Corporate CA auto-bake** — opt in to picking up `.crt` files from `~/.cocoon/certs/` at build time (off by default; see below)
+11. **Port forwards** — comma-separated docker-compose short forms (e.g. `3000:3000,5432:5432`); blank to skip and the `[ports]` template stays as a commented-out hint
+12. **apt categories** — text-editors, vcs, utilities, build, network, … (multi-select)
+13. **Plugins** to enable from the embedded catalog (multi-select)
 
 Each answer becomes a self-documenting line in `workspace.toml`. Pass `--yes` together with the value flags (`--service-name`, `--username`, `--image`, `--dir`, `--plugins`, `--certificates`, `--ports`, …) to drive it from CI without a TTY.
 

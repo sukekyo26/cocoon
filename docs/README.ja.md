@@ -89,15 +89,16 @@ docker compose -f .devcontainer/docker-compose.yml up -d # または VS Code で
 1. コンテナの **サービス名** と **ユーザー名**
 2. **ベースイメージ** — `ubuntu` / `debian` / `node` / `python` / `golang` / `rust` / `denoland/deno` (DockerHub 正式名称)
 3. **イメージバージョン** — 推奨候補からの選択、または任意の Docker タグを直接入力
-4. **ログインシェル** — `bash` / `zsh` / `fish`
-5. **エイリアスバンドル** — `git` / `ls` / `docker` のショートカット集 (複数選択)
-6. **マウント範囲** — cwd のみ、または親ディレクトリ (兄弟リポジトリも見える fat ワークスペース向け)
-7. **コンテナ内 workdir 名** — `/home/<user>/` 配下の親ディレクトリ名 (既定 `workspace`。スラッシュで多段階層も可。例: `work/myproject`。AWS SAM などコンテナ内パスをホスト構成に合わせたいツール向け)
-8. **VS Code Dev Containers** 対応 — `devcontainer.json` を出力するかどうか
-9. **社内 CA 自動取り込み** — `~/.cocoon/certs/` 配下の `.crt` をビルド時に取り込むか opt-in (デフォルト off。下記参照)
-10. **ポートフォワード** — カンマ区切りの docker-compose short form (例: `3000:3000,5432:5432`)。空 Enter で見送ると `[ports]` 雛形はコメント行のまま残る (後で有効化可能)
-11. **apt カテゴリ** — text-editors / vcs / utilities / build / network / … (複数選択)
-12. **プラグイン** — 同梱カタログから選択 (複数選択)
+4. **user-local インストール先 / PATH の自動設定** (言語イメージ選択時のみ) — `[container.shell.env]` に追加して `npm install -g` / `pip` / `go install` / `cargo install` / `deno install` を `sudo` なしで動かす。`node` / `python` / `golang` / `rust` / `denoland/deno` で既定 on。詳細は [`docs/configuration.ja.md#言語イメージ向け-path-自動設定`](configuration.ja.md#言語イメージ向け-path-自動設定) を参照
+5. **ログインシェル** — `bash` / `zsh` / `fish`
+6. **エイリアスバンドル** — `git` / `ls` / `docker` のショートカット集 (複数選択)
+7. **マウント範囲** — cwd のみ、または親ディレクトリ (兄弟リポジトリも見える fat ワークスペース向け)
+8. **コンテナ内 workdir 名** — `/home/<user>/` 配下の親ディレクトリ名 (既定 `workspace`。スラッシュで多段階層も可。例: `work/myproject`。AWS SAM などコンテナ内パスをホスト構成に合わせたいツール向け)
+9. **VS Code Dev Containers** 対応 — `devcontainer.json` を出力するかどうか
+10. **社内 CA 自動取り込み** — `~/.cocoon/certs/` 配下の `.crt` をビルド時に取り込むか opt-in (デフォルト off。下記参照)
+11. **ポートフォワード** — カンマ区切りの docker-compose short form (例: `3000:3000,5432:5432`)。空 Enter で見送ると `[ports]` 雛形はコメント行のまま残る (後で有効化可能)
+12. **apt カテゴリ** — text-editors / vcs / utilities / build / network / … (複数選択)
+13. **プラグイン** — 同梱カタログから選択 (複数選択)
 
 各回答は自己説明的な 1 行として `workspace.toml` に書き込まれます。`--yes` と各値フラグ (`--service-name` / `--username` / `--image` / `--dir` / `--plugins` / `--certificates` / `--ports` …) を組み合わせれば TTY なしで CI から呼び出せます。
 

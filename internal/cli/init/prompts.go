@@ -77,6 +77,9 @@ func promptIdentityAndImage(ans *initAnswers, cat *i18n.Catalog) error {
 		}
 		ans.ImageVersionSet = true
 	}
+	if err := promptImagePathFix(ans, cat); err != nil {
+		return err
+	}
 	if !ans.ShellSet {
 		ans.Shell = "bash"
 		if err := runSingleFieldForm(shellSelect(cat, &ans.Shell)); err != nil {
@@ -84,6 +87,26 @@ func promptIdentityAndImage(ans *initAnswers, cat *i18n.Catalog) error {
 		}
 		ans.ShellSet = true
 	}
+	return nil
+}
+
+// promptImagePathFix asks the image-path-fix confirm only when the
+// chosen image has a fix entry; for other images (ubuntu, debian) it
+// silently marks the answer as set so subsequent --force re-runs do not
+// re-prompt against a non-applicable image.
+func promptImagePathFix(ans *initAnswers, cat *i18n.Catalog) error {
+	if ans.ImagePathFixSet {
+		return nil
+	}
+	if !imagePathFixApplies(ans.Image) {
+		ans.ImagePathFixSet = true
+		return nil
+	}
+	ans.ImagePathFix = true
+	if err := runSingleFieldForm(imagePathFixConfirm(cat, ans.Image, &ans.ImagePathFix)); err != nil {
+		return err
+	}
+	ans.ImagePathFixSet = true
 	return nil
 }
 

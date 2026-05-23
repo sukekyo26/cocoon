@@ -31,10 +31,12 @@ CI など非対話実行では --yes に加えて --service-name / --username
       --force                    既存の workspace.toml を上書き
   -h, --help                     init のヘルプを表示
       --image string             ベースイメージ: ubuntu, debian, node, python, golang, rust, denoland/deno
+      --image-path-fix           言語イメージの PATH / インストール先自動設定を強制有効化（--image=node|python|golang|rust|denoland/deno が必須。それらは既定 on）
       --image-version string     ベースイメージのタグ（任意の妥当な Docker タグを受け付け。--image も併せて指定が必要）
       --mount-root string        マウント範囲: "."（cwd、既定）または ".."（親ディレクトリ）
       --no-certificates          [certificates] セクションをスキップ（既定 off）
       --no-devcontainer          .devcontainer/devcontainer.json の生成をスキップ
+      --no-image-path-fix        言語イメージの PATH / インストール先自動設定をスキップ（--image=node|python|golang|rust|denoland/deno が必須）
       --plugin-methods string    複数の [install.methods] を持つプラグイン向けの <id>=<method> 選択をカンマ区切りで指定（各 <id> は --plugins にも含めること。<method> は宣言済みキーであること）
       --plugin-versions string   version_capable プラグイン向けの <id>=<ref> ピンをカンマ区切りで指定（各 <id> は --plugins にも含めること）
       --plugins string           有効化するプラグイン ID のカンマ区切り（プラグイン複数選択プロンプトをスキップ）

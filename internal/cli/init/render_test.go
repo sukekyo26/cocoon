@@ -280,3 +280,213 @@ func TestRenderWorkspaceToml_DockerSocketTemplatePresent(t *testing.T) {
 		}
 	}
 }
+
+// TestRenderWorkspaceToml_ImagePathFix_PerImage pins the auto-comment +
+// [container.shell.env] block emitted for every language image cocoon
+// gates the prompt on. Catches accidental key renames (NPM_CONFIG_PREFIX,
+// CARGO_INSTALL_ROOT) and value drift before the snapshot test would.
+func TestRenderWorkspaceToml_ImagePathFix_PerImage(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		image string
+		// substrings that must appear in the rendered output
+		wantContains []string
+		// substrings that must NOT appear (sanity-checks the safe
+		// CARGO_INSTALL_ROOT spelling does not flip back to CARGO_HOME)
+		wantAbsent []string
+	}{
+		{
+			image: "node",
+			wantContains: []string{
+				"on the node image.",
+				"for `npm install -g <pkg>`",
+				"[container.shell.env]\n" +
+					"NPM_CONFIG_PREFIX = \"$HOME/.npm-global\"\n" +
+					"PATH = \"$HOME/.npm-global/bin:$PATH\"\n",
+			},
+		},
+		{
+			image: "python",
+			wantContains: []string{
+				"on the python image.",
+				"for `pip install --user <pkg>`",
+				"[container.shell.env]\n" +
+					"PATH = \"$HOME/.local/bin:$PATH\"\n",
+			},
+		},
+		{
+			image: "golang",
+			wantContains: []string{
+				"on the golang image.",
+				"for `go install <pkg>@latest`",
+				"[container.shell.env]\n" +
+					"PATH = \"$HOME/go/bin:$PATH\"\n",
+			},
+		},
+		{
+			image: "rust",
+			wantContains: []string{
+				"on the rust image.",
+				"for `cargo install <pkg>`",
+				"[container.shell.env]\n" +
+					"CARGO_INSTALL_ROOT = \"$HOME/.cargo\"\n" +
+					"PATH = \"$HOME/.cargo/bin:$PATH\"\n",
+			},
+			wantAbsent: []string{
+				// CARGO_HOME would clobber rustup state — the safe
+				// spelling stays CARGO_INSTALL_ROOT.
+				"CARGO_HOME =",
+			},
+		},
+		{
+			image: "denoland/deno",
+			wantContains: []string{
+				"on the denoland/deno image.",
+				"for `deno install <script>`",
+				"[container.shell.env]\n" +
+					"PATH = \"$HOME/.deno/bin:$PATH\"\n",
+			},
+		},
+	}
+	cat := i18n.New(i18n.LangEN)
+	for _, tc := range cases {
+		t.Run(tc.image, func(t *testing.T) {
+			t.Parallel()
+			got := renderWorkspaceToml(containerSpec{
+				ServiceName: "svc", Username: "dev",
+				Image: tc.image, ImageVersion: "x",
+				Shell: "bash", MountRoot: ".", Devcontainer: true,
+				ImagePathFix: true,
+			}, cat)
+			for _, want := range tc.wantContains {
+				if !strings.Contains(got, want) {
+					t.Errorf("%s: output missing %q\n--- got ---\n%s", tc.image, want, got)
+				}
+			}
+			for _, banned := range tc.wantAbsent {
+				if strings.Contains(got, banned) {
+					t.Errorf("%s: output must not contain %q", tc.image, banned)
+				}
+			}
+		})
+	}
+}
+
+// TestRenderWorkspaceToml_ImagePathFix_OffEmitsNothing pins that the
+// auto-comment + [container.shell.env] block is silent when ImagePathFix
+// is false even on an image that would otherwise trigger the prompt.
+// Mirror-tests the --no-image-path-fix opt-out path.
+func TestRenderWorkspaceToml_ImagePathFix_OffEmitsNothing(t *testing.T) {
+	t.Parallel()
+	cat := i18n.New(i18n.LangEN)
+	got := renderWorkspaceToml(containerSpec{
+		ServiceName: "svc", Username: "dev", Image: "node", ImageVersion: "x",
+		Shell: "bash", MountRoot: ".", Devcontainer: true,
+		ImagePathFix: false,
+	}, cat)
+	// "NPM_CONFIG_PREFIX" alone, and "[container.shell.env]" alone, both
+	// appear inside the [container.shell] header comment block (the
+	// inline-vs-subsection coexistence warning quotes both). Guard
+	// against the load-bearing signals only: the bare section header on
+	// its own line (no `#` prefix) and the actual value we would emit.
+	for _, banned := range []string{
+		"\n[container.shell.env]\n",
+		`NPM_CONFIG_PREFIX = "$HOME/.npm-global"`,
+		"Added by `cocoon init`",
+	} {
+		if strings.Contains(got, banned) {
+			t.Errorf("ImagePathFix=false should not emit %q\n--- got ---\n%s", banned, got)
+		}
+	}
+}
+
+// TestRenderWorkspaceToml_ImagePathFix_NonApplicableImageIgnored pins
+// that ImagePathFix=true is a no-op when the image has no fix entry —
+// defends against a future caller forgetting the imagePathFixApplies
+// gate.
+func TestRenderWorkspaceToml_ImagePathFix_NonApplicableImageIgnored(t *testing.T) {
+	t.Parallel()
+	cat := i18n.New(i18n.LangEN)
+	got := renderWorkspaceToml(containerSpec{
+		ServiceName: "svc", Username: "dev", Image: "ubuntu", ImageVersion: "26.04",
+		Shell: "bash", MountRoot: ".", Devcontainer: true,
+		ImagePathFix: true,
+	}, cat)
+	// As in OffEmitsNothing: pin the bare section header on its own
+	// line, not the literal string (which the inline-form coexistence
+	// warning now quotes inside the [container.shell] header comment).
+	if strings.Contains(got, "\n[container.shell.env]\n") {
+		t.Errorf("ImagePathFix=true on ubuntu must not emit a [container.shell.env] subsection\n--- got ---\n%s", got)
+	}
+}
+
+// TestRenderWorkspaceToml_ImagePathFix_LocalizedJA pins the Japanese
+// version of the auto-comment so the doc-comment contract holds across
+// locales.
+func TestRenderWorkspaceToml_ImagePathFix_LocalizedJA(t *testing.T) {
+	t.Parallel()
+	cat := i18n.New(i18n.LangJA)
+	got := renderWorkspaceToml(containerSpec{
+		ServiceName: "svc", Username: "dev", Image: "node", ImageVersion: "x",
+		Shell: "bash", MountRoot: ".", Devcontainer: true,
+		ImagePathFix: true,
+	}, cat)
+	for _, want := range []string{
+		"node イメージで user-local ツール",
+		"デフォルトイメージの失敗",
+		"[container.shell.env]",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("JA output missing %q\n--- got ---\n%s", want, got)
+		}
+	}
+}
+
+// TestRenderWorkspaceToml_ImagePathFix_CoexistWarning pins the inline /
+// subsection mutual-exclusion warning. It must appear in BOTH the
+// [container.shell] env example block (always present) AND the
+// auto-injected [container.shell.env] comment (only when the toggle is
+// on), so users discover the constraint regardless of which surface
+// they land on first.
+func TestRenderWorkspaceToml_ImagePathFix_CoexistWarning(t *testing.T) {
+	t.Parallel()
+	// Sub-test 1: the [container.shell] env example block always carries
+	// the warning, even when ImagePathFix is false. Otherwise a user who
+	// opts out at init time, then later uncomments the inline example,
+	// would hit the same trap if cocoon's behavior ever flips to
+	// default-on or they re-run --force.
+	t.Run("inline-example-always-warned", func(t *testing.T) {
+		t.Parallel()
+		cat := i18n.New(i18n.LangEN)
+		got := renderWorkspaceToml(containerSpec{
+			ServiceName: "svc", Username: "dev", Image: "ubuntu", ImageVersion: "26.04",
+			Shell: "bash", MountRoot: ".", Devcontainer: true,
+			ImagePathFix: false,
+		}, cat)
+		// Check short, single-line fragments — the full warning wraps
+		// across three lines in the template, so a longer substring
+		// search would miss it on the line break.
+		for _, want := range []string{
+			"both define the same `env` key",
+			"Pick one form",
+		} {
+			if !strings.Contains(got, want) {
+				t.Errorf("inline env example must warn about coexistence: missing %q\n--- got ---\n%s", want, got)
+			}
+		}
+	})
+	// Sub-test 2: the auto-injected subsection carries its own warning
+	// pointing the user back at the inline form they might have edited.
+	t.Run("auto-block-warns-about-inline", func(t *testing.T) {
+		t.Parallel()
+		cat := i18n.New(i18n.LangEN)
+		got := renderWorkspaceToml(containerSpec{
+			ServiceName: "svc", Username: "dev", Image: "node", ImageVersion: "x",
+			Shell: "bash", MountRoot: ".", Devcontainer: true,
+			ImagePathFix: true,
+		}, cat)
+		if !strings.Contains(got, "the inline `env = { ... }` form under [container.shell] cannot coexist") {
+			t.Errorf("auto-injected block must warn about inline coexistence\n--- got ---\n%s", got)
+		}
+	})
+}

@@ -147,8 +147,12 @@ to drive non-interactively from CI.`,
 	"flag_init_no_devcontainer_usage": "skip .devcontainer/devcontainer.json output",
 	"flag_init_certificates_usage":    "force-enable [certificates] auto-bake from ~/.cocoon/certs/",
 	"flag_init_no_certificates_usage": "skip the [certificates] section (default off)",
-	"flag_init_apt_categories_usage":  "comma-separated apt category IDs (skips the multi-select prompt)",
-	"flag_init_plugins_usage":         "comma-separated plugin IDs to enable (skips the plugin multi-select prompt)",
+	"flag_init_image_path_fix_usage": "force the language-image PATH/install-prefix auto-injection " +
+		"(requires --image=node|python|golang|rust|denoland/deno; default on for those)",
+	"flag_init_no_image_path_fix_usage": "skip the language-image PATH/install-prefix auto-injection " +
+		"(requires --image=node|python|golang|rust|denoland/deno)",
+	"flag_init_apt_categories_usage": "comma-separated apt category IDs (skips the multi-select prompt)",
+	"flag_init_plugins_usage":        "comma-separated plugin IDs to enable (skips the plugin multi-select prompt)",
 	"flag_init_plugin_versions_usage": "comma-separated <id>=<ref> pins for version_capable plugins " +
 		"(each <id> must also appear in --plugins)",
 	"flag_init_plugin_methods_usage": "comma-separated <id>=<method> picks for plugins that declare multiple " +
@@ -389,8 +393,12 @@ CI など非対話実行では --yes に加えて --service-name / --username
 	"flag_init_no_devcontainer_usage": ".devcontainer/devcontainer.json の生成をスキップ",
 	"flag_init_certificates_usage":    "~/.cocoon/certs/ からの [certificates] 自動取り込みを強制有効化",
 	"flag_init_no_certificates_usage": "[certificates] セクションをスキップ（既定 off）",
-	"flag_init_apt_categories_usage":  "カンマ区切り apt カテゴリ ID（複数選択プロンプトをスキップ）",
-	"flag_init_plugins_usage":         "有効化するプラグイン ID のカンマ区切り（プラグイン複数選択プロンプトをスキップ）",
+	"flag_init_image_path_fix_usage": "言語イメージの PATH / インストール先自動設定を強制有効化" +
+		"（--image=node|python|golang|rust|denoland/deno が必須。それらは既定 on）",
+	"flag_init_no_image_path_fix_usage": "言語イメージの PATH / インストール先自動設定をスキップ" +
+		"（--image=node|python|golang|rust|denoland/deno が必須）",
+	"flag_init_apt_categories_usage": "カンマ区切り apt カテゴリ ID（複数選択プロンプトをスキップ）",
+	"flag_init_plugins_usage":        "有効化するプラグイン ID のカンマ区切り（プラグイン複数選択プロンプトをスキップ）",
 	"flag_init_plugin_versions_usage": "version_capable プラグイン向けの <id>=<ref> ピンをカンマ区切りで指定" +
 		"（各 <id> は --plugins にも含めること）",
 	"flag_init_plugin_methods_usage": "複数の [install.methods] を持つプラグイン向けの <id>=<method> 選択をカンマ区切りで指定" +

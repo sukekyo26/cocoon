@@ -120,6 +120,57 @@ func TestRunInit_Snapshot(t *testing.T) {
 					"127.0.0.1:8001:8001,127.0.0.1:5000-5010:5000-5010,6060:6060/udp",
 			},
 		},
+		{
+			// node image with the default-on path fix pins the two-entry
+			// shape (NPM_CONFIG_PREFIX + PATH) and the auto-comment that
+			// explains why the block exists.
+			name:   "image-path-fix-node",
+			golden: "image-path-fix-node.workspace.toml",
+			args: []string{
+				"--yes", "--service-name", "dev", "--username", "dev",
+				"--image", "node", "--image-version", "22-bookworm-slim",
+				"--mount-root", ".", "--no-devcontainer",
+				"--apt-categories", "text-editors,vcs,utilities,compression,build",
+			},
+		},
+		{
+			// golang exercises the single-PATH-entry shape so a regression
+			// that drops the PATH entry stays caught.
+			name:   "image-path-fix-golang",
+			golden: "image-path-fix-golang.workspace.toml",
+			args: []string{
+				"--yes", "--service-name", "dev", "--username", "dev",
+				"--image", "golang", "--image-version", "1.25-bookworm",
+				"--mount-root", ".", "--no-devcontainer",
+				"--apt-categories", "text-editors,vcs,utilities,compression,build",
+			},
+		},
+		{
+			// rust exercises CARGO_INSTALL_ROOT so the rustup-safe variant
+			// (which avoids overriding CARGO_HOME) cannot silently flip to
+			// the CARGO_HOME spelling on a future refactor.
+			name:   "image-path-fix-rust",
+			golden: "image-path-fix-rust.workspace.toml",
+			args: []string{
+				"--yes", "--service-name", "dev", "--username", "dev",
+				"--image", "rust", "--image-version", "1.93-bookworm",
+				"--mount-root", ".", "--no-devcontainer",
+				"--apt-categories", "text-editors,vcs,utilities,compression,build",
+			},
+		},
+		{
+			// --no-image-path-fix on node pins the opt-out path so the
+			// auto-comment + [container.shell.env] block stays absent when
+			// the user opts out explicitly.
+			name:   "image-path-fix-disabled",
+			golden: "image-path-fix-disabled.workspace.toml",
+			args: []string{
+				"--yes", "--service-name", "dev", "--username", "dev",
+				"--image", "node", "--image-version", "22-bookworm-slim",
+				"--mount-root", ".", "--no-devcontainer", "--no-image-path-fix",
+				"--apt-categories", "text-editors,vcs,utilities,compression,build",
+			},
+		},
 	}
 
 	// Resolve goldenDir to an absolute path BEFORE t.Chdir below, otherwise

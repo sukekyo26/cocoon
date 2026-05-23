@@ -6,6 +6,12 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-05-24
+
+### 追加
+
+- `cocoon init` で言語ベースイメージ（`node` / `python` / `golang` / `rust` / `denoland/deno`）を選んだとき、`[container.shell.env]` に user-local の `PATH` / インストール先を自動追加するか問うようになりました（既定 on）。これがないと、公式イメージは（a）user install を root 所有の `/usr/local/...` に書き込もうとして失敗する（`npm install -g` / `pip install` / `cargo install` が `EACCES`、python 3.11+ では PEP 668 もヒット）か、（b）書き込み可能な user ディレクトリに置くが `PATH` に無くて呼び出せない（`go install` → `$HOME/go/bin`、`deno install` → `$HOME/.deno/bin`、`pip install --user` → `$HOME/.local/bin`）状態になります。対話プロンプトは確認前に追加するキー・値をプレビューします。生成された `[container.shell.env]` ブロックの直上には自動コメント 3 行（追加理由 / 削除した場合の影響 / インライン `env = { ... }` 形式とは併用不可の警告）が付くので、時間が経ってもそのセクションが何のために追加されたか読み取れます。新フラグ `--image-path-fix` で自動設定を強制 on、`--no-image-path-fix` で自動設定をスキップできます（どちらも image 依存のため `--image` の指定が必須で、非言語イメージに対しては早期に ErrUsage で失敗するため、スクリプトの typo を黙ってスキップしません）。`ubuntu` / `debian` ではプロンプト自体出ません。イメージ別の追加内容は: `node` → `NPM_CONFIG_PREFIX="$HOME/.npm-global"` + `PATH="$HOME/.npm-global/bin:$PATH"`、`python` → `PATH="$HOME/.local/bin:$PATH"`、`golang` → `PATH="$HOME/go/bin:$PATH"`、`rust` → `CARGO_INSTALL_ROOT="$HOME/.cargo"` + `PATH="$HOME/.cargo/bin:$PATH"`（`CARGO_HOME` は意図的にイメージ既定のままにし、rustup の状態と `cargo build` のレジストリキャッシュを移さない）、`denoland/deno` → `PATH="$HOME/.deno/bin:$PATH"`。
+
 ## [0.7.1] - 2026-05-23
 
 ### 修正
@@ -189,7 +195,8 @@ cocoon の主要な変更を記録します。フォーマットは
 - `COMPOSE_PROJECT_NAME` をプロジェクトディレクトリの basename から導出するように変更。docker compose の namespace がホストディレクトリと一致する。
 - 国際化 (英語 / 日本語) カタログを追加。CLI プロンプト・エラーメッセージ・`workspace.toml` インラインコメントすべてを `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` で切替可能。
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.7.2...HEAD
+[0.7.2]: https://github.com/sukekyo26/cocoon/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/sukekyo26/cocoon/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/sukekyo26/cocoon/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/sukekyo26/cocoon/compare/v0.5.0...v0.6.0

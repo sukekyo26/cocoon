@@ -162,6 +162,26 @@ env     = { EDITOR = "vim", PAGER = "less -R" }
 
 `[container.shell]` is for project-level settings checked into the repo. For **per-user, container-rebuild-persistent** edits, the rc file also sources `~/.cocoon/.shellrc` (or `~/.cocoon/.shellrc.fish` for fish) on every shell start; that path is backed by a Docker named volume so edits survive `docker compose down && up --build` and are reset only by `docker compose down -v`. See ["Shell injection" in `architecture.md`](architecture.md#shell-injection) for how the rc file is composed at build time and how the in-container `~/.cocoon/` differs from the host's cocoon CLI working area.
 
+#### Language-image PATH auto-injection
+
+`cocoon init` offers — and defaults on for — an auto-injection into `[container.shell.env]` when you pick a language base image. Without it, the official image's package managers either (a) write user installs to root-owned `/usr/local/...` directories (`npm install -g`, `pip install`, `cargo install`, failing with `EACCES` and — on python 3.11+ — PEP 668), or (b) place binaries in a writable user dir that is not on `PATH` (`go install` → `$HOME/go/bin`, `deno install` → `$HOME/.deno/bin`, `pip install --user` → `$HOME/.local/bin`). The injection points each tool at a writable `$HOME` prefix when the image lacks one and extends `PATH` so the bin dir is reachable.
+
+The interactive prompt previews the exact keys / values before asking, and the generated block is preceded by three self-documenting comment lines (added reason / removal consequence / coexist warning against the inline `env = { ... }` form) so the auto-added section reads correctly even months later. Re-run `cocoon init --force` (or pass `--no-image-path-fix`) to drop it; `--image-path-fix` forces it on for scripted runs (both flags require `--image` to be set, since the fix is image-specific).
+
+| `[container].image` | `[container.shell.env]` entries auto-added |
+|---|---|
+| `node` | `NPM_CONFIG_PREFIX = "$HOME/.npm-global"`, `PATH = "$HOME/.npm-global/bin:$PATH"` |
+| `python` | `PATH = "$HOME/.local/bin:$PATH"` |
+| `golang` | `PATH = "$HOME/go/bin:$PATH"` |
+| `rust` | `CARGO_INSTALL_ROOT = "$HOME/.cargo"`, `PATH = "$HOME/.cargo/bin:$PATH"` |
+| `denoland/deno` | `PATH = "$HOME/.deno/bin:$PATH"` |
+
+`ubuntu` and `debian` do not surface the prompt — they have no language runtime to fix up. `rust` uses `CARGO_INSTALL_ROOT` rather than overriding `CARGO_HOME` so rustup state and `cargo build`'s registry cache continue to live under the image-default `/usr/local/cargo`; only `cargo install`'s output is redirected under `$HOME`.
+
+> **Inline `env = { ... }` and `[container.shell.env]` cannot coexist.** TOML treats them as conflicting definitions of the same `env` key under `[container.shell]` and the parser will reject the file at `cocoon gen` time (`toml: key env should be a table, not a value`). Once the auto-injected subsection is present, append further env keys *inside* that subsection rather than uncommenting the inline-form hint above. The generated workspace.toml carries the same warning in two places (the `[container.shell]` env example block and the auto-comment above the auto-injected subsection) so the constraint stays visible whichever block you edit first.
+
+Enabling the matching cocoon plugin (`node` / `go` / `rust` / `deno`) for the same image is already rejected as a conflict, so the auto-injection only ever pairs with images you are using *without* the cocoon plugin overlay.
+
 ### `[container.hosts]`
 
 Extra `/etc/hosts` entries. Keys are hostnames (RFC 1123); values are IPv4 / IPv6 addresses or the literal `"host-gateway"` (resolves to the host machine).
