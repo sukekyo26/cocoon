@@ -6,6 +6,10 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+### 削除
+
+- **BREAKING**: `workspace.toml` から `[git]` と `[repositories]` を削除しました。両セクションは既に非推奨と明記されていましたが、ローダが unknown field として拒否するようになります。移行方法: `[git]` は `[home_files] files = [".gitconfig"]` に置き換え、生成される `.devcontainer/initializeCommand` がホストの `~/.gitconfig` を bind-mount します (不在時は 0o600 で touch するので、bind mount がディレクトリを誤作成しません)。`[repositories]` は `mount_root = ".."` を設定し、親ディレクトリ配下にホスト側で `git clone` する従来パターンに統一してください — 旧セクションが表現していた "fat workspace" レイアウトと同じことが、ホストの既存 git 認証情報で再現可能かつ debuggable に実現できます。
+
 ### 追加
 
 - `cocoon <command> --help` の出力が `cocoon init` プロンプトや `cocoon gen` メッセージと同じ `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` のロケール判定に追従するようになりました。`WORKSPACE_LANG=ja` を指定する (または `ja_*` ロケールで実行する) と、コマンド説明・フラグ usage・セクション見出しがすべての主要サブコマンド (`init`, `gen`, `gen workspace`, `plugin {list,show,pin,scaffold}`, `self-update`, `version`, `completion`, `help`) で日本語化されます。英語表示は引き続き既定のままです。ただし root の英語ヘルプのレイアウトは少し変わります。これまでの cocoon 独自の見出し (`Commands:` と末尾の `Run 'cocoon <command> --help' for command-specific usage.` のヒント行) は廃止され、cobra 標準のレイアウト (`Available Commands:` と `Use "cocoon [command] --help" for more information about a command.`) に統一されました。これにより全サブコマンドのヘルプが同一テンプレートに揃います。翻訳対象はヘルプ表示のみで、サブコマンド名・フラグ名・オプション値はシェルスクリプトでの取り扱いを変えないよう ASCII を維持します。

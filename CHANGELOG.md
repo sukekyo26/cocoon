@@ -6,6 +6,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Removed
+
+- **BREAKING**: `[git]` and `[repositories]` are removed from `workspace.toml`. Both sections were already documented as deprecated; the loader now rejects them as unknown fields. Migration: replace `[git]` with `[home_files] files = [".gitconfig"]` and let the generated `.devcontainer/initializeCommand` bind-mount the host's `~/.gitconfig` (the file is touched at 0o600 if absent, so the bind mount does not create a directory). For `[repositories]`, set `mount_root = ".."` and `git clone` sibling repos under the parent directory on the host — the same "fat workspace" layout the old section attempted to express, but reproducible and authenticated through the host's existing git credentials.
+
 ### Added
 
 - `cocoon <command> --help` output now follows the same `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` locale detection that drives `cocoon init` prompts and `cocoon gen` notices, so setting `WORKSPACE_LANG=ja` (or running in a `ja_*` locale) prints Japanese command descriptions, flag usages, and section headers across every subcommand (`init`, `gen`, `gen workspace`, `plugin {list,show,pin,scaffold}`, `self-update`, `version`, `completion`, `help`). English remains the default. The English root help layout shifts slightly: cocoon's bespoke header (`Commands:` with a trailing `Run 'cocoon <command> --help' for command-specific usage.` hint) is replaced with cobra's standard layout (`Available Commands:` with `Use "cocoon [command] --help" for more information about a command.`), aligning every subcommand's help on a single template. The translation only touches help/usage display — sub-command names, flag names, and option values stay ASCII for shell scripting.
