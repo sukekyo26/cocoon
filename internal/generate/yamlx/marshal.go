@@ -49,7 +49,6 @@ func Quoted(s string) *yaml.Node {
 	}
 }
 
-// Plain returns a *yaml.Node representing s as a plain (unquoted) scalar.
 func Plain(s string) *yaml.Node {
 	return &yaml.Node{
 		Kind:  yaml.ScalarNode,
@@ -67,7 +66,6 @@ func QuotedIfSpecial(s string) *yaml.Node {
 	return Plain(s)
 }
 
-// Int returns a plain integer scalar node.
 func Int(i int) *yaml.Node {
 	return &yaml.Node{
 		Kind:  yaml.ScalarNode,
@@ -76,7 +74,6 @@ func Int(i int) *yaml.Node {
 	}
 }
 
-// Bool returns a plain boolean scalar node ("true" / "false").
 func Bool(b bool) *yaml.Node {
 	v := "false"
 	if b {
@@ -104,7 +101,6 @@ func Map(pairs ...Pair) *yaml.Node {
 	return &yaml.Node{Kind: yaml.MappingNode, Content: content}
 }
 
-// Seq builds a sequence node from the given items.
 func Seq(items ...*yaml.Node) *yaml.Node {
 	return &yaml.Node{Kind: yaml.SequenceNode, Content: items}
 }

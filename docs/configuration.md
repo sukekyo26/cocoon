@@ -22,7 +22,7 @@ The first match wins. Pass `--workspace <path>` to `cocoon gen` to override disc
 
 | Section | Required? | Purpose |
 |---|---|---|
-| `[workspace]` | optional | Generation-wide knobs (mount range, Dev Container toggle) |
+| `[workspace]` | optional | Generation-wide knobs (mount range, in-container workdir parent, Dev Container toggle) |
 | `[container]` | **required** | Image identity (service name, username, OS / version) |
 | `[container.resources]` | optional | Compose resource limits |
 | `[container.shell]` | optional | Login shell + per-shell rc injection |
@@ -49,8 +49,6 @@ The first match wins. Pass `--workspace <path>` to `cocoon gen` to override disc
 | `[services.<name>]` | optional | Sidecar services |
 | `[devcontainer.*]` | optional | Pass-through fields for `devcontainer.json` |
 
-[`[git]`](#deprecated-sections) and [`[repositories]`](#deprecated-sections) are still accepted by the parser but are deprecated; new projects should not use them.
-
 ---
 
 ## `[workspace]`
@@ -60,13 +58,17 @@ Generation-wide knobs. All fields optional; defaults apply when omitted.
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `mount_root` | string | `"."` | `"."` mounts cwd as the project, `".."` mounts the parent directory so sibling repos are visible. |
+| `dir` | string | `"workspace"` | In-container workdir parent under `/home/<user>/`. Slashes allowed for nested paths (e.g. `"work/myproject"`). Useful when a tool like AWS SAM expects a specific in-container path. Allowed chars: `[A-Za-z0-9._-]` per segment; no leading/trailing slash, no `.` or `..` segments. |
 | `devcontainer` | bool | `true` | Emit `.devcontainer/devcontainer.json` for VS Code Reopen-in-Container. |
 
 ```toml
 [workspace]
 mount_root = "."
+dir = "workspace"
 devcontainer = true
 ```
+
+With `mount_root = "."` (default) the in-container path is `/home/<user>/<dir>/<service>`; with `mount_root = ".."` it is `/home/<user>/<dir>`.
 
 ---
 
@@ -141,7 +143,7 @@ Compose resource limits. Omit any field to inherit Docker defaults (unlimited).
 
 ### `[container.shell]`
 
-Login shell plus per-shell rc injection. Aliases / env are appended to the rc file inside the image at build time; bash and zsh share POSIX syntax (`alias k='v'`, `export K=V`), and fish is translated automatically.
+Login shell plus per-shell rc injection. Aliases / env are appended to the rc file inside the image at build time; bash and zsh share POSIX syntax (`alias k='v'`, `export K=V`), and fish is translated automatically. Env values are emitted with double-quote semantics — fully-safe values stay unquoted (`export EDITOR=vim`), anything else is wrapped in `"..."` — so `$HOME` / `$PATH` are expanded by the shell when the rc is sourced (e.g. `NPM_CONFIG_PREFIX = "$HOME/.local"` resolves to `/home/<user>/.local`). POSIX `$(cmd)` command substitution also expands on bash/zsh and on fish 3.4+; older fish needs the native `(cmd)` form. For a literal `$`, the value passed to the generator must contain `\$` — in TOML that's a basic string `"\\$RAW"` or a literal string `'\$RAW'` (a plain `"\$RAW"` is not a valid TOML escape). Alias bodies stay single-quoted because the shell re-parses them on invocation, so a `$1` / `$HOME` inside an alias still resolves at call time.
 
 | Field | Type | Default | Notes |
 |---|---|---|---|
@@ -505,14 +507,51 @@ extensions = [
 
 ---
 
-## Deprecated sections
+## `[code_workspace]`
 
-These sections are still accepted by the parser for backward compatibility but may be removed in a future major release.
+Defines a VS Code `.code-workspace` file that `cocoon gen workspace` writes alongside `workspace.toml` by default (**not** under `.devcontainer/`). The output directory can be redirected with `--output <dir>`; the generator always relativizes folder paths against the directory the file is actually written to, so VS Code resolves them correctly regardless of where the file lands. The generator expands `~` as well, so a `"~/.claude"` entry lets VS Code traverse upward to `$HOME`-adjacent directories from the same window.
 
-### `[git]`
+This section has no effect on `cocoon gen` itself — the `.code-workspace` file is only written when you explicitly run `cocoon gen workspace`.
 
-Use [`[home_files]`](#home_files) — bind-mounting the host's `~/.gitconfig` keeps git identity in one place.
+```toml
+[code_workspace]
+# Output file basename without ".code-workspace" (default: project directory basename).
+name = "my-stack"
 
-### `[repositories]`
+# Inline-table array. `name` is optional and defaults to the basename of the
+# resolved path.
+folders = [
+    { path = "." },
+    { path = "~/.claude" },
+    { path = "../sibling-repo" },
+    { path = "~/.config/nvim", name = "Neovim" },
+]
 
-For multi-repo "fat" workspaces, `git clone` the sibling repos under the parent directory and set `mount_root = ".."`.
+[code_workspace.settings]
+"editor.tabSize" = 2
+"files.autoSave" = "afterDelay"
+
+[code_workspace.extensions]
+recommendations = ["golang.go", "ms-azuretools.vscode-docker"]
+```
+
+### Path resolution
+
+Folder paths are relativized against the **directory the `.code-workspace` file lives in** — by default that is the workspace.toml directory, but it shifts when `--output` is passed.
+
+| Input                | Resolves to (default output, project at `/home/u/proj`, `$HOME=/home/u`) |
+|---|---|
+| `.`                  | `.`                                                       |
+| `../sibling-repo`    | `../sibling-repo`                                         |
+| `~/.claude`          | `../.claude`                                              |
+| `~/.config/nvim`     | `../.config/nvim`                                         |
+| `/etc/nginx`         | `../../../etc/nginx`                                      |
+
+Relative entries like `../sibling-repo` are interpreted from the workspace.toml directory (so the value keeps the same meaning whether or not `--output` is set); the result is then re-anchored on the output directory for VS Code to consume.
+
+- `name` is optional. When omitted, the basename of the resolved path is used (`.` falls back to the project directory's basename).
+- `~user` (other-user home expansion) is rejected; only the current user's `~` and `~/<rest>` are supported.
+- `settings` is passed through verbatim to the `.code-workspace` `"settings"` object. When empty, the key is elided.
+- `extensions.recommendations` becomes the `"extensions": { "recommendations": [...] }` block. Empty list elides the whole `"extensions"` object.
+
+See [`cocoon gen workspace`](commands.md#cocoon-gen-workspace) for the CLI flags that pair with this section.

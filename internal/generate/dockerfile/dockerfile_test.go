@@ -806,6 +806,51 @@ func TestGenerate_HostIndependentImage(t *testing.T) {
 	}
 }
 
+// TestGenerate_WorkspaceDirOverride pins that [workspace].dir flows into
+// the Dockerfile's WORKDIR line and the entrypoint's COCOON_WORKSPACE /
+// COCOON_BIND_PATHS env vars. Multi-segment dirs (e.g. "work/myapp") must
+// survive verbatim — they describe the in-container parent directory, not
+// the host bind path.
+func TestGenerate_WorkspaceDirOverride(t *testing.T) {
+	t.Parallel()
+
+	root := repoRoot(t)
+	wsPath := filepath.Join(root, "tests", "fixtures", "snapshot-cwd.workspace.toml")
+	pluginsDir := filepath.Join(root, "internal", "plugin", "catalog")
+	ws, err := config.LoadWorkspace(wsPath)
+	if err != nil {
+		t.Fatalf("load workspace: %v", err)
+	}
+	if ws.Workspace == nil {
+		ws.Workspace = &config.WorkspaceSpec{}
+	}
+	ws.Workspace.Dir = "work/myapp"
+
+	var warns bytes.Buffer
+	plugins, err := plugin.LoadEnabled(pluginsDir, ws.Plugins.Enable, &warns)
+	if err != nil {
+		t.Fatalf("load plugins: %v", err)
+	}
+	ctx := &generate.WorkspaceContext{WS: ws, PluginsFS: os.DirFS(pluginsDir), Plugins: plugins, Warnings: &warns}
+	got, err := dockerfile.Generate(ctx, dockerfile.Options{
+		WorkspaceRoot: root, RepoDir: "cocoon", Plugins: plugins, Warnings: &warns,
+	})
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	for _, want := range []string{
+		"WORKDIR /home/${USERNAME}/work/myapp",
+		`ENV COCOON_WORKSPACE="/home/testuser/work/myapp/snapshot-test"`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in Dockerfile:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "WORKDIR /home/${USERNAME}/workspace\n") {
+		t.Errorf("Dockerfile still contains the default WORKDIR after dir override:\n%s", got)
+	}
+}
+
 // TestGenerate_BindPathsIncludeHomeRootMount pins that a [[mounts]] target at
 // exactly the user's home directory is recorded in COCOON_BIND_PATHS, so the
 // entrypoint's chown sweep prunes it instead of recursively re-owning the

@@ -18,7 +18,6 @@ var (
 	rxEnvKey       = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 	rxShellEnvKey  = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`)
 	rxAliasKey     = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_-]*$`)
-	rxRepoPath     = regexp.MustCompile(`^[A-Za-z0-9_-][A-Za-z0-9_./-]*$`)
 	// rxHomeFilesSegment: each path segment of a [home_files].files entry
 	// must consist only of POSIX portable filename chars (letters,
 	// digits, dot, hyphen, underscore). home_files paths flow into the
@@ -30,7 +29,6 @@ var (
 	// blacklist.
 	rxHomeFilesSegment = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
 	rxLang             = regexp.MustCompile(`^[a-z]{2,3}_[A-Z]{2}\.UTF-8$`)
-	rxEmail            = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
 	rxAbsolutePath     = regexp.MustCompile(`^/`)
 	// rxMountTarget: a [[mounts]].target is interpolated unquoted into the
 	// generated Dockerfile `ENV COCOON_BIND_PATHS="..."` line and into the
@@ -74,6 +72,26 @@ var (
 	// that contract so tags like `_internal` or `2.7.14` are accepted and
 	// `.hidden` / `-foo` / `library/node` / `node:24` are rejected.
 	rxImageVersion = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._-]*$`)
+	// rxWorkspaceDir validates [workspace].dir: one or more portable filename
+	// segments joined by `/`. Each segment uses the same POSIX portable
+	// charset rxHomeFilesSegment uses so the value can flow into Dockerfile
+	// WORKDIR / docker-compose mount targets / docker-entrypoint.sh chown
+	// loops without shell-special characters reaching those contexts. The
+	// regex rejects absolute paths (leading `/`), trailing slashes, and
+	// empty segments, but `.` and `..` slip through it because both consist
+	// of charset chars — IsValidWorkspaceDir / WorkspaceSpec.validate strip
+	// those with an explicit per-segment check so the field stays relative
+	// to /home/<user>/ and cannot encode container-escape paths.
+	rxWorkspaceDir = regexp.MustCompile(`^[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$`)
+	// rxCodeWorkspaceName validates [code_workspace].name: a single portable
+	// filename segment used verbatim as the output file basename
+	// (<name>.code-workspace). Slash, backslash, colon, and whitespace are
+	// rejected so the name cannot escape the project directory or break
+	// filesystem semantics. "." and ".." pass the charset regex (both
+	// consist of allowed chars) but would produce a broken output path, so
+	// IsValidCodeWorkspaceName / CodeWorkspaceSpec.validate strip them with
+	// an explicit per-string check.
+	rxCodeWorkspaceName = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
 )
 
 // portMin and portMax bound ports forwarded into the dev container.
@@ -88,6 +106,31 @@ func IsValidPluginID(id string) bool {
 	return rxPluginID.MatchString(id)
 }
 
+// IsValidWorkspaceDir lets `cocoon init` reject bad [workspace].dir input
+// before the toml is written. Mirrors WorkspaceSpec.validate's two-step
+// check (charset + "no `.`/`..` segment").
+func IsValidWorkspaceDir(s string) bool {
+	if !rxWorkspaceDir.MatchString(s) {
+		return false
+	}
+	for _, seg := range strings.Split(s, "/") {
+		if seg == "." || seg == ".." {
+			return false
+		}
+	}
+	return true
+}
+
+// IsValidCodeWorkspaceName lets `cocoon gen workspace --name` reject bad
+// input before the output path is computed. Mirrors
+// CodeWorkspaceSpec.validate's two-step check (charset + "not `.` or `..`").
+func IsValidCodeWorkspaceName(s string) bool {
+	if !rxCodeWorkspaceName.MatchString(s) {
+		return false
+	}
+	return s != "." && s != ".."
+}
+
 // Accumulator collects FieldError rows scoped under a base path. The zero
 // value is usable; NewAccumulator is just a convenience constructor.
 type Accumulator struct {
@@ -95,7 +138,6 @@ type Accumulator struct {
 	errs *[]FieldError
 }
 
-// NewAccumulator returns an empty Accumulator rooted at no base path.
 func NewAccumulator() *Accumulator {
 	errs := make([]FieldError, 0)
 	return &Accumulator{base: nil, errs: &errs}
@@ -123,7 +165,6 @@ func (a *Accumulator) At(seg ...string) *Accumulator {
 	return &Accumulator{base: out, errs: a.errs}
 }
 
-// Add records a FieldError at base+seg with the given message.
 func (a *Accumulator) Add(msg string, seg ...string) {
 	a.ensure()
 	loc := make([]string, 0, len(a.base)+len(seg))
@@ -176,9 +217,6 @@ func (w *Workspace) runValidate(a *Accumulator) {
 	if w.Certificates != nil {
 		w.Certificates.validate(a.At("certificates"))
 	}
-	if w.Git != nil {
-		w.Git.validate(a.At("git"))
-	}
 	for i, m := range w.Mounts {
 		m.validate(a.At("mounts", fmt.Sprintf("%d", i)))
 	}
@@ -186,12 +224,61 @@ func (w *Workspace) runValidate(a *Accumulator) {
 		w.HomeFiles.validate(a.At("home_files"))
 	}
 	w.validateServices(a)
-	w.validateRepositories(a)
+	if w.CodeWorkspace != nil {
+		w.CodeWorkspace.validate(a.At("code_workspace"))
+	}
+}
+
+// validate checks [code_workspace] structurally. Path-level semantics — "~"
+// expansion against $HOME, "~user" rejection, relativization against the
+// project directory — are enforced by the generator in
+// internal/generate/codeworkspace. The generator does NOT stat each path
+// (cocoon is a pure generator and a path that does not exist yet on the
+// current host is still a legal entry), so validation here only ensures the
+// workspace.toml can be safely consumed.
+func (c *CodeWorkspaceSpec) validate(a *Accumulator) {
+	if c.Name != "" {
+		switch {
+		case !rxCodeWorkspaceName.MatchString(c.Name):
+			a.Add(
+				`name must be a single path segment of [A-Za-z0-9._-] (no slash, backslash, colon, or whitespace)`,
+				"name",
+			)
+		case c.Name == "." || c.Name == "..":
+			a.Add(`name must not be "." or ".."`, "name")
+		}
+	}
+	for i, f := range c.Folders {
+		idx := fmt.Sprintf("%d", i)
+		if f.Path == "" {
+			a.At("folders", idx).Add("path must not be empty", "path")
+		}
+	}
 }
 
 func (w *WorkspaceSpec) validate(a *Accumulator) {
 	if w.MountRoot != "" && w.MountRoot != "." && w.MountRoot != ".." {
 		a.Add(`mount_root must be "." or ".."`, "mount_root")
+	}
+	if w.Dir == "" {
+		return
+	}
+	if !rxWorkspaceDir.MatchString(w.Dir) {
+		a.Add(
+			`dir must be one or more path segments of [A-Za-z0-9._-] joined by "/", `+
+				`with no leading/trailing slash (e.g. "workspace" or "work/myproject")`,
+			"dir",
+		)
+		return
+	}
+	// Each segment matches [A-Za-z0-9._-]+ so "." and ".." sneak through the
+	// regex — reject them explicitly to keep dir relative and inside the
+	// container home.
+	for _, seg := range strings.Split(w.Dir, "/") {
+		if seg == "." || seg == ".." {
+			a.Add(`dir must not contain "." or ".." path segments`, "dir")
+			return
+		}
 	}
 }
 
@@ -471,12 +558,6 @@ func containsWhitespaceOrCtrl(s string) bool {
 	return false
 }
 
-// hasDotDotSegment treats ".." as a full path segment (split on "/"),
-// distinct from a substring like "foo..bar".
-func hasDotDotSegment(p string) bool {
-	return slices.Contains(strings.Split(p, "/"), "..")
-}
-
 func (s *SecurityOptSpec) validate(a *Accumulator) {
 	if s.Seccomp != nil && *s.Seccomp == "" {
 		a.Add("seccomp must not be empty (omit the key to use Docker's default)", "seccomp")
@@ -734,12 +815,6 @@ func (l *LocaleSpec) validate(a *Accumulator) {
 	}
 }
 
-func (g *GitIdentitySpec) validate(a *Accumulator) {
-	if g.UserEmail != nil && !rxEmail.MatchString(*g.UserEmail) {
-		a.Add("user_email does not match "+rxEmail.String(), "user_email")
-	}
-}
-
 // No-op hook (only field is enable: bool); kept so future fields slot in
 // without re-wiring runValidate.
 func (*CertificatesSpec) validate(_ *Accumulator) {}
@@ -892,89 +967,6 @@ func (sm *SidecarMount) validate(a *Accumulator) {
 	}
 	if !rxAbsolutePath.MatchString(sm.Target) {
 		a.Add("target must be an absolute path", "target")
-	}
-}
-
-//nolint:gocognit,gocyclo // straight-line per-entry validation; splitting fragments the rules.
-func (w *Workspace) validateRepositories(a *Accumulator) {
-	if w.Repositories == nil || len(w.Repositories.Clone) == 0 {
-		return
-	}
-	scope := a.At("repositories", "clone")
-	seenPaths := make(map[string]int, len(w.Repositories.Clone))
-	seenURLs := make(map[string]int, len(w.Repositories.Clone))
-	for i, entry := range w.Repositories.Clone {
-		idx := fmt.Sprintf("%d", i)
-		if entry.URL == "" {
-			scope.Add("url must not be empty", idx, "url")
-		}
-		if entry.Path != nil {
-			p := *entry.Path
-			switch {
-			case hasDotDotSegment(p):
-				scope.Add("path must not contain `..` segments", idx, "path")
-			case !rxRepoPath.MatchString(p):
-				scope.Add(
-					`path must contain only [A-Za-z0-9_./-], not start with "." or "/" `+
-						`(e.g. "foo/bar")`, idx, "path")
-			}
-		}
-		var pathField string
-		if entry.Path != nil {
-			pathField = *entry.Path
-		}
-		resolved := ResolveRepoPath(pathField, entry.URL)
-		if resolved == "" {
-			scope.Add(fmt.Sprintf(
-				`[repositories].clone[%d]: cannot derive target path from url=%q; `+
-					`specify `+"`path`"+` explicitly.`,
-				i, entry.URL,
-			), idx)
-			continue
-		}
-		segments := strings.Split(resolved, "/")
-		for _, s := range segments {
-			if s == ".." {
-				scope.Add(fmt.Sprintf(
-					"[repositories].clone[%d].path=%q: must not contain `..` segments "+
-						"(would escape the parent workspace).",
-					i, resolved,
-				), idx, "path")
-				break
-			}
-		}
-		if strings.HasPrefix(resolved, "..") {
-			scope.Add(fmt.Sprintf(
-				"[repositories].clone[%d].path=%q: must not contain `..` segments "+
-					"(would escape the parent workspace).",
-				i, resolved,
-			), idx, "path")
-		}
-		if resolved == "workspace-docker" {
-			scope.Add(fmt.Sprintf(
-				"[repositories].clone[%d].path=%q: cannot overwrite workspace-docker itself.",
-				i, resolved,
-			), idx, "path")
-		}
-		if prev, ok := seenPaths[resolved]; ok {
-			scope.Add(fmt.Sprintf(
-				"[repositories].clone[%d].path=%q: collides with entry [%d] (same target dir).",
-				i, resolved, prev,
-			), idx, "path")
-		} else {
-			seenPaths[resolved] = i
-		}
-		if prev, ok := seenURLs[entry.URL]; ok {
-			scope.Add(fmt.Sprintf(
-				"[repositories].clone[%d].url=%q: duplicates entry [%d].",
-				i, entry.URL, prev,
-			), idx, "url")
-		} else {
-			seenURLs[entry.URL] = i
-		}
-		if entry.Depth != nil && *entry.Depth < 1 {
-			scope.Add("depth must be >= 1", idx, "depth")
-		}
 	}
 }
 

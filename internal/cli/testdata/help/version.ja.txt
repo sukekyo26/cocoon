@@ -1,0 +1,7 @@
+cocoon バイナリのバージョンを表示
+
+使い方:
+  cocoon version [flags]
+
+フラグ:
+  -h, --help   version のヘルプを表示

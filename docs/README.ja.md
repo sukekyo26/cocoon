@@ -92,19 +92,20 @@ docker compose -f .devcontainer/docker-compose.yml up -d # または VS Code で
 4. **ログインシェル** — `bash` / `zsh` / `fish`
 5. **エイリアスバンドル** — `git` / `ls` / `docker` のショートカット集 (複数選択)
 6. **マウント範囲** — cwd のみ、または親ディレクトリ (兄弟リポジトリも見える fat ワークスペース向け)
-7. **VS Code Dev Containers** 対応 — `devcontainer.json` を出力するかどうか
-8. **社内 CA 自動取り込み** — `~/.cocoon/certs/` 配下の `.crt` をビルド時に取り込むか opt-in (デフォルト off。下記参照)
-9. **ポートフォワード** — カンマ区切りの docker-compose short form (例: `3000:3000,5432:5432`)。空 Enter で見送ると `[ports]` 雛形はコメント行のまま残る (後で有効化可能)
-10. **apt カテゴリ** — text-editors / vcs / utilities / build / network / … (複数選択)
-11. **プラグイン** — 同梱カタログ 26 種から選択 (複数選択)
+7. **コンテナ内 workdir 名** — `/home/<user>/` 配下の親ディレクトリ名 (既定 `workspace`。スラッシュで多段階層も可。例: `work/myproject`。AWS SAM などコンテナ内パスをホスト構成に合わせたいツール向け)
+8. **VS Code Dev Containers** 対応 — `devcontainer.json` を出力するかどうか
+9. **社内 CA 自動取り込み** — `~/.cocoon/certs/` 配下の `.crt` をビルド時に取り込むか opt-in (デフォルト off。下記参照)
+10. **ポートフォワード** — カンマ区切りの docker-compose short form (例: `3000:3000,5432:5432`)。空 Enter で見送ると `[ports]` 雛形はコメント行のまま残る (後で有効化可能)
+11. **apt カテゴリ** — text-editors / vcs / utilities / build / network / … (複数選択)
+12. **プラグイン** — 同梱カタログから選択 (複数選択)
 
-各回答は自己説明的な 1 行として `workspace.toml` に書き込まれます。`--yes` と各値フラグ (`--service-name` / `--username` / `--image` / `--plugins` / `--certificates` / `--ports` …) を組み合わせれば TTY なしで CI から呼び出せます。
+各回答は自己説明的な 1 行として `workspace.toml` に書き込まれます。`--yes` と各値フラグ (`--service-name` / `--username` / `--image` / `--dir` / `--plugins` / `--certificates` / `--ports` …) を組み合わせれば TTY なしで CI から呼び出せます。
 
 ## プラグイン
 
-26 のプラグインが `go:embed` でバイナリに同梱されています:
+`go:embed` でバイナリに同梱されているプラグイン:
 
-`aws-cli`, `aws-sam-cli`, `bun`, `claude-code`, `copilot-cli`, `deno`, `docker-buildx`, `docker-cli`, `github-cli`, `go`, `google-chrome`, `helm`, `kubectl`, `lazygit`, `mise`, `nerd-fonts`, `node`, `opentofu`, `proto`, `rust`, `shellcheck`, `shfmt`, `starship`, `terraform`, `uv`, `zig`
+`aws-cli`, `aws-sam-cli`, `bun`, `claude-code`, `copilot-cli`, `dart`, `deno`, `docker-buildx`, `docker-cli`, `flutter`, `github-cli`, `go`, `google-chrome`, `helm`, `kubectl`, `lazygit`, `mise`, `nerd-fonts`, `node`, `opentofu`, `proto`, `rust`, `shellcheck`, `shfmt`, `starship`, `terraform`, `uv`, `zig`
 
 `~/.cocoon/plugins/<id>/` (ユーザースコープ) や `<project>/.cocoon/plugins/<id>/` (プロジェクトスコープ。リポジトリにコミット可) で上書き・追加できます。どちらの層も埋め込みカタログより優先されます。作成手順は [`docs/plugins.ja.md`](plugins.ja.md) を参照してください。
 

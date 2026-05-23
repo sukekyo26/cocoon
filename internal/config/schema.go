@@ -6,25 +6,23 @@ package config
 
 // Workspace mirrors workspace.toml.
 type Workspace struct {
-	Workspace    *WorkspaceSpec            `toml:"workspace,omitempty"`
-	Container    ContainerSpec             `toml:"container"`
-	Plugins      PluginsSpec               `toml:"plugins"`
-	Ports        *PortsSpec                `toml:"ports,omitempty"`
-	Apt          *AptSpec                  `toml:"apt,omitempty"`
-	Volumes      map[string]string         `toml:"volumes,omitempty"`
-	Env          map[string]string         `toml:"env,omitempty"`
-	Mounts       []Mount                   `toml:"mounts,omitempty"`
-	HomeFiles    *HomeFilesSpec            `toml:"home_files,omitempty"`
-	Locale       *LocaleSpec               `toml:"locale,omitempty"`
-	Certificates *CertificatesSpec         `toml:"certificates,omitempty"`
-	Git          *GitIdentitySpec          `toml:"git,omitempty"`
-	Dockerfile   *DockerfileSpec           `toml:"dockerfile,omitempty"`
-	Services     map[string]SidecarService `toml:"services,omitempty"`
-	Repositories *RepositoriesSpec         `toml:"repositories,omitempty"`
-	Devcontainer Devcontainer              `toml:"devcontainer,omitempty"`
+	Workspace     *WorkspaceSpec            `toml:"workspace,omitempty"`
+	Container     ContainerSpec             `toml:"container"`
+	Plugins       PluginsSpec               `toml:"plugins"`
+	Ports         *PortsSpec                `toml:"ports,omitempty"`
+	Apt           *AptSpec                  `toml:"apt,omitempty"`
+	Volumes       map[string]string         `toml:"volumes,omitempty"`
+	Env           map[string]string         `toml:"env,omitempty"`
+	Mounts        []Mount                   `toml:"mounts,omitempty"`
+	HomeFiles     *HomeFilesSpec            `toml:"home_files,omitempty"`
+	Locale        *LocaleSpec               `toml:"locale,omitempty"`
+	Certificates  *CertificatesSpec         `toml:"certificates,omitempty"`
+	Dockerfile    *DockerfileSpec           `toml:"dockerfile,omitempty"`
+	Services      map[string]SidecarService `toml:"services,omitempty"`
+	Devcontainer  Devcontainer              `toml:"devcontainer,omitempty"`
+	CodeWorkspace *CodeWorkspaceSpec        `toml:"code_workspace,omitempty"`
 }
 
-// HasDevcontainer reports whether a [devcontainer] table was present.
 func (w *Workspace) HasDevcontainer() bool { return len(w.Devcontainer) > 0 }
 
 // WorkspaceSpec models the optional [workspace] section. Defaults apply when
@@ -39,18 +37,33 @@ type WorkspaceSpec struct {
 	// nothing else; loaders enforce the same constraint.
 	MountRoot string `toml:"mount_root,omitempty"`
 
+	// Dir overrides the in-container workdir parent directory under
+	// /home/<user>/. Empty falls back to "workspace". Multi-segment paths
+	// (e.g. "work/myproject") are accepted so callers can match a host
+	// path layout that tools like AWS SAM expect. Validation lives in
+	// rxWorkspaceDir plus a per-segment check; together they reject
+	// absolute paths, "." and ".." segments, and any non-portable filename
+	// character.
+	Dir string `toml:"dir,omitempty"`
+
 	// DevContainer toggles emission of .devcontainer/devcontainer.json.
 	// Pointer so the loader can distinguish "field omitted" (defaults true)
 	// from an explicit `devcontainer = false`.
 	DevContainer *bool `toml:"devcontainer,omitempty"`
 }
 
-// MountRootOrDefault falls back to "." when [workspace] is omitted or empty.
 func (w *WorkspaceSpec) MountRootOrDefault() string {
 	if w == nil || w.MountRoot == "" {
 		return "."
 	}
 	return w.MountRoot
+}
+
+func (w *WorkspaceSpec) DirOrDefault() string {
+	if w == nil || w.Dir == "" {
+		return "workspace"
+	}
+	return w.Dir
 }
 
 // DevContainerOrDefault is true unless explicitly set false.
@@ -140,8 +153,9 @@ func (c *ContainerSpec) DockerSocketEnabled() bool {
 // Every image is apt-based so the cocoon plugin catalog works the same
 // way across all of them. ubuntu pulls its own archive (archive.ubuntu.com);
 // the other six are Debian (bookworm) variants and pull from
-// deb.debian.org. apt-mirror rewriting keys off this distinction —
-// see aptMirrorOriginHosts in internal/generate/dockerfile/dockerfile.go.
+// deb.debian.org. apt-mirror rewriting keys off this distinction via the
+// ImageOSFamily classification — see aptMirrorOriginHosts in
+// internal/generate/dockerfile/dockerfile.go.
 //
 //nolint:gochecknoglobals // tabular configuration data, file-scoped by design.
 var SupportedImages = []string{"ubuntu", "debian", "node", "python", "golang", "rust", "denoland/deno"}
@@ -206,6 +220,35 @@ var ImageProvidesPlugin = map[string]string{
 	"rust":          "rust",
 	"node":          "node",
 	"denoland/deno": "deno",
+}
+
+// ImageOSFamily classifies each SupportedImages entry by underlying distro
+// family so apt-related generators (currently aptMirrorOriginHosts) can
+// pick the right upstream archive hosts without hard-coding image ids.
+// Replaces the previous literal `if image == "ubuntu"` check in
+// aptMirrorOriginHosts so adding a future Ubuntu-derived image (e.g.
+// eclipse-temurin) is a one-line map edit rather than a code change.
+//
+// Values are the literal "ubuntu" and "debian" — the same names used as
+// image ids for the two plain-distro images. Sub-suite distinctions
+// (bookworm vs trixie) deliberately are not encoded here because the
+// archive host (`deb.debian.org/debian`) is the same across Debian suites.
+//
+// Every entry in SupportedImages MUST have a matching row here.
+// TestImageOSFamilyLockstep enforces the invariant in both directions;
+// at runtime, an image id with no row makes aptMirrorOriginHosts return
+// nil and buildAptMirrorRewrite skips emission entirely (rather than
+// silently falling through to the Debian host list).
+//
+//nolint:gochecknoglobals // tabular configuration data, file-scoped by design.
+var ImageOSFamily = map[string]string{
+	"ubuntu":        "ubuntu",
+	"debian":        "debian",
+	"node":          "debian",
+	"python":        "debian",
+	"golang":        "debian",
+	"rust":          "debian",
+	"denoland/deno": "debian",
 }
 
 // SkelEntry seeds a file from the build context into /etc/skel so useradd -m
@@ -324,12 +367,6 @@ type LocaleSpec struct {
 	Lang     *string `toml:"lang,omitempty"`
 }
 
-// GitIdentitySpec models [git].
-type GitIdentitySpec struct {
-	UserName  *string `toml:"user_name,omitempty"`
-	UserEmail *string `toml:"user_email,omitempty"`
-}
-
 // CertificatesSpec gates TLS certificate auto-bake from ~/.cocoon/certs/.
 // See docs/configuration.md `[certificates]`.
 type CertificatesSpec struct {
@@ -409,19 +446,43 @@ type SidecarService struct {
 	Restart     *SidecarRestart   `toml:"restart,omitempty"`
 }
 
-// RepositoryClone models one [[repositories.clone]] entry.
-type RepositoryClone struct {
-	URL               string  `toml:"url"`
-	Path              *string `toml:"path,omitempty"`
-	Branch            *string `toml:"branch,omitempty"`
-	Depth             *int    `toml:"depth,omitempty"`
-	RecurseSubmodules *bool   `toml:"recurse_submodules,omitempty"`
-}
-
-// RepositoriesSpec models [repositories].
-type RepositoriesSpec struct {
-	Clone []RepositoryClone `toml:"clone"`
-}
-
 // Devcontainer is a passthrough map: dump-devcontainer emits entries verbatim.
 type Devcontainer map[string]any
+
+// CodeWorkspaceSpec models the optional [code_workspace] section consumed by
+// `cocoon gen workspace`. Output is a <name>.code-workspace file written at
+// the project root (not under .devcontainer/), since VS Code's convention is
+// to keep workspace files alongside the project they describe.
+//
+//   - Name: output file basename (without the .code-workspace extension).
+//     Empty falls back to filepath.Base(projectDir).
+//   - Folders: inline-table array of {path, name}. name is optional and
+//     defaults to the basename of the resolved path. path supports "~"
+//     home expansion and is relativized against the directory the
+//     .code-workspace file is written to (the workspace.toml directory by
+//     default, or `cocoon gen workspace --output <dir>` when set).
+//   - Settings: VS Code workspace "settings" object, passed through verbatim
+//     as JSON. Empty map is elided from the output.
+//   - Extensions.Recommendations: VS Code recommended extension IDs, emitted
+//     as `"extensions": { "recommendations": [...] }`. Empty list is elided.
+type CodeWorkspaceSpec struct {
+	Name       string                `toml:"name,omitempty"`
+	Folders    []CodeWorkspaceFolder `toml:"folders,omitempty"`
+	Settings   map[string]any        `toml:"settings,omitempty"`
+	Extensions *CodeWorkspaceExtSpec `toml:"extensions,omitempty"`
+}
+
+// CodeWorkspaceFolder models one [[code_workspace.folders]] inline-table
+// entry. Path is required; Name is optional and defaults to the basename of
+// the resolved path at generation time.
+type CodeWorkspaceFolder struct {
+	Path string `toml:"path"`
+	Name string `toml:"name,omitempty"`
+}
+
+// CodeWorkspaceExtSpec models [code_workspace.extensions]. Only the
+// `recommendations` array is supported today; other VS Code extension keys
+// (e.g. `unwantedRecommendations`) can be added later if requested.
+type CodeWorkspaceExtSpec struct {
+	Recommendations []string `toml:"recommendations,omitempty"`
+}

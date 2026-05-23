@@ -20,6 +20,7 @@ type initFlags struct {
 	ImageVersion   string
 	Shell          string
 	MountRoot      string
+	Dir            string
 	Devcontainer   bool
 	NoDevcontainer bool
 	Certificates   bool
@@ -48,6 +49,8 @@ type initAnswers struct {
 	ShellSet          bool
 	MountRoot         string
 	MountRootSet      bool
+	Dir               string
+	DirSet            bool
 	Devcontainer      bool
 	DevcontainerSet   bool
 	Certificates      bool
@@ -161,6 +164,15 @@ func applyImageFlags(flags *initFlags, ans *initAnswers) error {
 		}
 		ans.MountRoot, ans.MountRootSet = flags.MountRoot, true
 	}
+	if flags.Dir != "" {
+		if !config.IsValidWorkspaceDir(flags.Dir) {
+			return fmt.Errorf(
+				`%w: --dir %q must be one or more path segments of [A-Za-z0-9._-] joined by "/" `+
+					`(no leading/trailing slash, no "." or ".." segments)`,
+				clihelpers.ErrUsage, flags.Dir)
+		}
+		ans.Dir, ans.DirSet = flags.Dir, true
+	}
 	return nil
 }
 
@@ -249,6 +261,14 @@ func applyDefaults(ans initAnswers, plugins map[string]*plugin.Plugin) (initAnsw
 	if ans.Username == "" {
 		return ans, fmt.Errorf("%w: --yes requires --username", clihelpers.ErrUsage)
 	}
+	applyIdentityDefaults(&ans)
+	applyWorkspaceDefaults(&ans)
+	applyListDefaults(&ans, plugins)
+	return ans, nil
+}
+
+// applyIdentityDefaults fills the image / shell-related fields.
+func applyIdentityDefaults(ans *initAnswers) {
 	if !ans.ImageSet {
 		ans.Image, ans.ImageSet = "ubuntu", true
 	}
@@ -258,8 +278,16 @@ func applyDefaults(ans initAnswers, plugins map[string]*plugin.Plugin) (initAnsw
 	if !ans.ShellSet {
 		ans.Shell, ans.ShellSet = "bash", true
 	}
+}
+
+// applyWorkspaceDefaults fills the [workspace]-related fields and the
+// devcontainer / certificates toggles.
+func applyWorkspaceDefaults(ans *initAnswers) {
 	if !ans.MountRootSet {
 		ans.MountRoot, ans.MountRootSet = ".", true
+	}
+	if !ans.DirSet {
+		ans.Dir, ans.DirSet = "workspace", true
 	}
 	if !ans.DevcontainerSet {
 		ans.Devcontainer, ans.DevcontainerSet = true, true
@@ -267,6 +295,10 @@ func applyDefaults(ans initAnswers, plugins map[string]*plugin.Plugin) (initAnsw
 	if !ans.CertificatesSet {
 		ans.Certificates, ans.CertificatesSet = false, true
 	}
+}
+
+// applyListDefaults fills the multi-select / plugin-related fields.
+func applyListDefaults(ans *initAnswers, plugins map[string]*plugin.Plugin) {
 	if !ans.AptSet {
 		ans.AptCategories, ans.AptSet = aptcategories.DefaultAptCategoryIDs(), true
 	}
@@ -285,7 +317,6 @@ func applyDefaults(ans initAnswers, plugins map[string]*plugin.Plugin) (initAnsw
 	if !ans.PluginVersionsSet {
 		ans.PluginVersions, ans.PluginVersionsSet = nil, true
 	}
-	return ans, nil
 }
 
 // defaultImageVersion returns SupportedImageVersions[image][0], which is

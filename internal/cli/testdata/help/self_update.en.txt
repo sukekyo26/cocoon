@@ -1,0 +1,19 @@
+cocoon self-update — replace the current binary with the latest release
+
+Hits the GitHub Releases API for sukekyo26/cocoon, compares the
+release tag against the build's compiled-in version string, and on
+update downloads the matching cocoon-<os>-<arch> asset under SHA-256
+verification before atomically replacing this executable.
+
+Exit codes:
+  0   already up to date, or replacement succeeded
+  100 (only with --check-only) a newer version exists
+  1   any other failure
+
+Usage:
+  cocoon self-update [flags]
+
+Flags:
+      --check-only   exit 0 if up to date, exit 100 if a newer release exists; never download
+      --force        reinstall even when the local binary is already the latest version
+  -h, --help         help for self-update

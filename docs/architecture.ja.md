@@ -38,6 +38,7 @@ flowchart LR
 | Discovery | `internal/config/discovery.go` | cwd → `.cocoon/` → 親ディレクトリ方向に `workspace.toml` を探索 (`.git` か `$HOME` で停止)。 |
 | Plugin LayeredFS | `internal/plugin/layered.go` | プロジェクト / ユーザー / 埋め込みプラグインツリーを `project > user > embedded` の優先度でオーバーレイ。 |
 | Generators | `internal/generate/{dockerfile,compose,devcontainerjson,envfile,shellrc}` | `.devcontainer/` 配下の各成果物を生成。プラグインの install スクリプトは LayeredFS から直接読み出し、bash heredoc で Dockerfile に埋め込む。 |
+| Workspace generator | `internal/generate/codeworkspace` | opt-in な `cocoon gen workspace` サブコマンド。`workspace.toml` の `[code_workspace]` を読み、folder path を `~` 展開後、`.code-workspace` を書き出すディレクトリ (既定は workspace.toml と同階層、`--output` 指定時はその先) 起点で相対化し、`<name>.code-workspace` をプロジェクトルート (`.devcontainer/` 配下ではない) に書き出す。 |
 | i18n catalog | `internal/i18n/` | CLI プロンプトと `workspace.toml` 内コメントを英語 / 日本語で切替。 |
 
 ## プラグインシステム
@@ -95,8 +96,10 @@ sequenceDiagram
 
 | 値 | ホスト側 | コンテナ側 | 用途 |
 |---|---|---|---|
-| `"."` (デフォルト) | cwd | `/home/$USER/workspace/<service>` | 単一リポジトリ開発 |
-| `".."` | cwd の親 | `/home/$USER/workspace` | 兄弟リポジトリも見える Fat ワークスペース |
+| `"."` (デフォルト) | cwd | `/home/$USER/<dir>/<service>` | 単一リポジトリ開発 |
+| `".."` | cwd の親 | `/home/$USER/<dir>` | 兄弟リポジトリも見える Fat ワークスペース |
+
+`<dir>` は既定で `workspace`、`[workspace] dir` で上書きできます (例: `dir = "work/myproject"`)。AWS SAM などコンテナ内パスをホスト構成に合わせたいツール向け。スラッシュで多段階層も可で、値は `/home/$USER/` 配下にそのまま展開されます。
 
 `devcontainer.json::workspaceFolder` も同じ選択に追従するので、VS Code が正しいディレクトリで開きます。
 
@@ -121,7 +124,8 @@ sequenceDiagram
 RUN <<COCOON_RC_BLOCK
 cat >>"$HOME/.bashrc" <<'COCOON_RC'
 # Auto-generated from [container.shell] of workspace.toml.
-export EDITOR='vim'
+export EDITOR=vim
+export NPM_CONFIG_PREFIX="$HOME/.local"
 alias gs='git status'
 
 # Source persistent user shellrc from the cocoon named volume
@@ -129,6 +133,8 @@ alias gs='git status'
 COCOON_RC
 COCOON_RC_BLOCK
 ```
+
+env の値はダブルクォートのセマンティクスで出力します (安全文字のみの値はクォート無し、それ以外は `"..."` で囲み `$` はそのまま残す) ため、rc を source する時点で `$HOME` / `$PATH` などがシェルにより展開されます。`$(cmd)` コマンド置換は bash/zsh と fish 3.4+ で動作します。それ以前の fish では fish 固有の `(cmd)` 記法を使ってください。リテラルの `$` は値が `\$` を含む必要があり、TOML では通常文字列 `"\\$RAW"` かリテラル文字列 `'\$RAW'` と書きます。alias の本文はシングルクォートで出力します。alias は呼び出し時にシェルが本文を再パースするので、`$1` や `$HOME` を含めても呼び出し時に正しく解釈されます。
 
 bash / zsh は `~/.cocoon/.shellrc`、fish は `~/.cocoon/.shellrc.fish` を source します。`[container.shell]` 未設定でも常に出力されるので、ユーザーは再生成なしで永続ファイルを編集できます。
 

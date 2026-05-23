@@ -11,6 +11,7 @@
 |---|---|
 | `cocoon init` | `workspace.toml` を対話で生成 |
 | `cocoon gen` | `.devcontainer/` 配下の成果物を生成 |
+| `cocoon gen workspace` | プロジェクトルートに `<name>.code-workspace` を生成 |
 | `cocoon plugin list` | 利用可能な全プラグインを表示 (埋め込み + 上書き) |
 | `cocoon plugin show <id>` | 解決後の plugin マニフェストを表示 |
 | `cocoon plugin pin <id> <ref>` | `[plugins.versions]` 配下の inline-table 行を生成 (stdout / `--write` で in-place) |
@@ -108,6 +109,36 @@ cocoon gen --workspace ./infra/workspace.toml --output ./infra
 ### TLS 証明書
 
 生成される `Dockerfile` / `docker-compose.yml` / `devcontainer.json` に cert 自動取り込み配線が乗るのは、ワークスペースが `[certificates] enable = true` (または `cocoon init --certificates`) で opt-in したときのみ。cert を扱わないワークスペースは cert-free 成果物 (`additional_contexts` なし、`RUN --mount=type=bind` なし、`initializeCommand` なし) を commit する。opt-in 時は `~/.cocoon/certs/*.crt` が build 時にトラストストアへマージされる。詳細は [`configuration.ja.md` の `[certificates]`](configuration.ja.md#certificates) を参照。
+
+### `cocoon gen workspace`
+
+`workspace.toml` の `[code_workspace]` セクションから VS Code `.code-workspace` ファイルを生成します。出力先は既定で `workspace.toml` と同階層 (`.devcontainer/` 配下ではない) なので、`code <name>.code-workspace` で開いてプロジェクトのエントリポイントとして扱えます。`--output <dir>` で出力先を切り替えた場合、folder path は **実際に書き出されるディレクトリ** 起点で相対化されるため、移動先からでも VS Code がパスを正しく解決します。`~` 展開にも対応するので、`"~/.claude"` のようなエントリが VS Code 側で上方向に辿れる相対パスへ解決されます。
+
+`cocoon gen` 本体はこのファイルを生成しません。サブコマンドは opt-in です。
+
+#### フラグ
+
+| フラグ | 型 | 説明 |
+|---|---|---|
+| `--workspace <path>` | string | `workspace.toml` のパス (デフォルト: cwd から探索)。 |
+| `--output <dir>` | string | `.code-workspace` を書き出すプロジェクトルート (デフォルト: `workspace.toml` のディレクトリ)。 |
+| `--name <basename>` | string | 出力ファイル名 (拡張子 `.code-workspace` を除く)。デフォルト: `[code_workspace].name` またはプロジェクトディレクトリの basename。単一のパスセグメントとしてバリデーションされます。 |
+| `--folder <path>[=<name>]` | 反復可 | `[code_workspace].folders` の後ろにフォルダを追加。`~` 展開対応。`=<name>` で自動導出された display name を上書き可能。 |
+
+#### 例
+
+```bash
+# workspace.toml の [code_workspace] をそのまま使う
+cocoon gen workspace
+
+# workspace.toml を編集せず一時的にフォルダを足す
+cocoon gen workspace --folder ~/.config/nvim --folder ../sibling-repo=Sibling
+
+# 出力ファイル名を上書き
+cocoon gen workspace --name my-stack
+```
+
+TOML スキーマとパス解決ルールは [`configuration.ja.md` の `[code_workspace]`](configuration.ja.md#code_workspace) を参照。
 
 ---
 
@@ -322,13 +353,3 @@ cocoon completion powershell | Out-String | Invoke-Expression
 | `1` | 失敗 (`ErrFailure` ラップ) |
 | `2` | usage エラー (`ErrUsage` ラップ) |
 | `100` | `cocoon self-update --check-only`: 更新あり |
-
----
-
-## 削除済みコマンド
-
-以下のノウングループ・サブコマンドは過去のリリースに存在しましたが **削除済み** です。古いコマンドを探して辿り着いた読者向けに、移行先を記載します。完全な移行手順は [CHANGELOG](CHANGELOG.ja.md) を参照してください。
-
-- **`cocoon config` (ノウングループ全体)** — `get` / `list` / `volumes` / `plugin-get` / `plugin-list` / `plugin-volumes` / `plugins-table` / `validate-workspace` / `validate-plugins` / `has-section` / `list-sidecars` / `dump-devcontainer` / `dump-repositories` / `repositories` / `format-repositories`。これらは引退済みの bash entry-point スクリプト用の低レベル TOML アクセサでした。`cocoon config` でスクレイプしていた外部スクリプトは専用の TOML パーサ (`tomlq` / `taplo` / 小さな Go / Python ヘルパ) に切り替えてください。
-- **`cocoon plugin add`** — 代わりに `[plugins].enable` に id を列挙してください（埋め込みカタログは LayeredFS でコピーなしに公開されます）。埋め込みプラグインを改変したい場合は `cocoon plugin scaffold <new-id>` で新しい id を作りロジックを移植する手順がサポート対象です。
-- **`cocoon plugin remove`** — `rm -rf ~/.cocoon/plugins/<id>` (ユーザースコープ) もしくは `rm -rf <workspace>/.cocoon/plugins/<id>` (プロジェクトスコープ) で代替できます。

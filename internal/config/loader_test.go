@@ -4,7 +4,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sukekyo26/cocoon/internal/config"
@@ -46,8 +45,6 @@ func TestLoadWorkspace_Full(t *testing.T) {
 	require.Equal(t, map[string]string{"EDITOR": "vim"}, ws.Env)
 	require.Len(t, ws.Mounts, 1)
 	require.True(t, ws.Mounts[0].Readonly)
-	require.NotNil(t, ws.Repositories)
-	require.Len(t, ws.Repositories.Clone, 2)
 	require.True(t, ws.HasDevcontainer())
 	require.Equal(t, "echo hi", ws.Devcontainer["postCreateCommand"])
 }
@@ -70,57 +67,6 @@ func TestLoadWorkspace_FileNotFound(t *testing.T) {
 	_, err := config.LoadWorkspace(filepath.Join("testdata", "config", "does_not_exist.toml"))
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "does_not_exist.toml")
-}
-
-func TestBasenameFromGitURL(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		name string
-		in   string
-		want string
-	}{
-		{"https with .git", "https://github.com/foo/bar.git", "bar"},
-		{"https without .git", "https://github.com/foo/bar", "bar"},
-		{"trailing slash", "https://github.com/foo/bar/", "bar"},
-		{"ssh scp", "git@github.com:foo/bar.git", "bar"},
-		{"empty", "", ""},
-		{"with query", "https://github.com/foo/bar.git?ref=main", "bar"},
-		{"with fragment", "https://github.com/foo/bar.git#tag", "bar"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			got := config.BasenameFromGitURL(tc.in)
-			if diff := cmp.Diff(tc.want, got); diff != "" {
-				t.Fatalf("mismatch (-want +got):\n%s", diff)
-			}
-		})
-	}
-}
-
-func TestResolveRepoPath(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		name      string
-		path, url string
-		want      string
-	}{
-		{"path empty falls back to basename", "", "https://github.com/foo/bar.git", "bar"},
-		{"explicit path", "vendor/bar", "https://github.com/foo/bar.git", "vendor/bar"},
-		{"trailing slash appends basename", "vendor/", "https://github.com/foo/bar.git", "vendor/bar"},
-		{"slashes-only path", "///", "https://github.com/foo/bar.git", ""},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			got := config.ResolveRepoPath(tc.path, tc.url)
-			if diff := cmp.Diff(tc.want, got); diff != "" {
-				t.Fatalf("mismatch (-want +got):\n%s", diff)
-			}
-		})
-	}
 }
 
 func TestValidationError_Error(t *testing.T) {

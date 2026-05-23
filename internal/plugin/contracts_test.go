@@ -136,6 +136,16 @@ func TestPluginContracts(t *testing.T) {
 			mustContain: []string{"GitHub", "retry 3"},
 		},
 		{
+			id: "flutter", name: "Flutter",
+			requiresRoot: true, versionCapable: true, firstVolume: "pub-cache",
+			mustContain: []string{
+				"flutter_infra_release", "FLUTTER_ROOT", "sha256sum -c -",
+				"tlsv1.2", "retry 3", "dpkg --print-architecture", "tar",
+				"linux/amd64",
+			},
+			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
+		},
+		{
 			id: "go", name: "Go",
 			requiresRoot: true, versionCapable: true, firstVolume: "go",
 			mustContain: []string{"go.dev", "retry 3", "GOPATH", "tlsv1.2"},
@@ -173,6 +183,15 @@ func TestPluginContracts(t *testing.T) {
 			mustContain: []string{
 				"nodejs.org/dist", "NODE_ARCH", "sha256sum -c -",
 				"tlsv1.2", "retry 3", "dpkg --print-architecture", "tar",
+			},
+			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
+		},
+		{
+			id: "dart", name: "Dart",
+			requiresRoot: true, versionCapable: true, firstVolume: "pub-cache",
+			mustContain: []string{
+				"dart-archive", "DART_ARCH", "sha256sum -c -",
+				"tlsv1.2", "retry 3", "dpkg --print-architecture", "unzip",
 			},
 			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
 		},

@@ -58,7 +58,7 @@ func TestRenderBash(t *testing.T) {
 		`RUN <<COCOON_RC_BLOCK`,
 		`cat >>"$HOME/.bashrc" <<'COCOON_RC'`,
 		"export EDITOR=vim",
-		"export PAGER='less -R'",
+		`export PAGER="less -R"`,
 		"alias gs='git status'",
 		`[ -f "$HOME/.cocoon/.shellrc" ] && . "$HOME/.cocoon/.shellrc"`,
 		"COCOON_RC",
@@ -94,8 +94,8 @@ func TestRenderFishUsesSetGxAndFishConfig(t *testing.T) {
 	}
 	wants := []string{
 		`cat >>"$HOME/.config/fish/config.fish"`,
-		"set -gx EDITOR 'vim'",
-		"set -gx PAGER 'less -R'",
+		`set -gx EDITOR "vim"`,
+		`set -gx PAGER "less -R"`,
 		"alias gs 'git status'",
 		`test -f "$HOME/.cocoon/.shellrc.fish"; and source "$HOME/.cocoon/.shellrc.fish"`,
 	}
@@ -130,11 +130,13 @@ func TestPosixQuotingPolicy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RenderDockerfileBlock: %v", err)
 	}
+	// Env values are emitted with double-quote semantics so $HOME expands
+	// at shell start-up; an apostrophe inside double quotes is harmless.
 	wants := []string{
-		"export DOLLAR='$HOME'",
-		"export EMPTY=''",
-		`export WITHQUOTE='it'"'"'s'`,
-		"export SPACES='less -R'",
+		`export DOLLAR="$HOME"`,
+		`export EMPTY=""`,
+		`export WITHQUOTE="it's"`,
+		`export SPACES="less -R"`,
 		"export SAFE=vim",
 	}
 	for _, w := range wants {
@@ -167,15 +169,16 @@ func TestFishQuotingPolicy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RenderDockerfileBlock: %v", err)
 	}
-	// fish: $-expansion does not happen inside single quotes so $HOME is
-	// emitted verbatim; a quote becomes \' and a backslash becomes \\.
+	// fish double quotes expand $VAR (parity with bash/zsh) and escape \ and
+	// ". \$ stays verbatim so callers can spell a literal $. Single quotes
+	// inside double quotes are literal.
 	wants := []string{
-		"set -gx DOLLAR '$HOME'",
-		"set -gx EMPTY ''",
-		`set -gx WITHQUOTE 'it\'s'`,
-		"set -gx SPACES 'less -R'",
-		"set -gx SAFE 'vim'",
-		`set -gx BACKSLASH 'a\\b'`,
+		`set -gx DOLLAR "$HOME"`,
+		`set -gx EMPTY ""`,
+		`set -gx WITHQUOTE "it's"`,
+		`set -gx SPACES "less -R"`,
+		`set -gx SAFE "vim"`,
+		`set -gx BACKSLASH "a\\b"`,
 	}
 	for _, w := range wants {
 		if !strings.Contains(got, w) {

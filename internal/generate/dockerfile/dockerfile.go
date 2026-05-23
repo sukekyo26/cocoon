@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/sukekyo26/cocoon/internal/aptbase"
+	"github.com/sukekyo26/cocoon/internal/config"
 	"github.com/sukekyo26/cocoon/internal/generate"
 	"github.com/sukekyo26/cocoon/internal/generate/shellrc"
 	"github.com/sukekyo26/cocoon/internal/generate/shellx"
@@ -68,12 +69,12 @@ type templateData struct {
 	ShellHistoryInit       string
 	DockerfilePreUserSetup string
 	SkelCopies             string
-	GitConfig              string
 	CustomCertificates     string
 	PluginInstalls         string
 	DockerfilePostPlugins  string
 	CocoonWorkspace        string
 	CocoonBindPaths        string
+	WorkspaceDir           string
 }
 
 //nolint:lll // Dockerfile RUN/echo lines cannot be wrapped without changing semantics.
@@ -188,10 +189,6 @@ RUN mkdir -p "$HOME/.cocoon" && \
 {{ . }}
 
 {{ end -}}
-{{ with .GitConfig -}}
-{{ . }}
-
-{{ end -}}
 {{ with .CustomCertificates -}}
 {{ . }}
 
@@ -227,7 +224,7 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["sleep", "infinity"]
 
-WORKDIR /home/${USERNAME}/workspace
+WORKDIR /home/${USERNAME}/{{ .WorkspaceDir }}
 `, nil)
 
 // Generate produces Dockerfile contents.
@@ -278,7 +275,6 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 	}
 	aptExtra := formatAptContinuations(aptExtraPkgs)
 
-	gitConfig := buildGitConfig(ctx)
 	preUser, postPlugins := buildDockerfileHooks(ctx, opts.Warnings)
 	genList, lang, language := ctx.ResolveLocale()
 
@@ -317,12 +313,12 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 		ShellHistoryInit:       buildShellHistoryInit(loginShell, rcPath),
 		DockerfilePreUserSetup: preUser,
 		SkelCopies:             buildSkelCopies(ctx),
-		GitConfig:              gitConfig,
 		CustomCertificates:     certInstallEnv,
 		PluginInstalls:         pluginInstalls,
 		DockerfilePostPlugins:  postPlugins,
 		CocoonWorkspace:        cocoonWorkspace,
 		CocoonBindPaths:        cocoonBindPaths,
+		WorkspaceDir:           ctx.WS.Workspace.DirOrDefault(),
 	}
 
 	out, err := tmplx.Render(tmpl, data)
@@ -349,7 +345,7 @@ func pickRepoDir(override, root string) string {
 func cocoonEntrypointPaths(ctx *generate.WorkspaceContext) (workspace, bindPaths string) {
 	user := ctx.Username()
 	home := "/home/" + user
-	workspace = home + "/workspace"
+	workspace = home + "/" + ctx.WS.Workspace.DirOrDefault()
 	if ctx.WS.Workspace.MountRootOrDefault() != ".." {
 		workspace += "/" + ctx.ServiceName()
 	}
@@ -497,15 +493,22 @@ func hasHTTPSAptSource(ctx *generate.WorkspaceContext) bool {
 // (archive.ubuntu.com / security.ubuntu.com / ports.ubuntu.com) while
 // Debian 12+ publishes from a single host with two paths
 // (deb.debian.org/debian for the main archive and deb.debian.org/debian-security
-// for security updates). Returns "" when no mirror is configured. The URL is
-// validated to contain neither `'` nor `|`, so single-quoting the sed
-// expressions is safe without further escaping.
+// for security updates). Returns "" when no mirror is configured, or when
+// aptMirrorOriginHosts returns no hosts — that branch is unreachable in
+// practice (validateImage rejects images outside SupportedImages upstream)
+// but guards against a silent half-baked rewrite if validation regresses.
+// The URL passes containsUnsafeForSed validation (no whitespace, control
+// chars, `'`, `|`, `&`, or `\` — see internal/config/validate.go), so
+// single-quoting the sed expressions is safe without further escaping.
 func buildAptMirrorRewrite(ctx *generate.WorkspaceContext) string {
 	url := ctx.AptMirrorURL()
 	if url == "" {
 		return ""
 	}
 	originHosts := aptMirrorOriginHosts(ctx.WS.Container.Image)
+	if len(originHosts) == 0 {
+		return ""
+	}
 	var sedLines strings.Builder
 	for _, host := range originHosts {
 		sedLines.WriteString("    -e 's|" + host + "|" + url + "|g' \\\n")
@@ -518,13 +521,16 @@ func buildAptMirrorRewrite(ctx *generate.WorkspaceContext) string {
 
 // aptMirrorOriginHosts returns the set of upstream archive URL prefixes the
 // generator rewrites when [apt.mirror].url is set. Ubuntu and Debian publish
-// from disjoint hosts; the list is keyed off [container].image so a Debian
-// build does not emit useless Ubuntu sed expressions (and vice versa).
+// from disjoint hosts; the family classification in config.ImageOSFamily
+// drives the branch so a Debian build does not emit useless Ubuntu sed
+// expressions (and vice versa).
 //
-// Only "ubuntu" maps to the Ubuntu archive hosts; every other supported
-// image (debian, node, python, golang, rust, denoland/deno) is
-// Debian-based and uses deb.debian.org regardless of which
-// language-runtime layer sits on top.
+// Returns nil when the image id has no row in ImageOSFamily — which
+// validateImage prevents upstream, and TestImageOSFamilyLockstep pins
+// against accidental desync — so any future regression skips the rewrite
+// block entirely instead of silently falling through to the Debian host
+// list. Adding an Ubuntu-derived image (e.g. eclipse-temurin) is therefore
+// just a one-line ImageOSFamily edit; this function needs no change.
 //
 // Order matters. The slice is consumed top-down by sed -e expressions, and
 // each expression sees the line as already-rewritten by every earlier one.
@@ -535,16 +541,20 @@ func buildAptMirrorRewrite(ctx *generate.WorkspaceContext) string {
 // (different hostnames), but they are listed longest-first too so that the
 // invariant "more specific patterns precede their prefixes" stays uniform.
 func aptMirrorOriginHosts(image string) []string {
-	if image == "ubuntu" {
+	switch config.ImageOSFamily[image] {
+	case "ubuntu":
 		return []string{
 			"http://archive.ubuntu.com/ubuntu/",
 			"http://security.ubuntu.com/ubuntu/",
 			"http://ports.ubuntu.com/ubuntu-ports/",
 		}
-	}
-	return []string{
-		"http://deb.debian.org/debian-security",
-		"http://deb.debian.org/debian",
+	case "debian":
+		return []string{
+			"http://deb.debian.org/debian-security",
+			"http://deb.debian.org/debian",
+		}
+	default:
+		return nil
 	}
 }
 
@@ -622,26 +632,6 @@ func buildSkelCopies(ctx *generate.WorkspaceContext) string {
 		fmt.Fprintf(&b, "COPY %s /etc/skel/%s", e.Source, e.Target)
 	}
 	return b.String()
-}
-
-func buildGitConfig(ctx *generate.WorkspaceContext) string {
-	name := ctx.GitUserName()
-	email := ctx.GitUserEmail()
-	var lines []string
-	if name != "" {
-		lines = append(lines, "git config --system user.name  "+shellx.ShellQuote(name))
-	}
-	if email != "" {
-		lines = append(lines, "git config --system user.email "+shellx.ShellQuote(email))
-	}
-	if len(lines) == 0 {
-		return ""
-	}
-	joined := strings.Join(lines, " \\\n && ")
-	return "# Git identity from [git] section of workspace.toml\n" +
-		"USER root\n" +
-		"RUN " + joined + "\n" +
-		"USER ${USERNAME}"
 }
 
 func buildDockerfileHooks(ctx *generate.WorkspaceContext, warnings io.Writer) (preUser, postPlugins string) {

@@ -66,6 +66,26 @@ func mountRootSelect(cat *i18n.Catalog, target *string) *huh.Select[string] {
 		Value(target)
 }
 
+// dirInput accepts blank input (caller treats blank as "keep default
+// workspace") and validates non-blank entries through the shared
+// IsValidWorkspaceDir so init never accepts a value `cocoon gen` would
+// later reject.
+func dirInput(cat *i18n.Catalog, target *string) *huh.Input {
+	return huh.NewInput().
+		Title(cat.Msg("init_prompt_dir")).
+		Description(cat.Msg("init_desc_dir")).
+		Validate(func(s string) error {
+			if s == "" {
+				return nil
+			}
+			if !config.IsValidWorkspaceDir(s) {
+				return errors.New(cat.Msg("init_err_dir_fmt")) //nolint:err113 // user-facing prompt
+			}
+			return nil
+		}).
+		Value(target)
+}
+
 func devcontainerConfirm(cat *i18n.Catalog, target *bool) *huh.Confirm {
 	return huh.NewConfirm().
 		Title(cat.Msg("init_prompt_devcontainer")).

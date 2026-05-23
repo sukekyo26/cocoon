@@ -17,6 +17,7 @@ type containerSpec struct {
 	Shell          string
 	Aliases        map[string]string
 	MountRoot      string
+	Dir            string
 	Devcontainer   bool
 	Certificates   bool
 	Packages       []string
@@ -51,6 +52,7 @@ func writeWorkspaceSection(sb *strings.Builder, cat *i18n.Catalog, s containerSp
 	sb.WriteByte('\n')
 	sb.WriteString("[workspace]\n")
 	fmt.Fprintf(sb, "mount_root = %q\n", s.MountRoot)
+	fmt.Fprintf(sb, "dir = %q\n", s.Dir)
 	fmt.Fprintf(sb, "devcontainer = %t\n\n", s.Devcontainer)
 }
 
@@ -199,6 +201,7 @@ func writeTrailingTemplates(sb *strings.Builder, cat *i18n.Catalog, s containerS
 	templateKeys = append(templateKeys,
 		"init_toml_template_services",
 		"init_toml_template_devcontainer",
+		"init_toml_template_code_workspace",
 	)
 	for _, key := range templateKeys {
 		emitTemplate(sb, cat, key)

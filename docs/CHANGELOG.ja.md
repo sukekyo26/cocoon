@@ -6,6 +6,24 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-05-23
+
+### 追加
+
+- `cocoon <command> --help` の出力が `cocoon init` プロンプトや `cocoon gen` メッセージと同じ `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` のロケール判定に追従するようになりました。`WORKSPACE_LANG=ja` を指定する (または `ja_*` ロケールで実行する) と、コマンド説明・フラグ usage・セクション見出しがすべての主要サブコマンド (`init`, `gen`, `gen workspace`, `plugin {list,show,pin,scaffold}`, `self-update`, `version`, `completion`, `help`) で日本語化されます。英語表示は引き続き既定のままです。ただし root の英語ヘルプのレイアウトは少し変わります。これまでの cocoon 独自の見出し (`Commands:` と末尾の `Run 'cocoon <command> --help' for command-specific usage.` のヒント行) は廃止され、cobra 標準のレイアウト (`Available Commands:` と `Use "cocoon [command] --help" for more information about a command.`) に統一されました。これにより全サブコマンドのヘルプが同一テンプレートに揃います。翻訳対象はヘルプ表示のみで、サブコマンド名・フラグ名・オプション値はシェルスクリプトでの取り扱いを変えないよう ASCII を維持します。
+- `cocoon gen workspace` サブコマンドを新設しました。`workspace.toml` の新しい `[code_workspace]` セクションから VS Code `.code-workspace` ファイルを生成します。出力は **プロジェクトルート** (`workspace.toml` と同階層、`.devcontainer/` 配下ではない) なので `code <name>.code-workspace` でそのまま開けます。`[code_workspace].folders` は inline-table 配列 (`{ path, name }`) を受け付け、`path` は `~` 展開 + `.code-workspace` を書き出すディレクトリ (既定は `workspace.toml` と同階層、`--output <dir>` 指定時はその先) 起点の相対化に対応するため、`"~/.claude"` のようなエントリも VS Code が上方向に辿れる相対パスへ解決されます。`[code_workspace]` は `settings` テーブルと `extensions.recommendations` 配列も受け付け、いずれも verbatim に反映されます。CLI フラグも 2 つ追加: `--name <basename>` で出力ファイル名を上書き、`--folder <path>[=<name>]` (反復可) で `workspace.toml` を編集せず一時的にフォルダを追加できます。既存の `cocoon gen` は変更なし — このサブコマンドは opt-in です。
+- `[workspace]` にオプションの `dir` フィールドを追加しました。コンテナ内 workdir の親ディレクトリ (`/home/<user>/` 配下) を上書きできます (既定 `workspace`)。スラッシュで多段階層も可 (例: `dir = "work/myproject"`)。AWS SAM などコンテナ内パスをホスト構成に合わせたいツール向け。値は `docker-compose.yml` の bind mount と `working_dir`、`devcontainer.json` の `workspaceFolder`、生成 `Dockerfile` の `WORKDIR` に反映されます。`cocoon init` で対話入力を取り (非対話なら `--dir`)、既定値でも `dir = "..."` を `workspace.toml` に必ず書き出します。
+- 新しい `dart` プラグインを追加。`storage.googleapis.com/dart-archive/channels/stable/release/` から Dart SDK を取得して `/usr/local/dart` に展開し、SHA256 検証を行います (`linux-x64` / `linux-arm64`)。`[plugins.versions]` で `dart = { pin = "..." }` を省略すると、公式の `channels/stable/release/latest/VERSION` エンドポイントから最新 stable を自動解決します。`PUB_CACHE=/home/${USERNAME}/.pub-cache` を named volume で永続化するため、`dart pub global activate <pkg>` の成果がコンテナ再ビルドを跨いで残ります。
+- 新しい `flutter` プラグインを追加。`storage.googleapis.com/flutter_infra_release/releases/stable/linux/` から Flutter SDK を取得して `/usr/local/flutter` に展開し、SHA256 検証を行います。**Linux/amd64 のみ対応** — Flutter は公式 Linux/arm64 ビルドを提供していないため、arm64 ホスト上では install が早期失敗し、`docker --platform linux/amd64` でコンテナを起動するよう案内します (Apple Silicon 上の Docker Desktop は自動的に linux/amd64 をエミュレートするので影響なし。ネイティブ arm64 Linux ホストでのみ問題になります)。`[plugins.versions]` で `flutter = { pin = "..." }` を省略すると、公式の `releases_linux.json` マニフェストから `current_release.stable` ハッシュを照合して最新 stable を自動解決します。`[apt].packages` に Linux desktop ビルド toolchain (`clang`, `cmake`, `ninja-build`, `pkg-config`, `libgtk-3-dev`, `liblzma-dev`, `build-essential`) と archive/utility 系依存 (`git`, `unzip`, `xz-utils`, `zip`, `libglu1-mesa`) を同梱しているので、追加設定なしで `flutter doctor` の Linux toolchain が緑になります。`PUB_CACHE=/home/${USERNAME}/.pub-cache` と `/home/${USERNAME}/.flutter` を named volume で永続化します。
+
+### 修正
+
+- `cocoon gen` が `[container.shell].env` の値をダブルクォートのセマンティクスで出力するようになり、rc を source した時点で `$HOME` / `$PATH` がシェルにより展開されるようになりました (`$(cmd)` は bash/zsh では常に、fish では 3.4+ が必要 — 古い fish は fish 固有の `(cmd)` 記法を使う)。従来はシングルクォートで囲んでいたため `export NPM_CONFIG_PREFIX='$HOME/.local'` となり、`$HOME` がリテラル文字列のまま残って `npm install -g` などが存在しないパスに書き込もうとしていました。fish 側 (`set -gx K "$HOME/..."`) も同じ修正を反映しています。リテラルの `$` は生成器に渡す値が `\$` を含む必要があります (`\` はシェルに素通し)。TOML では通常文字列 `"\\$RAW"` かリテラル文字列 `'\$RAW'` と書きます (`"\$RAW"` は TOML として無効なエスケープです)。alias の本文は呼び出し時にシェルが再パースするため、これまでどおりシングルクォートのまま出力します (`$1` や `$HOME` を含めても呼び出し時に正しく展開されます)。
+
+### 削除
+
+- **BREAKING**: `workspace.toml` から `[git]` と `[repositories]` を削除しました。両セクションは既に非推奨と明記されていましたが、ローダが unknown field として拒否するようになります。移行方法: `[git]` は `[home_files] files = [".gitconfig"]` に置き換え、生成される `.devcontainer/initializeCommand` がホストの `~/.gitconfig` を bind-mount します (不在時は 0o600 で touch するので、bind mount がディレクトリを誤作成しません)。`[repositories]` は `mount_root = ".."` を設定し、親ディレクトリ配下にホスト側で `git clone` する従来パターンに統一してください — 旧セクションが表現していた "fat workspace" レイアウトと同じことが、ホストの既存 git 認証情報で再現可能かつ debuggable に実現できます。
+
 ## [0.6.0] - 2026-05-18
 
 ### 追加
@@ -165,7 +183,8 @@ cocoon の主要な変更を記録します。フォーマットは
 - `COMPOSE_PROJECT_NAME` をプロジェクトディレクトリの basename から導出するように変更。docker compose の namespace がホストディレクトリと一致する。
 - 国際化 (英語 / 日本語) カタログを追加。CLI プロンプト・エラーメッセージ・`workspace.toml` インラインコメントすべてを `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` で切替可能。
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/sukekyo26/cocoon/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/sukekyo26/cocoon/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/sukekyo26/cocoon/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/sukekyo26/cocoon/compare/v0.3.1...v0.4.0

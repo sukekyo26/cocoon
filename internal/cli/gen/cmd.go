@@ -38,31 +38,16 @@ var errCertsPathNotDirectory = errors.New("cocoon certs path exists but is not a
 // reach; warnDockerCLIWithoutSocket flags that combination.
 const dockerCLIPluginID = "docker-cli"
 
-const genLong = `cocoon gen — generate .devcontainer/{Dockerfile, docker-compose.yml, devcontainer.json}
-
-Discovers workspace.toml from the current directory (walking parent
-directories until a .git boundary or $HOME), assembles the layered
-plugin catalog (embedded < user < project), and writes the generated
-artifacts under .devcontainer/. Plugin install scripts are inlined into
-the generated Dockerfile, so the build needs no external context
-beyond the project tree.
-
-After generation, start the container yourself:
-
-  docker compose -f .devcontainer/docker-compose.yml up -d
-
-…or open the project in VS Code and pick "Reopen in Container".`
-
-// NewCommand returns the cobra command for `cocoon gen`.
 func NewCommand(stdout, stderr io.Writer) *cobra.Command {
+	cat := i18n.New(i18n.Detect())
 	var (
 		workspaceFlag string
 		outputFlag    string
 	)
 	cmd := &cobra.Command{
 		Use:           "gen",
-		Short:         "Generate .devcontainer/ artifacts from workspace.toml",
-		Long:          genLong,
+		Short:         cat.Msg("cmd_gen_short"),
+		Long:          cat.Msg("cmd_gen_long"),
 		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -70,49 +55,64 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 			return runGen(stdout, stderr, workspaceFlag, outputFlag)
 		},
 	}
-	cmd.Flags().StringVar(
-		&workspaceFlag,
-		"workspace",
-		"",
-		"path to workspace.toml (default: discovered from cwd)",
-	)
-	cmd.Flags().StringVar(
-		&outputFlag,
-		"output",
-		"",
-		"project root to write generated artifacts under (default: directory of workspace.toml)",
-	)
+	cmd.Flags().StringVar(&workspaceFlag, "workspace", "", cat.Msg("flag_gen_workspace_usage"))
+	cmd.Flags().StringVar(&outputFlag, "output", "", cat.Msg("flag_gen_output_usage"))
 	clihelpers.AttachHelpAlias(cmd)
+	cmd.AddCommand(newWorkspaceCmd(stdout, stderr))
 	return cmd
 }
 
-func runGen(stdout, stderr io.Writer, workspaceFlag, outputFlag string) error {
-	cat := i18n.New(i18n.Detect())
-	log := logx.New(stdout, stderr)
+// loadGenContext resolves workspace.toml from workspaceFlag (falling back
+// to discovery from cwd), determines the output directory (defaulting to
+// the workspace.toml directory), assembles the layered plugin FS
+// (embedded < user < project), and returns a loaded WorkspaceContext.
+// Shared by `cocoon gen` and `cocoon gen workspace` so the discovery
+// rules stay in lockstep.
+func loadGenContext(stderr io.Writer, workspaceFlag, outputFlag string) (
+	outDir string,
+	ctx *generate.WorkspaceContext,
+	err error,
+) {
 	wsPath, err := resolveWorkspace(workspaceFlag)
 	if err != nil {
-		return err
+		return "", nil, err
 	}
-	outDir := outputFlag
+	outDir = outputFlag
 	if outDir == "" {
 		outDir = filepath.Dir(wsPath)
 	}
-
+	// Normalize to an absolute path so downstream callers can mix it with
+	// abs paths (filepath.Rel rejects relative + absolute) and display
+	// helpers stay deterministic regardless of cwd-at-print-time.
+	outDir, err = filepath.Abs(outDir)
+	if err != nil {
+		return "", nil, fmt.Errorf("%w: resolve --output: %w", clihelpers.ErrUsage, err)
+	}
 	catalog, err := plugin.CatalogFS()
 	if err != nil {
-		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+		return "", nil, fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
 	}
 	userPluginDir, err := userPluginsDir()
 	if err != nil {
-		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+		return "", nil, fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
 	}
 	projectPluginDir := filepath.Join(filepath.Dir(wsPath), ".cocoon", "plugins")
 	layered := plugin.NewLayeredFS(catalog, userPluginDir, projectPluginDir)
 	layered.LogOverrides(stderr)
 
-	ctx, err := generatecli.LoadContext(wsPath, layered, "", stderr)
+	ctx, err = generatecli.LoadContext(wsPath, layered, "", stderr)
 	if err != nil {
-		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+		return "", nil, fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+	}
+	return outDir, ctx, nil
+}
+
+func runGen(stdout, stderr io.Writer, workspaceFlag, outputFlag string) error {
+	cat := i18n.New(i18n.Detect())
+	log := logx.New(stdout, stderr)
+	outDir, ctx, err := loadGenContext(stderr, workspaceFlag, outputFlag)
+	if err != nil {
+		return err
 	}
 	arts, err := generatecli.BuildArtifacts(ctx, stderr)
 	if err != nil {

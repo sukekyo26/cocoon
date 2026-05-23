@@ -12,33 +12,13 @@ import (
 
 	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
 	"github.com/sukekyo26/cocoon/internal/config"
+	"github.com/sukekyo26/cocoon/internal/i18n"
 	"github.com/sukekyo26/cocoon/internal/logx"
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
 
-const pinLong = `cocoon plugin pin — emit pin lines for [plugins.versions] (and optionally [plugins.methods])
-
-By default a ` + "`<id> = { pin = \"<ref>\" }`" + ` line is printed to stdout for you
-to paste under the [plugins.versions] section in workspace.toml. With
---write the line is upserted in place (inserted, or the existing
-<id> = { ... } line is replaced); comments and blank lines outside the
-target line are preserved verbatim.
-
-Use the --amd64-checksum / --arm64-checksum flags when the upstream
-release ships per-arch SHA256 sums you want the install script to
-verify. Plugins that declare verify = "pgp" in plugin.toml verify
-downloads against a bundled signature instead; passing checksum flags
-to those plugins is rejected.
-
-Pass --method <name> for plugins that declare two or more entries under
-[install.methods] in their plugin.toml — the pin then writes (or prints)
-both lines together: ` + "`<id> = \"<method>\"`" + ` for [plugins.methods] and
-the inline-table line for [plugins.versions]. Checksums are workspace-
-scoped (not per-method); when switching methods, refresh
---amd64-checksum / --arm64-checksum so the install script's SHA256
-verification still matches the new artifact.`
-
 func newPinCmd(stdout, stderr io.Writer) *cobra.Command {
+	cat := i18n.New(i18n.Detect())
 	var (
 		amd64Checksum string
 		arm64Checksum string
@@ -47,8 +27,8 @@ func newPinCmd(stdout, stderr io.Writer) *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:           "pin <id> <ref>",
-		Short:         "Emit inline-table pin lines for workspace.toml (stdout, or in-place with --write)",
-		Long:          pinLong,
+		Short:         cat.Msg("cmd_plugin_pin_short"),
+		Long:          cat.Msg("cmd_plugin_pin_long"),
 		Args:          cobra.ExactArgs(2),
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -56,15 +36,10 @@ func newPinCmd(stdout, stderr io.Writer) *cobra.Command {
 			return runPin(stdout, stderr, args[0], args[1], amd64Checksum, arm64Checksum, method, write)
 		},
 	}
-	cmd.Flags().StringVar(&amd64Checksum, "amd64-checksum", "", "sha256 of the amd64 artifact (optional)")
-	cmd.Flags().StringVar(&arm64Checksum, "arm64-checksum", "", "sha256 of the arm64 artifact (optional)")
-	cmd.Flags().StringVar(&method, "method", "",
-		"install method name; only meaningful for plugins that declare [install.methods]. "+
-			"When set, the command pins both [plugins.methods] and [plugins.versions] in a "+
-			"single workspace.toml read-write. When omitted, only [plugins.versions] is updated "+
-			"(the existing [plugins.methods] entry — or the plugin's default_method — stays in effect).")
-	cmd.Flags().BoolVar(&write, "write", false,
-		"upsert the inline-table line in workspace.toml (auto-discovered from cwd)")
+	cmd.Flags().StringVar(&amd64Checksum, "amd64-checksum", "", cat.Msg("flag_plugin_pin_amd64_checksum_usage"))
+	cmd.Flags().StringVar(&arm64Checksum, "arm64-checksum", "", cat.Msg("flag_plugin_pin_arm64_checksum_usage"))
+	cmd.Flags().StringVar(&method, "method", "", cat.Msg("flag_plugin_pin_method_usage"))
+	cmd.Flags().BoolVar(&write, "write", false, cat.Msg("flag_plugin_pin_write_usage"))
 	return cmd
 }
 

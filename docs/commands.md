@@ -11,6 +11,7 @@ Reference for every command exposed by the `cocoon` binary.
 |---|---|
 | `cocoon init` | Generate `workspace.toml` interactively |
 | `cocoon gen` | Generate `.devcontainer/` artifacts |
+| `cocoon gen workspace` | Generate `<name>.code-workspace` at the project root |
 | `cocoon plugin list` | List every available plugin (embedded + overlays) |
 | `cocoon plugin show <id>` | Print the resolved manifest for one plugin |
 | `cocoon plugin pin <id> <ref>` | Emit an inline-table line for `[plugins.versions]` (stdout, or in-place with `--write`) |
@@ -108,6 +109,36 @@ cocoon gen --workspace ./infra/workspace.toml --output ./infra
 ### TLS certificates
 
 The generated `Dockerfile` / `docker-compose.yml` / `devcontainer.json` carry cert auto-bake wiring **only when the workspace opts in** via `[certificates] enable = true` (or `cocoon init --certificates`). Cert-free workspaces commit cert-free artifacts (no `additional_contexts`, no `RUN --mount=type=bind`, no `initializeCommand`). When opted in, the trust store ingests any `~/.cocoon/certs/*.crt` files at build time. See [`[certificates]` in `configuration.md`](configuration.md#certificates) for the full setup and team workflow.
+
+### `cocoon gen workspace`
+
+Generate a VS Code `.code-workspace` file from the `[code_workspace]` section of `workspace.toml`. By default the file is written next to `workspace.toml` (**not** under `.devcontainer/`), so VS Code can open it with `code <name>.code-workspace` and treat it as the project's entry point. Pass `--output <dir>` to redirect the file elsewhere — folder paths are always relativized against the directory the file is actually written to, so VS Code resolves them correctly from that location. Paths in `folders[]` are `~`-expanded as well, which is what lets entries like `"~/.claude"` resolve to a path VS Code can traverse upward.
+
+`cocoon gen` itself does **not** emit this file — the subcommand is opt-in.
+
+#### Flags
+
+| Flag | Type | Description |
+|---|---|---|
+| `--workspace <path>` | string | Path to `workspace.toml` (default: discovered from cwd). |
+| `--output <dir>` | string | Project root to write the `.code-workspace` under (default: directory of `workspace.toml`). |
+| `--name <basename>` | string | Output file basename without `.code-workspace` (default: `[code_workspace].name` or project directory basename). Validated as a single path segment. |
+| `--folder <path>[=<name>]` | repeatable | Append a folder after `[code_workspace].folders`. Supports `~` expansion. Pass `=<name>` to override the auto-derived display name. |
+
+#### Examples
+
+```bash
+# Use [code_workspace] from workspace.toml as-is
+cocoon gen workspace
+
+# Add ad-hoc folders without editing workspace.toml
+cocoon gen workspace --folder ~/.config/nvim --folder ../sibling-repo=Sibling
+
+# Override the file name
+cocoon gen workspace --name my-stack
+```
+
+See [`[code_workspace]` in `configuration.md`](configuration.md#code_workspace) for the TOML schema and path-resolution rules.
 
 ---
 
@@ -322,13 +353,3 @@ cocoon completion powershell | Out-String | Invoke-Expression
 | `1` | Failure (`ErrFailure`-wrapped) |
 | `2` | Usage error (`ErrUsage`-wrapped) |
 | `100` | `cocoon self-update --check-only`: an update is available |
-
----
-
-## Removed commands
-
-The following noun groups and subcommands existed in earlier releases and have been **removed**. They are documented here so readers searching for an old command know where they went; full migration notes live in the [CHANGELOG](../CHANGELOG.md).
-
-- **`cocoon config` (entire noun group)** — `get`, `list`, `volumes`, `plugin-get`, `plugin-list`, `plugin-volumes`, `plugins-table`, `validate-workspace`, `validate-plugins`, `has-section`, `list-sidecars`, `dump-devcontainer`, `dump-repositories`, `repositories`, `format-repositories`. These were low-level TOML accessors used by retired bash entry-point scripts. External scripts that scraped `workspace.toml` via `cocoon config` should switch to a dedicated TOML parser (`tomlq`, `taplo`, or a small Go / Python helper).
-- **`cocoon plugin add`** — replaced by listing the id under `[plugins].enable` (the embedded catalog is exposed through LayeredFS without a copy step). To customise an embedded plugin, run `cocoon plugin scaffold <new-id>` and adapt logic from there.
-- **`cocoon plugin remove`** — replaced by `rm -rf ~/.cocoon/plugins/<id>` (user scope) or `rm -rf <workspace>/.cocoon/plugins/<id>` (project scope).

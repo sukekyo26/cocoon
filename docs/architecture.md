@@ -38,6 +38,7 @@ flowchart LR
 | Discovery | `internal/config/discovery.go` | Walks cwd → `.cocoon/` → parents to locate `workspace.toml`, stopping at `.git` or `$HOME`. |
 | Plugin LayeredFS | `internal/plugin/layered.go` | Overlays project / user / embedded plugin trees with priority `project > user > embedded`. |
 | Generators | `internal/generate/{dockerfile,compose,devcontainerjson,envfile,shellrc}` | Emit each artifact under `.devcontainer/`. Plugin install scripts are read directly from the LayeredFS and inlined into the generated Dockerfile via a quoted bash heredoc. |
+| Workspace generator | `internal/generate/codeworkspace` | Opt-in `cocoon gen workspace` subcommand. Reads `[code_workspace]` from `workspace.toml`, `~`-expands folder paths and relativizes them against the directory the `.code-workspace` file is written to (the workspace.toml directory by default, or `--output` when set), and writes `<name>.code-workspace` at the project root (not under `.devcontainer/`). |
 | i18n catalog | `internal/i18n/` | Switches CLI prompts and inline `workspace.toml` comments between English and Japanese. |
 
 ## Plugin system
@@ -95,8 +96,10 @@ Each artifact is rendered into memory first, then written atomically through `in
 
 | Value | Host source | Container target | Use case |
 |---|---|---|---|
-| `"."` (default) | cwd | `/home/$USER/workspace/<service>` | Single-repo development |
-| `".."` | parent of cwd | `/home/$USER/workspace` | Fat workspace where sibling repos must be visible |
+| `"."` (default) | cwd | `/home/$USER/<dir>/<service>` | Single-repo development |
+| `".."` | parent of cwd | `/home/$USER/<dir>` | Fat workspace where sibling repos must be visible |
+
+`<dir>` defaults to `workspace` and can be overridden via `[workspace] dir` (e.g. `dir = "work/myproject"`) when the in-container path needs to mirror a specific host layout — useful for tools like AWS SAM that key off absolute paths. Multi-segment values land verbatim under `/home/$USER/`.
 
 `devcontainer.json::workspaceFolder` follows the same choice so VS Code lands in the right directory.
 
@@ -121,7 +124,8 @@ The same heredoc also appends a final line that sources the user's persistent sh
 RUN <<COCOON_RC_BLOCK
 cat >>"$HOME/.bashrc" <<'COCOON_RC'
 # Auto-generated from [container.shell] of workspace.toml.
-export EDITOR='vim'
+export EDITOR=vim
+export NPM_CONFIG_PREFIX="$HOME/.local"
 alias gs='git status'
 
 # Source persistent user shellrc from the cocoon named volume
@@ -129,6 +133,8 @@ alias gs='git status'
 COCOON_RC
 COCOON_RC_BLOCK
 ```
+
+Env values are emitted with double-quote semantics (fully-safe values stay unquoted; anything else is wrapped in `"..."`, with `$` left intact) so references like `$HOME` / `$PATH` are expanded by the shell when the rc file is sourced. `$(cmd)` command substitution works on bash/zsh and on fish 3.4+; older fish needs the native `(cmd)` form. A literal `$` requires the value to contain `\$` — write that in TOML as a basic string `"\\$RAW"` or a literal string `'\$RAW'`. Alias bodies use single quotes because the shell re-parses them on invocation, so `$1` and `$HOME` inside an alias still resolve at call time.
 
 Bash / zsh source `~/.cocoon/.shellrc`; fish sources `~/.cocoon/.shellrc.fish`. The bootstrap is unconditional (it always emits, even when `[container.shell]` is unset), so the user can always edit the persistent file without re-generating.
 

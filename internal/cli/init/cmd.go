@@ -18,35 +18,13 @@ import (
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
 
-const initLong = `cocoon init — generate workspace.toml in the current directory
-
-Asks (when running interactively) for the container service name, the
-inside-the-container username, the base image / version, the mount range,
-whether to emit .devcontainer/devcontainer.json, and which categories
-of common apt packages to install. service_name and username have no
-default — you must type them — because cocoon refuses to bake either
-the cwd basename or your host $USER into a file you may commit.
-
-The interactive flow asks each question on its own screen. Empty
-service-name / username are rejected on submission. shift+tab does
-not navigate back across questions — re-run cocoon init to fix an
-earlier answer. (Each prompt being its own form sidesteps a class of
-viewport-sizing bugs in huh's multi-Group + OptionsFunc combination
-that caused the cursor indicator to stay pinned while options
-scrolled under it.)
-
-Use --yes plus --service-name / --username (both required when --yes
-is set) and any of --image / --image-version / --shell / --mount-root /
---devcontainer / --apt-categories / --plugins / --alias-bundles to drive
-non-interactively from CI.`
-
-// NewCommand returns the cobra command for `cocoon init`.
 func NewCommand(stdout, stderr io.Writer) *cobra.Command {
+	cat := i18n.New(i18n.Detect())
 	var flags initFlags
 	cmd := &cobra.Command{
 		Use:           "init",
-		Short:         "Create workspace.toml in the current directory",
-		Long:          initLong,
+		Short:         cat.Msg("cmd_init_short"),
+		Long:          cat.Msg("cmd_init_long"),
 		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -54,62 +32,27 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 			return runInit(cmd, stdout, stderr, &flags)
 		},
 	}
-	cmd.Flags().BoolVar(&flags.AutoYes, "yes", false, "skip optional prompts; --service-name and --username then required")
-	cmd.Flags().StringVar(&flags.ServiceName, "service-name", "", "compose service name (required with --yes)")
-	cmd.Flags().StringVar(&flags.Username, "username", "", "in-container user (required with --yes)")
+	cmd.Flags().BoolVar(&flags.AutoYes, "yes", false, cat.Msg("flag_init_yes_usage"))
+	cmd.Flags().StringVar(&flags.ServiceName, "service-name", "", cat.Msg("flag_init_service_name_usage"))
+	cmd.Flags().StringVar(&flags.Username, "username", "", cat.Msg("flag_init_username_usage"))
 	cmd.Flags().StringVar(&flags.Image, "image", "",
-		fmt.Sprintf("base image: %s", strings.Join(config.SupportedImages, ", ")))
-	cmd.Flags().StringVar(&flags.ImageVersion, "image-version", "",
-		"base image tag — any well-formed Docker tag is accepted; --image must also be set")
+		cat.Msg("flag_init_image_usage", strings.Join(config.SupportedImages, ", ")))
+	cmd.Flags().StringVar(&flags.ImageVersion, "image-version", "", cat.Msg("flag_init_image_version_usage"))
 	cmd.Flags().StringVar(&flags.Shell, "shell", "",
-		fmt.Sprintf("container login shell: %s (default: bash)", strings.Join(config.SupportedShells, ", ")))
-	cmd.Flags().StringVar(&flags.MountRoot, "mount-root", "", `mount range: "." (cwd, default) or ".." (parent)`)
-	cmd.Flags().BoolVar(&flags.Devcontainer, "devcontainer", false, "force-enable .devcontainer/devcontainer.json output")
-	cmd.Flags().BoolVar(&flags.NoDevcontainer, "no-devcontainer", false, "skip .devcontainer/devcontainer.json output")
-	cmd.Flags().BoolVar(&flags.Certificates, "certificates", false,
-		"force-enable [certificates] auto-bake from ~/.cocoon/certs/")
-	cmd.Flags().BoolVar(&flags.NoCertificates, "no-certificates", false,
-		"skip the [certificates] section (default off)")
-	cmd.Flags().StringVar(
-		&flags.AptCategories,
-		"apt-categories",
-		"",
-		"comma-separated apt category IDs (skips the multi-select prompt)",
-	)
-	cmd.Flags().StringVar(
-		&flags.Plugins,
-		"plugins",
-		"",
-		"comma-separated plugin IDs to enable (skips the plugin multi-select prompt)",
-	)
-	cmd.Flags().StringVar(
-		&flags.PluginVersions,
-		"plugin-versions",
-		"",
-		"comma-separated <id>=<ref> pins for version_capable plugins (each <id> must also appear in --plugins)",
-	)
-	cmd.Flags().StringVar(
-		&flags.PluginMethods,
-		"plugin-methods",
-		"",
-		"comma-separated <id>=<method> picks for plugins that declare multiple [install.methods] "+
-			"(each <id> must also appear in --plugins; <method> must be a declared key)",
-	)
-	cmd.Flags().StringVar(
-		&flags.AliasBundles,
-		"alias-bundles",
-		"",
-		"comma-separated shell-alias bundle IDs (skips the bundles multi-select prompt; e.g. git,ls)",
-	)
-	cmd.Flags().StringVar(
-		&flags.Ports,
-		"ports",
-		"",
-		"comma-separated docker-compose short-form port mappings — "+
-			"[HOST_IP:][HOST:]CONTAINER[/PROTOCOL]; numeric ranges (N-M) and tcp|udp are accepted "+
-			"(e.g. 3000,3000-3005,8000:8000,127.0.0.1:5432:5432/tcp,6060:6060/udp); skips the ports prompt",
-	)
-	cmd.Flags().BoolVar(&flags.Force, "force", false, "overwrite an existing workspace.toml")
+		cat.Msg("flag_init_shell_usage", strings.Join(config.SupportedShells, ", ")))
+	cmd.Flags().StringVar(&flags.MountRoot, "mount-root", "", cat.Msg("flag_init_mount_root_usage"))
+	cmd.Flags().StringVar(&flags.Dir, "dir", "", cat.Msg("flag_init_dir_usage"))
+	cmd.Flags().BoolVar(&flags.Devcontainer, "devcontainer", false, cat.Msg("flag_init_devcontainer_usage"))
+	cmd.Flags().BoolVar(&flags.NoDevcontainer, "no-devcontainer", false, cat.Msg("flag_init_no_devcontainer_usage"))
+	cmd.Flags().BoolVar(&flags.Certificates, "certificates", false, cat.Msg("flag_init_certificates_usage"))
+	cmd.Flags().BoolVar(&flags.NoCertificates, "no-certificates", false, cat.Msg("flag_init_no_certificates_usage"))
+	cmd.Flags().StringVar(&flags.AptCategories, "apt-categories", "", cat.Msg("flag_init_apt_categories_usage"))
+	cmd.Flags().StringVar(&flags.Plugins, "plugins", "", cat.Msg("flag_init_plugins_usage"))
+	cmd.Flags().StringVar(&flags.PluginVersions, "plugin-versions", "", cat.Msg("flag_init_plugin_versions_usage"))
+	cmd.Flags().StringVar(&flags.PluginMethods, "plugin-methods", "", cat.Msg("flag_init_plugin_methods_usage"))
+	cmd.Flags().StringVar(&flags.AliasBundles, "alias-bundles", "", cat.Msg("flag_init_alias_bundles_usage"))
+	cmd.Flags().StringVar(&flags.Ports, "ports", "", cat.Msg("flag_init_ports_usage"))
+	cmd.Flags().BoolVar(&flags.Force, "force", false, cat.Msg("flag_init_force_usage"))
 	return cmd
 }
 
@@ -151,6 +94,7 @@ func runInit(cmd *cobra.Command, stdout, stderr io.Writer, flags *initFlags) err
 		Shell:          ans.Shell,
 		Aliases:        aliases,
 		MountRoot:      ans.MountRoot,
+		Dir:            ans.Dir,
 		Devcontainer:   ans.Devcontainer,
 		Certificates:   ans.Certificates,
 		Packages:       pkgs,

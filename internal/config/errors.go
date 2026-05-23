@@ -15,7 +15,6 @@ type FieldError struct {
 	Message string
 }
 
-// LocString renders Loc as a dotted path, falling back to "(root)" when empty.
 func (e FieldError) LocString() string {
 	parts := make([]string, 0, len(e.Loc))
 	for _, p := range e.Loc {
@@ -37,8 +36,7 @@ type ValidationError struct {
 	Errors []FieldError
 }
 
-// Error implements error. The first failure is summarised; the full list is
-// available via Errors.
+// Error summarises the first failure; the full list is available via Errors.
 func (e *ValidationError) Error() string {
 	if len(e.Errors) == 0 {
 		return fmt.Sprintf("validation failed: %s", e.Path)

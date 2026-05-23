@@ -1,0 +1,45 @@
+cocoon init — カレントディレクトリに workspace.toml を生成
+
+対話実行時はサービス名・コンテナ内ユーザー名・ベースイメージ/バージョン・
+マウント範囲・.devcontainer/devcontainer.json を生成するかどうか・
+よく使う apt パッケージのカテゴリを順に質問します。
+service_name と username にデフォルトは無く、必ず入力してください。
+cocoon は cwd のディレクトリ名やホストの $USER を、コミットされ得る
+ファイルに自動で焼き込みません。
+
+対話フローは各質問を 1 画面ずつ表示します。service-name / username の
+空入力は送信時に拒否されます。shift+tab で前の質問へ戻ることは
+できません（前の回答を直すには cocoon init を再実行してください）。
+各プロンプトを独立フォームにしているのは、huh の multi-Group +
+OptionsFunc 組み合わせで発生する viewport サイジング起因のカーソル
+固定問題を回避するためです。
+
+CI など非対話実行では --yes に加えて --service-name / --username
+（--yes 指定時は両方必須）と必要に応じて --image / --image-version /
+--shell / --mount-root / --dir / --devcontainer / --apt-categories /
+--plugins / --alias-bundles を渡します。
+
+使い方:
+  cocoon init [flags]
+
+フラグ:
+      --alias-bundles string     シェルエイリアス bundle ID のカンマ区切り（bundles 複数選択プロンプトをスキップ。例: git,ls）
+      --apt-categories string    カンマ区切り apt カテゴリ ID（複数選択プロンプトをスキップ）
+      --certificates             ~/.cocoon/certs/ からの [certificates] 自動取り込みを強制有効化
+      --devcontainer             .devcontainer/devcontainer.json の生成を強制
+      --dir string               /home/<user>/ 配下のコンテナ作業ディレクトリ親（既定 "workspace"。"work/myproject" のように "/" 区切りでネスト可）
+      --force                    既存の workspace.toml を上書き
+  -h, --help                     init のヘルプを表示
+      --image string             ベースイメージ: ubuntu, debian, node, python, golang, rust, denoland/deno
+      --image-version string     ベースイメージのタグ（任意の妥当な Docker タグを受け付け。--image も併せて指定が必要）
+      --mount-root string        マウント範囲: "."（cwd、既定）または ".."（親ディレクトリ）
+      --no-certificates          [certificates] セクションをスキップ（既定 off）
+      --no-devcontainer          .devcontainer/devcontainer.json の生成をスキップ
+      --plugin-methods string    複数の [install.methods] を持つプラグイン向けの <id>=<method> 選択をカンマ区切りで指定（各 <id> は --plugins にも含めること。<method> は宣言済みキーであること）
+      --plugin-versions string   version_capable プラグイン向けの <id>=<ref> ピンをカンマ区切りで指定（各 <id> は --plugins にも含めること）
+      --plugins string           有効化するプラグイン ID のカンマ区切り（プラグイン複数選択プロンプトをスキップ）
+      --ports string             docker-compose の short-form ポートマッピングをカンマ区切りで指定 — [HOST_IP:][HOST:]CONTAINER[/PROTOCOL]。数値レンジ (N-M) と tcp|udp 可（例: 3000,3000-3005,8000:8000,127.0.0.1:5432:5432/tcp,6060:6060/udp）。ports プロンプトをスキップ
+      --service-name string      Compose サービス名（--yes 指定時は必須）
+      --shell string             コンテナのログインシェル: bash, zsh, fish（既定: bash）
+      --username string          コンテナ内ユーザー名（--yes 指定時は必須）
+      --yes                      任意プロンプトをスキップ（--service-name と --username が必須になります）

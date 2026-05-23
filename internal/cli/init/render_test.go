@@ -235,36 +235,6 @@ func TestRenderWorkspaceToml_AllTemplatesPresent_JA(t *testing.T) {
 	}
 }
 
-// TestRenderWorkspaceToml_NoDeprecatedSections is a regression guard: cocoon
-// dropped [git] and [repositories] from the design's intended set. Neither
-// must appear as an active section header (`[git]` at line start) nor as
-// a commented-out template header (`# [git]` at line start) — both forms
-// would nudge a user to use the retired sections.
-//
-// In-line backrefs ("…replaces the v1 [git] section…") are allowed: they
-// document the deprecation rather than promote the section, so we check
-// section-header position only, not raw substring presence.
-func TestRenderWorkspaceToml_NoDeprecatedSections(t *testing.T) {
-	t.Parallel()
-	for _, lang := range []i18n.Lang{i18n.LangEN, i18n.LangJA} {
-		cat := i18n.New(lang)
-		got := renderWorkspaceToml(containerSpec{
-			ServiceName: "svc", Username: "dev", Image: "ubuntu", ImageVersion: "26.04",
-			Shell: "bash", MountRoot: ".", Devcontainer: true,
-		}, cat)
-		for _, banned := range []string{"[git]", "[repositories]"} {
-			for _, prefix := range []string{"", "# "} {
-				header := prefix + banned
-				for _, line := range strings.Split(got, "\n") {
-					if strings.TrimSpace(line) == header {
-						t.Errorf("[%s] deprecated section header %q must not appear at line start", lang, header)
-					}
-				}
-			}
-		}
-	}
-}
-
 // TestRenderWorkspaceToml_TemplateOrdering pins that container.* extras
 // land between the active [container] block and the active
 // [container.shell] block, grouping sub-table extras under their parent.

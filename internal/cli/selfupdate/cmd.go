@@ -16,6 +16,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
+	"github.com/sukekyo26/cocoon/internal/i18n"
 	"github.com/sukekyo26/cocoon/internal/logx"
 	"github.com/sukekyo26/cocoon/internal/release"
 	"github.com/sukekyo26/cocoon/internal/version"
@@ -28,25 +29,13 @@ const (
 	ExitNewerAvailable = 100
 )
 
-const selfUpdateLong = `cocoon self-update — replace the current binary with the latest release
-
-Hits the GitHub Releases API for sukekyo26/cocoon, compares the
-release tag against the build's compiled-in version string, and on
-update downloads the matching cocoon-<os>-<arch> asset under SHA-256
-verification before atomically replacing this executable.
-
-Exit codes:
-  0   already up to date, or replacement succeeded
-  100 (only with --check-only) a newer version exists
-  1   any other failure`
-
-// NewCommand returns the cobra command for `cocoon self-update`.
 func NewCommand(stdout, stderr io.Writer) *cobra.Command {
+	cat := i18n.New(i18n.Detect())
 	var checkOnly, force bool
 	cmd := &cobra.Command{
 		Use:           "self-update",
-		Short:         "Replace this binary with the latest released version",
-		Long:          selfUpdateLong,
+		Short:         cat.Msg("cmd_self_update_short"),
+		Long:          cat.Msg("cmd_self_update_long"),
 		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -54,10 +43,8 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 			return runSelfUpdate(cmd.Context(), stdout, stderr, checkOnly, force)
 		},
 	}
-	cmd.Flags().BoolVar(&checkOnly, "check-only", false,
-		"exit 0 if up to date, exit 100 if a newer release exists; never download")
-	cmd.Flags().BoolVar(&force, "force", false,
-		"reinstall even when the local binary is already the latest version")
+	cmd.Flags().BoolVar(&checkOnly, "check-only", false, cat.Msg("flag_self_update_check_only_usage"))
+	cmd.Flags().BoolVar(&force, "force", false, cat.Msg("flag_self_update_force_usage"))
 	return cmd
 }
 

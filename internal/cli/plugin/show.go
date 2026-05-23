@@ -9,21 +9,17 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
+	"github.com/sukekyo26/cocoon/internal/i18n"
 	"github.com/sukekyo26/cocoon/internal/logx"
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
 
-const showLong = `cocoon plugin show — print the resolved plugin manifest for <id>
-
-Resolves <id> through the same project > user > embedded layered view as
-` + "`cocoon plugin list`" + `, prints the metadata, install hints, apt packages,
-and the source layer it was read from.`
-
 func newShowCmd(stdout, stderr io.Writer) *cobra.Command {
+	cat := i18n.New(i18n.Detect())
 	cmd := &cobra.Command{
 		Use:           "show <id>",
-		Short:         "Print the resolved manifest for a single plugin",
-		Long:          showLong,
+		Short:         cat.Msg("cmd_plugin_show_short"),
+		Long:          cat.Msg("cmd_plugin_show_long"),
 		Args:          cobra.ExactArgs(1),
 		SilenceUsage:  true,
 		SilenceErrors: true,
