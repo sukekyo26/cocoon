@@ -11,8 +11,10 @@ name: E2E
 #      plugins pinned. Catches plugin-vs-base-image and plugin-vs-plugin
 #      breakage; bumping a pinned version surfaces here as a deliberate diff.
 #   3. arm64  / full   — the arm64-safe subset on a native ubuntu-24.04-arm
-#      runner (no QEMU). Plugins whose install.sh hard-codes amd64 (aws-cli,
-#      aws-sam-cli, lazygit, zig, starship, google-chrome) are excluded.
+#      runner (no QEMU). Plugins excluded for one of two reasons:
+#        - install.sh hard-codes amd64 (lazygit, zig, starship, google-chrome)
+#        - install.sh fails fast on arm64 because no official Linux/arm64
+#          build exists (flutter)
 #
 # Local WSL2 cannot run any of these (gcc missing for `-race`); GitHub-hosted
 # ubuntu-latest / ubuntu-24.04-arm both ship docker + buildx out of the box.
