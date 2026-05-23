@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-05-23
+
 ### Added
 
 - `cocoon <command> --help` output now follows the same `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` locale detection that drives `cocoon init` prompts and `cocoon gen` notices, so setting `WORKSPACE_LANG=ja` (or running in a `ja_*` locale) prints Japanese command descriptions, flag usages, and section headers across every subcommand (`init`, `gen`, `gen workspace`, `plugin {list,show,pin,scaffold}`, `self-update`, `version`, `completion`, `help`). English remains the default. The English root help layout shifts slightly: cocoon's bespoke header (`Commands:` with a trailing `Run 'cocoon <command> --help' for command-specific usage.` hint) is replaced with cobra's standard layout (`Available Commands:` with `Use "cocoon [command] --help" for more information about a command.`), aligning every subcommand's help on a single template. The translation only touches help/usage display — sub-command names, flag names, and option values stay ASCII for shell scripting.
@@ -181,7 +183,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Add `COMPOSE_PROJECT_NAME` derivation from the project directory basename so docker compose namespacing matches the host directory.
 - Add i18n catalog (English / Japanese) covering every CLI prompt, error message, and inline `workspace.toml` comment, switched via `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG`.
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/sukekyo26/cocoon/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/sukekyo26/cocoon/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/sukekyo26/cocoon/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/sukekyo26/cocoon/compare/v0.3.1...v0.4.0

@@ -6,6 +6,8 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-05-23
+
 ### 追加
 
 - `cocoon <command> --help` の出力が `cocoon init` プロンプトや `cocoon gen` メッセージと同じ `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` のロケール判定に追従するようになりました。`WORKSPACE_LANG=ja` を指定する (または `ja_*` ロケールで実行する) と、コマンド説明・フラグ usage・セクション見出しがすべての主要サブコマンド (`init`, `gen`, `gen workspace`, `plugin {list,show,pin,scaffold}`, `self-update`, `version`, `completion`, `help`) で日本語化されます。英語表示は引き続き既定のままです。ただし root の英語ヘルプのレイアウトは少し変わります。これまでの cocoon 独自の見出し (`Commands:` と末尾の `Run 'cocoon <command> --help' for command-specific usage.` のヒント行) は廃止され、cobra 標準のレイアウト (`Available Commands:` と `Use "cocoon [command] --help" for more information about a command.`) に統一されました。これにより全サブコマンドのヘルプが同一テンプレートに揃います。翻訳対象はヘルプ表示のみで、サブコマンド名・フラグ名・オプション値はシェルスクリプトでの取り扱いを変えないよう ASCII を維持します。
@@ -181,7 +183,8 @@ cocoon の主要な変更を記録します。フォーマットは
 - `COMPOSE_PROJECT_NAME` をプロジェクトディレクトリの basename から導出するように変更。docker compose の namespace がホストディレクトリと一致する。
 - 国際化 (英語 / 日本語) カタログを追加。CLI プロンプト・エラーメッセージ・`workspace.toml` インラインコメントすべてを `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` で切替可能。
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/sukekyo26/cocoon/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/sukekyo26/cocoon/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/sukekyo26/cocoon/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/sukekyo26/cocoon/compare/v0.3.1...v0.4.0
