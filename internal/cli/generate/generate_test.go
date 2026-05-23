@@ -148,10 +148,13 @@ lang = "ja_JP.UTF-8"
 `,
 			assert: []expect{
 				{path: ".devcontainer/Dockerfile", mustContain: []string{
-					"locale-gen en_US.UTF-8 ja_JP.UTF-8",
+					`sed -i -E -e 's|^# *(en_US\.UTF-8 UTF-8)$|\1|' -e 's|^# *(ja_JP\.UTF-8 UTF-8)$|\1|' /etc/locale.gen`,
+					"&& locale-gen \\",
 					"ENV LANG=ja_JP.UTF-8",
 					"ENV LANGUAGE=ja_JP:en",
 					"ENV LC_ALL=ja_JP.UTF-8",
+				}, mustNotContain: []string{
+					"locale-gen en_US.UTF-8 ja_JP.UTF-8",
 				}},
 			},
 		},
