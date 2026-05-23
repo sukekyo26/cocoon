@@ -153,8 +153,9 @@ func (c *ContainerSpec) DockerSocketEnabled() bool {
 // Every image is apt-based so the cocoon plugin catalog works the same
 // way across all of them. ubuntu pulls its own archive (archive.ubuntu.com);
 // the other six are Debian (bookworm) variants and pull from
-// deb.debian.org. apt-mirror rewriting keys off this distinction —
-// see aptMirrorOriginHosts in internal/generate/dockerfile/dockerfile.go.
+// deb.debian.org. apt-mirror rewriting keys off this distinction via the
+// ImageOSFamily classification — see aptMirrorOriginHosts in
+// internal/generate/dockerfile/dockerfile.go.
 //
 //nolint:gochecknoglobals // tabular configuration data, file-scoped by design.
 var SupportedImages = []string{"ubuntu", "debian", "node", "python", "golang", "rust", "denoland/deno"}
@@ -219,6 +220,35 @@ var ImageProvidesPlugin = map[string]string{
 	"rust":          "rust",
 	"node":          "node",
 	"denoland/deno": "deno",
+}
+
+// ImageOSFamily classifies each SupportedImages entry by underlying distro
+// family so apt-related generators (currently aptMirrorOriginHosts) can
+// pick the right upstream archive hosts without hard-coding image ids.
+// Replaces the previous literal `if image == "ubuntu"` check in
+// aptMirrorOriginHosts so adding a future Ubuntu-derived image (e.g.
+// eclipse-temurin) is a one-line map edit rather than a code change.
+//
+// Values are the literal "ubuntu" and "debian" — the same names used as
+// image ids for the two plain-distro images. Sub-suite distinctions
+// (bookworm vs trixie) deliberately are not encoded here because the
+// archive host (`deb.debian.org/debian`) is the same across Debian suites.
+//
+// Every entry in SupportedImages MUST have a matching row here.
+// TestImageOSFamilyLockstep enforces the invariant in both directions;
+// at runtime, an image id with no row makes aptMirrorOriginHosts return
+// nil and buildAptMirrorRewrite skips emission entirely (rather than
+// silently falling through to the Debian host list).
+//
+//nolint:gochecknoglobals // tabular configuration data, file-scoped by design.
+var ImageOSFamily = map[string]string{
+	"ubuntu":        "ubuntu",
+	"debian":        "debian",
+	"node":          "debian",
+	"python":        "debian",
+	"golang":        "debian",
+	"rust":          "debian",
+	"denoland/deno": "debian",
 }
 
 // SkelEntry seeds a file from the build context into /etc/skel so useradd -m
