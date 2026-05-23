@@ -177,6 +177,15 @@ func TestPluginContracts(t *testing.T) {
 			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
 		},
 		{
+			id: "dart", name: "Dart",
+			requiresRoot: true, versionCapable: true, firstVolume: "pub-cache",
+			mustContain: []string{
+				"dart-archive", "DART_ARCH", "sha256sum -c -",
+				"tlsv1.2", "retry 3", "dpkg --print-architecture", "unzip",
+			},
+			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
+		},
+		{
 			id: "deno", name: "Deno",
 			requiresRoot: true, versionCapable: true, firstVolume: "deno",
 			mustContain: []string{
