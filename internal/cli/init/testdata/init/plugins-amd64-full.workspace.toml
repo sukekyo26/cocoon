@@ -116,6 +116,7 @@ enable = [
     "bun",
     "node",
     "deno",
+    "dart",
     "zig",
     "rust",
     "go",
@@ -143,6 +144,7 @@ aws-cli = { pin = "2.34.48" }
 aws-sam-cli = { pin = "1.160.1" }
 bun = { pin = "1.3.3" }
 copilot-cli = { pin = "1.0.47" }
+dart = { pin = "3.12.0" }
 deno = { pin = "2.7.14" }
 docker-buildx = { pin = "0.24.0" }
 go = { pin = "1.23.4" }

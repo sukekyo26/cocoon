@@ -1,0 +1,23 @@
+[metadata]
+name = "Dart"
+description = "Dart programming language"
+url = "https://github.com/dart-lang/sdk"
+default = false
+
+[apt]
+packages = ["unzip"]
+
+[install]
+requires_root = true
+volumes = ["/home/${USERNAME}/.pub-cache"]
+default_method = "archive"
+
+[install.methods.archive]
+description = "Multi-file Dart SDK zip from storage.googleapis.com/dart-archive"
+
+[install.env]
+PUB_CACHE = "/home/${USERNAME}/.pub-cache"
+PATH = "/usr/local/dart/bin:$PUB_CACHE/bin:$PATH"
+
+[version]
+version_capable = true
