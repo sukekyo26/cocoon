@@ -20,6 +20,7 @@ type containerSpec struct {
 	Dir            string
 	Devcontainer   bool
 	Certificates   bool
+	ImagePathFix   bool
 	Packages       []string
 	Plugins        []string
 	PluginVersions map[string]string
@@ -92,7 +93,13 @@ func writeContainerSection(sb *strings.Builder, cat *i18n.Catalog, s containerSp
 	}
 }
 
-// writeShellSection emits the [container.shell] block.
+// writeShellSection emits the [container.shell] block followed by an
+// auto-injected [container.shell.env] subsection when the image-path-fix
+// is on. The subsection is preceded by a three-line self-documenting
+// comment (added / removal / coexist) so a future reader knows why the
+// entries are there, what breaks if they delete the block, and that
+// the inline `env = { ... }` form under [container.shell] cannot
+// coexist (TOML rejects two definitions of the same key).
 func writeShellSection(sb *strings.Builder, cat *i18n.Catalog, s containerSpec) {
 	sb.WriteString(cat.Msg("init_toml_section_container_shell"))
 	sb.WriteByte('\n')
@@ -102,6 +109,34 @@ func writeShellSection(sb *strings.Builder, cat *i18n.Catalog, s containerSpec) 
 		sb.WriteString("aliases = ")
 		writeInlineTable(sb, s.Aliases)
 		sb.WriteByte('\n')
+	}
+	sb.WriteByte('\n')
+	writeImagePathFixEnv(sb, cat, s)
+}
+
+// writeImagePathFixEnv emits the [container.shell.env] subsection that
+// pairs with the prompt's auto-injection. No-op when the toggle is off
+// or when the image has no fix entry, so subsequent runs of `cocoon init
+// --force` against a different image cleanly drop the previous block.
+//
+// The three comment lines above the block carry the why (added), the
+// blast radius of removal (removal), and the mutual-exclusion warning
+// (coexist) with the [container.shell] inline `env = { ... }` form —
+// TOML rejects mixing them since both define the same `env` key.
+func writeImagePathFixEnv(sb *strings.Builder, cat *i18n.Catalog, s containerSpec) {
+	if !s.ImagePathFix || !imagePathFixApplies(s.Image) {
+		return
+	}
+	fix := imagePathFixFor(s.Image)
+	sb.WriteString(cat.Msg("init_toml_comment_image_path_fix_added", s.Image))
+	sb.WriteByte('\n')
+	sb.WriteString(cat.Msg("init_toml_comment_image_path_fix_removal", fix.Command))
+	sb.WriteByte('\n')
+	sb.WriteString(cat.Msg("init_toml_comment_image_path_fix_coexist"))
+	sb.WriteByte('\n')
+	sb.WriteString("[container.shell.env]\n")
+	for _, e := range fix.Entries {
+		fmt.Fprintf(sb, "%s = %q\n", e.Key, e.Value)
 	}
 	sb.WriteByte('\n')
 }

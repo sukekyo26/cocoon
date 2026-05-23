@@ -162,6 +162,26 @@ env     = { EDITOR = "vim", PAGER = "less -R" }
 
 `[container.shell]` はリポジトリにチェックインするプロジェクト共通設定向けです。**個人ごと、コンテナリビルドを跨いで永続化したい**設定は、起動時に rc ファイルから自動 source される `~/.cocoon/.shellrc` (fish の場合 `~/.cocoon/.shellrc.fish`) に書いてください。このパスは Docker named volume でバックされているため、`docker compose down && up --build` を跨いでも編集が残り、`docker compose down -v` でのみリセットされます。rc ファイルがビルド時にどう組み立てられるか、コンテナ内 `~/.cocoon/` とホスト側の cocoon CLI 作業領域がどう違うかは [`architecture.ja.md` の「シェル注入」](architecture.ja.md#シェル注入) を参照してください。
 
+#### 言語イメージ向け PATH 自動設定
+
+`cocoon init` は、言語ベースイメージを選んだとき `[container.shell.env]` への自動追加を提示します（既定 on）。これを入れないと、公式イメージは（a）user install を root 所有の `/usr/local/...` に書き込もうとして失敗する（`npm install -g` / `pip install` / `cargo install` が `EACCES`、python 3.11+ では PEP 668 もヒット）か、（b）書き込み可能な user ディレクトリに置くが `PATH` に無くて呼び出せない（`go install` → `$HOME/go/bin`、`deno install` → `$HOME/.deno/bin`、`pip install --user` → `$HOME/.local/bin`）。自動追加は、書き込み可能な `$HOME` 配下のプレフィックスをイメージに設定し（不足している場合）、対応する bin ディレクトリを `PATH` に通します。
+
+対話プロンプトは確認前に追加されるキー / 値をプレビューし、生成された `[container.shell.env]` ブロックの直上には自動コメント 3 行（追加理由 / 削除した場合の影響 / インライン `env = { ... }` 形式とは併用不可の警告）が付与されるので、時間が経っても「何が・なぜ追加されたか」が読み取れます。やり直しは `cocoon init --force`（または `--no-image-path-fix`）で、スクリプト用途で強制 on にしたい場合は `--image-path-fix` を使います（どちらのフラグも image 依存の自動設定のため `--image` の指定が必須）。
+
+| `[container].image` | 自動追加される `[container.shell.env]` のエントリ |
+|---|---|
+| `node` | `NPM_CONFIG_PREFIX = "$HOME/.npm-global"`、`PATH = "$HOME/.npm-global/bin:$PATH"` |
+| `python` | `PATH = "$HOME/.local/bin:$PATH"` |
+| `golang` | `PATH = "$HOME/go/bin:$PATH"` |
+| `rust` | `CARGO_INSTALL_ROOT = "$HOME/.cargo"`、`PATH = "$HOME/.cargo/bin:$PATH"` |
+| `denoland/deno` | `PATH = "$HOME/.deno/bin:$PATH"` |
+
+`ubuntu` / `debian` はプロンプトが出ません（修正すべき言語ランタイムを持っていないため）。`rust` は `CARGO_HOME` を上書きせず `CARGO_INSTALL_ROOT` のみを設定します。これにより rustup の状態と `cargo build` のレジストリキャッシュはイメージ既定の `/usr/local/cargo` に残り続け、影響を受けるのは `cargo install` の書き込み先だけになります。
+
+> **インライン `env = { ... }` と `[container.shell.env]` は併用できません。** TOML としては `[container.shell]` 配下の同一キー `env` に対する 2 重定義になるため、`cocoon gen` 時に `toml: key env should be a table, not a value` でパースが失敗します。自動追加されたサブセクションがある場合、追加 env はそのサブセクション内に書いてください（上のインライン形式のヒントを uncomment しないでください）。生成された workspace.toml では、`[container.shell]` の env 例ブロック側と、自動追加されたサブセクション直上のコメント両方に同じ注意書きが入るので、どちらから編集を始めても制約が見えるようになっています。
+
+同じイメージに対応する cocoon プラグイン（`node` / `go` / `rust` / `deno`）は元から競合として弾かれるため、この自動追加は「cocoon プラグインを使わずに公式イメージをそのまま使う」場合にだけ働きます。
+
 ### `[container.hosts]`
 
 `/etc/hosts` の追加エントリ。キーはホスト名 (RFC 1123)、値は IPv4 / IPv6 アドレスまたはリテラル `"host-gateway"` (ホスト機を指す)。

@@ -17,8 +17,8 @@ devcontainer = false
 [container]
 service_name = "dev"
 username = "dev"
-image = "ubuntu"
-image_version = "22.04"
+image = "golang"
+image_version = "1.25-bookworm"
 
 # docker_socket — bind-mount /var/run/docker.sock so an in-container docker
 #   client (e.g. the docker-cli plugin) can reach the host daemon.
@@ -102,6 +102,12 @@ image_version = "22.04"
 [container.shell]
 default = "bash"
 
+# Added by `cocoon init` so the container user can install user-local tools on the golang image.
+# Removing this restores the default-image failure for `go install <pkg>@latest` (permission denied on root-owned prefixes, or the installed binary not being on PATH).
+# Append extra env keys under this subsection — the inline `env = { ... }` form under [container.shell] cannot coexist (TOML rejects two definitions of the same key).
+[container.shell.env]
+PATH = "$HOME/go/bin:$PATH"
+
 # [plugins] — enable cocoon plugins (run `cocoon plugin list` for the catalog).
 #   Pin versions in [plugins.versions] when you need reproducible builds.
 [plugins]
@@ -168,19 +174,10 @@ packages = [
 # url        = "https://download.opensuse.org/repositories/shells:fish:release:3/xUbuntu_24.04/"
 # key_url    = "https://download.opensuse.org/repositories/shells:fish:release:3/xUbuntu_24.04/Release.key"
 
-# [ports] — host ports forwarded into the container.
-#   Short form: [HOST_IP:][HOST:]CONTAINER[/PROTOCOL]. Ranges (3000-3005:3000-3005), UDP, and IPv6 [::1] binds are accepted.
-[ports]
-forward = [
-    "3000",
-    "3000-3005",
-    "8000:8000",
-    "9090-9091:8080-8081",
-    "49100:22",
-    "127.0.0.1:8001:8001",
-    "127.0.0.1:5000-5010:5000-5010",
-    "6060:6060/udp",
-]
+# [ports] — host ports to forward into the container.
+#   Short form ("3000:3000") or long-form table; ranges and protocol/mode supported.
+# [ports]
+# forward = ["3000:3000", "5432:5432"]
 
 # [volumes] — extra named volumes mapped under the container's home.
 #   Persists state across container recreations. Format: <volume-name> = <path inside container>.
