@@ -353,13 +353,3 @@ cocoon completion powershell | Out-String | Invoke-Expression
 | `1` | 失敗 (`ErrFailure` ラップ) |
 | `2` | usage エラー (`ErrUsage` ラップ) |
 | `100` | `cocoon self-update --check-only`: 更新あり |
-
----
-
-## 削除済みコマンド
-
-以下のノウングループ・サブコマンドは過去のリリースに存在しましたが **削除済み** です。古いコマンドを探して辿り着いた読者向けに、移行先を記載します。完全な移行手順は [CHANGELOG](CHANGELOG.ja.md) を参照してください。
-
-- **`cocoon config` (ノウングループ全体)** — `get` / `list` / `volumes` / `plugin-get` / `plugin-list` / `plugin-volumes` / `plugins-table` / `validate-workspace` / `validate-plugins` / `has-section` / `list-sidecars` / `dump-devcontainer` / `dump-repositories` / `repositories` / `format-repositories`。これらは引退済みの bash entry-point スクリプト用の低レベル TOML アクセサでした。`cocoon config` でスクレイプしていた外部スクリプトは専用の TOML パーサ (`tomlq` / `taplo` / 小さな Go / Python ヘルパ) に切り替えてください。
-- **`cocoon plugin add`** — 代わりに `[plugins].enable` に id を列挙してください（埋め込みカタログは LayeredFS でコピーなしに公開されます）。埋め込みプラグインを改変したい場合は `cocoon plugin scaffold <new-id>` で新しい id を作りロジックを移植する手順がサポート対象です。
-- **`cocoon plugin remove`** — `rm -rf ~/.cocoon/plugins/<id>` (ユーザースコープ) もしくは `rm -rf <workspace>/.cocoon/plugins/<id>` (プロジェクトスコープ) で代替できます。

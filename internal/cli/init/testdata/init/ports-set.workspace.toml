@@ -197,7 +197,7 @@ forward = [
 # target   = "/home/${USERNAME}/.ssh"
 # readonly = true
 
-# [home_files] — files persisted via per-file bind mounts (replaces the v1 [git] section).
+# [home_files] — files persisted via per-file bind mounts.
 #   Each path is relative to ~. Bind-mount the host's ~/.gitconfig to share git identity.
 # [home_files]
 # files = [".gitconfig", ".claude.json"]

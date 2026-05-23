@@ -16,6 +16,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 - `cocoon gen` now emits `[container.shell].env` values with double-quote semantics so `$HOME` / `$PATH` are expanded by the shell when the rc file is sourced (and `$(cmd)` on bash/zsh — fish needs 3.4+ for `$(cmd)`, otherwise its native `(cmd)` form). Previously every value was wrapped in single quotes (e.g. `export NPM_CONFIG_PREFIX='$HOME/.local'`), so `$HOME` stayed literal and tools like `npm install -g` ended up writing to a path that did not exist. The same fix applies to the fish translation (`set -gx K "$HOME/..."`). A literal `$` requires the value passed to the generator to contain `\$` (the backslash passes through to the shell); in TOML, spell that as a basic string `"\\$RAW"` or a literal string `'\$RAW'` (a plain `"\$RAW"` is not a valid TOML escape). Alias bodies keep POSIX single-quote semantics because the shell re-parses them on invocation, so `$1` and `$HOME` inside an alias still resolve at call time.
 
+### Removed
+
+- **BREAKING**: `[git]` and `[repositories]` are removed from `workspace.toml`. Both sections were already documented as deprecated; the loader now rejects them as unknown fields. Migration: replace `[git]` with `[home_files] files = [".gitconfig"]` and let the generated `.devcontainer/initializeCommand` bind-mount the host's `~/.gitconfig` (the file is touched at 0o600 if absent, so the bind mount does not create a directory). For `[repositories]`, set `mount_root = ".."` and `git clone` sibling repos under the parent directory on the host — the same "fat workspace" layout the old section attempted to express, but reproducible and authenticated through the host's existing git credentials.
+
 ## [0.6.0] - 2026-05-18
 
 ### Added

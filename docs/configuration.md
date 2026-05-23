@@ -49,8 +49,6 @@ The first match wins. Pass `--workspace <path>` to `cocoon gen` to override disc
 | `[services.<name>]` | optional | Sidecar services |
 | `[devcontainer.*]` | optional | Pass-through fields for `devcontainer.json` |
 
-[`[git]`](#deprecated-sections) and [`[repositories]`](#deprecated-sections) are still accepted by the parser but are deprecated; new projects should not use them.
-
 ---
 
 ## `[workspace]`
@@ -557,17 +555,3 @@ Relative entries like `../sibling-repo` are interpreted from the workspace.toml 
 - `extensions.recommendations` becomes the `"extensions": { "recommendations": [...] }` block. Empty list elides the whole `"extensions"` object.
 
 See [`cocoon gen workspace`](commands.md#cocoon-gen-workspace) for the CLI flags that pair with this section.
-
----
-
-## Deprecated sections
-
-These sections are still accepted by the parser for backward compatibility but may be removed in a future major release.
-
-### `[git]`
-
-Use [`[home_files]`](#home_files) — bind-mounting the host's `~/.gitconfig` keeps git identity in one place.
-
-### `[repositories]`
-
-For multi-repo "fat" workspaces, `git clone` the sibling repos under the parent directory and set `mount_root = ".."`.

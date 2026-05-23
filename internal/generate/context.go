@@ -452,22 +452,6 @@ func (c *WorkspaceContext) CertificatesEnabled() bool {
 	return c.WS.Certificates.EnableOrDefault()
 }
 
-// GitUserName returns "" when unset.
-func (c *WorkspaceContext) GitUserName() string {
-	if c.WS == nil || c.WS.Git == nil || c.WS.Git.UserName == nil {
-		return ""
-	}
-	return *c.WS.Git.UserName
-}
-
-// GitUserEmail returns "" when unset.
-func (c *WorkspaceContext) GitUserEmail() string {
-	if c.WS == nil || c.WS.Git == nil || c.WS.Git.UserEmail == nil {
-		return ""
-	}
-	return *c.WS.Git.UserEmail
-}
-
 // DockerfilePreUserSetup returns "" when unset.
 func (c *WorkspaceContext) DockerfilePreUserSetup() string {
 	if c.WS == nil || c.WS.Dockerfile == nil || c.WS.Dockerfile.PreUserSetup == nil {
