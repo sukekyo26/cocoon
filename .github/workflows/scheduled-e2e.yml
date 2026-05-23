@@ -1,0 +1,105 @@
+name: Scheduled E2E
+
+# Plugin-heavy half of the cocoon e2e coverage. The push/PR workflow
+# (.github/workflows/e2e.yml) runs the minimal preset across every
+# supported base image; this one runs the all-plugins-enabled presets
+# (amd64-full + arm64-full) on ubuntu 22.04 to catch plugin-vs-image
+# and plugin-vs-plugin breakage.
+#
+# Split out from the PR critical path because the full presets cost
+# ~13 min each (28 / 23 plugins, real `docker buildx bake` per matrix
+# entry). Trade-off: plugin regressions land in develop up to a week
+# before scheduled CI surfaces them. Manual workflow_dispatch is the
+# escape hatch for verifying a new plugin before merge — see
+# `inputs.preset` below.
+#
+# arm64-full excludes plugins whose install.sh hard-codes amd64 or
+# fails fast on arm64 (lazygit / zig / starship / google-chrome /
+# flutter). The exclusion list lives next to the case-stmt in
+# e2e/docker-roundtrip.sh and is in lockstep with
+# internal/cli/init/testdata/init/plugins-arm64-full.workspace.toml.
+
+on:
+  schedule:
+    # Mon 06:00 UTC — same as install-sh-e2e.yml. Aligning the two
+    # weekly runs concentrates the "something cocoon publishes broke"
+    # signal in one timezone window.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      preset:
+        description: "Plugin preset to run (both = full matrix)"
+        type: choice
+        options:
+          - both
+          - amd64-full
+          - arm64-full
+        default: both
+
+concurrency:
+  # schedule-only group keyed by the event so a manual dispatch never
+  # cancels an in-flight cron run (and vice versa). cancel-in-progress
+  # is off because scheduled runs are independent — losing one because
+  # a later dispatch landed mid-run hides regressions.
+  group: scheduled-e2e-${{ github.event.schedule || github.run_id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # Decide which preset(s) to run. job-level `if:` cannot read the
+  # `matrix` context (GHA evaluates `if` before matrix expansion), so
+  # we emit the matrix include list as JSON here and consume it via
+  # fromJSON below. Schedule / API triggers leave inputs.preset empty
+  # → both presets run.
+  select:
+    runs-on: ubuntu-latest
+    outputs:
+      include: ${{ steps.set.outputs.include }}
+    steps:
+      - id: set
+        env:
+          PRESET: ${{ inputs.preset }}
+        run: |
+          set -euo pipefail
+          amd64='{"label":"amd64 / full","runs-on":"ubuntu-latest","preset":"amd64-full","image":"ubuntu","image-version":"22.04"}'
+          arm64='{"label":"arm64 / full","runs-on":"ubuntu-24.04-arm","preset":"arm64-full","image":"ubuntu","image-version":"22.04"}'
+          case "${PRESET:-both}" in
+            amd64-full) include="[$amd64]" ;;
+            arm64-full) include="[$arm64]" ;;
+            both | "") include="[$amd64,$arm64]" ;;
+            *) echo "unknown preset: $PRESET" >&2; exit 1 ;;
+          esac
+          echo "include=$include" >>"$GITHUB_OUTPUT"
+
+  docker-roundtrip:
+    needs: select
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.runs-on }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.select.outputs.include) }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+      # Exposes ACTIONS_RUNTIME_TOKEN / ACTIONS_CACHE_URL / ACTIONS_RESULTS_URL
+      # as plain env vars so the raw `docker buildx bake` invocation in
+      # the script below can talk to the GHA cache backend.
+      - uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
+      - uses: taiki-e/install-action@b1fb785e72add1aaabe1e13115c2292ca8925d3f # just
+      - name: Build cocoon binary
+        run: just build
+      - name: cocoon init + gen + docker compose round-trip
+        env:
+          COCOON: ${{ github.workspace }}/bin/cocoon
+          PRESET: ${{ matrix.preset }}
+          IMAGE: ${{ matrix.image }}
+          IMAGE_VERSION: ${{ matrix.image-version }}
+        run: bash "$GITHUB_WORKSPACE/e2e/docker-roundtrip.sh"
