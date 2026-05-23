@@ -497,8 +497,9 @@ func hasHTTPSAptSource(ctx *generate.WorkspaceContext) bool {
 // aptMirrorOriginHosts returns no hosts — that branch is unreachable in
 // practice (validateImage rejects images outside SupportedImages upstream)
 // but guards against a silent half-baked rewrite if validation regresses.
-// The URL is validated to contain neither `'` nor `|`, so single-quoting
-// the sed expressions is safe without further escaping.
+// The URL passes containsUnsafeForSed validation (no whitespace, control
+// chars, `'`, `|`, `&`, or `\` — see internal/config/validate.go), so
+// single-quoting the sed expressions is safe without further escaping.
 func buildAptMirrorRewrite(ctx *generate.WorkspaceContext) string {
 	url := ctx.AptMirrorURL()
 	if url == "" {
