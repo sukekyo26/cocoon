@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-05-24
+
 ### Added
 
 - `cocoon init` now offers to auto-configure user-local `PATH` / install-prefix entries under `[container.shell.env]` when the chosen `[container].image` is a language base image (`node` / `python` / `golang` / `rust` / `denoland/deno`). Without it, the official image's package managers either (a) write user installs to root-owned `/usr/local/...` directories (`npm install -g`, `pip install`, `cargo install`, failing with `EACCES` and — on python 3.11+ — PEP 668), or (b) place binaries in a writable user dir that is not on `PATH` (`go install` → `$HOME/go/bin`, `deno install` → `$HOME/.deno/bin`, `pip install --user` → `$HOME/.local/bin`). The interactive prompt previews the exact entries before asking and defaults to yes; the generated block is preceded by three self-documenting comment lines (added reason / removal consequence / coexist warning against the inline `env = { ... }` form) so the auto-added section stays readable months later. Pair the prompt with two new flags: `--image-path-fix` forces the injection on, `--no-image-path-fix` skips it (both require `--image` to be set, since the fix is image-specific, and error against non-language images so a scripted typo fails fast rather than silently no-op'ing). `ubuntu` / `debian` do not surface the prompt. The per-image entries are: `node` → `NPM_CONFIG_PREFIX="$HOME/.npm-global"` + `PATH="$HOME/.npm-global/bin:$PATH"`; `python` → `PATH="$HOME/.local/bin:$PATH"`; `golang` → `PATH="$HOME/go/bin:$PATH"`; `rust` → `CARGO_INSTALL_ROOT="$HOME/.cargo"` + `PATH="$HOME/.cargo/bin:$PATH"` (`CARGO_HOME` is intentionally left at the image default so rustup and `cargo build`'s registry cache are not relocated); `denoland/deno` → `PATH="$HOME/.deno/bin:$PATH"`.
@@ -193,7 +195,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Add `COMPOSE_PROJECT_NAME` derivation from the project directory basename so docker compose namespacing matches the host directory.
 - Add i18n catalog (English / Japanese) covering every CLI prompt, error message, and inline `workspace.toml` comment, switched via `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG`.
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.7.2...HEAD
+[0.7.2]: https://github.com/sukekyo26/cocoon/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/sukekyo26/cocoon/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/sukekyo26/cocoon/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/sukekyo26/cocoon/compare/v0.5.0...v0.6.0
