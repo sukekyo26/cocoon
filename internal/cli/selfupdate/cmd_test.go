@@ -2,17 +2,23 @@
 package selfupdatecli
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 
+	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
 	"github.com/sukekyo26/cocoon/internal/release"
+	"github.com/sukekyo26/cocoon/internal/version"
 )
 
 // TestDownloadFile covers the three states of the binary/SHA256SUMS
@@ -206,6 +212,306 @@ func TestAtomicReplace(t *testing.T) {
 	}
 	if _, err := os.Stat(src); !os.IsNotExist(err) {
 		t.Errorf("src still exists after rename (err = %v)", err)
+	}
+}
+
+// withSelfUpdateSeams snapshots the package-level seams (fetchLatest,
+// executablePath, osExit) and restores them via t.Cleanup. Tests use this
+// instead of touching the vars directly so a failing assertion can't leak
+// fakes into sibling tests.
+//
+// All callers must be //nolint:paralleltest because the seams are shared
+// package state.
+func withSelfUpdateSeams(t *testing.T) {
+	t.Helper()
+	origFL, origEP, origExit := fetchLatest, executablePath, osExit
+	t.Cleanup(func() {
+		fetchLatest, executablePath, osExit = origFL, origEP, origExit
+	})
+}
+
+// withVersion pins version.Version for the duration of the test so the
+// "dev build" guard and the up-to-date / newer comparisons are exercised
+// against a known string.
+func withVersion(t *testing.T, v string) {
+	t.Helper()
+	orig := version.Version
+	t.Cleanup(func() { version.Version = orig })
+	version.Version = v
+}
+
+// TestRunSelfUpdate_DevBuildErrors covers the "no version baked in" guard:
+// version.Version == "dev" must short-circuit to ErrFailure before any
+// fetchLatest call is made.
+//
+//nolint:paralleltest // mutates the package-level version.Version
+func TestRunSelfUpdate_DevBuildErrors(t *testing.T) {
+	withSelfUpdateSeams(t)
+	withVersion(t, "dev")
+	fetchLatest = func(context.Context, ...release.Option) (*release.Release, error) {
+		t.Error("fetchLatest must not run on a dev build")
+		return nil, errors.New("should not be called")
+	}
+
+	var stderr bytes.Buffer
+	err := runSelfUpdate(context.Background(), &bytes.Buffer{}, &stderr, false, false)
+	if !errors.Is(err, clihelpers.ErrFailure) {
+		t.Fatalf("err = %v, want errors.Is ErrFailure", err)
+	}
+	if !strings.Contains(stderr.String(), "dev build") {
+		t.Errorf("stderr = %q, want substring %q", stderr.String(), "dev build")
+	}
+}
+
+// TestRunSelfUpdate_FetchLatestFails pins that a transport-level fetch
+// failure is wrapped as ErrFailure (the user-actionable class) without
+// dropping the original cause from the chain.
+//
+//nolint:paralleltest // mutates the package-level fetchLatest seam
+func TestRunSelfUpdate_FetchLatestFails(t *testing.T) {
+	withSelfUpdateSeams(t)
+	withVersion(t, "0.0.1")
+
+	cause := errors.New("github api down")
+	fetchLatest = func(context.Context, ...release.Option) (*release.Release, error) {
+		return nil, cause
+	}
+
+	err := runSelfUpdate(context.Background(), &bytes.Buffer{}, &bytes.Buffer{}, false, false)
+	if !errors.Is(err, clihelpers.ErrFailure) {
+		t.Fatalf("err = %v, want errors.Is ErrFailure", err)
+	}
+	if !errors.Is(err, cause) {
+		t.Errorf("err = %v lost original cause %v", err, cause)
+	}
+}
+
+// TestRunSelfUpdate_AlreadyUpToDate covers the no-op path: when fetchLatest
+// reports the same tag the binary already carries, runSelfUpdate exits
+// with nil and prints "already up to date" without downloading anything.
+//
+//nolint:paralleltest // mutates the package-level fetchLatest seam
+func TestRunSelfUpdate_AlreadyUpToDate(t *testing.T) {
+	withSelfUpdateSeams(t)
+	withVersion(t, "1.2.3")
+	fetchLatest = func(context.Context, ...release.Option) (*release.Release, error) {
+		return &release.Release{TagName: "v1.2.3"}, nil
+	}
+
+	var stdout bytes.Buffer
+	err := runSelfUpdate(context.Background(), &stdout, &bytes.Buffer{}, false, false)
+	if err != nil {
+		t.Fatalf("err = %v, want nil", err)
+	}
+	if !strings.Contains(stdout.String(), "already up to date") {
+		t.Errorf("stdout = %q, want substring %q", stdout.String(), "already up to date")
+	}
+}
+
+// TestRunSelfUpdate_CheckOnlyExitsWith100 pins the contract that
+// `--check-only` invokes osExit(ExitNewerAvailable) when a newer release
+// is available, so CI scripts can branch on exit code 100 without
+// parsing stdout.
+//
+//nolint:paralleltest // mutates the package-level osExit + fetchLatest seams
+func TestRunSelfUpdate_CheckOnlyExitsWith100(t *testing.T) {
+	withSelfUpdateSeams(t)
+	withVersion(t, "1.0.0")
+	fetchLatest = func(context.Context, ...release.Option) (*release.Release, error) {
+		return &release.Release{TagName: "v2.0.0"}, nil
+	}
+	var exitCode int
+	osExit = func(code int) { exitCode = code }
+
+	err := runSelfUpdate(context.Background(), &bytes.Buffer{}, &bytes.Buffer{}, true, false)
+	if err != nil {
+		t.Fatalf("err = %v, want nil (osExit is fake, runSelfUpdate returns post-osExit)", err)
+	}
+	if exitCode != ExitNewerAvailable {
+		t.Errorf("osExit code = %d, want %d", exitCode, ExitNewerAvailable)
+	}
+}
+
+// TestRunSelfUpdate_AssetNotFound exercises the "release exists but has
+// no matching asset for this OS/arch" branch.
+//
+//nolint:paralleltest // mutates the package-level fetchLatest seam
+func TestRunSelfUpdate_AssetNotFound(t *testing.T) {
+	withSelfUpdateSeams(t)
+	withVersion(t, "1.0.0")
+	fetchLatest = func(context.Context, ...release.Option) (*release.Release, error) {
+		return &release.Release{TagName: "v2.0.0", Assets: nil}, nil
+	}
+
+	err := runSelfUpdate(context.Background(), &bytes.Buffer{}, &bytes.Buffer{}, false, false)
+	if !errors.Is(err, clihelpers.ErrFailure) {
+		t.Fatalf("err = %v, want errors.Is ErrFailure", err)
+	}
+	if !strings.Contains(err.Error(), "release asset") {
+		t.Errorf("err = %v, want substring %q", err, "release asset")
+	}
+}
+
+// TestRunSelfUpdate_SumsNotFound covers the symmetric "asset present but
+// SHA256SUMS missing" branch — the second guard right after assetURL.
+//
+//nolint:paralleltest // mutates the package-level fetchLatest seam
+func TestRunSelfUpdate_SumsNotFound(t *testing.T) {
+	withSelfUpdateSeams(t)
+	withVersion(t, "1.0.0")
+	assetName := fmt.Sprintf("cocoon-%s-%s", runtime.GOOS, runtime.GOARCH)
+	fetchLatest = func(context.Context, ...release.Option) (*release.Release, error) {
+		return &release.Release{
+			TagName: "v2.0.0",
+			Assets:  []release.Asset{{Name: assetName, URL: "http://127.0.0.1:0/asset"}},
+		}, nil
+	}
+
+	err := runSelfUpdate(context.Background(), &bytes.Buffer{}, &bytes.Buffer{}, false, false)
+	if !errors.Is(err, clihelpers.ErrFailure) {
+		t.Fatalf("err = %v, want errors.Is ErrFailure", err)
+	}
+	if !strings.Contains(err.Error(), "SHA256SUMS") {
+		t.Errorf("err = %v, want substring %q", err, "SHA256SUMS")
+	}
+}
+
+// TestRunSelfUpdate_HappyPath walks the full download → verify → replace
+// pipeline. It stands up an httptest server that serves a fake binary
+// and a matching SHA256SUMS, points the seams at it, and asserts that
+// the executablePath target ends up with the new binary's bytes.
+//
+//nolint:paralleltest // mutates the package-level fetchLatest / executablePath seams
+func TestRunSelfUpdate_HappyPath(t *testing.T) {
+	withSelfUpdateSeams(t)
+	withVersion(t, "1.0.0")
+
+	const payload = "#!/bin/sh\necho new-cocoon\n"
+	sum := sha256.Sum256([]byte(payload))
+	hashHex := hex.EncodeToString(sum[:])
+	assetName := fmt.Sprintf("cocoon-%s-%s", runtime.GOOS, runtime.GOARCH)
+	sumsBody := hashHex + "  " + assetName + "\n"
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/asset":
+			_, _ = w.Write([]byte(payload)) //nolint:errcheck // test mock
+		case "/sums":
+			_, _ = w.Write([]byte(sumsBody)) //nolint:errcheck // test mock
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	fetchLatest = func(context.Context, ...release.Option) (*release.Release, error) {
+		return &release.Release{
+			TagName: "v2.0.0",
+			Assets: []release.Asset{
+				{Name: assetName, URL: srv.URL + "/asset"},
+				{Name: "SHA256SUMS", URL: srv.URL + "/sums"},
+			},
+		}, nil
+	}
+
+	target := filepath.Join(t.TempDir(), "cocoon")
+	if err := os.WriteFile(target, []byte("old"), 0o755); err != nil { //nolint:gosec // test fixture
+		t.Fatalf("seed target: %v", err)
+	}
+	executablePath = func() (string, error) { return target, nil }
+
+	var stdout bytes.Buffer
+	err := runSelfUpdate(context.Background(), &stdout, &bytes.Buffer{}, false, false)
+	if err != nil {
+		t.Fatalf("runSelfUpdate: %v", err)
+	}
+	got, err := os.ReadFile(target) //nolint:gosec // test asserts the file we just wrote
+	if err != nil {
+		t.Fatalf("read target: %v", err)
+	}
+	if string(got) != payload {
+		t.Errorf("target content = %q, want %q", got, payload)
+	}
+	if !strings.Contains(stdout.String(), "updated cocoon to 2.0.0") {
+		t.Errorf("stdout = %q, want substring %q", stdout.String(), "updated cocoon to 2.0.0")
+	}
+}
+
+// TestRunSelfUpdate_ChecksumMismatch points fetchLatest at a server that
+// serves a SHA256SUMS file whose digest disagrees with the asset bytes.
+// runSelfUpdate must surface a "checksum mismatch" error and not touch
+// the existing executable.
+//
+//nolint:paralleltest // mutates the package-level fetchLatest / executablePath seams
+func TestRunSelfUpdate_ChecksumMismatch(t *testing.T) {
+	withSelfUpdateSeams(t)
+	withVersion(t, "1.0.0")
+
+	const payload = "real-bytes"
+	assetName := fmt.Sprintf("cocoon-%s-%s", runtime.GOOS, runtime.GOARCH)
+	const wrongHash = "0000000000000000000000000000000000000000000000000000000000000000"
+	sumsBody := wrongHash + "  " + assetName + "\n"
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/asset":
+			_, _ = w.Write([]byte(payload)) //nolint:errcheck // test mock
+		case "/sums":
+			_, _ = w.Write([]byte(sumsBody)) //nolint:errcheck // test mock
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	fetchLatest = func(context.Context, ...release.Option) (*release.Release, error) {
+		return &release.Release{
+			TagName: "v2.0.0",
+			Assets: []release.Asset{
+				{Name: assetName, URL: srv.URL + "/asset"},
+				{Name: "SHA256SUMS", URL: srv.URL + "/sums"},
+			},
+		}, nil
+	}
+	target := filepath.Join(t.TempDir(), "cocoon")
+	if err := os.WriteFile(target, []byte("old"), 0o755); err != nil { //nolint:gosec // test fixture
+		t.Fatalf("seed target: %v", err)
+	}
+	executablePath = func() (string, error) { return target, nil }
+
+	err := runSelfUpdate(context.Background(), &bytes.Buffer{}, &bytes.Buffer{}, false, false)
+	if !errors.Is(err, clihelpers.ErrFailure) {
+		t.Fatalf("err = %v, want errors.Is ErrFailure", err)
+	}
+	if !strings.Contains(err.Error(), "checksum mismatch") {
+		t.Errorf("err = %v, want substring %q", err, "checksum mismatch")
+	}
+	got, _ := os.ReadFile(target) //nolint:errcheck,gosec // assertion on existing file
+	if string(got) != "old" {
+		t.Errorf("target was overwritten despite checksum mismatch: %q", got)
+	}
+}
+
+// TestNewCommand_FlagsWired pins the cobra wiring (flag registration,
+// SilenceUsage / SilenceErrors / NoArgs) so a future refactor cannot
+// silently drop the --check-only contract or start dumping usage on
+// every error.
+func TestNewCommand_FlagsWired(t *testing.T) {
+	t.Parallel()
+
+	cmd := NewCommand(&bytes.Buffer{}, &bytes.Buffer{})
+
+	if cmd.Use != "self-update" {
+		t.Errorf("Use = %q, want %q", cmd.Use, "self-update")
+	}
+	if !cmd.SilenceUsage {
+		t.Error("SilenceUsage must be true; usage is dumped from main.go on ErrUsage")
+	}
+	if !cmd.SilenceErrors {
+		t.Error("SilenceErrors must be true; main.go owns user-facing error output")
+	}
+	for _, name := range []string{"check-only", "force"} {
+		if cmd.Flags().Lookup(name) == nil {
+			t.Errorf("flag --%s missing", name)
+		}
 	}
 }
 
