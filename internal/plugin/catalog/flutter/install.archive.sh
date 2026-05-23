@@ -52,9 +52,14 @@ else
     echo "Failed to read current_release.stable from Flutter manifest" >&2
     exit 1
   fi
+  # `|| true` keeps the command substitution non-fatal: under `set -euo
+  # pipefail`, a no-match from `grep -oE` (e.g. manifest shape change) would
+  # otherwise exit the script via the pipeline's non-zero status before the
+  # friendly `-z "$VERSION"` check below could run. Let the empty-VERSION
+  # branch emit the actionable error instead.
   VERSION=$(printf '%s' "$MANIFEST" | tr -d '\n' |
     grep -oE "\\{[^{}]*\"hash\"[[:space:]]*:[[:space:]]*\"${STABLE_HASH}\"[^{}]*\\}" |
-    sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)
+    sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1) || true
   if [ -z "$VERSION" ]; then
     echo "Failed to resolve latest Flutter stable version" >&2
     exit 1
