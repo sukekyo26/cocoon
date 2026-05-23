@@ -194,7 +194,11 @@ func promptPluginsWithRetry(cat *i18n.Catalog, plugins map[string]*plugin.Plugin
 // previous field to land on. The form keymap below blanks the Prev
 // binding's help text in every field profile so huh's help bar stops
 // advertising a "shift+tab back" affordance that does nothing.
-func runSingleFieldForm(field huh.Field) error {
+//
+// runSingleFieldForm is a package-level var rather than a func so tests
+// can replace it with a no-op (or counter) and exercise the surrounding
+// prompt flow's branching logic without a real TTY.
+var runSingleFieldForm = func(field huh.Field) error {
 	if err := huh.NewForm(huh.NewGroup(field)).WithKeyMap(keyMapWithoutPrevHelp()).Run(); err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
 			return fmt.Errorf("%w: aborted", clihelpers.ErrUsage)

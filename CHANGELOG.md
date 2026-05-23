@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-05-23
+
+### Fixed
+
+- `cocoon gen` now uncomments the requested locales in `/etc/locale.gen` and invokes `locale-gen` with no arguments, instead of passing the locale list directly as `locale-gen <name>`. On some Debian-based images (notably `*-slim` variants) the `/etc/locale.gen` shipped by the `locales` package has every line commented out, and `locale-gen <name>` does not always materialise the requested locale — leaving the container to emit `bash: warning: setlocale: LC_ALL: cannot change locale (...)` on every shell start because `LC_ALL` is set but never generated. The new flow follows the canonical Debian/Ubuntu order (uncomment lines, then `locale-gen`) and is no-op safe on images that already have the locales uncommented.
+
 ## [0.7.0] - 2026-05-23
 
 ### Added
@@ -183,7 +189,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Add `COMPOSE_PROJECT_NAME` derivation from the project directory basename so docker compose namespacing matches the host directory.
 - Add i18n catalog (English / Japanese) covering every CLI prompt, error message, and inline `workspace.toml` comment, switched via `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG`.
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/sukekyo26/cocoon/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/sukekyo26/cocoon/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/sukekyo26/cocoon/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/sukekyo26/cocoon/compare/v0.4.0...v0.5.0

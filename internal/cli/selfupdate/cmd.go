@@ -61,7 +61,7 @@ func runSelfUpdate(ctx context.Context, stdout, stderr io.Writer, checkOnly, for
 
 	tctx, cancel := context.WithTimeout(ctx, apiTimeout)
 	defer cancel()
-	rel, err := release.FetchLatest(tctx)
+	rel, err := fetchLatest(tctx)
 	if err != nil {
 		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
 	}
@@ -81,7 +81,8 @@ func runSelfUpdate(ctx context.Context, stdout, stderr io.Writer, checkOnly, for
 		log.Infof("newer release %s available; rerun without --check-only to install", latest)
 		// Cancel before os.Exit (gocritic exitAfterDefer).
 		cancel()
-		os.Exit(ExitNewerAvailable) //nolint:gocritic // cancel() above runs the only pending defer.
+		osExit(ExitNewerAvailable) //nolint:gocritic // cancel() above runs the only pending defer.
+		return nil
 	}
 
 	assetName := fmt.Sprintf("cocoon-%s-%s", runtime.GOOS, runtime.GOARCH)
@@ -128,7 +129,7 @@ func runSelfUpdate(ctx context.Context, stdout, stderr io.Writer, checkOnly, for
 		return fmt.Errorf("%w: chmod: %w", clihelpers.ErrFailure, err)
 	}
 
-	selfPath, err := os.Executable()
+	selfPath, err := executablePath()
 	if err != nil {
 		return fmt.Errorf("%w: locate self: %w", clihelpers.ErrFailure, err)
 	}
@@ -195,6 +196,16 @@ func sha256File(path string) (string, error) {
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
+
+// fetchLatest / executablePath / osExit are test seams (same pattern as
+// renameFn below). They let runSelfUpdate be exercised end-to-end without
+// a real GitHub Releases roundtrip or terminating the test process.
+// Production always points at the std library / package impls.
+var (
+	fetchLatest    = release.FetchLatest
+	executablePath = os.Executable
+	osExit         = os.Exit
+)
 
 // renameFn is a test seam: it lets the EXDEV copy fallback in
 // atomicReplace be exercised deterministically without a second real

@@ -43,11 +43,11 @@ cover:
     go tool cover -html={{cover_file}} -o coverage.html
     go tool cover -func={{cover_file}} | tail -1
 
-# CI gate: coverage + total threshold (default 80%, override with MIN_COVERAGE)
+# CI gate: coverage + total threshold (default 90%, override with MIN_COVERAGE)
 cover-check:
     #!/usr/bin/env bash
     set -euo pipefail
-    min_coverage="${MIN_COVERAGE:-80}"
+    min_coverage="${MIN_COVERAGE:-90}"
     go test -shuffle=on -covermode=atomic \
         -coverpkg=./internal/... -coverprofile={{cover_file}} {{pkgs}}
     go tool cover -func={{cover_file}} | tail -1

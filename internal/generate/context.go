@@ -1,6 +1,7 @@
 package generate
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -10,6 +11,12 @@ import (
 	"github.com/sukekyo26/cocoon/internal/config"
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
+
+// ErrInvalidLocale is returned (wrapped) by LocaleSedScript when a locale
+// name from workspace.toml contains characters that cannot safely be
+// embedded into the generated /etc/locale.gen sed script. Callers can
+// identify it with errors.Is.
+var ErrInvalidLocale = errors.New("invalid locale name")
 
 // WorkspaceContext is a normalized read-only view over a workspace.toml that
 // generator subpackages consume.
@@ -307,6 +314,58 @@ func (c *WorkspaceContext) ResolveLocale() (genList, lang, language string) {
 		genList = "en_US.UTF-8 " + l
 	}
 	return genList, l, language
+}
+
+// LocaleSedScript returns the `sed -E` expression arguments that
+// uncomment each locale produced by ResolveLocale in /etc/locale.gen.
+// Output is shell-ready, e.g.
+//
+//	-e 's|^# *(en_US\.UTF-8 UTF-8)$|\1|' -e 's|^# *(ja_JP\.UTF-8 UTF-8)$|\1|'
+//
+// The pattern anchors on a leading `#` so already-uncommented lines pass
+// through untouched, and the `.` in each locale is escaped before being
+// embedded in the regex. Locale names containing shell or sed
+// metacharacters, whitespace, or non-ASCII bytes are rejected with an
+// error wrapping ErrInvalidLocale; callers can identify it via
+// errors.Is.
+func (c *WorkspaceContext) LocaleSedScript() (string, error) {
+	genList, _, _ := c.ResolveLocale()
+	locales := strings.Fields(genList)
+	args := make([]string, 0, len(locales))
+	for _, loc := range locales {
+		if err := validateLocaleName(loc); err != nil {
+			return "", err
+		}
+		escaped := strings.ReplaceAll(loc, ".", `\.`)
+		args = append(args, fmt.Sprintf(`-e 's|^# *(%s UTF-8)$|\1|'`, escaped))
+	}
+	return strings.Join(args, " "), nil
+}
+
+// validateLocaleName accepts the conservative POSIX-style locale name
+// charset [A-Za-z0-9_.@-] and rejects everything else (shell
+// metacharacters, whitespace, quote marks, non-ASCII bytes). Returning
+// an ErrInvalidLocale-wrapped error keeps the generated sed script free
+// of injection vectors. config.LocaleSpec.validate already enforces a
+// stricter regex for workspace.toml input; this check is the
+// defence-in-depth gate at the generator boundary for callers that
+// construct WorkspaceContext directly.
+func validateLocaleName(name string) error {
+	if name == "" {
+		return fmt.Errorf("%w: %q", ErrInvalidLocale, name)
+	}
+	for i := 0; i < len(name); i++ {
+		b := name[i]
+		switch {
+		case b >= 'A' && b <= 'Z':
+		case b >= 'a' && b <= 'z':
+		case b >= '0' && b <= '9':
+		case b == '_' || b == '.' || b == '-' || b == '@':
+		default:
+			return fmt.Errorf("%w: %q", ErrInvalidLocale, name)
+		}
+	}
+	return nil
 }
 
 // UserEnv never returns nil.

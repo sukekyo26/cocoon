@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `just ci` — push 前ゲート（`fmt-check + vet + lint + test + cover-check + vuln + mod-verify + shellcheck + shfmt-check`）。
 - `just regen-snapshots` — golden / fixture（dockerfile / compose / devcontainerjson / plugin / init）を一括再生成。ジェネレータ・プラグインミューテータ・`cocoon init` 出力を意図的に変えたら走らせ、`testdata/` をソース変更と同じコミットに入れる。CI は `-update-golden` なしで走るためドリフトは即落ちる。
 - 単一テスト: `go test ./internal/cli/init -run TestInitInteractive`
-- カバレッジ閾値は 80%（`MIN_COVERAGE` で上書き可、`just cover-check`）。
+- カバレッジ閾値は 90%（`MIN_COVERAGE` で上書き可、`just cover-check`）。
 - 個別レシピは `just --list` 参照。
 
 ## CHANGELOG

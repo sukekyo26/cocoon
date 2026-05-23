@@ -58,7 +58,7 @@ type templateData struct {
 	AptShellPackages       string
 	AptPluginPackages      string
 	AptExtraPackages       string
-	LocaleGenList          string
+	LocaleSedScript        string
 	LocaleLang             string
 	LocaleLanguage         string
 	RepoDir                string
@@ -125,7 +125,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 {{- with .AptExtraPackages }}
 {{ . }}
 {{- end }}
-    && locale-gen {{ .LocaleGenList }} \
+    && sed -i -E {{ .LocaleSedScript }} /etc/locale.gen \
+    && locale-gen \
     && rm -rf /tmp/* /var/tmp/*
 
 {{ with .DockerfilePreUserSetup -}}
@@ -265,18 +266,15 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 	aptPlugin := collectPluginAptPackages(opts.Plugins, enabled, basePkgNames)
 
 	aptExtraPkgs := ctx.AptExtraPackages()
-	for _, pkg := range aptExtraPkgs {
-		if _, dup := basePkgNames[pkg]; dup && opts.Warnings != nil {
-			fmt.Fprintf(opts.Warnings,
-				"WARNING: [apt] packages contains '%s', which cocoon already installs "+
-					"as a base package. Remove it from [apt] packages in workspace.toml "+
-					"to avoid redundant installs.\n", pkg)
-		}
-	}
+	warnDuplicateAptExtras(aptExtraPkgs, basePkgNames, opts.Warnings)
 	aptExtra := formatAptContinuations(aptExtraPkgs)
 
 	preUser, postPlugins := buildDockerfileHooks(ctx, opts.Warnings)
-	genList, lang, language := ctx.ResolveLocale()
+	_, lang, language := ctx.ResolveLocale()
+	localeSed, err := ctx.LocaleSedScript()
+	if err != nil {
+		return "", fmt.Errorf("dockerfile: %w", err)
+	}
 
 	loginShell := ctx.LoginShell()
 	rcPath := ctx.RCFilePath()
@@ -302,7 +300,7 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 		AptShellPackages:       strings.TrimRight(formatAptContinuations(aptShellList), "\n"),
 		AptPluginPackages:      strings.TrimRight(aptPlugin, "\n"),
 		AptExtraPackages:       strings.TrimRight(aptExtra, "\n"),
-		LocaleGenList:          genList,
+		LocaleSedScript:        localeSed,
 		LocaleLang:             lang,
 		LocaleLanguage:         language,
 		RepoDir:                pickRepoDir(opts.RepoDir, root),
@@ -326,6 +324,23 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 		return "", fmt.Errorf("dockerfile: %w", err)
 	}
 	return out, nil
+}
+
+// warnDuplicateAptExtras flags packages listed in workspace.toml [apt]
+// that cocoon already installs as a MinimalBasePackage. A nil warnings
+// sink silently drops the diagnostics, matching the rest of Generate.
+func warnDuplicateAptExtras(extras []string, basePkgNames map[string]struct{}, warnings io.Writer) {
+	if warnings == nil {
+		return
+	}
+	for _, pkg := range extras {
+		if _, dup := basePkgNames[pkg]; dup {
+			fmt.Fprintf(warnings,
+				"WARNING: [apt] packages contains '%s', which cocoon already installs "+
+					"as a base package. Remove it from [apt] packages in workspace.toml "+
+					"to avoid redundant installs.\n", pkg)
+		}
+	}
 }
 
 // pickRepoDir falls back to filepath.Base(WorkspaceRoot). Tests pass an
