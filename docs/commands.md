@@ -353,13 +353,3 @@ cocoon completion powershell | Out-String | Invoke-Expression
 | `1` | Failure (`ErrFailure`-wrapped) |
 | `2` | Usage error (`ErrUsage`-wrapped) |
 | `100` | `cocoon self-update --check-only`: an update is available |
-
----
-
-## Removed commands
-
-The following noun groups and subcommands existed in earlier releases and have been **removed**. They are documented here so readers searching for an old command know where they went; full migration notes live in the [CHANGELOG](../CHANGELOG.md).
-
-- **`cocoon config` (entire noun group)** — `get`, `list`, `volumes`, `plugin-get`, `plugin-list`, `plugin-volumes`, `plugins-table`, `validate-workspace`, `validate-plugins`, `has-section`, `list-sidecars`, `dump-devcontainer`, `dump-repositories`, `repositories`, `format-repositories`. These were low-level TOML accessors used by retired bash entry-point scripts. External scripts that scraped `workspace.toml` via `cocoon config` should switch to a dedicated TOML parser (`tomlq`, `taplo`, or a small Go / Python helper).
-- **`cocoon plugin add`** — replaced by listing the id under `[plugins].enable` (the embedded catalog is exposed through LayeredFS without a copy step). To customise an embedded plugin, run `cocoon plugin scaffold <new-id>` and adapt logic from there.
-- **`cocoon plugin remove`** — replaced by `rm -rf ~/.cocoon/plugins/<id>` (user scope) or `rm -rf <workspace>/.cocoon/plugins/<id>` (project scope).
