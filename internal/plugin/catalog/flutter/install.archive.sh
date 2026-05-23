@@ -79,3 +79,9 @@ fi
 # Tarball root is "flutter/" — extract directly into /usr/local.
 tar -C /usr/local -xJf /tmp/flutter.tar.xz
 rm /tmp/flutter.tar.xz
+
+# Flutter writes inside its own SDK tree at runtime (bin/cache/ for engine
+# binaries, dart-sdk stamps, pre-cached artifacts), so the non-root container
+# user must own /usr/local/flutter. Chown inside the same RUN keeps the
+# ownership flip in a single image layer (no duplicated 700 MB SDK).
+chown -R "${USERNAME}:${USERNAME}" /usr/local/flutter
