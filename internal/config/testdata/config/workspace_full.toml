@@ -27,10 +27,6 @@ EDITOR = "vim"
 timezone = "Asia/Tokyo"
 lang = "en_US.UTF-8"
 
-[git]
-user_name = "Test User"
-user_email = "test@example.com"
-
 [container.shell]
 aliases = { ll = "ls -la" }
 env = { GOPATH = "/home/developer/go" }
@@ -39,12 +35,6 @@ env = { GOPATH = "/home/developer/go" }
 source = "/etc/ssh"
 target = "/etc/ssh"
 readonly = true
-
-[repositories]
-clone = [
-  { url = "https://github.com/example/repo.git" },
-  { url = "https://github.com/example/other.git", path = "vendor/", branch = "main", depth = 1, recurse_submodules = true },
-]
 
 [devcontainer]
 forwardPorts = [9000]

@@ -68,7 +68,6 @@ type templateData struct {
 	ShellHistoryInit       string
 	DockerfilePreUserSetup string
 	SkelCopies             string
-	GitConfig              string
 	CustomCertificates     string
 	PluginInstalls         string
 	DockerfilePostPlugins  string
@@ -189,10 +188,6 @@ RUN mkdir -p "$HOME/.cocoon" && \
 {{ . }}
 
 {{ end -}}
-{{ with .GitConfig -}}
-{{ . }}
-
-{{ end -}}
 {{ with .CustomCertificates -}}
 {{ . }}
 
@@ -279,7 +274,6 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 	}
 	aptExtra := formatAptContinuations(aptExtraPkgs)
 
-	gitConfig := buildGitConfig(ctx)
 	preUser, postPlugins := buildDockerfileHooks(ctx, opts.Warnings)
 	genList, lang, language := ctx.ResolveLocale()
 
@@ -318,7 +312,6 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 		ShellHistoryInit:       buildShellHistoryInit(loginShell, rcPath),
 		DockerfilePreUserSetup: preUser,
 		SkelCopies:             buildSkelCopies(ctx),
-		GitConfig:              gitConfig,
 		CustomCertificates:     certInstallEnv,
 		PluginInstalls:         pluginInstalls,
 		DockerfilePostPlugins:  postPlugins,
@@ -624,26 +617,6 @@ func buildSkelCopies(ctx *generate.WorkspaceContext) string {
 		fmt.Fprintf(&b, "COPY %s /etc/skel/%s", e.Source, e.Target)
 	}
 	return b.String()
-}
-
-func buildGitConfig(ctx *generate.WorkspaceContext) string {
-	name := ctx.GitUserName()
-	email := ctx.GitUserEmail()
-	var lines []string
-	if name != "" {
-		lines = append(lines, "git config --system user.name  "+shellx.ShellQuote(name))
-	}
-	if email != "" {
-		lines = append(lines, "git config --system user.email "+shellx.ShellQuote(email))
-	}
-	if len(lines) == 0 {
-		return ""
-	}
-	joined := strings.Join(lines, " \\\n && ")
-	return "# Git identity from [git] section of workspace.toml\n" +
-		"USER root\n" +
-		"RUN " + joined + "\n" +
-		"USER ${USERNAME}"
 }
 
 func buildDockerfileHooks(ctx *generate.WorkspaceContext, warnings io.Writer) (preUser, postPlugins string) {

@@ -50,12 +50,6 @@ func TestWorkspaceContext_NilSafe(t *testing.T) {
 	if got := c.AptExtraPackages(); got == nil || len(got) != 0 {
 		t.Errorf("AptExtraPackages should be empty non-nil slice, got %v", got)
 	}
-	if c.GitUserName() != "" {
-		t.Error("GitUserName should be empty")
-	}
-	if c.GitUserEmail() != "" {
-		t.Error("GitUserEmail should be empty")
-	}
 	if c.DockerfilePreUserSetup() != "" {
 		t.Error("DockerfilePreUserSetup should be empty")
 	}
@@ -104,10 +98,6 @@ func TestWorkspaceContext_PopulatedAccessors(t *testing.T) {
 		Locale: &config.LocaleSpec{
 			Lang:     ptr("ja_JP.UTF-8"),
 			Timezone: ptr("Asia/Tokyo"),
-		},
-		Git: &config.GitIdentitySpec{
-			UserName:  ptr("Alice"),
-			UserEmail: ptr("a@example.com"),
 		},
 		Dockerfile: &config.DockerfileSpec{
 			PreUserSetup: ptr("RUN echo pre"),
@@ -168,12 +158,6 @@ func TestWorkspaceContext_PopulatedAccessors(t *testing.T) {
 	}
 	if got := c.AptExtraPackages(); strings.Join(got, ",") != "jq,curl" {
 		t.Errorf("AptExtraPackages = %v", got)
-	}
-	if c.GitUserName() != "Alice" {
-		t.Errorf("GitUserName = %q", c.GitUserName())
-	}
-	if c.GitUserEmail() != "a@example.com" {
-		t.Errorf("GitUserEmail = %q", c.GitUserEmail())
 	}
 	if c.DockerfilePreUserSetup() != "RUN echo pre" {
 		t.Errorf("DockerfilePreUserSetup = %q", c.DockerfilePreUserSetup())

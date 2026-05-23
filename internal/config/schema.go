@@ -17,10 +17,8 @@ type Workspace struct {
 	HomeFiles     *HomeFilesSpec            `toml:"home_files,omitempty"`
 	Locale        *LocaleSpec               `toml:"locale,omitempty"`
 	Certificates  *CertificatesSpec         `toml:"certificates,omitempty"`
-	Git           *GitIdentitySpec          `toml:"git,omitempty"`
 	Dockerfile    *DockerfileSpec           `toml:"dockerfile,omitempty"`
 	Services      map[string]SidecarService `toml:"services,omitempty"`
-	Repositories  *RepositoriesSpec         `toml:"repositories,omitempty"`
 	Devcontainer  Devcontainer              `toml:"devcontainer,omitempty"`
 	CodeWorkspace *CodeWorkspaceSpec        `toml:"code_workspace,omitempty"`
 }
@@ -339,12 +337,6 @@ type LocaleSpec struct {
 	Lang     *string `toml:"lang,omitempty"`
 }
 
-// GitIdentitySpec models [git].
-type GitIdentitySpec struct {
-	UserName  *string `toml:"user_name,omitempty"`
-	UserEmail *string `toml:"user_email,omitempty"`
-}
-
 // CertificatesSpec gates TLS certificate auto-bake from ~/.cocoon/certs/.
 // See docs/configuration.md `[certificates]`.
 type CertificatesSpec struct {
@@ -422,20 +414,6 @@ type SidecarService struct {
 	DependsOn   []string          `toml:"depends_on,omitempty"`
 	Healthcheck HealthcheckSpec   `toml:"healthcheck,omitempty"`
 	Restart     *SidecarRestart   `toml:"restart,omitempty"`
-}
-
-// RepositoryClone models one [[repositories.clone]] entry.
-type RepositoryClone struct {
-	URL               string  `toml:"url"`
-	Path              *string `toml:"path,omitempty"`
-	Branch            *string `toml:"branch,omitempty"`
-	Depth             *int    `toml:"depth,omitempty"`
-	RecurseSubmodules *bool   `toml:"recurse_submodules,omitempty"`
-}
-
-// RepositoriesSpec models [repositories].
-type RepositoriesSpec struct {
-	Clone []RepositoryClone `toml:"clone"`
 }
 
 // Devcontainer is a passthrough map: dump-devcontainer emits entries verbatim.

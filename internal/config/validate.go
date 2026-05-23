@@ -18,7 +18,6 @@ var (
 	rxEnvKey       = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 	rxShellEnvKey  = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`)
 	rxAliasKey     = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_-]*$`)
-	rxRepoPath     = regexp.MustCompile(`^[A-Za-z0-9_-][A-Za-z0-9_./-]*$`)
 	// rxHomeFilesSegment: each path segment of a [home_files].files entry
 	// must consist only of POSIX portable filename chars (letters,
 	// digits, dot, hyphen, underscore). home_files paths flow into the
@@ -30,7 +29,6 @@ var (
 	// blacklist.
 	rxHomeFilesSegment = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
 	rxLang             = regexp.MustCompile(`^[a-z]{2,3}_[A-Z]{2}\.UTF-8$`)
-	rxEmail            = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
 	rxAbsolutePath     = regexp.MustCompile(`^/`)
 	// rxMountTarget: a [[mounts]].target is interpolated unquoted into the
 	// generated Dockerfile `ENV COCOON_BIND_PATHS="..."` line and into the
@@ -219,9 +217,6 @@ func (w *Workspace) runValidate(a *Accumulator) {
 	if w.Certificates != nil {
 		w.Certificates.validate(a.At("certificates"))
 	}
-	if w.Git != nil {
-		w.Git.validate(a.At("git"))
-	}
 	for i, m := range w.Mounts {
 		m.validate(a.At("mounts", fmt.Sprintf("%d", i)))
 	}
@@ -229,7 +224,6 @@ func (w *Workspace) runValidate(a *Accumulator) {
 		w.HomeFiles.validate(a.At("home_files"))
 	}
 	w.validateServices(a)
-	w.validateRepositories(a)
 	if w.CodeWorkspace != nil {
 		w.CodeWorkspace.validate(a.At("code_workspace"))
 	}
@@ -564,12 +558,6 @@ func containsWhitespaceOrCtrl(s string) bool {
 	return false
 }
 
-// hasDotDotSegment treats ".." as a full path segment (split on "/"),
-// distinct from a substring like "foo..bar".
-func hasDotDotSegment(p string) bool {
-	return slices.Contains(strings.Split(p, "/"), "..")
-}
-
 func (s *SecurityOptSpec) validate(a *Accumulator) {
 	if s.Seccomp != nil && *s.Seccomp == "" {
 		a.Add("seccomp must not be empty (omit the key to use Docker's default)", "seccomp")
@@ -827,12 +815,6 @@ func (l *LocaleSpec) validate(a *Accumulator) {
 	}
 }
 
-func (g *GitIdentitySpec) validate(a *Accumulator) {
-	if g.UserEmail != nil && !rxEmail.MatchString(*g.UserEmail) {
-		a.Add("user_email does not match "+rxEmail.String(), "user_email")
-	}
-}
-
 // No-op hook (only field is enable: bool); kept so future fields slot in
 // without re-wiring runValidate.
 func (*CertificatesSpec) validate(_ *Accumulator) {}
@@ -985,89 +967,6 @@ func (sm *SidecarMount) validate(a *Accumulator) {
 	}
 	if !rxAbsolutePath.MatchString(sm.Target) {
 		a.Add("target must be an absolute path", "target")
-	}
-}
-
-//nolint:gocognit,gocyclo // straight-line per-entry validation; splitting fragments the rules.
-func (w *Workspace) validateRepositories(a *Accumulator) {
-	if w.Repositories == nil || len(w.Repositories.Clone) == 0 {
-		return
-	}
-	scope := a.At("repositories", "clone")
-	seenPaths := make(map[string]int, len(w.Repositories.Clone))
-	seenURLs := make(map[string]int, len(w.Repositories.Clone))
-	for i, entry := range w.Repositories.Clone {
-		idx := fmt.Sprintf("%d", i)
-		if entry.URL == "" {
-			scope.Add("url must not be empty", idx, "url")
-		}
-		if entry.Path != nil {
-			p := *entry.Path
-			switch {
-			case hasDotDotSegment(p):
-				scope.Add("path must not contain `..` segments", idx, "path")
-			case !rxRepoPath.MatchString(p):
-				scope.Add(
-					`path must contain only [A-Za-z0-9_./-], not start with "." or "/" `+
-						`(e.g. "foo/bar")`, idx, "path")
-			}
-		}
-		var pathField string
-		if entry.Path != nil {
-			pathField = *entry.Path
-		}
-		resolved := ResolveRepoPath(pathField, entry.URL)
-		if resolved == "" {
-			scope.Add(fmt.Sprintf(
-				`[repositories].clone[%d]: cannot derive target path from url=%q; `+
-					`specify `+"`path`"+` explicitly.`,
-				i, entry.URL,
-			), idx)
-			continue
-		}
-		segments := strings.Split(resolved, "/")
-		for _, s := range segments {
-			if s == ".." {
-				scope.Add(fmt.Sprintf(
-					"[repositories].clone[%d].path=%q: must not contain `..` segments "+
-						"(would escape the parent workspace).",
-					i, resolved,
-				), idx, "path")
-				break
-			}
-		}
-		if strings.HasPrefix(resolved, "..") {
-			scope.Add(fmt.Sprintf(
-				"[repositories].clone[%d].path=%q: must not contain `..` segments "+
-					"(would escape the parent workspace).",
-				i, resolved,
-			), idx, "path")
-		}
-		if resolved == "workspace-docker" {
-			scope.Add(fmt.Sprintf(
-				"[repositories].clone[%d].path=%q: cannot overwrite workspace-docker itself.",
-				i, resolved,
-			), idx, "path")
-		}
-		if prev, ok := seenPaths[resolved]; ok {
-			scope.Add(fmt.Sprintf(
-				"[repositories].clone[%d].path=%q: collides with entry [%d] (same target dir).",
-				i, resolved, prev,
-			), idx, "path")
-		} else {
-			seenPaths[resolved] = i
-		}
-		if prev, ok := seenURLs[entry.URL]; ok {
-			scope.Add(fmt.Sprintf(
-				"[repositories].clone[%d].url=%q: duplicates entry [%d].",
-				i, entry.URL, prev,
-			), idx, "url")
-		} else {
-			seenURLs[entry.URL] = i
-		}
-		if entry.Depth != nil && *entry.Depth < 1 {
-			scope.Add("depth must be >= 1", idx, "depth")
-		}
 	}
 }
 

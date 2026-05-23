@@ -438,71 +438,6 @@ func TestValidate_ReservedLocalVolume(t *testing.T) {
 	require.Contains(t, err.Error(), `reserved name "local"`)
 }
 
-func TestValidate_RepoPathDotDot(t *testing.T) {
-	t.Parallel()
-	body := minimalWorkspace() +
-		"\n[repositories]\nclone = [{ url = \"https://x/y/foo.git\", path = \"foo/../bar\" }]\n"
-	err := loadWS(t, body)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "`..` segments")
-}
-
-func TestValidate_RepoPathBadCharacter(t *testing.T) {
-	t.Parallel()
-	body := minimalWorkspace() +
-		"\n[repositories]\nclone = [{ url = \"https://x/y/foo.git\", path = \"with space\" }]\n"
-	err := loadWS(t, body)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), `[A-Za-z0-9_./-]`)
-}
-
-func TestValidate_RepoPathDotDotSubstring(t *testing.T) {
-	t.Parallel()
-	// "foo..bar" contains ".." as a substring but not as a path segment,
-	// so it must pass validation (no path traversal risk).
-	body := minimalWorkspace() +
-		"\n[repositories]\nclone = [{ url = \"https://x/y/foo.git\", path = \"foo..bar\" }]\n"
-	err := loadWS(t, body)
-	require.NoError(t, err)
-}
-
-func TestValidate_RepoWorkspaceDocker(t *testing.T) {
-	t.Parallel()
-	body := minimalWorkspace() + "\n[repositories]\nclone = [{ url = \"https://x/y/workspace-docker.git\" }]\n"
-	err := loadWS(t, body)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "workspace-docker itself")
-}
-
-func TestValidate_RepoDuplicatePath(t *testing.T) {
-	t.Parallel()
-	body := minimalWorkspace() + "\n[repositories]\nclone = [\n" +
-		"  { url = \"https://x/y/foo.git\" },\n" +
-		"  { url = \"https://other/foo.git\" },\n]\n"
-	err := loadWS(t, body)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "collides with entry")
-}
-
-func TestValidate_RepoDuplicateURL(t *testing.T) {
-	t.Parallel()
-	body := minimalWorkspace() + "\n[repositories]\nclone = [\n" +
-		"  { url = \"https://x/y/foo.git\", path = \"a\" },\n" +
-		"  { url = \"https://x/y/foo.git\", path = \"b\" },\n]\n"
-	err := loadWS(t, body)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "duplicates entry")
-}
-
-func TestValidate_UnresolvableRepoPath(t *testing.T) {
-	t.Parallel()
-	body := minimalWorkspace() +
-		"\n[repositories]\nclone = [{ url = \"?\", path = \"libs/\" }]\n"
-	err := loadWS(t, body)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "cannot derive target path")
-}
-
 func TestValidate_SidecarInvalidEnvKey(t *testing.T) {
 	t.Parallel()
 	body := minimalWorkspace() + "\n[services.redis]\nimage = \"redis:7\"\nenv = { \"1BAD\" = \"v\" }\n"
@@ -1027,22 +962,6 @@ func TestValidate_LocaleAccepts(t *testing.T) {
 	t.Parallel()
 	body := minimalWorkspace() +
 		"\n[locale]\nlang = \"en_US.UTF-8\"\n"
-	require.NoError(t, loadWS(t, body))
-}
-
-func TestValidate_GitIdentityInvalidEmail(t *testing.T) {
-	t.Parallel()
-	body := minimalWorkspace() +
-		"\n[git]\nuser_email = \"not an email\"\n"
-	err := loadWS(t, body)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "user_email does not match")
-}
-
-func TestValidate_GitIdentityAccepts(t *testing.T) {
-	t.Parallel()
-	body := minimalWorkspace() +
-		"\n[git]\nuser_email = \"dev@example.com\"\n"
 	require.NoError(t, loadWS(t, body))
 }
 

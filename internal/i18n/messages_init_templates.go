@@ -120,7 +120,7 @@ var messagesEN_initTemplates = map[string]string{
 		"# source   = \"~/.ssh\"\n" +
 		"# target   = \"/home/${USERNAME}/.ssh\"\n" +
 		"# readonly = true",
-	"init_toml_template_home_files": "# [home_files] — files persisted via per-file bind mounts (replaces the v1 [git] section).\n" +
+	"init_toml_template_home_files": "# [home_files] — files persisted via per-file bind mounts.\n" +
 		"#   Each path is relative to ~. Bind-mount the host's ~/.gitconfig to share git identity.\n" +
 		"# [home_files]\n" +
 		"# files = [\".gitconfig\", \".claude.json\"]",
@@ -287,7 +287,7 @@ var messagesJA_initTemplates = map[string]string{
 		"# source   = \"~/.ssh\"\n" +
 		"# target   = \"/home/${USERNAME}/.ssh\"\n" +
 		"# readonly = true",
-	"init_toml_template_home_files": "# [home_files] — 単一ファイル bind mount で永続化 (v1 の [git] セクションの代替)。\n" +
+	"init_toml_template_home_files": "# [home_files] — 単一ファイル bind mount で永続化。\n" +
 		"#   各パスは ~ 相対。ホストの ~/.gitconfig を bind して git identity を共有。\n" +
 		"# [home_files]\n" +
 		"# files = [\".gitconfig\", \".claude.json\"]",

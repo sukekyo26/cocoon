@@ -236,14 +236,13 @@ func TestRenderWorkspaceToml_AllTemplatesPresent_JA(t *testing.T) {
 }
 
 // TestRenderWorkspaceToml_NoDeprecatedSections is a regression guard: cocoon
-// dropped [git] and [repositories] from the design's intended set. Neither
-// must appear as an active section header (`[git]` at line start) nor as
-// a commented-out template header (`# [git]` at line start) — both forms
-// would nudge a user to use the retired sections.
+// removed [git] and [repositories] from the schema. Neither must appear as
+// an active section header (`[git]` at line start) nor as a commented-out
+// template header (`# [git]` at line start) — both forms would nudge a user
+// to write a section the loader now rejects as an unknown field.
 //
-// In-line backrefs ("…replaces the v1 [git] section…") are allowed: they
-// document the deprecation rather than promote the section, so we check
-// section-header position only, not raw substring presence.
+// In-line backrefs in surrounding prose are allowed: we check section-header
+// position only, not raw substring presence.
 func TestRenderWorkspaceToml_NoDeprecatedSections(t *testing.T) {
 	t.Parallel()
 	for _, lang := range []i18n.Lang{i18n.LangEN, i18n.LangJA} {
