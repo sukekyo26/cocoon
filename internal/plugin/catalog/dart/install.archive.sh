@@ -62,7 +62,11 @@ else
 fi
 
 # ZIP root is "dart-sdk/" — extract into a scratch dir then move to /usr/local/dart.
-rm -rf /tmp/dart-out
+# Clear /usr/local/dart up front so a rerun (e.g. a base image layer that
+# already carries a dart-sdk/ tree) overwrites the toolchain instead of
+# nesting the new SDK at /usr/local/dart/dart-sdk and leaving PATH pointing
+# at the stale install.
+rm -rf /tmp/dart-out /usr/local/dart
 unzip -q /tmp/dart.zip -d /tmp/dart-out
 mv /tmp/dart-out/dart-sdk /usr/local/dart
 rm -rf /tmp/dart-out /tmp/dart.zip
