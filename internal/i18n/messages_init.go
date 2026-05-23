@@ -98,7 +98,7 @@ var messagesEN_init = map[string]string{
 	"init_toml_comment_image_path_fix_removal":         "# Removing this restores the default-image failure for `%s` (permission denied on root-owned prefixes, or the installed binary not being on PATH).",
 	"init_toml_comment_image_path_fix_coexist":         "# Append extra env keys under this subsection — the inline `env = { ... }` form under [container.shell] cannot coexist (TOML rejects two definitions of the same key).",
 	"init_toml_comment_image_path_fix_volumes_added":   "# Added by `cocoon init` so the %s image persists `%s` results across `docker compose down && up --build`.",
-	"init_toml_comment_image_path_fix_volumes_removal": "# Removing a line below loses `%s` results on the next container recreation (only `docker compose down -v` clears the volume itself).",
+	"init_toml_comment_image_path_fix_volumes_removal": "# Removing a line below loses `%s` results on the next container recreation; to delete the volume itself, run e.g. `docker compose down -v` or `docker volume rm <name>`.",
 	"init_toml_comment_image_path_fix_volumes_extra":   "# Append extra named volumes under this same [volumes] block — do not open a second [volumes] section (TOML rejects duplicate tables).",
 	"init_toml_section_plugins": "# [plugins] — enable cocoon plugins (run `cocoon plugin list` for the catalog).\n" +
 		"#   Pin versions in [plugins.versions] when you need reproducible builds.",
@@ -237,7 +237,7 @@ var messagesJA_init = map[string]string{
 	"init_toml_comment_image_path_fix_removal":         "# 削除すると `%s` がデフォルトイメージの失敗（root 所有プレフィックスへの書き込み拒否、または PATH に無いバイナリ）に戻ります。",
 	"init_toml_comment_image_path_fix_coexist":         "# 追加 env はこのサブセクション内に書く（[container.shell] のインライン `env = { ... }` 形式とは併用不可。TOML が同一キーの二重定義を拒否するため）。",
 	"init_toml_comment_image_path_fix_volumes_added":   "# `cocoon init` が追加。%s イメージで `docker compose down && up --build` を跨いでも `%s` の結果が消えないようにする。",
-	"init_toml_comment_image_path_fix_volumes_removal": "# 行を削除すると、コンテナ再生成時に `%s` の結果が失われる（named volume 自体を消すには `docker compose down -v`）。",
+	"init_toml_comment_image_path_fix_volumes_removal": "# 行を削除すると、コンテナ再生成時に `%s` の結果が失われる（named volume 自体を消すには `docker compose down -v` または `docker volume rm <name>` 等）。",
 	"init_toml_comment_image_path_fix_volumes_extra":   "# 追加の named volume はこの同じ [volumes] ブロックに追記する（2 つ目の [volumes] セクションを開かない。TOML が同一テーブルの二重定義を拒否するため）。",
 	"init_toml_section_plugins": "# [plugins] — cocoon プラグインの有効化（一覧は `cocoon plugin list`）。\n" +
 		"#   再現性が必要なら [plugins.versions] でバージョン固定。",
