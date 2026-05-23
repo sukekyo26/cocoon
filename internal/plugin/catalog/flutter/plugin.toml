@@ -1,0 +1,40 @@
+[metadata]
+name = "Flutter"
+description = "Flutter SDK for cross-platform UI (Linux/amd64 only)"
+url = "https://github.com/flutter/flutter"
+default = false
+
+[apt]
+packages = [
+  "git",
+  "unzip",
+  "xz-utils",
+  "zip",
+  "libglu1-mesa",
+  "clang",
+  "cmake",
+  "ninja-build",
+  "pkg-config",
+  "libgtk-3-dev",
+  "liblzma-dev",
+  "build-essential",
+]
+
+[install]
+requires_root = true
+volumes = [
+  "/home/${USERNAME}/.pub-cache",
+  "/home/${USERNAME}/.flutter",
+]
+default_method = "archive"
+
+[install.methods.archive]
+description = "Multi-file Flutter SDK tarball from storage.googleapis.com/flutter_infra_release (x86_64 only)"
+
+[install.env]
+PUB_CACHE = "/home/${USERNAME}/.pub-cache"
+FLUTTER_ROOT = "/usr/local/flutter"
+PATH = "/usr/local/flutter/bin:/usr/local/flutter/bin/cache/dart-sdk/bin:$PUB_CACHE/bin:$PATH"
+
+[version]
+version_capable = true
