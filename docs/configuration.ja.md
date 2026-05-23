@@ -178,6 +178,8 @@ env     = { EDITOR = "vim", PAGER = "less -R" }
 
 `ubuntu` / `debian` はプロンプトが出ません（修正すべき言語ランタイムを持っていないため）。`rust` は `CARGO_HOME` を上書きせず `CARGO_INSTALL_ROOT` のみを設定します。これにより rustup の状態と `cargo build` のレジストリキャッシュはイメージ既定の `/usr/local/cargo` に残り続け、影響を受けるのは `cargo install` の書き込み先だけになります。
 
+> **インライン `env = { ... }` と `[container.shell.env]` は併用できません。** TOML としては `[container.shell]` 配下の同一キー `env` に対する 2 重定義になるため、`cocoon gen` 時に `toml: key env should be a table, not a value` でパースが失敗します。自動追加されたサブセクションがある場合、追加 env はそのサブセクション内に書いてください（上のインライン形式のヒントを uncomment しないでください）。生成された workspace.toml では、`[container.shell]` の env 例ブロック側と、自動追加されたサブセクション直上のコメント両方に同じ注意書きが入るので、どちらから編集を始めても制約が見えるようになっています。
+
 同じイメージに対応する cocoon プラグイン（`node` / `go` / `rust` / `deno`）は元から競合として弾かれるため、この自動追加は「cocoon プラグインを使わずに公式イメージをそのまま使う」場合にだけ働きます。
 
 ### `[container.hosts]`

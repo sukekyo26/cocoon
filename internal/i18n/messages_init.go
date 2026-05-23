@@ -86,6 +86,9 @@ var messagesEN_init = map[string]string{
 		"#\n" +
 		"# env example (uncomment + edit):\n" +
 		"#   env = { EDITOR = \"vim\", PAGER = \"less -R\" }\n" +
+		"#   Note: this inline form and a [container.shell.env] subsection (which `cocoon init`\n" +
+		"#   auto-adds for language base images) both define the same `env` key, so TOML rejects\n" +
+		"#   mixing them. Pick one form and append every key under that one block.\n" +
 		"# Caveats:\n" +
 		"#   - EDITOR=vim / nano needs the `text-editors` apt category enabled.\n" +
 		"#   - EDITOR=code only works when launched from VS Code Dev Containers (the `code` shim is\n" +
@@ -93,6 +96,7 @@ var messagesEN_init = map[string]string{
 		"#   - PAGER=less / less -R needs the `utilities` apt category (less is not in cocoon's minimal base).",
 	"init_toml_comment_image_path_fix_added":   "# Added by `cocoon init` so the container user can install user-local tools on the %s image.",
 	"init_toml_comment_image_path_fix_removal": "# Removing this restores the original sudo requirement for `%s`.",
+	"init_toml_comment_image_path_fix_coexist": "# Append extra env keys under this subsection — the inline `env = { ... }` form under [container.shell] cannot coexist (TOML rejects two definitions of the same key).",
 	"init_toml_section_plugins": "# [plugins] — enable cocoon plugins (run `cocoon plugin list` for the catalog).\n" +
 		"#   Pin versions in [plugins.versions] when you need reproducible builds.",
 	"init_toml_section_plugins_methods": "# [plugins.methods] — install method picked for plugins that declare multiple methods.\n" +
@@ -218,6 +222,9 @@ var messagesJA_init = map[string]string{
 		"#\n" +
 		"# env の設定例（コメントアウトを外して編集）:\n" +
 		"#   env = { EDITOR = \"vim\", PAGER = \"less -R\" }\n" +
+		"#   注: このインライン形式と [container.shell.env] サブセクション（言語ベースイメージでは\n" +
+		"#   `cocoon init` が自動追加することがある）は同じ env キーを定義するため、TOML としては\n" +
+		"#   併用できない。どちらか片方の形式に統一し、全てのキーをその 1 ブロックに追記する。\n" +
 		"# 注意:\n" +
 		"#   - EDITOR=vim / nano は apt カテゴリ `text-editors` の有効化が前提。\n" +
 		"#   - EDITOR=code は VS Code Dev Containers で開いたときのみ動く（`code` シムは\n" +
@@ -225,6 +232,7 @@ var messagesJA_init = map[string]string{
 		"#   - PAGER=less / less -R は apt カテゴリ `utilities` が前提（less は cocoon の最小ベースに含まれない）。",
 	"init_toml_comment_image_path_fix_added":   "# %s イメージで user-local ツールを sudo なしで入れられるよう `cocoon init` が追加。",
 	"init_toml_comment_image_path_fix_removal": "# 削除すると `%s` で再び sudo が必要になります。",
+	"init_toml_comment_image_path_fix_coexist": "# 追加 env はこのサブセクション内に書く（[container.shell] のインライン `env = { ... }` 形式とは併用不可。TOML が同一キーの二重定義を拒否するため）。",
 	"init_toml_section_plugins": "# [plugins] — cocoon プラグインの有効化（一覧は `cocoon plugin list`）。\n" +
 		"#   再現性が必要なら [plugins.versions] でバージョン固定。",
 	"init_toml_section_plugins_methods": "# [plugins.methods] — 複数のインストール方式を提供するプラグインに対する選択。\n" +

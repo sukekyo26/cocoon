@@ -178,6 +178,8 @@ The interactive prompt previews the exact keys / values before asking, and the g
 
 `ubuntu` and `debian` do not surface the prompt — they have no language runtime to fix up. `rust` uses `CARGO_INSTALL_ROOT` rather than overriding `CARGO_HOME` so rustup state and `cargo build`'s registry cache continue to live under the image-default `/usr/local/cargo`; only `cargo install`'s output is redirected under `$HOME`.
 
+> **Inline `env = { ... }` and `[container.shell.env]` cannot coexist.** TOML treats them as conflicting definitions of the same `env` key under `[container.shell]` and the parser will reject the file at `cocoon gen` time (`toml: key env should be a table, not a value`). Once the auto-injected subsection is present, append further env keys *inside* that subsection rather than uncommenting the inline-form hint above. The generated workspace.toml carries the same warning in two places (the `[container.shell]` env example block and the auto-comment above the auto-injected subsection) so the constraint stays visible whichever block you edit first.
+
 Enabling the matching cocoon plugin (`node` / `go` / `rust` / `deno`) for the same image is already rejected as a conflict, so the auto-injection only ever pairs with images you are using *without* the cocoon plugin overlay.
 
 ### `[container.hosts]`

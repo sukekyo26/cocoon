@@ -91,6 +91,9 @@ image_version = "1.25-bookworm"
 #
 # env example (uncomment + edit):
 #   env = { EDITOR = "vim", PAGER = "less -R" }
+#   Note: this inline form and a [container.shell.env] subsection (which `cocoon init`
+#   auto-adds for language base images) both define the same `env` key, so TOML rejects
+#   mixing them. Pick one form and append every key under that one block.
 # Caveats:
 #   - EDITOR=vim / nano needs the `text-editors` apt category enabled.
 #   - EDITOR=code only works when launched from VS Code Dev Containers (the `code` shim is
@@ -101,6 +104,7 @@ default = "bash"
 
 # Added by `cocoon init` so the container user can install user-local tools on the golang image.
 # Removing this restores the original sudo requirement for `go install <pkg>@latest`.
+# Append extra env keys under this subsection — the inline `env = { ... }` form under [container.shell] cannot coexist (TOML rejects two definitions of the same key).
 [container.shell.env]
 PATH = "$HOME/go/bin:$PATH"
 

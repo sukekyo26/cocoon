@@ -116,6 +116,11 @@ func writeShellSection(sb *strings.Builder, cat *i18n.Catalog, s containerSpec) 
 // pairs with the prompt's auto-injection. No-op when the toggle is off
 // or when the image has no fix entry, so subsequent runs of `cocoon init
 // --force` against a different image cleanly drop the previous block.
+//
+// The three comment lines above the block carry the why (added), the
+// blast radius of removal (removal), and the mutual-exclusion warning
+// (coexist) with the [container.shell] inline `env = { ... }` form —
+// TOML rejects mixing them since both define the same `env` key.
 func writeImagePathFixEnv(sb *strings.Builder, cat *i18n.Catalog, s containerSpec) {
 	if !s.ImagePathFix || !imagePathFixApplies(s.Image) {
 		return
@@ -124,6 +129,8 @@ func writeImagePathFixEnv(sb *strings.Builder, cat *i18n.Catalog, s containerSpe
 	sb.WriteString(cat.Msg("init_toml_comment_image_path_fix_added", s.Image))
 	sb.WriteByte('\n')
 	sb.WriteString(cat.Msg("init_toml_comment_image_path_fix_removal", fix.Command))
+	sb.WriteByte('\n')
+	sb.WriteString(cat.Msg("init_toml_comment_image_path_fix_coexist"))
 	sb.WriteByte('\n')
 	sb.WriteString("[container.shell.env]\n")
 	for _, e := range fix.Entries {

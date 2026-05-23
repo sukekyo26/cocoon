@@ -91,6 +91,9 @@ image_version = "22.04"
 #
 # env example (uncomment + edit):
 #   env = { EDITOR = "vim", PAGER = "less -R" }
+#   Note: this inline form and a [container.shell.env] subsection (which `cocoon init`
+#   auto-adds for language base images) both define the same `env` key, so TOML rejects
+#   mixing them. Pick one form and append every key under that one block.
 # Caveats:
 #   - EDITOR=vim / nano needs the `text-editors` apt category enabled.
 #   - EDITOR=code only works when launched from VS Code Dev Containers (the `code` shim is
