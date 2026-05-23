@@ -6,6 +6,8 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-05-23
+
 ### 修正
 
 - `cocoon gen` がロケール生成を「`/etc/locale.gen` の該当行をアンコメント → `locale-gen` を引数なしで実行」の正攻法に変更しました。従来は `locale-gen <name>` のように locale 名を引数に渡していましたが、Debian 系の一部イメージ（特に `*-slim` 系）では `locales` パッケージが配布する `/etc/locale.gen` が全行コメントアウトされた状態で出荷されており、`locale-gen <name>` だけでは要求した locale が実体化されず、`LC_ALL` が設定されているのに生成されていないためコンテナ起動時に `bash: warning: setlocale: LC_ALL: cannot change locale (...)` が出続けていました。新方式は Debian/Ubuntu canonical な手順を踏みつつ、既に locale がアンコメント済みのイメージでも no-op で安全に動作します。
@@ -187,7 +189,8 @@ cocoon の主要な変更を記録します。フォーマットは
 - `COMPOSE_PROJECT_NAME` をプロジェクトディレクトリの basename から導出するように変更。docker compose の namespace がホストディレクトリと一致する。
 - 国際化 (英語 / 日本語) カタログを追加。CLI プロンプト・エラーメッセージ・`workspace.toml` インラインコメントすべてを `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` で切替可能。
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/sukekyo26/cocoon/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/sukekyo26/cocoon/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/sukekyo26/cocoon/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/sukekyo26/cocoon/compare/v0.4.0...v0.5.0
