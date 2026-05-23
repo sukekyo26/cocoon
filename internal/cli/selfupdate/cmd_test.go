@@ -484,7 +484,10 @@ func TestRunSelfUpdate_ChecksumMismatch(t *testing.T) {
 	if !strings.Contains(err.Error(), "checksum mismatch") {
 		t.Errorf("err = %v, want substring %q", err, "checksum mismatch")
 	}
-	got, _ := os.ReadFile(target) //nolint:errcheck,gosec // assertion on existing file
+	got, err := os.ReadFile(target) //nolint:gosec // assertion on a path we wrote above
+	if err != nil {
+		t.Fatalf("read target: %v", err)
+	}
 	if string(got) != "old" {
 		t.Errorf("target was overwritten despite checksum mismatch: %q", got)
 	}
