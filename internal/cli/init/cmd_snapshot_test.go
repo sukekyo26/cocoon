@@ -159,6 +159,33 @@ func TestRunInit_Snapshot(t *testing.T) {
 			},
 		},
 		{
+			// deno pins the single-volume shape (only $HOME/.deno) plus its
+			// [container.shell.env] entry, so a regression that drops either
+			// surface stays caught.
+			name:   "image-path-fix-deno",
+			golden: "image-path-fix-deno.workspace.toml",
+			args: []string{
+				"--yes", "--service-name", "dev", "--username", "dev",
+				"--image", "denoland/deno", "--image-version", "debian-2.7.14",
+				"--mount-root", ".", "--no-devcontainer",
+				"--apt-categories", "text-editors,vcs,utilities,compression,build",
+			},
+		},
+		{
+			// python pins the "env-only, no volumes" asymmetry: $HOME/.local
+			// is already covered by the reserved `local:` named volume, so
+			// no active [volumes] block is emitted and the commented-out
+			// template stays in place.
+			name:   "image-path-fix-python",
+			golden: "image-path-fix-python.workspace.toml",
+			args: []string{
+				"--yes", "--service-name", "dev", "--username", "dev",
+				"--image", "python", "--image-version", "3.13-slim-bookworm",
+				"--mount-root", ".", "--no-devcontainer",
+				"--apt-categories", "text-editors,vcs,utilities,compression,build",
+			},
+		},
+		{
 			// --no-image-path-fix on node pins the opt-out path so the
 			// auto-comment + [container.shell.env] block stays absent when
 			// the user opts out explicitly.

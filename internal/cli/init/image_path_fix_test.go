@@ -2,10 +2,12 @@
 package initcli
 
 import (
+	"io"
 	"sort"
 	"testing"
 
 	"github.com/sukekyo26/cocoon/internal/config"
+	"github.com/sukekyo26/cocoon/internal/plugin"
 )
 
 // TestImagePathFixApplies_MatchesLanguageImagesOnly pins that the gate
@@ -125,4 +127,125 @@ func endsWith(s, suffix string) bool {
 func startsWithHome(s string) bool {
 	const prefix = "$HOME"
 	return len(s) >= len(prefix) && s[:len(prefix)] == prefix
+}
+
+// TestImagePathFix_VolumeNamesDeriveFromPaths pins the contract that each
+// pathFixVolume.Name equals plugin.DeriveVolumeName(Path). This guarantees
+// the [volumes] keys cocoon writes for image-path-fix line up with how the
+// compose generator names plugin volumes — any drift here would emit
+// inconsistent compose snapshots depending on whether the user picked the
+// image route or the plugin route.
+func TestImagePathFix_VolumeNamesDeriveFromPaths(t *testing.T) {
+	t.Parallel()
+	for image, fix := range imagePathFixes {
+		for _, v := range fix.Volumes {
+			got := plugin.DeriveVolumeName(v.Path)
+			if got != v.Name {
+				t.Errorf("%s: pathFixVolume{Name: %q, Path: %q} — DeriveVolumeName=%q, want Name to match",
+					image, v.Name, v.Path, got)
+			}
+		}
+	}
+}
+
+// TestImagePathFix_VolumePathsAreContainerAbsolute pins that every Path
+// is a container-absolute path under /home/${USERNAME}/. Compose mount
+// targets must be absolute (`name:/abs/path`), and the `${USERNAME}`
+// placeholder is required so the generated YAML works across users.
+func TestImagePathFix_VolumePathsAreContainerAbsolute(t *testing.T) {
+	t.Parallel()
+	const wantPrefix = "/home/${USERNAME}/"
+	for image, fix := range imagePathFixes {
+		for _, v := range fix.Volumes {
+			if len(v.Path) < len(wantPrefix) || v.Path[:len(wantPrefix)] != wantPrefix {
+				t.Errorf("%s: Volume %q Path=%q must start with %q",
+					image, v.Name, v.Path, wantPrefix)
+			}
+		}
+	}
+}
+
+// TestImagePathFix_VolumesMatchPluginCatalog asserts that the volume
+// names cocoon emits for an image-path-fix image are a subset of the
+// volume names the equivalent catalog plugin would emit. This guarantees
+// "image route" and "plugin route" stay structurally equivalent at the
+// compose level — adding a new volume to a plugin without mirroring it in
+// the matching imagePathFix (or vice versa) breaks the user-visible
+// promise that swapping image⇄plugin yields the same compose volumes.
+//
+// python is intentionally absent from this map: it has no Volumes
+// because $HOME/.local is already covered by the reserved `local:`
+// named volume, and no `python` plugin exists in the catalog (python is
+// apt-installed). denoland/deno → deno, golang → go, etc.
+func TestImagePathFix_VolumesMatchPluginCatalog(t *testing.T) {
+	t.Parallel()
+	// imageToPluginID maps each image-path-fix image to the catalog plugin
+	// id that ships the same language toolchain. python is omitted by design.
+	imageToPluginID := map[string]string{
+		"node":          "node",
+		"golang":        "go",
+		"rust":          "rust",
+		"denoland/deno": "deno",
+	}
+	src, err := plugin.CatalogFS()
+	if err != nil {
+		t.Fatalf("plugin.CatalogFS: %v", err)
+	}
+	ids := make([]string, 0, len(imageToPluginID))
+	for _, id := range imageToPluginID {
+		ids = append(ids, id)
+	}
+	plugins, err := plugin.LoadEnabledFromFS(src, ids, io.Discard, "")
+	if err != nil {
+		t.Fatalf("plugin.LoadEnabledFromFS: %v", err)
+	}
+	for image, pluginID := range imageToPluginID {
+		t.Run(image, func(t *testing.T) {
+			t.Parallel()
+			p, ok := plugins[pluginID]
+			if !ok {
+				t.Fatalf("catalog plugin %q not loaded", pluginID)
+			}
+			pluginVolNames := make(map[string]struct{}, len(p.Install.Volumes))
+			for _, path := range p.Install.Volumes {
+				pluginVolNames[plugin.DeriveVolumeName(path)] = struct{}{}
+			}
+			fix := imagePathFixFor(image)
+			if len(fix.Volumes) == 0 {
+				t.Fatalf("imagePathFixes[%q] has no Volumes — language images must persist their install destinations", image)
+			}
+			for _, v := range fix.Volumes {
+				if _, ok := pluginVolNames[v.Name]; !ok {
+					t.Errorf("%s: volume %q not declared by catalog plugin %q (drift between image-path-fix and plugin route)",
+						image, v.Name, pluginID)
+				}
+			}
+		})
+	}
+}
+
+// TestImagePathFix_PythonHasNoVolumes pins that python's image-path-fix
+// intentionally carries no Volumes. python's install target ($HOME/.local
+// for `pip install --user`) is already covered by cocoon's reserved
+// `local:` named volume; adding a redundant entry would collide with the
+// compose generator's reservedMountPaths check.
+func TestImagePathFix_PythonHasNoVolumes(t *testing.T) {
+	t.Parallel()
+	if got := imagePathFixFor("python").Volumes; len(got) != 0 {
+		t.Errorf("python Volumes = %+v, want empty (covered by reserved `local:` volume)", got)
+	}
+}
+
+// TestImagePathFix_RustOmitsRustup pins that rust's image-path-fix does
+// not volume-mount $HOME/.rustup. The official rust Docker image keeps
+// rustup state at /usr/local/rustup (not $HOME), so a $HOME/.rustup
+// volume would persist an empty directory and confuse anyone reading
+// the generated compose.
+func TestImagePathFix_RustOmitsRustup(t *testing.T) {
+	t.Parallel()
+	for _, v := range imagePathFixFor("rust").Volumes {
+		if v.Path == "/home/${USERNAME}/.rustup" {
+			t.Errorf("rust must not volume-mount $HOME/.rustup (rustup state lives at /usr/local/rustup on the rust image)")
+		}
+	}
 }
