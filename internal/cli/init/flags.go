@@ -183,12 +183,11 @@ func applyImageFlags(flags *initFlags, ans *initAnswers) error {
 	return nil
 }
 
-// applyToggleFlags resolves the --x / --no-x pairs. The mutual-exclusion
-// check happens earlier in runInit, so at most one of each pair is set.
-// --image-path-fix / --no-image-path-fix only takes effect when the chosen
-// image is in imagePathFixes; the gate in applyImagePathFixFlags returns
-// ErrUsage when the pair is set against an image that has no fix so a
-// silent no-op cannot hide a typo.
+// applyToggleFlags resolves the --x / --no-x pairs for --devcontainer
+// and --certificates. The mutual-exclusion check happens earlier in
+// runInit, so at most one of each pair is set.
+// (--image-path-fix / --no-image-path-fix is image-gated and lives in
+// applyImagePathFixFlags below.)
 func applyToggleFlags(flags *initFlags, ans *initAnswers) {
 	switch {
 	case flags.Devcontainer:
