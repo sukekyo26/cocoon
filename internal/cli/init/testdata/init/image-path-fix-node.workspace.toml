@@ -103,7 +103,7 @@ image_version = "22-bookworm-slim"
 default = "bash"
 
 # Added by `cocoon init` so the container user can install user-local tools on the node image.
-# Removing this restores the original sudo requirement for `npm install -g <pkg>`.
+# Removing this restores the default-image failure for `npm install -g <pkg>` (permission denied on root-owned prefixes, or the installed binary not being on PATH).
 # Append extra env keys under this subsection — the inline `env = { ... }` form under [container.shell] cannot coexist (TOML rejects two definitions of the same key).
 [container.shell.env]
 NPM_CONFIG_PREFIX = "$HOME/.npm-global"

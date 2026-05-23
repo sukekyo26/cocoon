@@ -120,10 +120,12 @@ func imagePathFixConfirm(cat *i18n.Catalog, image string, target *bool) *huh.Con
 }
 
 // formatPathFixEntries renders the entries as TOML-looking lines so the
-// prompt's preview matches what lands in workspace.toml byte-for-byte.
-// Width is padded against the longest key for legibility on multi-entry
-// images (node, rust); single-entry images (python, golang, deno) get a
-// trivial alignment that still reads cleanly.
+// prompt's preview shows the same keys and values that land in
+// workspace.toml. The preview adds a 2-space indent and pads keys
+// against the longest one for legibility on multi-entry images
+// (node, rust); the file emit in writeImagePathFixEnv stays unpadded
+// canonical TOML, so the two surfaces share the key=value pairs but
+// not their layout.
 func formatPathFixEntries(entries []pathFixEnvEntry) string {
 	width := 0
 	for _, e := range entries {

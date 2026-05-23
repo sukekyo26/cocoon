@@ -95,9 +95,11 @@ func writeContainerSection(sb *strings.Builder, cat *i18n.Catalog, s containerSp
 
 // writeShellSection emits the [container.shell] block followed by an
 // auto-injected [container.shell.env] subsection when the image-path-fix
-// is on. The subsection is preceded by a two-line self-documenting
-// comment so a future reader knows why the entries are there and what
-// breaks if they delete the block.
+// is on. The subsection is preceded by a three-line self-documenting
+// comment (added / removal / coexist) so a future reader knows why the
+// entries are there, what breaks if they delete the block, and that
+// the inline `env = { ... }` form under [container.shell] cannot
+// coexist (TOML rejects two definitions of the same key).
 func writeShellSection(sb *strings.Builder, cat *i18n.Catalog, s containerSpec) {
 	sb.WriteString(cat.Msg("init_toml_section_container_shell"))
 	sb.WriteByte('\n')

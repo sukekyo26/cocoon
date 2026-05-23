@@ -42,7 +42,7 @@ var messagesEN_init = map[string]string{
 	"init_prompt_certificates":          "Bake user TLS certificates from ~/.cocoon/certs/ into the container image?",
 	"init_desc_certificates":            "Enable when your build needs a corp CA inside the container (Zscaler, internal proxies, etc.). When off, no cert wiring lands in the generated artifacts.",
 	"init_prompt_image_path_fix_title":  "Auto-configure user-local install prefix for %s?",
-	"init_desc_image_path_fix":          "Adds the following to [container.shell.env] in workspace.toml so the container user can install global tools without sudo:\n\n%s\n\nLets you run %s without sudo. Skip if you never install global tools with this runtime.",
+	"init_desc_image_path_fix":          "Adds the following to [container.shell.env] in workspace.toml so user-local installs land somewhere writable and the resulting bin dir is on PATH:\n\n%s\n\nLets the container user run %s without hitting the default-image failure (permission denied on root-owned prefixes, or the installed binary not being on PATH). Skip if you never install user-local tools with this runtime.",
 	"init_confirm_yes":                  "Yes",
 	"init_confirm_no":                   "No",
 	"init_prompt_apt":                   "Select common apt packages to install",
@@ -95,7 +95,7 @@ var messagesEN_init = map[string]string{
 		"#     injected by VS Code, not by cocoon).\n" +
 		"#   - PAGER=less / less -R needs the `utilities` apt category (less is not in cocoon's minimal base).",
 	"init_toml_comment_image_path_fix_added":   "# Added by `cocoon init` so the container user can install user-local tools on the %s image.",
-	"init_toml_comment_image_path_fix_removal": "# Removing this restores the original sudo requirement for `%s`.",
+	"init_toml_comment_image_path_fix_removal": "# Removing this restores the default-image failure for `%s` (permission denied on root-owned prefixes, or the installed binary not being on PATH).",
 	"init_toml_comment_image_path_fix_coexist": "# Append extra env keys under this subsection — the inline `env = { ... }` form under [container.shell] cannot coexist (TOML rejects two definitions of the same key).",
 	"init_toml_section_plugins": "# [plugins] — enable cocoon plugins (run `cocoon plugin list` for the catalog).\n" +
 		"#   Pin versions in [plugins.versions] when you need reproducible builds.",
@@ -179,7 +179,7 @@ var messagesJA_init = map[string]string{
 	"init_prompt_certificates":          "~/.cocoon/certs/ の TLS 証明書をコンテナイメージに取り込みますか？",
 	"init_desc_certificates":            "Zscaler や社内プロキシなど、build 中に corp CA を信頼させる必要がある場合に Yes。off の場合は生成物に cert 関連の配線は一切乗りません。",
 	"init_prompt_image_path_fix_title":  "%s イメージの user-local インストール先を自動設定しますか？",
-	"init_desc_image_path_fix":          "workspace.toml の [container.shell.env] に以下を追加し、コンテナユーザーが sudo なしでグローバルツールを入れられるようにします:\n\n%s\n\n%s を sudo なしで実行できるようになります。このランタイムでグローバルツールを入れない場合はスキップ。",
+	"init_desc_image_path_fix":          "workspace.toml の [container.shell.env] に以下を追加し、user-local インストール先を書き込み可能なパスに向け、生成された bin ディレクトリを PATH に通します:\n\n%s\n\n`%s` を実行したときに発生するデフォルトの失敗（root 所有プレフィックスへの書き込み拒否、またはインストール済みバイナリが PATH 上にない）を回避できます。このランタイムで user-local ツールを入れない場合はスキップ。",
 	"init_confirm_yes":                  "はい",
 	"init_confirm_no":                   "いいえ",
 	"init_prompt_apt":                   "インストールする apt パッケージのカテゴリを選択",
@@ -230,8 +230,8 @@ var messagesJA_init = map[string]string{
 		"#   - EDITOR=code は VS Code Dev Containers で開いたときのみ動く（`code` シムは\n" +
 		"#     VS Code が注入するもので、cocoon は関与しない）。\n" +
 		"#   - PAGER=less / less -R は apt カテゴリ `utilities` が前提（less は cocoon の最小ベースに含まれない）。",
-	"init_toml_comment_image_path_fix_added":   "# %s イメージで user-local ツールを sudo なしで入れられるよう `cocoon init` が追加。",
-	"init_toml_comment_image_path_fix_removal": "# 削除すると `%s` で再び sudo が必要になります。",
+	"init_toml_comment_image_path_fix_added":   "# %s イメージで user-local ツールを入れられるよう `cocoon init` が追加。",
+	"init_toml_comment_image_path_fix_removal": "# 削除すると `%s` がデフォルトイメージの失敗（root 所有プレフィックスへの書き込み拒否、または PATH に無いバイナリ）に戻ります。",
 	"init_toml_comment_image_path_fix_coexist": "# 追加 env はこのサブセクション内に書く（[container.shell] のインライン `env = { ... }` 形式とは併用不可。TOML が同一キーの二重定義を拒否するため）。",
 	"init_toml_section_plugins": "# [plugins] — cocoon プラグインの有効化（一覧は `cocoon plugin list`）。\n" +
 		"#   再現性が必要なら [plugins.versions] でバージョン固定。",

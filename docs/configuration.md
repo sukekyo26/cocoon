@@ -164,9 +164,9 @@ env     = { EDITOR = "vim", PAGER = "less -R" }
 
 #### Language-image PATH auto-injection
 
-`cocoon init` offers — and defaults on for — an auto-injection into `[container.shell.env]` when you pick a language base image. Without it, the official image's package managers write user installs under `/usr/local/...` (root-owned), so `npm install -g <pkg>` / `pip install <pkg>` / `go install <pkg>@latest` / `cargo install <pkg>` / `deno install <script>` fail with `EACCES` or PEP 668 under the non-root devcontainer user.
+`cocoon init` offers — and defaults on for — an auto-injection into `[container.shell.env]` when you pick a language base image. Without it, the official image's package managers either (a) write user installs to root-owned `/usr/local/...` directories (`npm install -g`, `pip install`, `cargo install`, failing with `EACCES` and — on python 3.11+ — PEP 668), or (b) place binaries in a writable user dir that is not on `PATH` (`go install` → `$HOME/go/bin`, `deno install` → `$HOME/.deno/bin`, `pip install --user` → `$HOME/.local/bin`). The injection points each tool at a writable `$HOME` prefix when the image lacks one and extends `PATH` so the bin dir is reachable.
 
-The interactive prompt previews the exact keys / values before asking, and the generated block is preceded by two self-documenting comment lines so the auto-added section reads correctly even months later. Re-run `cocoon init --force` (or pass `--no-image-path-fix`) to drop it; `--image-path-fix` forces it on for scripted runs.
+The interactive prompt previews the exact keys / values before asking, and the generated block is preceded by three self-documenting comment lines (added reason / removal consequence / coexist warning against the inline `env = { ... }` form) so the auto-added section reads correctly even months later. Re-run `cocoon init --force` (or pass `--no-image-path-fix`) to drop it; `--image-path-fix` forces it on for scripted runs (both flags require `--image` to be set, since the fix is image-specific).
 
 | `[container].image` | `[container.shell.env]` entries auto-added |
 |---|---|

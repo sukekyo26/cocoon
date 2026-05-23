@@ -103,7 +103,7 @@ image_version = "1.93-bookworm"
 default = "bash"
 
 # Added by `cocoon init` so the container user can install user-local tools on the rust image.
-# Removing this restores the original sudo requirement for `cargo install <pkg>`.
+# Removing this restores the default-image failure for `cargo install <pkg>` (permission denied on root-owned prefixes, or the installed binary not being on PATH).
 # Append extra env keys under this subsection — the inline `env = { ... }` form under [container.shell] cannot coexist (TOML rejects two definitions of the same key).
 [container.shell.env]
 CARGO_INSTALL_ROOT = "$HOME/.cargo"

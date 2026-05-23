@@ -3,6 +3,7 @@ package initcli
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
@@ -283,6 +284,48 @@ func TestApplyDefaults_FillsMissingDefaults(t *testing.T) {
 	}
 	if ans.Shell != "bash" || !ans.ShellSet {
 		t.Errorf("Shell default = %q ShellSet=%v", ans.Shell, ans.ShellSet)
+	}
+}
+
+// TestApplyImagePathFixFlags_RequiresImage pins the upfront gate: the
+// fix is image-specific, so passing the flag without --image must
+// surface as a usage error that names the missing requirement instead
+// of falling through to imagePathFixApplies("") and reporting the
+// confusing "--image=\"\" has no fix". Mirrors --image-version's
+// "requires --image" dependency.
+func TestApplyImagePathFixFlags_RequiresImage(t *testing.T) {
+	t.Parallel()
+	plugins := loadPluginsForTest(t)
+	for _, flag := range []struct {
+		name    string
+		mutate  func(*initFlags)
+		needles []string
+	}{
+		{
+			name:    "--image-path-fix",
+			mutate:  func(f *initFlags) { f.ImagePathFix = true },
+			needles: []string{"--image-path-fix", "requires --image"},
+		},
+		{
+			name:    "--no-image-path-fix",
+			mutate:  func(f *initFlags) { f.NoImagePathFix = true },
+			needles: []string{"--no-image-path-fix", "requires --image"},
+		},
+	} {
+		t.Run(flag.name, func(t *testing.T) {
+			t.Parallel()
+			f := &initFlags{}
+			flag.mutate(f)
+			_, err := applyFlags(f, plugins)
+			if !errors.Is(err, clihelpers.ErrUsage) {
+				t.Fatalf("want ErrUsage, got %v", err)
+			}
+			for _, needle := range flag.needles {
+				if !strings.Contains(err.Error(), needle) {
+					t.Errorf("error %q should mention %q", err, needle)
+				}
+			}
+		})
 	}
 }
 

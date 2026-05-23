@@ -164,9 +164,9 @@ env     = { EDITOR = "vim", PAGER = "less -R" }
 
 #### 言語イメージ向け PATH 自動設定
 
-`cocoon init` は、言語ベースイメージを選んだとき `[container.shell.env]` への自動追加を提示します（既定 on）。これを入れないと、公式イメージは各言語パッケージマネージャの書き込み先が `/usr/local/...`（root 所有）に向いており、非 root の devcontainer ユーザーから `npm install -g <pkg>` / `pip install <pkg>` / `go install <pkg>@latest` / `cargo install <pkg>` / `deno install <script>` を実行すると `EACCES` や PEP 668 で失敗します。
+`cocoon init` は、言語ベースイメージを選んだとき `[container.shell.env]` への自動追加を提示します（既定 on）。これを入れないと、公式イメージは（a）user install を root 所有の `/usr/local/...` に書き込もうとして失敗する（`npm install -g` / `pip install` / `cargo install` が `EACCES`、python 3.11+ では PEP 668 もヒット）か、（b）書き込み可能な user ディレクトリに置くが `PATH` に無くて呼び出せない（`go install` → `$HOME/go/bin`、`deno install` → `$HOME/.deno/bin`、`pip install --user` → `$HOME/.local/bin`）。自動追加は、書き込み可能な `$HOME` 配下のプレフィックスをイメージに設定し（不足している場合）、対応する bin ディレクトリを `PATH` に通します。
 
-対話プロンプトは確認前に追加されるキー / 値をプレビューし、生成された `[container.shell.env]` ブロックの直上には自動コメント 2 行が付与されるので、時間が経っても「何が・なぜ追加されたか」が読み取れます。やり直しは `cocoon init --force`（または `--no-image-path-fix`）で、スクリプト用途で強制 on にしたい場合は `--image-path-fix` を使います。
+対話プロンプトは確認前に追加されるキー / 値をプレビューし、生成された `[container.shell.env]` ブロックの直上には自動コメント 3 行（追加理由 / 削除した場合の影響 / インライン `env = { ... }` 形式とは併用不可の警告）が付与されるので、時間が経っても「何が・なぜ追加されたか」が読み取れます。やり直しは `cocoon init --force`（または `--no-image-path-fix`）で、スクリプト用途で強制 on にしたい場合は `--image-path-fix` を使います（どちらのフラグも image 依存の自動設定のため `--image` の指定が必須）。
 
 | `[container].image` | 自動追加される `[container.shell.env]` のエントリ |
 |---|---|

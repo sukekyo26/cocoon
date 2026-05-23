@@ -204,22 +204,31 @@ func applyToggleFlags(flags *initFlags, ans *initAnswers) {
 	}
 }
 
-// applyImagePathFixFlags resolves --image-path-fix / --no-image-path-fix
-// and rejects the pair against images that have no fix entry so a
-// scripted invocation against ubuntu/debian cannot silently no-op.
+// applyImagePathFixFlags resolves --image-path-fix / --no-image-path-fix.
+// The fix is image-specific, so --image must already be set; an
+// otherwise-valid --image-path-fix with no --image would silently hit
+// the imagePathFixApplies("") false branch and surface as the confusing
+// "--image=\"\" has no fix" message — the explicit --image requirement
+// here mirrors --image-version's same dependency. After that gate, the
+// pair is rejected against images that have no fix entry so a scripted
+// invocation against ubuntu/debian cannot silently no-op.
 func applyImagePathFixFlags(flags *initFlags, ans *initAnswers) error {
-	switch {
-	case flags.ImagePathFix:
-		if !imagePathFixApplies(ans.Image) {
-			return imagePathFixFlagUsageErr("--image-path-fix", ans.Image)
-		}
-		ans.ImagePathFix, ans.ImagePathFixSet = true, true
-	case flags.NoImagePathFix:
-		if !imagePathFixApplies(ans.Image) {
-			return imagePathFixFlagUsageErr("--no-image-path-fix", ans.Image)
-		}
-		ans.ImagePathFix, ans.ImagePathFixSet = false, true
+	if !flags.ImagePathFix && !flags.NoImagePathFix {
+		return nil
 	}
+	flag := "--image-path-fix"
+	if flags.NoImagePathFix {
+		flag = "--no-image-path-fix"
+	}
+	if !ans.ImageSet {
+		return fmt.Errorf(
+			"%w: %s requires --image (the fix is image-specific)",
+			clihelpers.ErrUsage, flag)
+	}
+	if !imagePathFixApplies(ans.Image) {
+		return imagePathFixFlagUsageErr(flag, ans.Image)
+	}
+	ans.ImagePathFix, ans.ImagePathFixSet = flags.ImagePathFix, true
 	return nil
 }
 

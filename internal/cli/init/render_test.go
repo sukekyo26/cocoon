@@ -433,7 +433,7 @@ func TestRenderWorkspaceToml_ImagePathFix_LocalizedJA(t *testing.T) {
 	}, cat)
 	for _, want := range []string{
 		"node イメージで user-local ツール",
-		"再び sudo が必要",
+		"デフォルトイメージの失敗",
 		"[container.shell.env]",
 	} {
 		if !strings.Contains(got, want) {
