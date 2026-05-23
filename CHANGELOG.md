@@ -6,6 +6,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `cocoon init` now offers to auto-configure user-local `PATH` / install-prefix entries under `[container.shell.env]` when the chosen `[container].image` is a language base image (`node` / `python` / `golang` / `rust` / `denoland/deno`). Without it, the official image's package managers write user installs to root-owned directories such as `/usr/local/lib/node_modules`, so `npm install -g <pkg>` / `pip install <pkg>` / `go install <pkg>@latest` / `cargo install <pkg>` / `deno install <script>` fail with `EACCES` (or PEP 668 on python 3.11+) under the non-root devcontainer user. The interactive prompt previews the exact entries before asking and defaults to yes; the generated block is preceded by two self-documenting comment lines so the auto-added section stays readable months later. Pair the prompt with two new flags: `--image-path-fix` forces the injection on, `--no-image-path-fix` skips it (both error against non-language images so a scripted typo fails fast rather than silently no-op'ing). `ubuntu` / `debian` do not surface the prompt. The per-image entries are: `node` → `NPM_CONFIG_PREFIX="$HOME/.npm-global"` + `PATH="$HOME/.npm-global/bin:$PATH"`; `python` → `PATH="$HOME/.local/bin:$PATH"`; `golang` → `PATH="$HOME/go/bin:$PATH"`; `rust` → `CARGO_INSTALL_ROOT="$HOME/.cargo"` + `PATH="$HOME/.cargo/bin:$PATH"` (`CARGO_HOME` is intentionally left at the image default so rustup and `cargo build`'s registry cache are not relocated); `denoland/deno` → `PATH="$HOME/.deno/bin:$PATH"`.
+
 ## [0.7.1] - 2026-05-23
 
 ### Fixed

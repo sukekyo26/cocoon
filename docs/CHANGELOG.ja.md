@@ -6,6 +6,10 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+### 追加
+
+- `cocoon init` で言語ベースイメージ（`node` / `python` / `golang` / `rust` / `denoland/deno`）を選んだとき、`[container.shell.env]` に user-local の `PATH` / インストール先を自動追加するか問うようになりました（既定 on）。これがないと、公式イメージの各言語パッケージマネージャの書き込み先が `/usr/local/lib/node_modules` などの root 所有ディレクトリに向いており、非 root の devcontainer ユーザーから `npm install -g <pkg>` / `pip install <pkg>` / `go install <pkg>@latest` / `cargo install <pkg>` / `deno install <script>` を実行すると `EACCES`（python 3.11+ なら PEP 668）で失敗します。対話プロンプトは確認前に追加するキー・値をプレビューします。生成された `[container.shell.env]` ブロックの直上には自動コメント 2 行が付くので、時間が経ってもそのセクションが何のために追加されたか読み取れます。新フラグ `--image-path-fix` で自動設定を強制 on、`--no-image-path-fix` で自動設定をスキップできます（どちらも非言語イメージに対しては早期に ErrUsage で失敗するため、スクリプトの typo を黙ってスキップしません）。`ubuntu` / `debian` ではプロンプト自体出ません。イメージ別の追加内容は: `node` → `NPM_CONFIG_PREFIX="$HOME/.npm-global"` + `PATH="$HOME/.npm-global/bin:$PATH"`、`python` → `PATH="$HOME/.local/bin:$PATH"`、`golang` → `PATH="$HOME/go/bin:$PATH"`、`rust` → `CARGO_INSTALL_ROOT="$HOME/.cargo"` + `PATH="$HOME/.cargo/bin:$PATH"`（`CARGO_HOME` は意図的にイメージ既定のままにし、rustup の状態と `cargo build` のレジストリキャッシュを移さない）、`denoland/deno` → `PATH="$HOME/.deno/bin:$PATH"`。
+
 ## [0.7.1] - 2026-05-23
 
 ### 修正

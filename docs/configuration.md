@@ -162,6 +162,24 @@ env     = { EDITOR = "vim", PAGER = "less -R" }
 
 `[container.shell]` is for project-level settings checked into the repo. For **per-user, container-rebuild-persistent** edits, the rc file also sources `~/.cocoon/.shellrc` (or `~/.cocoon/.shellrc.fish` for fish) on every shell start; that path is backed by a Docker named volume so edits survive `docker compose down && up --build` and are reset only by `docker compose down -v`. See ["Shell injection" in `architecture.md`](architecture.md#shell-injection) for how the rc file is composed at build time and how the in-container `~/.cocoon/` differs from the host's cocoon CLI working area.
 
+#### Language-image PATH auto-injection
+
+`cocoon init` offers — and defaults on for — an auto-injection into `[container.shell.env]` when you pick a language base image. Without it, the official image's package managers write user installs under `/usr/local/...` (root-owned), so `npm install -g <pkg>` / `pip install <pkg>` / `go install <pkg>@latest` / `cargo install <pkg>` / `deno install <script>` fail with `EACCES` or PEP 668 under the non-root devcontainer user.
+
+The interactive prompt previews the exact keys / values before asking, and the generated block is preceded by two self-documenting comment lines so the auto-added section reads correctly even months later. Re-run `cocoon init --force` (or pass `--no-image-path-fix`) to drop it; `--image-path-fix` forces it on for scripted runs.
+
+| `[container].image` | `[container.shell.env]` entries auto-added |
+|---|---|
+| `node` | `NPM_CONFIG_PREFIX = "$HOME/.npm-global"`, `PATH = "$HOME/.npm-global/bin:$PATH"` |
+| `python` | `PATH = "$HOME/.local/bin:$PATH"` |
+| `golang` | `PATH = "$HOME/go/bin:$PATH"` |
+| `rust` | `CARGO_INSTALL_ROOT = "$HOME/.cargo"`, `PATH = "$HOME/.cargo/bin:$PATH"` |
+| `denoland/deno` | `PATH = "$HOME/.deno/bin:$PATH"` |
+
+`ubuntu` and `debian` do not surface the prompt — they have no language runtime to fix up. `rust` uses `CARGO_INSTALL_ROOT` rather than overriding `CARGO_HOME` so rustup state and `cargo build`'s registry cache continue to live under the image-default `/usr/local/cargo`; only `cargo install`'s output is redirected under `$HOME`.
+
+Enabling the matching cocoon plugin (`node` / `go` / `rust` / `deno`) for the same image is already rejected as a conflict, so the auto-injection only ever pairs with images you are using *without* the cocoon plugin overlay.
+
 ### `[container.hosts]`
 
 Extra `/etc/hosts` entries. Keys are hostnames (RFC 1123); values are IPv4 / IPv6 addresses or the literal `"host-gateway"` (resolves to the host machine).

@@ -162,6 +162,24 @@ env     = { EDITOR = "vim", PAGER = "less -R" }
 
 `[container.shell]` はリポジトリにチェックインするプロジェクト共通設定向けです。**個人ごと、コンテナリビルドを跨いで永続化したい**設定は、起動時に rc ファイルから自動 source される `~/.cocoon/.shellrc` (fish の場合 `~/.cocoon/.shellrc.fish`) に書いてください。このパスは Docker named volume でバックされているため、`docker compose down && up --build` を跨いでも編集が残り、`docker compose down -v` でのみリセットされます。rc ファイルがビルド時にどう組み立てられるか、コンテナ内 `~/.cocoon/` とホスト側の cocoon CLI 作業領域がどう違うかは [`architecture.ja.md` の「シェル注入」](architecture.ja.md#シェル注入) を参照してください。
 
+#### 言語イメージ向け PATH 自動設定
+
+`cocoon init` は、言語ベースイメージを選んだとき `[container.shell.env]` への自動追加を提示します（既定 on）。これを入れないと、公式イメージは各言語パッケージマネージャの書き込み先が `/usr/local/...`（root 所有）に向いており、非 root の devcontainer ユーザーから `npm install -g <pkg>` / `pip install <pkg>` / `go install <pkg>@latest` / `cargo install <pkg>` / `deno install <script>` を実行すると `EACCES` や PEP 668 で失敗します。
+
+対話プロンプトは確認前に追加されるキー / 値をプレビューし、生成された `[container.shell.env]` ブロックの直上には自動コメント 2 行が付与されるので、時間が経っても「何が・なぜ追加されたか」が読み取れます。やり直しは `cocoon init --force`（または `--no-image-path-fix`）で、スクリプト用途で強制 on にしたい場合は `--image-path-fix` を使います。
+
+| `[container].image` | 自動追加される `[container.shell.env]` のエントリ |
+|---|---|
+| `node` | `NPM_CONFIG_PREFIX = "$HOME/.npm-global"`、`PATH = "$HOME/.npm-global/bin:$PATH"` |
+| `python` | `PATH = "$HOME/.local/bin:$PATH"` |
+| `golang` | `PATH = "$HOME/go/bin:$PATH"` |
+| `rust` | `CARGO_INSTALL_ROOT = "$HOME/.cargo"`、`PATH = "$HOME/.cargo/bin:$PATH"` |
+| `denoland/deno` | `PATH = "$HOME/.deno/bin:$PATH"` |
+
+`ubuntu` / `debian` はプロンプトが出ません（修正すべき言語ランタイムを持っていないため）。`rust` は `CARGO_HOME` を上書きせず `CARGO_INSTALL_ROOT` のみを設定します。これにより rustup の状態と `cargo build` のレジストリキャッシュはイメージ既定の `/usr/local/cargo` に残り続け、影響を受けるのは `cargo install` の書き込み先だけになります。
+
+同じイメージに対応する cocoon プラグイン（`node` / `go` / `rust` / `deno`）は元から競合として弾かれるため、この自動追加は「cocoon プラグインを使わずに公式イメージをそのまま使う」場合にだけ働きます。
+
 ### `[container.hosts]`
 
 `/etc/hosts` の追加エントリ。キーはホスト名 (RFC 1123)、値は IPv4 / IPv6 アドレスまたはリテラル `"host-gateway"` (ホスト機を指す)。
