@@ -6,6 +6,10 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+### 追加
+
+- 新しい `just` プラグイン: [just](https://github.com/casey/just) コマンドランナー（make の現代的な代替）を公式 GitHub Release tarball から `/usr/local/bin/just` に展開し、SHA256 検証を行います（`x86_64-unknown-linux-musl` / `aarch64-unknown-linux-musl`）。`[plugins.versions]` で `just = { pin = "..." }` を省略した場合は `https://github.com/casey/just/releases/latest` から最新安定版を解決します（just のリリースタグは `v` プレフィックスを持たない素のセマンティックバージョンなので、URL は `releases/download/<ver>/...` の形）。`default = false` のため、利用するには `[plugins].enable = [..., "just"]` に明示的に追加してください。
+
 ## [0.7.3] - 2026-05-24
 
 ### 修正

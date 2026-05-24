@@ -269,6 +269,15 @@ func TestPluginContracts(t *testing.T) {
 			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
 		},
 		{
+			id: "just", name: "just",
+			requiresRoot: true, versionCapable: true,
+			mustContain: []string{
+				"just", "github.com/casey/just", "sha256sum -c -",
+				"tlsv1.2", "retry 3", "dpkg --print-architecture", "tar -xz",
+			},
+			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
+		},
+		{
 			id: "docker-buildx", name: "Docker Buildx",
 			requiresRoot: true, versionCapable: true,
 			mustContain: []string{

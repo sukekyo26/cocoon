@@ -1,0 +1,15 @@
+[metadata]
+name = "just"
+description = "Modern command runner (an alternative to make)"
+url = "https://github.com/casey/just"
+default = false
+
+[install]
+requires_root = true
+default_method = "binary"
+
+[install.methods.binary]
+description = "Single just binary extracted from a GitHub Release tarball"
+
+[version]
+version_capable = true
