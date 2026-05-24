@@ -6,6 +6,17 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+### 追加
+
+- 新しい `gitleaks` プラグインを埋め込みカタログに追加。
+  [gitleaks](https://github.com/gitleaks/gitleaks) シークレットスキャナを
+  公式 GitHub Release tarball から `/usr/local/bin/gitleaks` に SHA256 検証付き
+  でインストールします (`linux_x64` / `linux_arm64`)。`[plugins.versions]` で
+  `gitleaks = { pin = "..." }` を省略した場合は
+  `https://github.com/gitleaks/gitleaks/releases/latest` から最新安定版の tag
+  を解決します。`default = false` のため、利用するには
+  `[plugins].enable = [..., "gitleaks"]` で明示的に有効化してください。
+
 ## [0.7.5] - 2026-05-24
 
 ### 追加
