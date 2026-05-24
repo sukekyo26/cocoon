@@ -63,9 +63,20 @@ jobs:
           echo "latest=${latest}" >> "$GITHUB_OUTPUT"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
 
-          gh release list --limit 200 --json tagName -q '.[].tagName' > tags.txt
+          # --limit caps the response. actions/deploy-pages full-replaces
+          # the site, so any tag beyond this cap silently drops from
+          # /v<old>/ next deploy. Fail loud at the cap rather than lose
+          # history — bump the number (or implement GraphQL pagination)
+          # when it actually trips.
+          limit=1000
+          gh release list --limit "$limit" --json tagName -q '.[].tagName' > tags.txt
+          count=$(wc -l < tags.txt)
+          if [ "$count" -ge "$limit" ]; then
+            echo "::error::release count ($count) reached --limit ($limit); bump pages.yml's limit or paginate via GraphQL — otherwise older /v<tag>/ archives will silently drop from the published site"
+            exit 1
+          fi
           echo "Latest=${latest} version=${version}"
-          echo "All tags ($(wc -l < tags.txt)):"
+          echo "All tags ($count):"
           cat tags.txt
 
       - name: Assemble _site/
