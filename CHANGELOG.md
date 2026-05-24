@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.5] - 2026-05-24
+
 ### Added
 
 - GitHub Pages mirror (`.github/workflows/pages.yml`) publishes `install.sh`,
@@ -244,7 +246,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Add `COMPOSE_PROJECT_NAME` derivation from the project directory basename so docker compose namespacing matches the host directory.
 - Add i18n catalog (English / Japanese) covering every CLI prompt, error message, and inline `workspace.toml` comment, switched via `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG`.
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.7.4...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.7.5...HEAD
+[0.7.5]: https://github.com/sukekyo26/cocoon/compare/v0.7.4...v0.7.5
 [0.7.4]: https://github.com/sukekyo26/cocoon/compare/v0.7.3...v0.7.4
 [0.7.3]: https://github.com/sukekyo26/cocoon/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/sukekyo26/cocoon/compare/v0.7.1...v0.7.2
