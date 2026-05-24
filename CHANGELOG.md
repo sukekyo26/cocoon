@@ -6,6 +6,45 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.5] - 2026-05-24
+
+### Added
+
+- GitHub Pages mirror (`.github/workflows/pages.yml`) publishes `install.sh`,
+  the prebuilt cocoon binaries, and `SHA256SUMS` to
+  `https://sukekyo26.github.io/cocoon/` on every release. Each release tag is
+  archived under `/v<tag>/` and the current latest release is mirrored at
+  `/latest/` + `/VERSION`. This is an alternative install path served from
+  `*.github.io` for environments that can reach `*.github.io` but not
+  `raw.githubusercontent.com` / `api.github.com`. Because
+  `actions/deploy-pages` replaces the entire site on each deploy, the
+  workflow rebuilds the full layout every run by iterating
+  `gh release list` and downloading each tag's assets — historical tags
+  therefore stay reachable across releases. GitHub Releases is the source
+  of truth: the release marked "latest" populates `/install.sh`, `/VERSION`,
+  and `/latest/`. `workflow_dispatch` takes no inputs and just rebuilds
+  from the current Releases state (use it to back-fill a missed release or
+  recover from stale Pages content).
+- `install.sh` now accepts `COCOON_PAGES_BASE` (default empty). When set, the
+  script reads the latest version from `$COCOON_PAGES_BASE/VERSION` (instead
+  of the GitHub API) and downloads the binary + `SHA256SUMS` from
+  `$COCOON_PAGES_BASE/v<tag>/...` (instead of `github.com/.../releases/...`).
+  The existing GitHub-API / GitHub-Releases code path is unchanged when the
+  variable is unset.
+- README: documented the Pages mirror one-liner
+  (`curl -fsSL https://sukekyo26.github.io/cocoon/install.sh | COCOON_PAGES_BASE=... sh`)
+  as an alternative install path next to the default.
+- New `cocoon` plugin in the embedded catalog: installs the cocoon binary
+  inside the dev container by downloading it from the GitHub Pages mirror
+  (`https://sukekyo26.github.io/cocoon/v<pin>/cocoon-linux-{amd64,arm64}`)
+  with SHA256 verification. When `cocoon = { pin = "..." }` is omitted from
+  `[plugins.versions]`, the install script resolves the latest stable from
+  `https://sukekyo26.github.io/cocoon/VERSION`. The plugin downloads
+  exclusively from Pages — no fallback to the `github.com/.../releases/download/...`
+  route — so it works in environments that can reach `*.github.io` but not
+  `raw.githubusercontent.com` / `api.github.com`. The plugin is `default = false`
+  — enable it explicitly under `[plugins].enable = [..., "cocoon"]`.
+
 ## [0.7.4] - 2026-05-24
 
 ### Added
@@ -207,7 +246,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Add `COMPOSE_PROJECT_NAME` derivation from the project directory basename so docker compose namespacing matches the host directory.
 - Add i18n catalog (English / Japanese) covering every CLI prompt, error message, and inline `workspace.toml` comment, switched via `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG`.
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.7.4...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.7.5...HEAD
+[0.7.5]: https://github.com/sukekyo26/cocoon/compare/v0.7.4...v0.7.5
 [0.7.4]: https://github.com/sukekyo26/cocoon/compare/v0.7.3...v0.7.4
 [0.7.3]: https://github.com/sukekyo26/cocoon/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/sukekyo26/cocoon/compare/v0.7.1...v0.7.2

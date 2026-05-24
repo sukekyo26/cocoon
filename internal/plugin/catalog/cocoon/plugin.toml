@@ -1,0 +1,15 @@
+[metadata]
+name = "cocoon"
+description = "cocoon — generate .devcontainer/ from workspace.toml (dogfood the tool inside the container)"
+url = "https://github.com/sukekyo26/cocoon"
+default = false
+
+[install]
+requires_root = true
+default_method = "binary"
+
+[install.methods.binary]
+description = "Single cocoon binary downloaded from the GitHub Pages mirror at https://sukekyo26.github.io/cocoon/"
+
+[version]
+version_capable = true

@@ -1,0 +1,129 @@
+name: Pages mirror
+
+# Publishes install.sh + the prebuilt release binaries + SHA256SUMS to
+# GitHub Pages at https://sukekyo26.github.io/cocoon/, so the bootstrap
+# one-liner is reachable from environments that can hit *.github.io but
+# not raw.githubusercontent.com / api.github.com. The layout is:
+#
+#   /install.sh                      install.sh from the current latest release
+#   /VERSION                         single line "<version>\n" (current latest)
+#   /<tag>/cocoon-<os>-<arch>        immutable per-tag asset archive
+#   /<tag>/SHA256SUMS                immutable per-tag checksums
+#   /latest/cocoon-<os>-<arch>       mirror of the current latest release
+#   /latest/SHA256SUMS
+#
+# `actions/deploy-pages` replaces the entire site on each deploy, so the
+# job rebuilds the full layout every run by iterating `gh release list`
+# and downloading each tag's assets. GitHub Releases is the source of
+# truth — the latest release (per the GitHub "latest" flag) populates
+# /install.sh, /VERSION, and /latest/. workflow_dispatch takes no
+# inputs: it just rebuilds from current Releases state, which is what
+# you want to back-fill a missed release or recover from a stale Pages
+# state.
+#
+# One-time manual step: Settings -> Pages -> Source: GitHub Actions
+# must be enabled on the repo for this workflow's deploy-pages step to
+# succeed. After that, every release.published event auto-deploys.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Do not drop in-flight Pages deploys — losing one would leave the site
+# on an older asset set.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    name: Mirror releases to Pages
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Resolve latest tag + collect all tags
+        id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          latest=$(gh release view --json tagName -q .tagName)
+          [ -n "$latest" ] || { echo "::error::no releases found"; exit 1; }
+          version="${latest#v}"
+          echo "latest=${latest}" >> "$GITHUB_OUTPUT"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+          # --limit caps the response. actions/deploy-pages full-replaces
+          # the site, so any tag beyond this cap silently drops from
+          # /v<old>/ next deploy. Fail loud at the cap rather than lose
+          # history — bump the number (or implement GraphQL pagination)
+          # when it actually trips.
+          limit=1000
+          gh release list --limit "$limit" --json tagName -q '.[].tagName' > tags.txt
+          count=$(wc -l < tags.txt)
+          if [ "$count" -ge "$limit" ]; then
+            echo "::error::release count ($count) reached --limit ($limit); bump pages.yml's limit or paginate via GraphQL — otherwise older /v<tag>/ archives will silently drop from the published site"
+            exit 1
+          fi
+          echo "Latest=${latest} version=${version}"
+          echo "All tags ($count):"
+          cat tags.txt
+
+      - name: Assemble _site/
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LATEST_TAG: ${{ steps.resolve.outputs.latest }}
+          LATEST_VERSION: ${{ steps.resolve.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p _site
+
+          # Per-tag immutable archives. Re-downloaded every run because
+          # actions/deploy-pages replaces the entire site each deploy.
+          while IFS= read -r tag; do
+            [ -n "$tag" ] || continue
+            echo "Downloading assets for ${tag}"
+            mkdir -p "_site/${tag}"
+            gh release download "$tag" \
+              --pattern 'cocoon-linux-amd64' \
+              --pattern 'cocoon-linux-arm64' \
+              --pattern 'cocoon-darwin-amd64' \
+              --pattern 'cocoon-darwin-arm64' \
+              --pattern 'SHA256SUMS' \
+              --dir "_site/${tag}"
+          done < tags.txt
+
+          # /latest/ mirrors the current latest tag's assets.
+          mkdir -p _site/latest
+          cp -a "_site/${LATEST_TAG}/." _site/latest/
+
+          # /VERSION is what install.sh reads to discover the latest
+          # version when COCOON_VERSION=latest.
+          printf '%s\n' "$LATEST_VERSION" > _site/VERSION
+
+          # /install.sh is the latest release's bootstrap script (the
+          # release.yml workflow uploads install.sh as a release asset
+          # alongside the binaries).
+          gh release download "$LATEST_TAG" --pattern 'install.sh' --dir _site --clobber
+
+          echo "Assembled _site/ contents:"
+          find _site -maxdepth 3 -type f | sort
+
+      - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
+
+      - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
+        with:
+          path: _site
+
+      - id: deploy
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4

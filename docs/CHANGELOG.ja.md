@@ -6,6 +6,46 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+## [0.7.5] - 2026-05-24
+
+### 追加
+
+- GitHub Pages ミラー (`.github/workflows/pages.yml`) を追加: リリースのたび
+  `install.sh`、ビルド済み cocoon バイナリ、`SHA256SUMS` を
+  `https://sukekyo26.github.io/cocoon/` に発行します。各リリースタグは
+  `/v<tag>/` 配下に不変アーカイブとして残り、最新リリースは `/latest/` と
+  `/VERSION` にもミラーされます。`*.github.io` には到達できるが
+  `raw.githubusercontent.com` / `api.github.com` には到達できない環境向けの
+  代替インストール経路です。`actions/deploy-pages` は毎デプロイでサイト全体
+  を置き換えるため、ワークフローは毎回 `gh release list` を辿って全 tag の
+  アセットを再ダウンロードし、サイト全体を再構築します。これにより過去
+  リリースの `/v<tag>/` アーカイブは新規リリース後も到達可能なまま維持され
+  ます。GitHub Releases の "latest" フラグが付いたリリースが
+  `/install.sh` / `/VERSION` / `/latest/` を populate します。
+  `workflow_dispatch` は入力を取らず、現在の Releases 状態からサイトを
+  再構築するだけです（取りこぼしたリリースの back-fill や、Pages が
+  古い状態に陥った場合の復旧に使ってください）。
+- `install.sh` に `COCOON_PAGES_BASE` 環境変数を追加 (既定: 空)。設定すると、
+  最新バージョンは GitHub API ではなく `$COCOON_PAGES_BASE/VERSION` から
+  読み込み、バイナリと `SHA256SUMS` も `github.com/.../releases/...` ではなく
+  `$COCOON_PAGES_BASE/v<tag>/...` から取得します。未設定時の挙動 (GitHub
+  API / GitHub Releases 経路) は従来通りで変化ありません。
+- README に Pages ミラー版のワンライナー
+  (`curl -fsSL https://sukekyo26.github.io/cocoon/install.sh | COCOON_PAGES_BASE=... sh`)
+  を追加し、既定経路と並ぶ代替インストール経路として記載しました。
+- 新しい `cocoon` プラグインを埋め込みカタログに追加。dev container 内で
+  cocoon バイナリを GitHub Pages ミラー
+  (`https://sukekyo26.github.io/cocoon/v<pin>/cocoon-linux-{amd64,arm64}`)
+  からダウンロードして SHA256 検証付きでインストールします。
+  `[plugins.versions]` で `cocoon = { pin = "..." }` を省略した場合、
+  install スクリプトは `https://sukekyo26.github.io/cocoon/VERSION` から
+  最新 stable を解決します。Pages ミラーからのみダウンロードし、
+  `github.com/.../releases/download/...` ルートにはフォールバックしません。
+  そのため `*.github.io` には到達できるが `raw.githubusercontent.com` /
+  `api.github.com` には到達できない環境でも動作します。
+  `default = false` のため、利用するには
+  `[plugins].enable = [..., "cocoon"]` で明示的に有効化してください。
+
 ## [0.7.4] - 2026-05-24
 
 ### 追加
@@ -207,7 +247,8 @@ cocoon の主要な変更を記録します。フォーマットは
 - `COMPOSE_PROJECT_NAME` をプロジェクトディレクトリの basename から導出するように変更。docker compose の namespace がホストディレクトリと一致する。
 - 国際化 (英語 / 日本語) カタログを追加。CLI プロンプト・エラーメッセージ・`workspace.toml` インラインコメントすべてを `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` で切替可能。
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.7.4...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.7.5...HEAD
+[0.7.5]: https://github.com/sukekyo26/cocoon/compare/v0.7.4...v0.7.5
 [0.7.4]: https://github.com/sukekyo26/cocoon/compare/v0.7.3...v0.7.4
 [0.7.3]: https://github.com/sukekyo26/cocoon/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/sukekyo26/cocoon/compare/v0.7.1...v0.7.2

@@ -3,6 +3,9 @@
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/sukekyo26/cocoon/main/install.sh | sh
+#   # GitHub Pages mirror (skips raw.githubusercontent.com + api.github.com):
+#   curl -fsSL https://sukekyo26.github.io/cocoon/install.sh | \
+#     COCOON_PAGES_BASE=https://sukekyo26.github.io/cocoon sh
 #
 # Environment overrides:
 #   COCOON_VERSION       Pin to a specific version (e.g. "0.1.0"); default "latest".
@@ -14,6 +17,14 @@
 #   COCOON_API_TOKEN     Optional bearer token sent to COCOON_API_BASE. Lifts the
 #                        anonymous rate limit (60 req/hour per IP → 5000 with a
 #                        GitHub token); typically only set in CI / automation.
+#   COCOON_PAGES_BASE    GitHub Pages mirror base URL (default empty). When set,
+#                        the script reads the latest version from
+#                        "$COCOON_PAGES_BASE/VERSION" instead of the GitHub API
+#                        and downloads the binary + SHA256SUMS from
+#                        "$COCOON_PAGES_BASE/<tag>/..." instead of
+#                        github.com/.../releases/download/. Use this in
+#                        environments that can reach *.github.io but not
+#                        raw.githubusercontent.com / api.github.com.
 #
 # The script verifies the binary's SHA-256 against the SHA256SUMS asset
 # from the same release before installing.
@@ -38,11 +49,13 @@ INSTALL_DIR="${COCOON_INSTALL_DIR:-$HOME/.local/bin}"
 VERSION="${COCOON_VERSION:-latest}"
 API_BASE="${COCOON_API_BASE:-https://api.github.com}"
 RELEASE_BASE="${COCOON_RELEASE_BASE:-https://github.com}"
+PAGES_BASE="${COCOON_PAGES_BASE:-}"
 # Strip a single trailing slash so callers may pass either ".../api/v3" or
 # ".../api/v3/" without producing "//<rest>" URLs that some mirrors / GHES
 # reverse proxies reject.
 API_BASE="${API_BASE%/}"
 RELEASE_BASE="${RELEASE_BASE%/}"
+PAGES_BASE="${PAGES_BASE%/}"
 API_TOKEN="${COCOON_API_TOKEN:-}"
 
 err() { printf "%scocoon-install: %s%s\n" "$C_RED" "$*" "$C_RST" >&2; }
@@ -84,21 +97,32 @@ case "$arch" in
 esac
 
 if [ "$VERSION" = "latest" ]; then
-  # Capture curl output first so a network/API failure dies with a specific
-  # message instead of being masked by the pipeline's last-command exit
-  # status (POSIX sh has no `pipefail`).
-  releases_url="$API_BASE/repos/$REPO/releases/latest"
-  if [ -n "$API_TOKEN" ]; then
-    api_response=$(curl -fsSL --proto '=https' --tlsv1.2 -H "Authorization: Bearer $API_TOKEN" "$releases_url") ||
-      die "failed to fetch release metadata: $releases_url"
+  if [ -n "$PAGES_BASE" ]; then
+    # Pages mirror: a single static "<version>\n" file is the source of
+    # truth for "latest". Avoids api.github.com entirely.
+    version_url="$PAGES_BASE/VERSION"
+    pages_version=$(curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors "$version_url") ||
+      die "failed to fetch latest version: $version_url"
+    pages_version=$(printf '%s' "$pages_version" | tr -d '[:space:]')
+    [ -n "$pages_version" ] || die "empty VERSION file at $version_url"
+    tag="v$pages_version"
   else
-    api_response=$(curl -fsSL --proto '=https' --tlsv1.2 "$releases_url") ||
-      die "failed to fetch release metadata: $releases_url"
+    # Capture curl output first so a network/API failure dies with a specific
+    # message instead of being masked by the pipeline's last-command exit
+    # status (POSIX sh has no `pipefail`).
+    releases_url="$API_BASE/repos/$REPO/releases/latest"
+    if [ -n "$API_TOKEN" ]; then
+      api_response=$(curl -fsSL --proto '=https' --tlsv1.2 -H "Authorization: Bearer $API_TOKEN" "$releases_url") ||
+        die "failed to fetch release metadata: $releases_url"
+    else
+      api_response=$(curl -fsSL --proto '=https' --tlsv1.2 "$releases_url") ||
+        die "failed to fetch release metadata: $releases_url"
+    fi
+    tag=$(printf '%s' "$api_response" |
+      sed -n 's/.*"tag_name": *"\(v\{0,1\}[^"]*\)".*/\1/p' |
+      head -n1)
+    [ -n "$tag" ] || die "could not parse tag_name from GitHub API response for $REPO"
   fi
-  tag=$(printf '%s' "$api_response" |
-    sed -n 's/.*"tag_name": *"\(v\{0,1\}[^"]*\)".*/\1/p' |
-    head -n1)
-  [ -n "$tag" ] || die "could not parse tag_name from GitHub API response for $REPO"
 else
   case "$VERSION" in
     v*) tag="$VERSION" ;;
@@ -110,7 +134,11 @@ fi
 version=${tag#v}
 
 asset="cocoon-$os-$arch"
-base="$RELEASE_BASE/$REPO/releases/download/$tag"
+if [ -n "$PAGES_BASE" ]; then
+  base="$PAGES_BASE/$tag"
+else
+  base="$RELEASE_BASE/$REPO/releases/download/$tag"
+fi
 
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT

@@ -68,12 +68,20 @@ Destructive commands ask for confirmation first; pass `-y` to skip it. Build cac
 ## Install
 
 ```bash
-# Recommended: prebuilt binary with SHA256 verification
+# Default: prebuilt binary with SHA256 verification.
 curl -fsSL https://raw.githubusercontent.com/sukekyo26/cocoon/main/install.sh | sh
 
-# Alternative: from source (Go 1.26+)
+# Alternative: same binary served from the GitHub Pages mirror (`*.github.io`).
+# Use this if your environment can reach `*.github.io` but not
+# `raw.githubusercontent.com` / `api.github.com`.
+curl -fsSL https://sukekyo26.github.io/cocoon/install.sh | \
+  COCOON_PAGES_BASE=https://sukekyo26.github.io/cocoon sh
+
+# From source (Go 1.26+)
 go install github.com/sukekyo26/cocoon/cmd/cocoon@latest
 ```
+
+The Pages mirror publishes every release tag at `https://sukekyo26.github.io/cocoon/v<tag>/` (e.g. `/v0.7.4/`) and re-points `/latest/` + `/VERSION` on each release, so `COCOON_VERSION=0.7.4 sh` (or any other published version) still works to pin a version. If you fork the repo and want to host your own mirror, enable Pages once via **Settings → Pages → Source: GitHub Actions** — the `pages.yml` workflow then deploys on every release.
 
 ## Quick start
 
@@ -106,7 +114,7 @@ Each answer becomes a self-documenting line in `workspace.toml`. Pass `--yes` to
 
 Plugins shipped inside the binary via `go:embed`:
 
-`aws-cli`, `aws-sam-cli`, `bun`, `claude-code`, `copilot-cli`, `dart`, `deno`, `docker-buildx`, `docker-cli`, `flutter`, `github-cli`, `go`, `google-chrome`, `helm`, `kubectl`, `lazygit`, `mise`, `nerd-fonts`, `node`, `opentofu`, `proto`, `rust`, `shellcheck`, `shfmt`, `starship`, `terraform`, `uv`, `zig`
+`aws-cli`, `aws-sam-cli`, `bun`, `claude-code`, `cocoon`, `copilot-cli`, `dart`, `deno`, `docker-buildx`, `docker-cli`, `flutter`, `github-cli`, `go`, `google-chrome`, `helm`, `kubectl`, `lazygit`, `mise`, `nerd-fonts`, `node`, `opentofu`, `proto`, `rust`, `shellcheck`, `shfmt`, `starship`, `terraform`, `uv`, `zig`
 
 Override or add your own under `~/.cocoon/plugins/<id>/` (user scope) or `<project>/.cocoon/plugins/<id>/` (project scope, checked into the repo) — both layers win over the embedded catalog. See [`docs/plugins.md`](docs/plugins.md) for the authoring guide.
 
