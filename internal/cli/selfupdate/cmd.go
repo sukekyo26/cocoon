@@ -251,7 +251,9 @@ var renameFn = os.Rename
 // mounts / immutable attributes / SELinux MAC / NFS root_squash are all
 // caught. Returns ErrInstallDirReadOnly on EACCES so callers can attach
 // a remediation hint specific to the "binary lives in a root-owned dir"
-// case; other I/O errors propagate verbatim.
+// case; other I/O errors (including Close/Remove of the probe file)
+// propagate verbatim so a half-written probe never gets silently left
+// behind — the helper's contract is "no artefacts on return".
 func checkInstallDirWritable(selfPath string) error {
 	dir := filepath.Dir(selfPath)
 	f, err := os.CreateTemp(dir, ".cocoon-update-preflight-")
@@ -262,8 +264,13 @@ func checkInstallDirWritable(selfPath string) error {
 		return fmt.Errorf("preflight write check in %s: %w", dir, err)
 	}
 	name := f.Name()
-	_ = f.Close()
-	_ = os.Remove(name)
+	if cerr := f.Close(); cerr != nil {
+		_ = os.Remove(name)
+		return fmt.Errorf("preflight close %s: %w", name, cerr)
+	}
+	if rerr := os.Remove(name); rerr != nil {
+		return fmt.Errorf("preflight cleanup %s: %w", name, rerr)
+	}
 	return nil
 }
 
