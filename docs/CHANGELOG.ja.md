@@ -31,6 +31,18 @@ cocoon の主要な変更を記録します。フォーマットは
 - README に Pages ミラー版のワンライナー
   (`curl -fsSL https://sukekyo26.github.io/cocoon/install.sh | COCOON_PAGES_BASE=... sh`)
   を追加し、既定経路と並ぶ代替インストール経路として記載しました。
+- 新しい `cocoon` プラグインを埋め込みカタログに追加。dev container 内で
+  cocoon バイナリを GitHub Pages ミラー
+  (`https://sukekyo26.github.io/cocoon/v<pin>/cocoon-linux-{amd64,arm64}`)
+  からダウンロードして SHA256 検証付きでインストールします。
+  `[plugins.versions]` で `cocoon = { pin = "..." }` を省略した場合、
+  install スクリプトは `https://sukekyo26.github.io/cocoon/VERSION` から
+  最新 stable を解決します。Pages ミラーからのみダウンロードし、
+  `github.com/.../releases/download/...` ルートにはフォールバックしません。
+  そのため `*.github.io` には到達できるが `raw.githubusercontent.com` /
+  `api.github.com` には到達できない環境でも動作します。
+  `default = false` のため、利用するには
+  `[plugins].enable = [..., "cocoon"]` で明示的に有効化してください。
 
 ## [0.7.4] - 2026-05-24
 

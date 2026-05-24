@@ -111,6 +111,15 @@ func TestPluginContracts(t *testing.T) {
 			mustContain: []string{"Claude", "retry 3", "curl -fsSL"},
 		},
 		{
+			id: "cocoon", name: "cocoon",
+			requiresRoot: true, versionCapable: true,
+			mustContain: []string{
+				"cocoon", "sukekyo26.github.io/cocoon",
+				"sha256sum -c -", "retry 3", "tlsv1.2", "PIN",
+			},
+			mustNotContain: append(append([]string{}, noPlaceholders...), "api.github.com", "| jq ", "raw.githubusercontent.com"),
+		},
+		{
 			id: "copilot-cli", name: "GitHub Copilot CLI",
 			requiresRoot: false, versionCapable: true, firstVolume: "copilot",
 			mustContain: []string{

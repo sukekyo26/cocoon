@@ -32,6 +32,16 @@ adheres to [Semantic Versioning](https://semver.org/).
 - README: documented the Pages mirror one-liner
   (`curl -fsSL https://sukekyo26.github.io/cocoon/install.sh | COCOON_PAGES_BASE=... sh`)
   as an alternative install path next to the default.
+- New `cocoon` plugin in the embedded catalog: installs the cocoon binary
+  inside the dev container by downloading it from the GitHub Pages mirror
+  (`https://sukekyo26.github.io/cocoon/v<pin>/cocoon-linux-{amd64,arm64}`)
+  with SHA256 verification. When `cocoon = { pin = "..." }` is omitted from
+  `[plugins.versions]`, the install script resolves the latest stable from
+  `https://sukekyo26.github.io/cocoon/VERSION`. The plugin downloads
+  exclusively from Pages — no fallback to the `github.com/.../releases/download/...`
+  route — so it works in environments that can reach `*.github.io` but not
+  `raw.githubusercontent.com` / `api.github.com`. The plugin is `default = false`
+  — enable it explicitly under `[plugins].enable = [..., "cocoon"]`.
 
 ## [0.7.4] - 2026-05-24
 
