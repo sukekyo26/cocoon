@@ -1,9 +1,11 @@
 # https://pre-commit.com — install with `pip install pre-commit && pre-commit install`.
-# Hooks shell out to the same shellcheck/shfmt that `just ci` invokes, so all
-# three layers (just / CI / pre-commit) agree.
+# All hooks shell out to the same commands `just ci` invokes, so pre-commit /
+# just / GitHub Actions agree. Heavy gates (test / cover / vuln / build-all)
+# stay in `just ci` (pre-push) — see CLAUDE.md.
 repos:
   - repo: local
     hooks:
+      # ---- Shell ----
       - id: shellcheck
         name: shellcheck (severity=style)
         entry: shellcheck --severity=style
@@ -19,3 +21,39 @@ repos:
         types: [shell]
         exclude: ^bin/
         require_serial: false
+
+      # ---- Go ----
+      - id: gofmt-check
+        name: golangci-lint fmt --diff
+        entry: golangci-lint fmt --diff ./...
+        language: system
+        types: [go]
+        pass_filenames: false
+
+      - id: go-vet
+        name: go vet ./...
+        entry: go vet ./...
+        language: system
+        types: [go]
+        pass_filenames: false
+
+      - id: golangci-lint
+        name: golangci-lint run ./...
+        entry: golangci-lint run ./...
+        language: system
+        types: [go]
+        pass_filenames: false
+
+      - id: go-mod-verify
+        name: go mod verify
+        entry: go mod verify
+        language: system
+        files: ^(go\.mod|go\.sum)$
+        pass_filenames: false
+
+      - id: go-mod-tidy
+        name: go mod tidy (no diff)
+        entry: bash -c 'go mod tidy && git diff --exit-code -- go.mod go.sum'
+        language: system
+        files: ^(go\.mod|go\.sum)$
+        pass_filenames: false

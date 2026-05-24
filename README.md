@@ -142,11 +142,11 @@ Every prompt, error message, and inline `workspace.toml` comment renders in Engl
 
 ## Developing
 
-`just ci` is the single pre-push gate (Go fmt/vet/lint/test/vuln/mod-verify + `shellcheck` + `shfmt-check`). Optional pre-commit integration runs the same shell hooks at commit time:
+`just ci` is the single pre-push gate (Go fmt/vet/lint/test/vuln/mod-verify + `shellcheck` + `shfmt-check`). Optional pre-commit integration runs the fast subset on each `git commit` — `shellcheck`, `shfmt`, `golangci-lint fmt --diff`, `go vet`, `golangci-lint run`, `go mod verify`, and a `go mod tidy` drift check. Slow gates (test / coverage / govulncheck / cross-compile) stay in `just ci`.
 
 ```bash
 pip install pre-commit  # or `brew install pre-commit`
-pre-commit install      # shellcheck + shfmt fire on each `git commit`
+pre-commit install      # hooks fire on each `git commit`
 ```
 
-`shellcheck` and `shfmt` must be on `$PATH`. macOS: `brew install shellcheck shfmt`. Linux/WSL: `apt-get install shellcheck` + download `shfmt` from <https://github.com/mvdan/sh/releases>.
+Required on `$PATH`: `shellcheck`, `shfmt`, `go`, `golangci-lint`. macOS: `brew install shellcheck shfmt golangci-lint`. Linux/WSL: `apt-get install shellcheck`, download `shfmt` from <https://github.com/mvdan/sh/releases>, install `golangci-lint` per <https://golangci-lint.run/welcome/install/>.
