@@ -14,9 +14,15 @@ cocoon の主要な変更を記録します。フォーマットは
   `/v<tag>/` 配下に不変アーカイブとして残り、最新リリースは `/latest/` と
   `/VERSION` にもミラーされます。`*.github.io` には到達できるが
   `raw.githubusercontent.com` / `api.github.com` には到達できない環境向けの
-  代替インストール経路です。ワークフローは `workflow_dispatch` の
-  `tag` + `update_latest` 入力にも対応し、`/latest/` と `/VERSION` を
-  上書きせずに過去のリリースタグを back-fill できます。
+  代替インストール経路です。`actions/deploy-pages` は毎デプロイでサイト全体
+  を置き換えるため、ワークフローは毎回 `gh release list` を辿って全 tag の
+  アセットを再ダウンロードし、サイト全体を再構築します。これにより過去
+  リリースの `/v<tag>/` アーカイブは新規リリース後も到達可能なまま維持され
+  ます。GitHub Releases の "latest" フラグが付いたリリースが
+  `/install.sh` / `/VERSION` / `/latest/` を populate します。
+  `workflow_dispatch` は入力を取らず、現在の Releases 状態からサイトを
+  再構築するだけです（取りこぼしたリリースの back-fill や、Pages が
+  古い状態に陥った場合の復旧に使ってください）。
 - `install.sh` に `COCOON_PAGES_BASE` 環境変数を追加 (既定: 空)。設定すると、
   最新バージョンは GitHub API ではなく `$COCOON_PAGES_BASE/VERSION` から
   読み込み、バイナリと `SHA256SUMS` も `github.com/.../releases/...` ではなく
