@@ -22,11 +22,8 @@ __pycache__/
 
 # VS Code user-specific
 .vscode/
-
-# cocoon
-.cocoon/
-.devcontainer/
-workspace.toml
+*.code-workspace
 
 # claude
 .claude/scheduled_tasks.lock
+settings.local.json

@@ -58,12 +58,13 @@ func TestRunInit_Snapshot(t *testing.T) {
 				"docker-cli,docker-buildx,aws-cli,aws-sam-cli,github-cli,claude-code,copilot-cli," +
 					"proto,mise,uv,bun,node,deno,dart,flutter,zig,rust,go,lazygit,starship," +
 					"nerd-fonts,google-chrome,terraform,opentofu," +
-					"kubectl,helm,shellcheck,shfmt",
+					"kubectl,helm,shellcheck,shfmt,just",
 				"--plugin-versions",
 				"aws-cli=2.34.48,aws-sam-cli=1.160.1,bun=1.3.3,copilot-cli=1.0.47,dart=3.12.0,deno=2.7.14," +
-					"docker-buildx=0.24.0,flutter=3.44.0,go=1.23.4,helm=3.16.0,kubectl=1.31.0,lazygit=0.44.1," +
-					"mise=2025.12.0,nerd-fonts=3.4.0,node=24.15.0,opentofu=1.9.0,proto=0.46.1," +
-					"shellcheck=0.10.0,shfmt=3.10.0,starship=1.21.1,terraform=1.10.5,uv=0.5.7,zig=0.13.0",
+					"docker-buildx=0.24.0,flutter=3.44.0,go=1.23.4,helm=3.16.0,just=1.51.0," +
+					"kubectl=1.31.0,lazygit=0.44.1,mise=2025.12.0,nerd-fonts=3.4.0,node=24.15.0," +
+					"opentofu=1.9.0,proto=0.46.1,shellcheck=0.10.0,shfmt=3.10.0,starship=1.21.1," +
+					"terraform=1.10.5,uv=0.5.7,zig=0.13.0",
 				// Mirrors the e2e amd64-full preset's --plugin-methods so the
 				// snapshot stays in lockstep with what the real Docker
 				// round-trip generates. arm64-full intentionally omits this
@@ -83,10 +84,10 @@ func TestRunInit_Snapshot(t *testing.T) {
 				"--plugins",
 				"docker-cli,docker-buildx,aws-cli,aws-sam-cli,github-cli,claude-code,copilot-cli," +
 					"proto,mise,uv,bun,node,deno,dart,rust,go,nerd-fonts,terraform,opentofu," +
-					"kubectl,helm,shellcheck,shfmt",
+					"kubectl,helm,shellcheck,shfmt,just",
 				"--plugin-versions",
 				"aws-cli=2.34.48,aws-sam-cli=1.160.1,bun=1.3.3,copilot-cli=1.0.47,dart=3.12.0,deno=2.7.14," +
-					"docker-buildx=0.24.0,go=1.23.4,helm=3.16.0,kubectl=1.31.0,mise=2025.12.0," +
+					"docker-buildx=0.24.0,go=1.23.4,helm=3.16.0,just=1.51.0,kubectl=1.31.0,mise=2025.12.0," +
 					"nerd-fonts=3.4.0,node=24.15.0,opentofu=1.9.0,proto=0.46.1,shellcheck=0.10.0," +
 					"shfmt=3.10.0,terraform=1.10.5,uv=0.5.7",
 			},
