@@ -6,6 +6,19 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- `cocoon self-update` now fails fast with a remediation hint when the
+  install directory is not writable by the current user (e.g. the binary
+  lives at a root-owned location like `/usr/local/bin/cocoon`). Previously
+  the command downloaded the new asset (~12 MB) and verified its SHA256
+  before failing at the `rename` step with a raw `permission denied` that
+  exposed an internal `*.cocoon-update.tmp` path. The error now points at
+  the offending directory and tells the user to rerun with
+  `sudo <selfPath> self-update`. `cocoon self-update --check-only` is
+  read-only by design and skips this preflight, so a version check still
+  works without sudo on root-owned install paths.
+
 ## [0.7.6] - 2026-05-24
 
 ### Added
