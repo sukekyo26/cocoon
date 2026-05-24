@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- New `gitleaks` plugin in the embedded catalog: installs the
+  [gitleaks](https://github.com/gitleaks/gitleaks) secret scanner from the
+  official GitHub Release tarball into `/usr/local/bin/gitleaks` with SHA256
+  verification (`linux_x64` / `linux_arm64`). When `gitleaks = { pin = "..." }`
+  is omitted from `[plugins.versions]`, the install script resolves the
+  latest stable tag from `https://github.com/gitleaks/gitleaks/releases/latest`.
+  `default = false` — enable explicitly via `[plugins].enable = [..., "gitleaks"]`.
+
 ## [0.7.5] - 2026-05-24
 
 ### Added

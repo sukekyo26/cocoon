@@ -145,6 +145,18 @@ func TestPluginContracts(t *testing.T) {
 			mustContain: []string{"GitHub", "retry 3"},
 		},
 		{
+			id: "gitleaks", name: "gitleaks",
+			requiresRoot: true, versionCapable: true,
+			mustContain: []string{
+				"gitleaks", "github.com/gitleaks/gitleaks", "sha256sum -c -",
+				"tlsv1.2", "retry 3", "dpkg --print-architecture", "tar -xz",
+				// gitleaks asset names use x64 / arm64 (not x86_64 / aarch64);
+				// pin to catch lazygit copy-paste accidents.
+				`DOWNLOAD_ARCH="x64"`,
+			},
+			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
+		},
+		{
 			id: "flutter", name: "Flutter",
 			requiresRoot: true, versionCapable: true, firstVolume: "pub-cache",
 			mustContain: []string{
