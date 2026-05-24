@@ -14,6 +14,15 @@ import (
 // This is the per-id body emitted under the shared `[plugins.versions]`
 // section header.
 func FormatPinLine(id, ref, amd64Checksum, arm64Checksum string) string {
+	return FormatPinLineWithExtras(id, ref, amd64Checksum, arm64Checksum, nil)
+}
+
+// FormatPinLineWithExtras is FormatPinLine plus any caller-supplied extra
+// keys (declared by the plugin via [install.extra_versions]). Extras are
+// emitted in sorted key order so the output is stable across calls.
+// Passing a nil/empty extras map reproduces FormatPinLine's output
+// byte-for-byte.
+func FormatPinLineWithExtras(id, ref, amd64Checksum, arm64Checksum string, extras map[string]string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s = { pin = %q", id, ref)
 	if amd64Checksum != "" {
@@ -21,6 +30,16 @@ func FormatPinLine(id, ref, amd64Checksum, arm64Checksum string) string {
 	}
 	if arm64Checksum != "" {
 		fmt.Fprintf(&b, ", checksum_arm64 = %q", arm64Checksum)
+	}
+	if len(extras) > 0 {
+		keys := make([]string, 0, len(extras))
+		for k := range extras {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			fmt.Fprintf(&b, ", %s = %q", k, extras[k])
+		}
 	}
 	b.WriteString(" }\n")
 	return b.String()

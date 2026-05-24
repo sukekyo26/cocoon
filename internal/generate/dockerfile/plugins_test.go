@@ -112,6 +112,7 @@ func TestRenderInstallRun_InlineHeredoc(t *testing.T) {
 				"my-plugin", "# Install Stuff", nil, tc.script,
 				false, true, false, config.PluginVersionOverride{},
 				nil,
+				nil,
 				"",
 				shellEnv{
 					rcFileAbs:  "/home/${USERNAME}/.bashrc",
@@ -722,7 +723,7 @@ func TestBuildInstallEnvPairs_VerifyGatesChecksum(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			pairs := buildInstallEnvPairs(tc.versionCapable, tc.checksumVerify, true, override, nil, "", sh)
+			pairs := buildInstallEnvPairs(tc.versionCapable, tc.checksumVerify, true, override, nil, nil, "", sh)
 			joined := strings.Join(pairs, " ")
 			if gotPIN := strings.Contains(joined, `PIN="1.2.3"`); gotPIN != tc.wantPIN {
 				t.Errorf("PIN present = %v, want %v\n%s", gotPIN, tc.wantPIN, joined)
@@ -847,5 +848,127 @@ func TestGeneratePluginInstalls_UnknownMethodFails(t *testing.T) {
 	)
 	if !errors.Is(err, plugin.ErrUnknownMethod) {
 		t.Fatalf("err = %v, want errors.Is(.., plugin.ErrUnknownMethod)", err)
+	}
+}
+
+// TestBuildInstallEnvPairs_ExtraVersions pins that [install.extra_versions]
+// keys surface in the env prefix block: defaults are used when no
+// workspace override exists, the override wins when both are present,
+// and the env-pair order is stable (sorted by key) so the generated
+// Dockerfile does not drift.
+func TestBuildInstallEnvPairs_ExtraVersions(t *testing.T) {
+	t.Parallel()
+	sh := shellEnv{rcFileAbs: "/home/${USERNAME}/.bashrc", rcSyntax: "posix", loginShell: "bash"}
+	extras := map[string]plugin.ExtraVersionSpec{
+		"api_level":   {Env: "ANDROID_SDK_API_LEVEL", Default: "35"},
+		"build_tools": {Env: "ANDROID_SDK_BUILD_TOOLS", Default: "35.0.0"},
+	}
+	t.Run("defaults_when_no_override", func(t *testing.T) {
+		t.Parallel()
+		pairs := buildInstallEnvPairs(false, false, false, config.PluginVersionOverride{}, nil, extras, "", sh)
+		joined := strings.Join(pairs, " ")
+		if !strings.Contains(joined, `ANDROID_SDK_API_LEVEL="35"`) {
+			t.Errorf("missing default api_level env: %s", joined)
+		}
+		if !strings.Contains(joined, `ANDROID_SDK_BUILD_TOOLS="35.0.0"`) {
+			t.Errorf("missing default build_tools env: %s", joined)
+		}
+	})
+	t.Run("override_wins_over_default", func(t *testing.T) {
+		t.Parallel()
+		override := config.PluginVersionOverride{
+			Pin:   "14742923",
+			Extra: map[string]string{"api_level": "36"},
+		}
+		pairs := buildInstallEnvPairs(true, true, true, override, nil, extras, "", sh)
+		joined := strings.Join(pairs, " ")
+		if !strings.Contains(joined, `ANDROID_SDK_API_LEVEL="36"`) {
+			t.Errorf("override did not take effect for api_level: %s", joined)
+		}
+		// build_tools has no override; default must still appear.
+		if !strings.Contains(joined, `ANDROID_SDK_BUILD_TOOLS="35.0.0"`) {
+			t.Errorf("build_tools fell out of env: %s", joined)
+		}
+	})
+	t.Run("sort_order_stable", func(t *testing.T) {
+		t.Parallel()
+		pairs := buildInstallEnvPairs(false, false, false, config.PluginVersionOverride{}, nil, extras, "", sh)
+		apiIdx, buildIdx := -1, -1
+		for i, p := range pairs {
+			if strings.HasPrefix(p, "ANDROID_SDK_API_LEVEL=") {
+				apiIdx = i
+			}
+			if strings.HasPrefix(p, "ANDROID_SDK_BUILD_TOOLS=") {
+				buildIdx = i
+			}
+		}
+		if apiIdx < 0 || buildIdx < 0 {
+			t.Fatalf("expected both extra envs to appear; pairs=%v", pairs)
+		}
+		if apiIdx >= buildIdx {
+			t.Errorf("expected api_level (sorted first) before build_tools; api=%d build=%d", apiIdx, buildIdx)
+		}
+	})
+}
+
+// TestValidateVersionOverrides_UnknownExtraKey pins that
+// [plugins.versions].<id> setting a key outside pin / checksum_* is
+// rejected with ErrUnknownExtraVersion unless the plugin declares it
+// under [install.extra_versions]. This is the typo-detection path.
+func TestValidateVersionOverrides_UnknownExtraKey(t *testing.T) {
+	t.Parallel()
+	p := &plugin.Plugin{
+		Metadata: plugin.Metadata{Name: "android-sdk", URL: "https://example.com/x"},
+		Install: plugin.Install{
+			DefaultMethod: "archive",
+			Methods:       map[string]plugin.InstallMethod{"archive": {Description: "x"}},
+			ExtraVersions: map[string]plugin.ExtraVersionSpec{
+				"api_level": {Env: "ANDROID_SDK_API_LEVEL", Default: "35"},
+			},
+		},
+		Version: plugin.Version{VersionCapable: true},
+	}
+	plugins := map[string]*plugin.Plugin{"android-sdk": p}
+	overrides := map[string]config.PluginVersionOverride{
+		"android-sdk": {
+			Pin:   "14742923",
+			Extra: map[string]string{"api_lvl": "35"}, // typo!
+		},
+	}
+	err := validateVersionOverrides(plugins, overrides, &bytes.Buffer{})
+	if !errors.Is(err, ErrUnknownExtraVersion) {
+		t.Fatalf("err = %v, want errors.Is(.., ErrUnknownExtraVersion)", err)
+	}
+	if !strings.Contains(err.Error(), "api_lvl") {
+		t.Errorf("error message should name the unknown key: %v", err)
+	}
+}
+
+// TestValidateVersionOverrides_DeclaredExtraKeyOK pins the happy path:
+// a workspace override whose Extra keys are all declared by the plugin
+// passes validation without error.
+func TestValidateVersionOverrides_DeclaredExtraKeyOK(t *testing.T) {
+	t.Parallel()
+	p := &plugin.Plugin{
+		Metadata: plugin.Metadata{Name: "android-sdk", URL: "https://example.com/x"},
+		Install: plugin.Install{
+			DefaultMethod: "archive",
+			Methods:       map[string]plugin.InstallMethod{"archive": {Description: "x"}},
+			ExtraVersions: map[string]plugin.ExtraVersionSpec{
+				"api_level":   {Env: "ANDROID_SDK_API_LEVEL", Default: "35"},
+				"build_tools": {Env: "ANDROID_SDK_BUILD_TOOLS", Default: "35.0.0"},
+			},
+		},
+		Version: plugin.Version{VersionCapable: true},
+	}
+	plugins := map[string]*plugin.Plugin{"android-sdk": p}
+	overrides := map[string]config.PluginVersionOverride{
+		"android-sdk": {
+			Pin:   "14742923",
+			Extra: map[string]string{"api_level": "36", "build_tools": "36.0.0"},
+		},
+	}
+	if err := validateVersionOverrides(plugins, overrides, &bytes.Buffer{}); err != nil {
+		t.Fatalf("validateVersionOverrides: %v", err)
 	}
 }

@@ -33,6 +33,13 @@ func EntrypointScript() string { return entrypointScript }
 // unknown plugin or one whose install method does not allow pinning.
 var ErrInvalidVersionOverride = errors.New("dockerfile: invalid version override")
 
+// ErrUnknownExtraVersion is returned when [plugins.versions].<id> sets an
+// extra key (anything beyond pin / checksum_amd64 / checksum_arm64) that
+// the plugin's plugin.toml does not declare under [install.extra_versions].
+// Surfaced as a sentinel so callers and tests can match the typo-detection
+// failure class with errors.Is.
+var ErrUnknownExtraVersion = errors.New("dockerfile: unknown extra version key")
+
 // Options carries inputs Generate needs beyond ctx.
 type Options struct {
 	WorkspaceRoot string

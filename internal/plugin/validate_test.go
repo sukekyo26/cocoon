@@ -393,3 +393,113 @@ func TestVersion_VerifiesByChecksum(t *testing.T) {
 		})
 	}
 }
+
+// TestValidate_ExtraVersionsAccepted pins that a well-formed
+// [install.extra_versions] block passes validation: two declarations
+// with distinct lowercase keys, uppercase env names, non-empty defaults.
+func TestValidate_ExtraVersionsAccepted(t *testing.T) {
+	t.Parallel()
+	p := &plugin.Plugin{
+		Metadata: validMetadata(),
+		Install: plugin.Install{
+			DefaultMethod: "archive",
+			Methods:       map[string]plugin.InstallMethod{"archive": {Description: "x"}},
+			ExtraVersions: map[string]plugin.ExtraVersionSpec{
+				"api_level":   {Env: "ANDROID_SDK_API_LEVEL", Default: "35"},
+				"build_tools": {Env: "ANDROID_SDK_BUILD_TOOLS", Default: "35.0.0"},
+			},
+		},
+	}
+	require.NoError(t, p.Validate("test/plugin.toml"))
+}
+
+// TestValidate_ExtraVersionsRejects sweeps the rejection cases for
+// [install.extra_versions]: bad key shape, bad env shape, empty env,
+// reserved env collision, build_args collision, and duplicate env
+// across two declarations.
+func TestValidate_ExtraVersionsRejects(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name        string
+		buildArgs   []string
+		extras      map[string]plugin.ExtraVersionSpec
+		wantSnippet string
+	}{
+		{
+			name: "key_uppercase",
+			extras: map[string]plugin.ExtraVersionSpec{
+				"API_LEVEL": {Env: "ANDROID_SDK_API_LEVEL", Default: "35"},
+			},
+			wantSnippet: "extra_versions key does not match",
+		},
+		{
+			name: "key_starts_with_digit",
+			extras: map[string]plugin.ExtraVersionSpec{
+				"1level": {Env: "ANDROID_SDK_API_LEVEL", Default: "35"},
+			},
+			wantSnippet: "extra_versions key does not match",
+		},
+		{
+			name: "env_empty",
+			extras: map[string]plugin.ExtraVersionSpec{
+				"api_level": {Env: "", Default: "35"},
+			},
+			wantSnippet: "env must not be empty",
+		},
+		{
+			name: "env_lowercase",
+			extras: map[string]plugin.ExtraVersionSpec{
+				"api_level": {Env: "android_sdk_api_level", Default: "35"},
+			},
+			wantSnippet: "env does not match",
+		},
+		{
+			name: "env_reserved_pin",
+			extras: map[string]plugin.ExtraVersionSpec{
+				"api_level": {Env: "PIN", Default: "35"},
+			},
+			wantSnippet: "collides with a cocoon-reserved variable",
+		},
+		{
+			name: "env_reserved_checksum_amd64",
+			extras: map[string]plugin.ExtraVersionSpec{
+				"api_level": {Env: "CHECKSUM_AMD64", Default: "35"},
+			},
+			wantSnippet: "collides with a cocoon-reserved variable",
+		},
+		{
+			name:      "env_collides_with_build_args",
+			buildArgs: []string{"ANDROID_SDK_API_LEVEL"},
+			extras: map[string]plugin.ExtraVersionSpec{
+				"api_level": {Env: "ANDROID_SDK_API_LEVEL", Default: "35"},
+			},
+			wantSnippet: "collides with an install.build_args entry",
+		},
+		{
+			name: "env_duplicate_across_extras",
+			extras: map[string]plugin.ExtraVersionSpec{
+				"api_level":   {Env: "ANDROID_X", Default: "35"},
+				"build_tools": {Env: "ANDROID_X", Default: "35.0.0"},
+			},
+			wantSnippet: "is also used by extra_versions.",
+		},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			p := &plugin.Plugin{
+				Metadata: validMetadata(),
+				Install: plugin.Install{
+					DefaultMethod: "archive",
+					Methods:       map[string]plugin.InstallMethod{"archive": {Description: "x"}},
+					BuildArgs:     tc.buildArgs,
+					ExtraVersions: tc.extras,
+				},
+			}
+			err := p.Validate("test/plugin.toml")
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.wantSnippet)
+		})
+	}
+}

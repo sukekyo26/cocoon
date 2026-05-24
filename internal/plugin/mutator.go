@@ -9,6 +9,8 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/pelletier/go-toml/v2"
+
 	"github.com/sukekyo26/cocoon/internal/fsx"
 )
 
@@ -81,9 +83,63 @@ func upsertPinLineBytes(input []byte, id, ref, amd64Sum, arm64Sum string) ([]byt
 	if hasLegacySubsection(lines) {
 		return nil, ErrLegacyPinSubsection
 	}
-	newLine := strings.TrimSuffix(FormatPinLine(id, ref, amd64Sum, arm64Sum), "\n")
+	// pin / checksum_* are rewritten from the dedicated arguments; any other
+	// inline-table keys the user already had (declared by the plugin via
+	// [install.extra_versions]) must be preserved verbatim.
+	extras := extractExistingPinExtras(lines, "plugins.versions", id)
+	newLine := strings.TrimSuffix(FormatPinLineWithExtras(id, ref, amd64Sum, arm64Sum, extras), "\n")
 	updated := upsertIDLineInSection(lines, "plugins.versions", id, newLine)
 	return renderLines(updated, hadTrailingNewline)
+}
+
+// extractExistingPinExtras parses the existing inline-table line for id
+// in the named section and returns the keys that are not pin /
+// checksum_amd64 / checksum_arm64. Returns nil when no existing line is
+// present, the inline table is malformed, or no extras are found.
+func extractExistingPinExtras(lines []string, section, id string) map[string]string {
+	sectionStart, sectionEnd := findSection(lines, section)
+	if sectionStart < 0 {
+		return nil
+	}
+	idAssignRE := regexp.MustCompile(`^\s*` + regexp.QuoteMeta(id) + `\s*=\s*(.*)$`)
+	for i := sectionStart + 1; i < sectionEnd; i++ {
+		m := idAssignRE.FindStringSubmatch(lines[i])
+		if m == nil {
+			continue
+		}
+		return parseInlineTableExtras(m[1])
+	}
+	return nil
+}
+
+// parseInlineTableExtras decodes a single inline-table value (e.g.
+// `{ pin = "1.2.3", api_level = "35" }`) and returns its non-reserved
+// string keys. Decoding errors are swallowed: the existing line is
+// either valid TOML (the decoder will succeed) or it was already broken
+// before --write ran, in which case losing extras is not a new
+// regression and we still want to emit a syntactically clean line.
+func parseInlineTableExtras(value string) map[string]string {
+	var tmp struct {
+		V map[string]any `toml:"v"`
+	}
+	if err := toml.Unmarshal([]byte("v = "+value+"\n"), &tmp); err != nil {
+		return nil
+	}
+	out := make(map[string]string, len(tmp.V))
+	for k, v := range tmp.V {
+		if k == "pin" || k == "checksum_amd64" || k == "checksum_arm64" {
+			continue
+		}
+		s, ok := v.(string)
+		if !ok {
+			continue
+		}
+		out[k] = s
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 // UpsertMethodLine atomically inserts or replaces an assignment

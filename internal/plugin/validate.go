@@ -9,12 +9,32 @@ import (
 )
 
 var (
-	rxEnvKey       = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
-	rxBuildArg     = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`)
-	rxPluginVolume = regexp.MustCompile(`^/home/\$\{USERNAME\}/[^/]+$`)
-	rxPluginURL    = regexp.MustCompile(`^https://[^\s]+$`)
-	rxMethodName   = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
+	rxEnvKey          = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+	rxBuildArg        = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`)
+	rxPluginVolume    = regexp.MustCompile(`^/home/\$\{USERNAME\}/[^/]+$`)
+	rxPluginURL       = regexp.MustCompile(`^https://[^\s]+$`)
+	rxMethodName      = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
+	rxExtraVersionKey = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
 )
+
+// reservedExtraVersionEnvs lists env variable names cocoon supplies to
+// every install script. A plugin's [install.extra_versions].<key>.env
+// must not collide with these — otherwise the user-overridable value
+// would silently shadow (or be shadowed by) the framework-provided
+// value, with no fail-fast at decode time. Kept in sync with
+// internal/generate/dockerfile/plugins.go's buildInstallEnvPairs.
+//
+//nolint:gochecknoglobals // pin-down table for validation.
+var reservedExtraVersionEnvs = map[string]struct{}{
+	"PIN":                   {},
+	"CHECKSUM_AMD64":        {},
+	"CHECKSUM_ARM64":        {},
+	"RC_FILE":               {},
+	"RC_SYNTAX":             {},
+	"LOGIN_SHELL":           {},
+	"COCOON_INSTALL_METHOD": {},
+	"USERNAME":              {},
+}
 
 // Validate returns a *config.ValidationError on failure so the CLI's error
 // renderer treats it identically to a workspace.toml failure.
@@ -83,6 +103,54 @@ func (i *Install) validate(a *config.Accumulator) {
 		}
 	}
 	i.validateMethods(a)
+	i.validateExtraVersions(a)
+}
+
+func (i *Install) validateExtraVersions(a *config.Accumulator) {
+	if len(i.ExtraVersions) == 0 {
+		return
+	}
+	buildArgs := make(map[string]struct{}, len(i.BuildArgs))
+	for _, b := range i.BuildArgs {
+		buildArgs[b] = struct{}{}
+	}
+	// Sort keys so the first-error summary is stable across runs.
+	keys := make([]string, 0, len(i.ExtraVersions))
+	for k := range i.ExtraVersions {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+	seenEnv := make(map[string]string, len(keys))
+	for _, k := range keys {
+		spec := i.ExtraVersions[k]
+		if !rxExtraVersionKey.MatchString(k) {
+			a.Add("extra_versions key does not match "+rxExtraVersionKey.String(), "extra_versions", k)
+		}
+		if spec.Env == "" {
+			a.Add("env must not be empty", "extra_versions", k, "env")
+			continue
+		}
+		if !rxBuildArg.MatchString(spec.Env) {
+			a.Add("env does not match "+rxBuildArg.String(), "extra_versions", k, "env")
+			continue
+		}
+		if _, reserved := reservedExtraVersionEnvs[spec.Env]; reserved {
+			a.Add(fmt.Sprintf("env %q collides with a cocoon-reserved variable", spec.Env),
+				"extra_versions", k, "env")
+			continue
+		}
+		if _, conflict := buildArgs[spec.Env]; conflict {
+			a.Add(fmt.Sprintf("env %q collides with an install.build_args entry", spec.Env),
+				"extra_versions", k, "env")
+			continue
+		}
+		if prev, dup := seenEnv[spec.Env]; dup {
+			a.Add(fmt.Sprintf("env %q is also used by extra_versions.%s", spec.Env, prev),
+				"extra_versions", k, "env")
+			continue
+		}
+		seenEnv[spec.Env] = k
+	}
 }
 
 func (i *Install) validateMethods(a *config.Accumulator) {

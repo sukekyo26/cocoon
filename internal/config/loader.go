@@ -11,7 +11,10 @@ import (
 )
 
 // LoadWorkspace parses and validates a workspace.toml file. Unknown top-level
-// or nested keys are rejected as *ValidationError.
+// or nested keys are rejected as *ValidationError, except inside
+// [plugins.versions] inline tables where extra keys are carried into
+// PluginVersionOverride.Extra (cross-checked later against the plugin's
+// declared [install.extra_versions]).
 func LoadWorkspace(path string) (*Workspace, error) {
 	data, err := os.ReadFile(path) //nolint:gosec // path provided by trusted caller
 	if err != nil {
@@ -21,10 +24,59 @@ func LoadWorkspace(path string) (*Workspace, error) {
 	if err := StrictUnmarshal(path, data, &ws); err != nil {
 		return nil, err
 	}
+	if err := materializePluginVersions(path, &ws); err != nil {
+		return nil, err
+	}
 	if err := ws.Validate(path); err != nil {
 		return nil, err
 	}
 	return &ws, nil
+}
+
+// materializePluginVersions converts PluginsSpec.VersionsRaw (the
+// map-of-any shape that survived strict unmarshal) into the typed
+// PluginsSpec.Versions map. Reserved keys (pin / checksum_amd64 /
+// checksum_arm64) populate the dedicated fields; any remaining keys go
+// into Extra so a plugin's [install.extra_versions] can pick them up at
+// generation time. Non-string values produce a *ValidationError.
+func materializePluginVersions(path string, ws *Workspace) error {
+	if len(ws.Plugins.VersionsRaw) == 0 {
+		return nil
+	}
+	out := make(map[string]PluginVersionOverride, len(ws.Plugins.VersionsRaw))
+	a := NewAccumulator()
+	for id, raw := range ws.Plugins.VersionsRaw {
+		entry := PluginVersionOverride{} //nolint:exhaustruct // filled below
+		for k, v := range raw {
+			s, ok := v.(string)
+			if !ok {
+				a.Add(fmt.Sprintf("value for %q must be a string, got %T", k, v),
+					"plugins", "versions", id, k)
+				continue
+			}
+			switch k {
+			case "pin":
+				entry.Pin = s
+			case "checksum_amd64":
+				cs := s
+				entry.ChecksumAmd64 = &cs
+			case "checksum_arm64":
+				cs := s
+				entry.ChecksumArm64 = &cs
+			default:
+				if entry.Extra == nil {
+					entry.Extra = make(map[string]string)
+				}
+				entry.Extra[k] = s
+			}
+		}
+		out[id] = entry
+	}
+	if errs := a.Errors(); len(errs) > 0 {
+		return &ValidationError{Path: path, Errors: errs}
+	}
+	ws.Plugins.Versions = out
+	return nil
 }
 
 // StrictUnmarshal decodes data into v with DisallowUnknownFields enabled. The

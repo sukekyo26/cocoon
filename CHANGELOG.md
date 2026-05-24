@@ -6,6 +6,28 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- New `[install.extra_versions]` section in `plugin.toml` lets a plugin
+  expose subcomponent versions as user-overridable knobs. Each entry
+  declares a key (used in `[plugins.versions].<id>` to override),
+  an `env` name (passed to the install script as that env variable),
+  and a `default` (used when the workspace.toml override is absent).
+  `env` must match `^[A-Z_][A-Z0-9_]*$` and must not collide with
+  cocoon-reserved env variables (`PIN`, `CHECKSUM_*`, `RC_FILE`,
+  `RC_SYNTAX`, `LOGIN_SHELL`, `COCOON_INSTALL_METHOD`, `USERNAME`)
+  or with any name in `[install].build_args`.
+- `[plugins.versions].<id>` inline tables in `workspace.toml` now
+  accept keys beyond the reserved `pin` / `checksum_amd64` /
+  `checksum_arm64` triple, provided the named plugin declares them
+  under `[install.extra_versions]`. Example:
+  `android-sdk = { pin = "14742923", api_level = "36", build_tools = "36.0.0" }`.
+  Unknown keys (typos, removed declarations) are rejected by
+  `cocoon gen` so misconfigurations fail fast instead of silently
+  falling back to the plugin default. `cocoon plugin pin <id> --write`
+  preserves any extra keys present on the existing line — it rewrites
+  `pin` / `checksum_*` only.
+
 ### Changed
 
 - `cocoon self-update` now fails fast with a remediation hint when the
