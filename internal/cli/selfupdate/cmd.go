@@ -4,8 +4,10 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -21,6 +23,12 @@ import (
 	"github.com/sukekyo26/cocoon/internal/release"
 	"github.com/sukekyo26/cocoon/internal/version"
 )
+
+// ErrInstallDirReadOnly is returned when the parent directory of the
+// running binary is not writable by the current uid. Callers can
+// identify the class via errors.Is and surface a remediation hint
+// (reinstall to $HOME/.local/bin, or rerun with sudo).
+var ErrInstallDirReadOnly = errors.New("install directory is not writable")
 
 const (
 	apiTimeout = 30 * time.Second
@@ -48,7 +56,7 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 	return cmd
 }
 
-//nolint:gocyclo // self-update has many sequential phases; splitting hurts readability.
+//nolint:gocyclo,gocognit,funlen // self-update has many sequential phases; splitting hurts readability.
 func runSelfUpdate(ctx context.Context, stdout, stderr io.Writer, checkOnly, force bool) error {
 	log := logx.New(stdout, stderr)
 
@@ -58,6 +66,20 @@ func runSelfUpdate(ctx context.Context, stdout, stderr io.Writer, checkOnly, for
 		return clihelpers.ErrFailure
 	}
 	current = strings.TrimPrefix(current, "v")
+
+	// Resolve self path and verify the install dir is writable before any
+	// network I/O so a permission problem fails fast (saves a 12MB download
+	// + SHA256 check) and the error carries a remediation hint.
+	selfPath, err := executablePath()
+	if err != nil {
+		return fmt.Errorf("%w: locate self: %w", clihelpers.ErrFailure, err)
+	}
+	if err = checkInstallDirWritable(selfPath); err != nil {
+		if errors.Is(err, ErrInstallDirReadOnly) {
+			return fmt.Errorf("%w: %w\n%s", clihelpers.ErrFailure, err, installDirHint(selfPath))
+		}
+		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+	}
 
 	tctx, cancel := context.WithTimeout(ctx, apiTimeout)
 	defer cancel()
@@ -129,11 +151,14 @@ func runSelfUpdate(ctx context.Context, stdout, stderr io.Writer, checkOnly, for
 		return fmt.Errorf("%w: chmod: %w", clihelpers.ErrFailure, err)
 	}
 
-	selfPath, err := executablePath()
-	if err != nil {
-		return fmt.Errorf("%w: locate self: %w", clihelpers.ErrFailure, err)
-	}
 	if err = atomicReplace(binPath, selfPath); err != nil {
+		// preflight already caught the common "root-owned dir" case; this
+		// branch handles late-arriving EACCES (immutable bit, SELinux MAC,
+		// preflight↔rename race) by reusing the same hint so the user
+		// still sees actionable remediation rather than a raw syscall error.
+		if errors.Is(err, fs.ErrPermission) {
+			return fmt.Errorf("%w: replace %s: %w\n%s", clihelpers.ErrFailure, selfPath, err, installDirHint(selfPath))
+		}
 		return fmt.Errorf("%w: replace %s: %w", clihelpers.ErrFailure, selfPath, err)
 	}
 
@@ -211,6 +236,40 @@ var (
 // atomicReplace be exercised deterministically without a second real
 // filesystem. Production always uses os.Rename.
 var renameFn = os.Rename
+
+// checkInstallDirWritable verifies the parent of selfPath is writable
+// without doing the full network/checksum round-trip. It does a real
+// create-and-remove test rather than guessing from mode bits, so RO
+// mounts / immutable attributes / SELinux MAC / NFS root_squash are all
+// caught. Returns ErrInstallDirReadOnly on EACCES so callers can attach
+// a remediation hint specific to the "binary lives in a root-owned dir"
+// case; other I/O errors propagate verbatim.
+func checkInstallDirWritable(selfPath string) error {
+	dir := filepath.Dir(selfPath)
+	f, err := os.CreateTemp(dir, ".cocoon-update-preflight-")
+	if err != nil {
+		if errors.Is(err, fs.ErrPermission) {
+			return fmt.Errorf("%w: %s", ErrInstallDirReadOnly, dir)
+		}
+		return fmt.Errorf("preflight write check in %s: %w", dir, err)
+	}
+	name := f.Name()
+	_ = f.Close()
+	_ = os.Remove(name)
+	return nil
+}
+
+// installDirHint returns a remediation message naming the binary's
+// location and the elevated invocation the user needs to retry. Kept
+// minimal (no alternative install paths) so the message stays focused
+// on the one action that always works.
+func installDirHint(selfPath string) string {
+	return fmt.Sprintf(
+		"  cocoon binary lives at %s. self-update needs write access to its parent dir.\n"+
+			"  rerun with elevated privileges: sudo %s self-update",
+		selfPath, selfPath,
+	)
+}
 
 // atomicReplace falls back to copy+chmod when src and dst are on
 // different filesystems (os.Rename's EXDEV).
