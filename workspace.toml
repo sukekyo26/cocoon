@@ -119,11 +119,13 @@ enable = [
     "docker-buildx",
     "docker-cli",
     "github-cli",
+    "gitleaks",
     "just",
     "node",
     "shellcheck",
     "shfmt",
     "starship",
+    "uv",
 ]
 
 # [plugins.methods] — install method picked for plugins that declare multiple methods.
