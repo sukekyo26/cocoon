@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.4] - 2026-05-24
+
 ### Added
 
 - New `just` plugin: installs the [just](https://github.com/casey/just) command runner (a modern alternative to make) from the official GitHub Release tarball into `/usr/local/bin/just` with SHA256 verification (`x86_64-unknown-linux-musl` / `aarch64-unknown-linux-musl`). When `just = { pin = "..." }` is omitted from `[plugins.versions]`, the install script resolves the latest stable from `https://github.com/casey/just/releases/latest` (note: just's release tags are bare semver without a `v` prefix, so the URL is `releases/download/<ver>/...`). The plugin is `default = false` — enable it explicitly under `[plugins].enable = [..., "just"]`.
@@ -205,7 +207,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Add `COMPOSE_PROJECT_NAME` derivation from the project directory basename so docker compose namespacing matches the host directory.
 - Add i18n catalog (English / Japanese) covering every CLI prompt, error message, and inline `workspace.toml` comment, switched via `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG`.
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.7.3...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.7.4...HEAD
+[0.7.4]: https://github.com/sukekyo26/cocoon/compare/v0.7.3...v0.7.4
 [0.7.3]: https://github.com/sukekyo26/cocoon/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/sukekyo26/cocoon/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/sukekyo26/cocoon/compare/v0.7.0...v0.7.1
