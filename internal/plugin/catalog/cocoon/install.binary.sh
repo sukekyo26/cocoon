@@ -37,8 +37,13 @@ case "$ARCH" in
     CHECKSUM="$CHECKSUM_ARM64"
     ;;
   *)
-    DOWNLOAD_ARCH="amd64"
-    CHECKSUM="$CHECKSUM_AMD64"
+    # The Pages mirror only publishes linux-amd64 / linux-arm64. Fail
+    # loud here rather than silently download the amd64 binary and trip
+    # `exec format error` at first run (the rest of the catalog defaults
+    # to amd64 for unknown arch, but those plugins target upstreams that
+    # publish more architectures — cocoon's mirror is strictly two).
+    echo "cocoon plugin: unsupported architecture '${ARCH}' — Pages mirror publishes linux-amd64 and linux-arm64 only" >&2
+    exit 1
     ;;
 esac
 
