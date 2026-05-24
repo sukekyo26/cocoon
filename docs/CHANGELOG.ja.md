@@ -6,6 +6,26 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+### 追加
+
+- GitHub Pages ミラー (`.github/workflows/pages.yml`) を追加: リリースのたび
+  `install.sh`、ビルド済み cocoon バイナリ、`SHA256SUMS` を
+  `https://sukekyo26.github.io/cocoon/` に発行します。各リリースタグは
+  `/v<tag>/` 配下に不変アーカイブとして残り、最新リリースは `/latest/` と
+  `/VERSION` にもミラーされます。`*.github.io` には到達できるが
+  `raw.githubusercontent.com` / `api.github.com` には到達できない環境向けの
+  代替インストール経路です。ワークフローは `workflow_dispatch` の
+  `tag` + `update_latest` 入力にも対応し、`/latest/` と `/VERSION` を
+  上書きせずに過去のリリースタグを back-fill できます。
+- `install.sh` に `COCOON_PAGES_BASE` 環境変数を追加 (既定: 空)。設定すると、
+  最新バージョンは GitHub API ではなく `$COCOON_PAGES_BASE/VERSION` から
+  読み込み、バイナリと `SHA256SUMS` も `github.com/.../releases/...` ではなく
+  `$COCOON_PAGES_BASE/v<tag>/...` から取得します。未設定時の挙動 (GitHub
+  API / GitHub Releases 経路) は従来通りで変化ありません。
+- README に Pages ミラー版のワンライナー
+  (`curl -fsSL https://sukekyo26.github.io/cocoon/install.sh | COCOON_PAGES_BASE=... sh`)
+  を追加し、既定経路と並ぶ代替インストール経路として記載しました。
+
 ## [0.7.4] - 2026-05-24
 
 ### 追加

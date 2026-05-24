@@ -1,0 +1,136 @@
+name: Pages mirror
+
+# Publishes install.sh + the prebuilt release binaries + SHA256SUMS to
+# GitHub Pages at https://sukekyo26.github.io/cocoon/, so the bootstrap
+# one-liner is reachable from environments that can hit *.github.io but
+# not raw.githubusercontent.com / api.github.com. The layout is:
+#
+#   /install.sh                      copy of install.sh from the release tag
+#   /VERSION                         single line "<version>\n" (latest only)
+#   /<tag>/cocoon-<os>-<arch>        immutable per-tag asset archive
+#   /<tag>/SHA256SUMS                immutable per-tag checksums
+#   /latest/cocoon-<os>-<arch>       moving "latest" mirror
+#   /latest/SHA256SUMS
+#
+# One-time manual step: Settings -> Pages -> Source: GitHub Actions must
+# be enabled on the repo for this workflow's deploy-pages step to
+# succeed. After that, every release.published event auto-deploys.
+#
+# Back-fill: use workflow_dispatch with `tag: vX.Y.Z` and
+# `update_latest: false` to publish historical tags without overwriting
+# /latest/ or /VERSION.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to mirror (e.g. v0.7.4). Leave empty to mirror the latest release."
+        type: string
+        required: false
+        default: ""
+      update_latest:
+        description: "Refresh /latest/ and /VERSION. Disable when back-filling an older tag."
+        type: boolean
+        required: false
+        default: true
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Do not drop in-flight Pages deploys — losing one would leave the site
+# on an older asset set.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    name: Mirror release to Pages
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Resolve tag + version
+        id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_TAG: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "release" ]; then
+            tag="$EVENT_TAG"
+          elif [ -n "$INPUT_TAG" ]; then
+            tag="$INPUT_TAG"
+          else
+            tag=$(gh release view --json tagName -q .tagName)
+          fi
+          [ -n "$tag" ] || { echo "::error::could not resolve release tag"; exit 1; }
+          version="${tag#v}"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "Resolved tag=${tag} version=${version}"
+
+      - name: Download release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.resolve.outputs.tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p assets
+          gh release download "$TAG" \
+            --pattern 'cocoon-linux-amd64' \
+            --pattern 'cocoon-linux-arm64' \
+            --pattern 'cocoon-darwin-amd64' \
+            --pattern 'cocoon-darwin-arm64' \
+            --pattern 'SHA256SUMS' \
+            --dir assets
+          ls -l assets
+
+      - name: Assemble _site/
+        env:
+          TAG: ${{ steps.resolve.outputs.tag }}
+          VERSION: ${{ steps.resolve.outputs.version }}
+          UPDATE_LATEST: ${{ inputs.update_latest }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          mkdir -p "_site/${TAG}"
+          cp install.sh _site/install.sh
+          cp -a assets/. "_site/${TAG}/"
+
+          # `release.published` always refreshes /latest/ + /VERSION.
+          # `workflow_dispatch` honours the boolean input (default true),
+          # so a back-fill run can pass `update_latest=false` to leave
+          # the current latest in place.
+          update_latest="$UPDATE_LATEST"
+          if [ "$EVENT_NAME" = "release" ]; then
+            update_latest=true
+          fi
+
+          if [ "$update_latest" = "true" ]; then
+            mkdir -p _site/latest
+            cp -a assets/. _site/latest/
+            printf '%s\n' "$VERSION" > _site/VERSION
+            echo "Refreshed /latest/ and /VERSION (${VERSION})"
+          else
+            echo "Skipping /latest/ and /VERSION refresh (back-fill mode)"
+          fi
+          find _site -maxdepth 3 -type f | sort
+
+      - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
+
+      - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
+        with:
+          path: _site
+
+      - id: deploy
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
