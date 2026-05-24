@@ -842,6 +842,11 @@ else
 fi
 COCOON_PLUGIN_EOF
 
+# === user-defined dockerfile.post_plugins (from workspace.toml) ===
+# pre-commit (uses the cocoon uv plugin already enabled above)
+RUN uv tool install pre-commit
+# === end dockerfile.post_plugins ===
+
 # Backup image-installed files for volume-mount resilience
 RUN if [ -d ~/.local ]; then cp -a ~/.local ~/.image-local; else mkdir -p ~/.image-local; fi
 
