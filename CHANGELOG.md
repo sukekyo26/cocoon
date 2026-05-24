@@ -6,6 +6,33 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- GitHub Pages mirror (`.github/workflows/pages.yml`) publishes `install.sh`,
+  the prebuilt cocoon binaries, and `SHA256SUMS` to
+  `https://sukekyo26.github.io/cocoon/` on every release. Each release tag is
+  archived under `/v<tag>/` and the current latest release is mirrored at
+  `/latest/` + `/VERSION`. This is an alternative install path served from
+  `*.github.io` for environments that can reach `*.github.io` but not
+  `raw.githubusercontent.com` / `api.github.com`. Because
+  `actions/deploy-pages` replaces the entire site on each deploy, the
+  workflow rebuilds the full layout every run by iterating
+  `gh release list` and downloading each tag's assets — historical tags
+  therefore stay reachable across releases. GitHub Releases is the source
+  of truth: the release marked "latest" populates `/install.sh`, `/VERSION`,
+  and `/latest/`. `workflow_dispatch` takes no inputs and just rebuilds
+  from the current Releases state (use it to back-fill a missed release or
+  recover from stale Pages content).
+- `install.sh` now accepts `COCOON_PAGES_BASE` (default empty). When set, the
+  script reads the latest version from `$COCOON_PAGES_BASE/VERSION` (instead
+  of the GitHub API) and downloads the binary + `SHA256SUMS` from
+  `$COCOON_PAGES_BASE/v<tag>/...` (instead of `github.com/.../releases/...`).
+  The existing GitHub-API / GitHub-Releases code path is unchanged when the
+  variable is unset.
+- README: documented the Pages mirror one-liner
+  (`curl -fsSL https://sukekyo26.github.io/cocoon/install.sh | COCOON_PAGES_BASE=... sh`)
+  as an alternative install path next to the default.
+
 ## [0.7.4] - 2026-05-24
 
 ### Added
