@@ -114,6 +114,7 @@ PATH = "$HOME/go/bin:$PATH"
 [plugins]
 enable = [
     "claude-code",
+    "cocoon",
     "copilot-cli",
     "docker-buildx",
     "docker-cli",
