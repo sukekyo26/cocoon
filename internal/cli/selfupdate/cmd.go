@@ -67,18 +67,26 @@ func runSelfUpdate(ctx context.Context, stdout, stderr io.Writer, checkOnly, for
 	}
 	current = strings.TrimPrefix(current, "v")
 
-	// Resolve self path and verify the install dir is writable before any
-	// network I/O so a permission problem fails fast (saves a 12MB download
-	// + SHA256 check) and the error carries a remediation hint.
-	selfPath, err := executablePath()
-	if err != nil {
-		return fmt.Errorf("%w: locate self: %w", clihelpers.ErrFailure, err)
-	}
-	if err = checkInstallDirWritable(selfPath); err != nil {
-		if errors.Is(err, ErrInstallDirReadOnly) {
-			return fmt.Errorf("%w: %w\n%s", clihelpers.ErrFailure, err, installDirHint(selfPath))
+	// --check-only is read-only by design — skip the install-dir preflight
+	// so users without write access (binary in a root-owned dir like
+	// /usr/local/bin) can still query the latest release without sudo.
+	// For the install path, resolve self path and verify the parent dir is
+	// writable before any network I/O so a permission problem fails fast
+	// (saves a 12MB download + SHA256 check) and the error carries a
+	// remediation hint.
+	var selfPath string
+	if !checkOnly {
+		var err error
+		selfPath, err = executablePath()
+		if err != nil {
+			return fmt.Errorf("%w: locate self: %w", clihelpers.ErrFailure, err)
 		}
-		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+		if err = checkInstallDirWritable(selfPath); err != nil {
+			if errors.Is(err, ErrInstallDirReadOnly) {
+				return fmt.Errorf("%w: %w\n%s", clihelpers.ErrFailure, err, installDirHint(selfPath))
+			}
+			return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+		}
 	}
 
 	tctx, cancel := context.WithTimeout(ctx, apiTimeout)

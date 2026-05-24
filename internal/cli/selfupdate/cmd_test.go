@@ -620,6 +620,50 @@ func TestCheckInstallDirWritable_ReadOnlyReturnsSentinel(t *testing.T) {
 	}
 }
 
+// TestRunSelfUpdate_CheckOnlySkipsPreflight pins the contract that
+// `--check-only` is a read-only operation: the install-dir writability
+// preflight must be skipped so users whose binary lives in a root-owned
+// dir (e.g. /usr/local/bin) can still query the latest release without
+// sudo. The test stages a read-only directory, points executablePath at
+// it, and asserts that runSelfUpdate reaches fetchLatest and exits with
+// the "already up to date" no-op rather than ErrInstallDirReadOnly.
+//
+//nolint:paralleltest // mutates the package-level fetchLatest / executablePath seams
+func TestRunSelfUpdate_CheckOnlySkipsPreflight(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses DAC; preflight can't be triggered without dropping privileges")
+	}
+	withSelfUpdateSeams(t)
+	withVersion(t, "1.0.0")
+
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0o555); err != nil {
+		t.Fatalf("chmod dir read-only: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chmod(dir, 0o755); err != nil {
+			t.Logf("chmod cleanup failed (t.TempDir rm may struggle): %v", err)
+		}
+	})
+	target := filepath.Join(dir, "cocoon")
+	executablePath = func() (string, error) {
+		t.Error("executablePath must not be called when --check-only skips the preflight")
+		return target, nil
+	}
+	fetchLatest = func(context.Context, ...release.Option) (*release.Release, error) {
+		return &release.Release{TagName: "v1.0.0"}, nil
+	}
+
+	var stdout bytes.Buffer
+	err := runSelfUpdate(context.Background(), &stdout, &bytes.Buffer{}, true, false)
+	if err != nil {
+		t.Fatalf("err = %v, want nil (--check-only on a read-only install dir must not fail)", err)
+	}
+	if !strings.Contains(stdout.String(), "already up to date") {
+		t.Errorf("stdout = %q, want substring %q", stdout.String(), "already up to date")
+	}
+}
+
 // TestRunSelfUpdate_ReadOnlyInstallDirShortCircuits is the fail-fast
 // contract: when the install dir is read-only, runSelfUpdate must
 // surface ErrInstallDirReadOnly + the remediation hint *before* any

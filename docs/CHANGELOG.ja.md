@@ -15,6 +15,9 @@ cocoon の主要な変更を記録します。フォーマットは
   し、内部の `*.cocoon-update.tmp` パスを露出した `permission denied` のみ
   が表示されていました。エラーメッセージが書込不可ディレクトリを名指しし、
   `sudo <selfPath> self-update` で再実行するよう案内します。
+  `cocoon self-update --check-only` は read-only 操作なのでこの preflight
+  をスキップし、root 所有のインストール先でも sudo なしにバージョン確認
+  ができます。
 
 ## [0.7.6] - 2026-05-24
 

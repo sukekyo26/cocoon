@@ -15,7 +15,9 @@ adheres to [Semantic Versioning](https://semver.org/).
   before failing at the `rename` step with a raw `permission denied` that
   exposed an internal `*.cocoon-update.tmp` path. The error now points at
   the offending directory and tells the user to rerun with
-  `sudo <selfPath> self-update`.
+  `sudo <selfPath> self-update`. `cocoon self-update --check-only` is
+  read-only by design and skips this preflight, so a version check still
+  works without sudo on root-owned install paths.
 
 ## [0.7.6] - 2026-05-24
 
