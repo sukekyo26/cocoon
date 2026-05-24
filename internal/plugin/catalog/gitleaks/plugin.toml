@@ -1,0 +1,15 @@
+[metadata]
+name = "gitleaks"
+description = "Secret scanner for git repositories"
+url = "https://github.com/gitleaks/gitleaks"
+default = false
+
+[install]
+requires_root = true
+default_method = "binary"
+
+[install.methods.binary]
+description = "Single binary extracted from a GitHub Release tarball"
+
+[version]
+version_capable = true
