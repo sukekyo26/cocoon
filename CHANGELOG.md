@@ -6,6 +6,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- New `just` plugin: installs the [just](https://github.com/casey/just) command runner (a modern alternative to make) from the official GitHub Release tarball into `/usr/local/bin/just` with SHA256 verification (`x86_64-unknown-linux-musl` / `aarch64-unknown-linux-musl`). When `just = { pin = "..." }` is omitted from `[plugins.versions]`, the install script resolves the latest stable from `https://github.com/casey/just/releases/latest` (note: just's release tags are bare semver without a `v` prefix, so the URL is `releases/download/<ver>/...`). The plugin is `default = false` — enable it explicitly under `[plugins].enable = [..., "just"]`.
+
 ## [0.7.3] - 2026-05-24
 
 ### Fixed

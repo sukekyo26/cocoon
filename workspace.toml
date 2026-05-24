@@ -118,6 +118,7 @@ enable = [
     "docker-buildx",
     "docker-cli",
     "github-cli",
+    "just",
     "node",
     "shellcheck",
     "shfmt",
