@@ -40,6 +40,23 @@ cocoon の主要な変更を記録します。フォーマットは
   default に silently fallback する事故を防ぎます。`cocoon plugin pin
   <id> --write` は既存行の extra キーを保全し、`pin` / `checksum_*`
   のみ書き換えます。
+- `android-sdk` プラグイン（catalog id `android-sdk`、`archive` メソッド）。
+  Android command-line tools (`sdkmanager`) を
+  `/usr/local/android-sdk` にインストールし、同じ RUN 内で `sdkmanager`
+  を実行して `platform-tools` / `platforms;android-<api_level>` /
+  `build-tools;<build_tools>` を取得します。`ANDROID_HOME` /
+  `ANDROID_SDK_ROOT` を export し、`PATH` の先頭に
+  `cmdline-tools/latest/bin` と `platform-tools` を追加します。
+  apt で OpenJDK 17 (AGP 8.x baseline) も同梱。`pin` は
+  commandline-tools の `BUILD_NUMBER` で必須（Google が安定 manifest
+  を公開していないため latest 解決はしない）。`api_level`（default
+  `35`）と `build_tools`（default `35.0.0`）を `[install.extra_versions]`
+  で公開しているため、catalog に手を加えずに workspace 側で platform /
+  build-tools のバージョンを上書きできます。Linux amd64 / arm64 両対応
+  （ZIP は JVM-only で arch 非依存、同じ SHA を両方に pin します）。
+  Android emulator と `system-images` は初期版のスコープ外です。
+  `flutter` と組み合わせると `flutter doctor` の Android toolchain
+  チェックが緑になります。
 
 ### 変更
 

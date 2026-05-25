@@ -401,6 +401,11 @@ Use these embedded plugins as templates when writing your own:
   (`installer` + `binary`). Read both `install.installer.sh` and
   `install.binary.sh` to see the multi-method `$COCOON_INSTALL_METHOD`
   fail-fast pattern in action.
+- **`android-sdk`** — `archive` method that downloads a ZIP and then
+  drives a follow-up installer (`sdkmanager`) inside the same RUN.
+  Reference for `[install.extra_versions]`: `api_level` and
+  `build_tools` are declared so users can pin platform / build-tools
+  versions independently of the `commandline-tools` `pin`.
 
 ## Troubleshooting
 
