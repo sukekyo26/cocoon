@@ -17,6 +17,14 @@ cocoon の主要な変更を記録します。フォーマットは
   予約 env 名（`PIN`、`CHECKSUM_*`、`RC_FILE`、`RC_SYNTAX`、
   `LOGIN_SHELL`、`COCOON_INSTALL_METHOD`、`USERNAME`）や
   `[install].build_args` の名前と衝突できません。
+  予約キー名（`pin`、`checksum_amd64`、`checksum_arm64`）を
+  `extra_versions` のキーとして宣言することは拒否されます
+  （`[plugins.versions]` が予約フィールドとして消費するため、宣言しても
+  ユーザーが上書きできない no-op になるため）。`default` は必須・非空。
+  プラグイン側 `default` と workspace 側 override のどちらも
+  `"` / `\` / `\n` / `\r` を含む値は拒否されます（値は Dockerfile の
+  RUN 行の `KEY="..."` 環境変数に展開されるため、これらの文字は
+  shell quoting を破壊する）。
 - `workspace.toml` の `[plugins.versions].<id>` インラインテーブルが、
   予約済み 3 キー（`pin` / `checksum_amd64` / `checksum_arm64`）に加えて、
   プラグインが `[install.extra_versions]` で宣言した任意のキーを受け

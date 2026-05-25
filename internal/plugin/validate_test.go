@@ -483,6 +483,62 @@ func TestValidate_ExtraVersionsRejects(t *testing.T) {
 			},
 			wantSnippet: "is also used by extra_versions.",
 		},
+		{
+			name: "default_empty",
+			extras: map[string]plugin.ExtraVersionSpec{
+				"api_level": {Env: "ANDROID_SDK_API_LEVEL", Default: ""},
+			},
+			wantSnippet: "default must not be empty",
+		},
+		{
+			name: "key_reserved_pin",
+			extras: map[string]plugin.ExtraVersionSpec{
+				"pin": {Env: "ANDROID_PIN", Default: "35"},
+			},
+			wantSnippet: `extra_versions key "pin" is reserved`,
+		},
+		{
+			name: "key_reserved_checksum_amd64",
+			extras: map[string]plugin.ExtraVersionSpec{
+				"checksum_amd64": {Env: "ANDROID_CSUM_AMD", Default: "35"},
+			},
+			wantSnippet: `"checksum_amd64" is reserved`,
+		},
+		{
+			name: "key_reserved_checksum_arm64",
+			extras: map[string]plugin.ExtraVersionSpec{
+				"checksum_arm64": {Env: "ANDROID_CSUM_ARM", Default: "35"},
+			},
+			wantSnippet: `"checksum_arm64" is reserved`,
+		},
+		{
+			name: "default_contains_double_quote",
+			extras: map[string]plugin.ExtraVersionSpec{
+				"api_level": {Env: "ANDROID_SDK_API_LEVEL", Default: `36" rm -rf / "`},
+			},
+			wantSnippet: "default contains unsafe character",
+		},
+		{
+			name: "default_contains_backslash",
+			extras: map[string]plugin.ExtraVersionSpec{
+				"api_level": {Env: "ANDROID_SDK_API_LEVEL", Default: `36\nfoo`},
+			},
+			wantSnippet: "default contains unsafe character",
+		},
+		{
+			name: "default_contains_newline",
+			extras: map[string]plugin.ExtraVersionSpec{
+				"api_level": {Env: "ANDROID_SDK_API_LEVEL", Default: "36\nfoo"},
+			},
+			wantSnippet: "default contains unsafe character",
+		},
+		{
+			name: "default_contains_cr",
+			extras: map[string]plugin.ExtraVersionSpec{
+				"api_level": {Env: "ANDROID_SDK_API_LEVEL", Default: "36\rfoo"},
+			},
+			wantSnippet: "default contains unsafe character",
+		},
 	}
 	for _, tc := range cases {
 		tc := tc

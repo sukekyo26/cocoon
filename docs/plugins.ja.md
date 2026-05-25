@@ -326,12 +326,18 @@ build_tools = { env = "ANDROID_SDK_BUILD_TOOLS", default = "35.0.0" }
 
 - **キー名**（`api_level`, `build_tools`）— ユーザーが
   `[plugins.versions].<id>` 内に書く名前。`^[a-z][a-z0-9_]*$` に一致。
+  `pin` / `checksum_amd64` / `checksum_arm64` は `[plugins.versions]`
+  が消費する予約キーなので、extra キーとして宣言すると拒否される
+  （宣言しても上書き不可能な no-op になるため）。
 - **`env`** — install スクリプトが読む環境変数名。`^[A-Z_][A-Z0-9_]*$`、
   予約 env 名（前述）や `[install].build_args` の名前、`extra_versions`
   内の他の `env` と衝突不可。
-- **`default`** — `workspace.toml` で未指定時に使われる値。install
-  スクリプトは env がセットされている前提で書く（`: "${ANDROID_SDK_API_LEVEL:?...}"`
-  などで fail-fast）。
+- **`default`** — 必須・非空。`workspace.toml` で未指定時に使われる値。
+  install スクリプトは env がセットされている前提で書く
+  （`: "${ANDROID_SDK_API_LEVEL:?...}"` などで fail-fast）。
+  `default` も workspace 側の override も `"` / `\` / `\n` / `\r` を
+  含む値は拒否される（値は Dockerfile の RUN プレフィックス
+  `KEY="..."` に展開されるため、これらの文字は shell quoting を破壊する）。
 
 ユーザー側 workspace.toml では既存の `[plugins.versions]` と同じ書き方:
 

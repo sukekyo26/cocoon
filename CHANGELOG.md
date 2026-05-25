@@ -16,7 +16,14 @@ adheres to [Semantic Versioning](https://semver.org/).
   `env` must match `^[A-Z_][A-Z0-9_]*$` and must not collide with
   cocoon-reserved env variables (`PIN`, `CHECKSUM_*`, `RC_FILE`,
   `RC_SYNTAX`, `LOGIN_SHELL`, `COCOON_INSTALL_METHOD`, `USERNAME`)
-  or with any name in `[install].build_args`.
+  or with any name in `[install].build_args`. Reserved keys
+  (`pin`, `checksum_amd64`, `checksum_arm64`) are rejected as
+  `extra_versions` keys (declaring one would be a no-op because the
+  user can never override it via `[plugins.versions]`). `default` is
+  required and non-empty. Both the plugin-side `default` and any
+  workspace-side override are rejected if they contain `"`, `\`,
+  `\n`, or `\r` (the value flows into a `KEY="..."` env pair on the
+  Dockerfile RUN line and those runes would break the shell quoting).
 - `[plugins.versions].<id>` inline tables in `workspace.toml` now
   accept keys beyond the reserved `pin` / `checksum_amd64` /
   `checksum_arm64` triple, provided the named plugin declares them

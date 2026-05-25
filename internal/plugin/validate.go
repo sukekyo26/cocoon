@@ -17,6 +17,22 @@ var (
 	rxExtraVersionKey = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
 )
 
+// reservedExtraVersionKeys lists the [plugins.versions].<id> keys that
+// the workspace loader consumes into dedicated PluginVersionOverride
+// fields (Pin / ChecksumAmd64 / ChecksumArm64). A plugin declaring one
+// of these names under [install.extra_versions] would be a silent no-op:
+// the user can never override the value via [plugins.versions] because
+// the loader routes the matching key into the reserved field, never
+// into Extra. Reject the declaration up front so the plugin author sees
+// the conflict instead of debugging a "default that never moves".
+//
+//nolint:gochecknoglobals // pin-down table for validation.
+var reservedExtraVersionKeys = map[string]struct{}{
+	"pin":            {},
+	"checksum_amd64": {},
+	"checksum_arm64": {},
+}
+
 // reservedExtraVersionEnvs lists env variable names cocoon supplies to
 // every install script. A plugin's [install.extra_versions].<key>.env
 // must not collide with these — otherwise the user-overridable value
@@ -122,34 +138,86 @@ func (i *Install) validateExtraVersions(a *config.Accumulator) {
 	slices.Sort(keys)
 	seenEnv := make(map[string]string, len(keys))
 	for _, k := range keys {
-		spec := i.ExtraVersions[k]
-		if !rxExtraVersionKey.MatchString(k) {
-			a.Add("extra_versions key does not match "+rxExtraVersionKey.String(), "extra_versions", k)
-		}
-		if spec.Env == "" {
-			a.Add("env must not be empty", "extra_versions", k, "env")
-			continue
-		}
-		if !rxBuildArg.MatchString(spec.Env) {
-			a.Add("env does not match "+rxBuildArg.String(), "extra_versions", k, "env")
-			continue
-		}
-		if _, reserved := reservedExtraVersionEnvs[spec.Env]; reserved {
-			a.Add(fmt.Sprintf("env %q collides with a cocoon-reserved variable", spec.Env),
-				"extra_versions", k, "env")
-			continue
-		}
-		if _, conflict := buildArgs[spec.Env]; conflict {
-			a.Add(fmt.Sprintf("env %q collides with an install.build_args entry", spec.Env),
-				"extra_versions", k, "env")
-			continue
-		}
-		if prev, dup := seenEnv[spec.Env]; dup {
-			a.Add(fmt.Sprintf("env %q is also used by extra_versions.%s", spec.Env, prev),
-				"extra_versions", k, "env")
-			continue
-		}
-		seenEnv[spec.Env] = k
+		validateOneExtraVersion(a, k, i.ExtraVersions[k], buildArgs, seenEnv)
+	}
+}
+
+// validateOneExtraVersion runs the per-entry checks: reserved key,
+// key shape, env shape, env-name collisions, then Default shape. Each
+// branch ends on first failure so a single entry produces one error
+// (mirroring how other validate.go branches accumulate).
+func validateOneExtraVersion(
+	a *config.Accumulator,
+	k string,
+	spec ExtraVersionSpec,
+	buildArgs map[string]struct{},
+	seenEnv map[string]string,
+) {
+	if _, reserved := reservedExtraVersionKeys[k]; reserved {
+		a.Add(fmt.Sprintf("extra_versions key %q is reserved by [plugins.versions] "+
+			"(consumed as the dedicated %s field, never as an extra) — pick a different key",
+			k, k), "extra_versions", k)
+		return
+	}
+	if !rxExtraVersionKey.MatchString(k) {
+		a.Add("extra_versions key does not match "+rxExtraVersionKey.String(), "extra_versions", k)
+	}
+	if !checkExtraVersionEnv(a, k, spec.Env, buildArgs, seenEnv) {
+		return
+	}
+	seenEnv[spec.Env] = k
+	checkExtraVersionDefault(a, k, spec.Default)
+}
+
+// checkExtraVersionEnv returns true when env passed every shape /
+// collision check, so the caller can record it in seenEnv. Returns
+// false the moment any failure was recorded.
+func checkExtraVersionEnv(
+	a *config.Accumulator,
+	k, env string,
+	buildArgs map[string]struct{},
+	seenEnv map[string]string,
+) bool {
+	switch {
+	case env == "":
+		a.Add("env must not be empty", "extra_versions", k, "env")
+		return false
+	case !rxBuildArg.MatchString(env):
+		a.Add("env does not match "+rxBuildArg.String(), "extra_versions", k, "env")
+		return false
+	}
+	if _, reserved := reservedExtraVersionEnvs[env]; reserved {
+		a.Add(fmt.Sprintf("env %q collides with a cocoon-reserved variable", env),
+			"extra_versions", k, "env")
+		return false
+	}
+	if _, conflict := buildArgs[env]; conflict {
+		a.Add(fmt.Sprintf("env %q collides with an install.build_args entry", env),
+			"extra_versions", k, "env")
+		return false
+	}
+	if prev, dup := seenEnv[env]; dup {
+		a.Add(fmt.Sprintf("env %q is also used by extra_versions.%s", env, prev),
+			"extra_versions", k, "env")
+		return false
+	}
+	return true
+}
+
+// checkExtraVersionDefault rejects an empty default or one containing
+// runes that would break the Dockerfile RUN-prefix env quoting.
+func checkExtraVersionDefault(a *config.Accumulator, k, def string) {
+	if def == "" {
+		a.Add("default must not be empty (the install script reads the env as required; "+
+			"an empty default would make the build unstable across invocations)",
+			"extra_versions", k, "default")
+		return
+	}
+	if bad, r := config.UnsafeExtraVersionRune(def); bad {
+		a.Add(fmt.Sprintf("default contains unsafe character %q "+
+			`(the value flows into the Dockerfile RUN prefix's KEY="..." env pair; `+
+			`a bare ", \, \n, or \r would break the shell quoting)`, r),
+			"extra_versions", k, "default")
 	}
 }
 

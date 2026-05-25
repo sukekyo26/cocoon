@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"slices"
 
 	"github.com/pelletier/go-toml/v2"
 )
@@ -38,45 +39,75 @@ func LoadWorkspace(path string) (*Workspace, error) {
 // PluginsSpec.Versions map. Reserved keys (pin / checksum_amd64 /
 // checksum_arm64) populate the dedicated fields; any remaining keys go
 // into Extra so a plugin's [install.extra_versions] can pick them up at
-// generation time. Non-string values produce a *ValidationError.
+// generation time. Non-string values and extra-keys carrying shell-unsafe
+// runes ('"', '\\', '\n', '\r') produce a *ValidationError. Plugin ids and
+// per-entry keys are iterated in sorted order so the FieldError sequence
+// (and hence the "first error" summary) is deterministic across runs.
 func materializePluginVersions(path string, ws *Workspace) error {
 	if len(ws.Plugins.VersionsRaw) == 0 {
 		return nil
 	}
 	out := make(map[string]PluginVersionOverride, len(ws.Plugins.VersionsRaw))
 	a := NewAccumulator()
-	for id, raw := range ws.Plugins.VersionsRaw {
-		entry := PluginVersionOverride{} //nolint:exhaustruct // filled below
-		for k, v := range raw {
-			s, ok := v.(string)
-			if !ok {
-				a.Add(fmt.Sprintf("value for %q must be a string, got %T", k, v),
-					"plugins", "versions", id, k)
-				continue
-			}
-			switch k {
-			case "pin":
-				entry.Pin = s
-			case "checksum_amd64":
-				cs := s
-				entry.ChecksumAmd64 = &cs
-			case "checksum_arm64":
-				cs := s
-				entry.ChecksumArm64 = &cs
-			default:
-				if entry.Extra == nil {
-					entry.Extra = make(map[string]string)
-				}
-				entry.Extra[k] = s
-			}
-		}
-		out[id] = entry
+	ids := make([]string, 0, len(ws.Plugins.VersionsRaw))
+	for id := range ws.Plugins.VersionsRaw {
+		ids = append(ids, id)
+	}
+	slices.Sort(ids)
+	for _, id := range ids {
+		out[id] = materializeOneOverride(a, id, ws.Plugins.VersionsRaw[id])
 	}
 	if errs := a.Errors(); len(errs) > 0 {
 		return &ValidationError{Path: path, Errors: errs}
 	}
 	ws.Plugins.Versions = out
 	return nil
+}
+
+// materializeOneOverride pulls the per-plugin loop body out of
+// materializePluginVersions so the outer fn stays under the gocognit
+// threshold. Errors accumulate on a; the returned override is always
+// safe to store even on partial failure (later validation surfaces the
+// accumulated errors).
+func materializeOneOverride(a *Accumulator, id string, raw map[string]any) PluginVersionOverride {
+	entry := PluginVersionOverride{} //nolint:exhaustruct // filled below
+	keys := make([]string, 0, len(raw))
+	for k := range raw {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+	for _, k := range keys {
+		v := raw[k]
+		s, ok := v.(string)
+		if !ok {
+			a.Add(fmt.Sprintf("value for %q must be a string, got %T", k, v),
+				"plugins", "versions", id, k)
+			continue
+		}
+		switch k {
+		case "pin":
+			entry.Pin = s
+		case "checksum_amd64":
+			cs := s
+			entry.ChecksumAmd64 = &cs
+		case "checksum_arm64":
+			cs := s
+			entry.ChecksumArm64 = &cs
+		default:
+			if bad, r := UnsafeExtraVersionRune(s); bad {
+				a.Add(fmt.Sprintf("value contains unsafe character %q "+
+					`(the value flows into the Dockerfile RUN prefix's KEY="..." env pair; `+
+					`a bare ", \, \n, or \r would break the shell quoting)`, r),
+					"plugins", "versions", id, k)
+				continue
+			}
+			if entry.Extra == nil {
+				entry.Extra = make(map[string]string)
+			}
+			entry.Extra[k] = s
+		}
+	}
+	return entry
 }
 
 // StrictUnmarshal decodes data into v with DisallowUnknownFields enabled. The

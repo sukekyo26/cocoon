@@ -345,15 +345,22 @@ build_tools = { env = "ANDROID_SDK_BUILD_TOOLS", default = "35.0.0" }
 ```
 
 - **Key** (`api_level`, `build_tools`) — what the user writes in
-  `[plugins.versions].<id>`. Matches `^[a-z][a-z0-9_]*$`.
+  `[plugins.versions].<id>`. Matches `^[a-z][a-z0-9_]*$`. `pin`,
+  `checksum_amd64`, and `checksum_arm64` are reserved by
+  `[plugins.versions]` and are rejected as extra keys (declaring them
+  would be a no-op — the user could never override the value).
 - **`env`** — the env name the install script reads. Matches
   `^[A-Z_][A-Z0-9_]*$`, must not collide with the reserved env
   variables above, with any name in `[install].build_args`, or with
   another declared `env` inside `extra_versions`.
-- **`default`** — used when `workspace.toml` does not override the key.
-  The install script should treat the env as required (e.g.
-  `: "${ANDROID_SDK_API_LEVEL:?...}"`) so a misconfigured generator
-  fails fast instead of producing a half-installed SDK.
+- **`default`** — required, non-empty. Used when `workspace.toml` does
+  not override the key. The install script should treat the env as
+  required (e.g. `: "${ANDROID_SDK_API_LEVEL:?...}"`) so a misconfigured
+  generator fails fast instead of producing a half-installed SDK. Both
+  the `default` and any workspace override are rejected if they contain
+  `"`, `\`, `\n`, or `\r` (the value is interpolated into the Dockerfile
+  RUN-prefix `KEY="..."` env pair, so those runes would break the shell
+  quoting).
 
 End-user override looks like any other `[plugins.versions]` entry:
 

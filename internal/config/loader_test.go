@@ -102,8 +102,8 @@ func TestValidationError_LocStringEmpty(t *testing.T) {
 // declaring api_level / build_tools under [install.extra_versions]
 // could not surface the workspace override into the install script.
 //
-// Three input shapes covered: pin only (Extra nil), pin + extras, and
-// inline-table values with quoted keys.
+// Four input shapes covered: pin only (Extra nil), pin + extras, pin +
+// checksum + extras, and a quoted bare-key form ("api_level" = "36").
 func TestLoadWorkspace_PluginVersionsExtra(t *testing.T) {
 	t.Parallel()
 
@@ -130,6 +130,12 @@ func TestLoadWorkspace_PluginVersionsExtra(t *testing.T) {
 			versionLine: `android-sdk = { pin = "14742923", checksum_amd64 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", api_level = "35" }`,
 			wantPin:     "14742923",
 			wantExtra:   map[string]string{"api_level": "35"},
+		},
+		{
+			name:        "quoted_keys",
+			versionLine: `android-sdk = { "pin" = "14742923", "api_level" = "36" }`,
+			wantPin:     "14742923",
+			wantExtra:   map[string]string{"api_level": "36"},
 		},
 	}
 	for _, tc := range cases {
@@ -188,4 +194,48 @@ android-sdk = { pin = "14742923", api_level = 36 }
 	_, err := config.LoadWorkspace(tmp)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "must be a string")
+}
+
+// TestLoadWorkspace_PluginVersionsExtraUnsafeValue covers the rune
+// classes UnsafeExtraVersionRune rejects on a workspace override value.
+// A bare ", \, \n, or \r would break the Dockerfile RUN-prefix
+// `KEY="..."` env pair the value is later embedded into, so they have
+// to be rejected at decode time (well before docker build).
+func TestLoadWorkspace_PluginVersionsExtraUnsafeValue(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name      string
+		extraExpr string
+	}{
+		// TOML basic strings forbid raw control chars but accept escapes;
+		// \" / \\ / \n / \r all decode to the literal rune the validator rejects.
+		{"double_quote", `api_level = "36\" rm -rf / \""`},
+		{"backslash", `api_level = "36\\nfoo"`},
+		{"newline", `api_level = "36\nfoo"`},
+		{"carriage_return", `api_level = "36\rfoo"`},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			body := `
+[container]
+service_name = "dev"
+username = "developer"
+image = "ubuntu"
+image_version = "24.04"
+
+[plugins]
+enable = []
+
+[plugins.versions]
+android-sdk = { pin = "14742923", ` + tc.extraExpr + ` }
+`
+			tmp := t.TempDir() + "/ws.toml"
+			require.NoError(t, os.WriteFile(tmp, []byte(body), 0o600))
+			_, err := config.LoadWorkspace(tmp)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "value contains unsafe character")
+		})
+	}
 }
