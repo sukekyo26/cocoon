@@ -143,9 +143,21 @@ func (i *Install) validateExtraVersions(a *config.Accumulator) {
 }
 
 // validateOneExtraVersion runs the per-entry checks: reserved key,
-// key shape, env shape, env-name collisions, then Default shape. Each
-// branch ends on first failure so a single entry produces one error
-// (mirroring how other validate.go branches accumulate).
+// key shape, env shape, env-name collisions, then Default shape. The
+// branches are layered, not fully short-circuiting:
+//
+//   - A reserved key (pin / checksum_*) returns immediately — no point
+//     reporting downstream env/default issues for a name that can never
+//     be used.
+//   - The key-shape regex check is independent of the env-group checks:
+//     a bad key shape records one error and validation continues into
+//     the env checks, so a single entry can produce one key-shape error
+//     plus one env-group error.
+//   - Inside the env group (empty / shape / reserved env / build_args
+//     collision / duplicate env) the checks short-circuit on first
+//     failure so the user sees one actionable error per env field.
+//   - Default checks run only when the env group passed; otherwise the
+//     env failure is the actionable one to surface first.
 func validateOneExtraVersion(
 	a *config.Accumulator,
 	k string,
@@ -216,7 +228,8 @@ func checkExtraVersionDefault(a *config.Accumulator, k, def string) {
 	if bad, r := config.UnsafeExtraVersionRune(def); bad {
 		a.Add(fmt.Sprintf("default contains unsafe character %q "+
 			`(the value flows into the Dockerfile RUN prefix's KEY="..." env pair; `+
-			`a bare ", \, \n, or \r would break the shell quoting)`, r),
+			"a bare \", \\, \\n, \\r, $, or backtick would break the shell quoting "+
+			"or trigger parameter/command substitution)", r),
 			"extra_versions", k, "default")
 	}
 }

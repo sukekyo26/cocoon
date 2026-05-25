@@ -558,12 +558,22 @@ func containsWhitespaceOrCtrl(s string) bool {
 	return false
 }
 
-// UnsafeExtraVersionRune reports the first rune in s that would break the
-// generated Dockerfile RUN-prefix `KEY="..."` env pair if the value were
-// interpolated verbatim. A bare `"` would close the env value early and
-// turn the rest into garbage tokens; `\` is the shell's escape character
-// inside double quotes; `\n` / `\r` terminate the RUN line. Returns
-// (false, 0) when the value is safe to embed.
+// UnsafeExtraVersionRune reports the first rune in s that would break or
+// alter the generated Dockerfile RUN-prefix `KEY="..."` env pair if the
+// value were interpolated verbatim:
+//
+//   - `"` would close the env value early and turn the rest into
+//     garbage tokens.
+//   - `\` is the shell's escape character inside double quotes.
+//   - `\n` / `\r` terminate the RUN line.
+//   - `$` triggers parameter / command substitution
+//     (`$VAR`, `${VAR}`, `$(...)`), which would silently change the
+//     value seen by the install script (or execute commands at build
+//     time) instead of passing the literal version string through.
+//   - backtick triggers legacy command substitution with the same
+//     concern.
+//
+// Returns (false, 0) when the value is safe to embed.
 //
 // Both the plugin-author-side default (plugin.toml's
 // [install.extra_versions].<key>.default) and the user-side override
@@ -573,7 +583,7 @@ func containsWhitespaceOrCtrl(s string) bool {
 func UnsafeExtraVersionRune(s string) (bool, rune) {
 	for _, r := range s {
 		switch r {
-		case '"', '\\', '\n', '\r':
+		case '"', '\\', '\n', '\r', '$', '`':
 			return true, r
 		}
 	}

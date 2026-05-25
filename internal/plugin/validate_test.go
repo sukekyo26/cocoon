@@ -539,6 +539,27 @@ func TestValidate_ExtraVersionsRejects(t *testing.T) {
 			},
 			wantSnippet: "default contains unsafe character",
 		},
+		{
+			name: "default_contains_dollar",
+			extras: map[string]plugin.ExtraVersionSpec{
+				"api_level": {Env: "ANDROID_SDK_API_LEVEL", Default: "$HOME/sdk"},
+			},
+			wantSnippet: "default contains unsafe character",
+		},
+		{
+			name: "default_contains_command_substitution",
+			extras: map[string]plugin.ExtraVersionSpec{
+				"api_level": {Env: "ANDROID_SDK_API_LEVEL", Default: "$(date)"},
+			},
+			wantSnippet: "default contains unsafe character",
+		},
+		{
+			name: "default_contains_backtick",
+			extras: map[string]plugin.ExtraVersionSpec{
+				"api_level": {Env: "ANDROID_SDK_API_LEVEL", Default: "`whoami`"},
+			},
+			wantSnippet: "default contains unsafe character",
+		},
 	}
 	for _, tc := range cases {
 		tc := tc

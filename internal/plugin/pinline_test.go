@@ -103,3 +103,54 @@ func TestFormatPinLineWithExtras_QuotedValues(t *testing.T) {
 		t.Errorf("got:\n%s\nwant:\n%s", got, want)
 	}
 }
+
+// TestFormatPinLineWithExtras_SkipsInvalidBareKeys pins that a key that
+// cannot be emitted as a TOML bare key (contains '.', whitespace,
+// uppercase letters, etc.) is dropped instead of being interpolated raw
+// — the latter would produce invalid TOML on round-trip via the
+// mutator (parseInlineTableExtras tolerates quoted keys on input but
+// FormatPinLineWithExtras emits bare keys on output).
+func TestFormatPinLineWithExtras_SkipsInvalidBareKeys(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name   string
+		extras map[string]string
+		want   string
+	}{
+		{
+			name:   "key_with_dot",
+			extras: map[string]string{"weird.key": "v", "api_level": "35"},
+			want:   "x = { pin = \"1.0\", api_level = \"35\" }\n",
+		},
+		{
+			name:   "key_with_space",
+			extras: map[string]string{"weird key": "v", "api_level": "35"},
+			want:   "x = { pin = \"1.0\", api_level = \"35\" }\n",
+		},
+		{
+			name:   "key_uppercase",
+			extras: map[string]string{"API_LEVEL": "v", "api_level": "35"},
+			want:   "x = { pin = \"1.0\", api_level = \"35\" }\n",
+		},
+		{
+			name:   "key_starts_with_digit",
+			extras: map[string]string{"1bad": "v", "api_level": "35"},
+			want:   "x = { pin = \"1.0\", api_level = \"35\" }\n",
+		},
+		{
+			name:   "all_invalid",
+			extras: map[string]string{"weird.key": "v"},
+			want:   "x = { pin = \"1.0\" }\n",
+		},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := plugin.FormatPinLineWithExtras("x", "1.0", "", "", tc.extras)
+			if got != tc.want {
+				t.Errorf("got:\n%s\nwant:\n%s", got, tc.want)
+			}
+		})
+	}
+}

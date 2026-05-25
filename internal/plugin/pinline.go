@@ -22,6 +22,15 @@ func FormatPinLine(id, ref, amd64Checksum, arm64Checksum string) string {
 // emitted in sorted key order so the output is stable across calls.
 // Passing a nil/empty extras map reproduces FormatPinLine's output
 // byte-for-byte.
+//
+// Keys are emitted unquoted as TOML bare keys, so any key that does not
+// match rxExtraVersionKey (^[a-z][a-z0-9_]*$) is skipped — emitting it
+// raw would produce invalid TOML. The caller upstream of this function
+// (validation on plugin.toml decode, plus rxExtraVersionKey enforcement
+// in validateExtraVersions) is what actually rejects bad keys; this
+// filter is a belt-and-suspenders guard for the mutator path where
+// extras come from parsing an existing workspace.toml line and could
+// legally carry TOML quoted-keys like "weird.key".
 func FormatPinLineWithExtras(id, ref, amd64Checksum, arm64Checksum string, extras map[string]string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s = { pin = %q", id, ref)
@@ -34,6 +43,9 @@ func FormatPinLineWithExtras(id, ref, amd64Checksum, arm64Checksum string, extra
 	if len(extras) > 0 {
 		keys := make([]string, 0, len(extras))
 		for k := range extras {
+			if !rxExtraVersionKey.MatchString(k) {
+				continue
+			}
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)

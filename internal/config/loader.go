@@ -97,7 +97,8 @@ func materializeOneOverride(a *Accumulator, id string, raw map[string]any) Plugi
 			if bad, r := UnsafeExtraVersionRune(s); bad {
 				a.Add(fmt.Sprintf("value contains unsafe character %q "+
 					`(the value flows into the Dockerfile RUN prefix's KEY="..." env pair; `+
-					`a bare ", \, \n, or \r would break the shell quoting)`, r),
+					"a bare \", \\, \\n, \\r, $, or backtick would break the shell quoting "+
+					"or trigger parameter/command substitution)", r),
 					"plugins", "versions", id, k)
 				continue
 			}

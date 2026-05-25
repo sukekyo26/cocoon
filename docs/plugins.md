@@ -358,9 +358,11 @@ build_tools = { env = "ANDROID_SDK_BUILD_TOOLS", default = "35.0.0" }
   required (e.g. `: "${ANDROID_SDK_API_LEVEL:?...}"`) so a misconfigured
   generator fails fast instead of producing a half-installed SDK. Both
   the `default` and any workspace override are rejected if they contain
-  `"`, `\`, `\n`, or `\r` (the value is interpolated into the Dockerfile
-  RUN-prefix `KEY="..."` env pair, so those runes would break the shell
-  quoting).
+  `"`, `\`, `\n`, `\r`, `$`, or backtick: the value is interpolated
+  into the Dockerfile RUN-prefix `KEY="..."` env pair, where the first
+  four runes would break the shell quoting and `$` / backtick would
+  trigger parameter or command substitution at build time instead of
+  passing through as a literal version string.
 
 End-user override looks like any other `[plugins.versions]` entry:
 

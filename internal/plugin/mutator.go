@@ -85,7 +85,10 @@ func upsertPinLineBytes(input []byte, id, ref, amd64Sum, arm64Sum string) ([]byt
 	}
 	// pin / checksum_* are rewritten from the dedicated arguments; any other
 	// inline-table keys the user already had (declared by the plugin via
-	// [install.extra_versions]) must be preserved verbatim.
+	// [install.extra_versions]) are carried through so --write does not
+	// drop them. Formatting is not preserved byte-for-byte: extras are
+	// re-emitted by FormatPinLineWithExtras in sorted key order with
+	// %q-quoted values, which normalises spacing and quoting style.
 	extras := extractExistingPinExtras(lines, "plugins.versions", id)
 	newLine := strings.TrimSuffix(FormatPinLineWithExtras(id, ref, amd64Sum, arm64Sum, extras), "\n")
 	updated := upsertIDLineInSection(lines, "plugins.versions", id, newLine)

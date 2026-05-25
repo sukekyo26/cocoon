@@ -22,8 +22,11 @@ adheres to [Semantic Versioning](https://semver.org/).
   user can never override it via `[plugins.versions]`). `default` is
   required and non-empty. Both the plugin-side `default` and any
   workspace-side override are rejected if they contain `"`, `\`,
-  `\n`, or `\r` (the value flows into a `KEY="..."` env pair on the
-  Dockerfile RUN line and those runes would break the shell quoting).
+  `\n`, `\r`, `$`, or backtick: the value flows into a `KEY="..."`
+  env pair on the Dockerfile RUN line, where the first four runes
+  would break the shell quoting and `$` / backtick would trigger
+  parameter or command substitution at build time instead of passing
+  through as a literal version string.
 - `[plugins.versions].<id>` inline tables in `workspace.toml` now
   accept keys beyond the reserved `pin` / `checksum_amd64` /
   `checksum_arm64` triple, provided the named plugin declares them

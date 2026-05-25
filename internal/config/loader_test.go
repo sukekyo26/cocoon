@@ -213,6 +213,12 @@ func TestLoadWorkspace_PluginVersionsExtraUnsafeValue(t *testing.T) {
 		{"backslash", `api_level = "36\\nfoo"`},
 		{"newline", `api_level = "36\nfoo"`},
 		{"carriage_return", `api_level = "36\rfoo"`},
+		// $ and backtick trigger shell parameter / command substitution
+		// inside the generated Dockerfile RUN-prefix KEY="..." pair —
+		// rejected for the same fail-fast reason as the runes above.
+		{"dollar", `api_level = "$HOME/sdk"`},
+		{"command_substitution", `api_level = "$(date)"`},
+		{"backtick", "api_level = \"`whoami`\""},
 	}
 	for _, tc := range cases {
 		tc := tc

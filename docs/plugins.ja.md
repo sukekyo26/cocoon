@@ -335,9 +335,11 @@ build_tools = { env = "ANDROID_SDK_BUILD_TOOLS", default = "35.0.0" }
 - **`default`** — 必須・非空。`workspace.toml` で未指定時に使われる値。
   install スクリプトは env がセットされている前提で書く
   （`: "${ANDROID_SDK_API_LEVEL:?...}"` などで fail-fast）。
-  `default` も workspace 側の override も `"` / `\` / `\n` / `\r` を
-  含む値は拒否される（値は Dockerfile の RUN プレフィックス
-  `KEY="..."` に展開されるため、これらの文字は shell quoting を破壊する）。
+  `default` も workspace 側の override も `"` / `\` / `\n` / `\r` /
+  `$` / backtick を含む値は拒否される（値は Dockerfile の RUN
+  プレフィックス `KEY="..."` に展開されるため、前 4 文字は shell
+  quoting を破壊し、`$` / backtick は parameter / command substitution
+  を引き起こしてリテラルなバージョン文字列として渡らなくなる）。
 
 ユーザー側 workspace.toml では既存の `[plugins.versions]` と同じ書き方:
 
