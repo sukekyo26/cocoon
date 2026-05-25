@@ -305,17 +305,30 @@ type Resources struct {
 // user-selected install method name (a key in that plugin's
 // [install.methods] section); absent entries fall back to the plugin's
 // default_method.
+//
+// VersionsRaw is the TOML-decoded shape of [plugins.versions]; it carries
+// any extra inline-table keys (declared by plugins via
+// [install.extra_versions]) past the strict unmarshal gate. LoadWorkspace
+// post-processes VersionsRaw into the typed Versions map so callers can
+// keep working with PluginVersionOverride. Test code that bypasses
+// LoadWorkspace must populate Versions directly.
 type PluginsSpec struct {
-	Enable   []string                         `toml:"enable"`
-	Versions map[string]PluginVersionOverride `toml:"versions,omitempty"`
-	Methods  map[string]string                `toml:"methods,omitempty"`
+	Enable      []string                         `toml:"enable"`
+	VersionsRaw map[string]map[string]any        `toml:"versions,omitempty"`
+	Methods     map[string]string                `toml:"methods,omitempty"`
+	Versions    map[string]PluginVersionOverride `toml:"-"`
 }
 
-// PluginVersionOverride models one entry under [plugins.versions].
+// PluginVersionOverride models one entry under [plugins.versions]. Pin /
+// ChecksumAmd64 / ChecksumArm64 are the three reserved keys cocoon has
+// always supported; Extra carries any additional inline-table keys a
+// plugin opts into via [install.extra_versions] (e.g. Android SDK's
+// api_level / build_tools). Extra is nil when no extra keys are set.
 type PluginVersionOverride struct {
-	Pin           string  `toml:"pin"`
-	ChecksumAmd64 *string `toml:"checksum_amd64,omitempty"`
-	ChecksumArm64 *string `toml:"checksum_arm64,omitempty"`
+	Pin           string
+	ChecksumAmd64 *string
+	ChecksumArm64 *string
+	Extra         map[string]string
 }
 
 // PortsSpec models [ports]. Each Forward entry is either a docker-compose

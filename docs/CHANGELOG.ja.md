@@ -6,6 +6,41 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+### 追加
+
+- `plugin.toml` に新しい `[install.extra_versions]` セクションを追加。
+  プラグインがサブコンポーネントのバージョンを「ユーザーが上書き可能な
+  つまみ」として公開できます。各エントリは
+  「キー名（`[plugins.versions].<id>` に書く名前）」「`env`（install
+  スクリプトに渡る環境変数名）」「`default`（workspace.toml で未指定時
+  の値）」を宣言します。`env` は `^[A-Z_][A-Z0-9_]*$` に一致し、cocoon
+  予約 env 名（`PIN`、`CHECKSUM_*`、`RC_FILE`、`RC_SYNTAX`、
+  `LOGIN_SHELL`、`COCOON_INSTALL_METHOD`、`USERNAME`）や
+  `[install].build_args` の名前と衝突できません。
+  プラグインの `[install].build_args` エントリ自体も同じ予約 env
+  集合と衝突する名前は拒否されるようになりました — `build_args`
+  ペアは framework value の後に RUN env プレフィックスへ追加される
+  ため、衝突すると silent shadow が起きるため。
+  予約キー名（`pin`、`checksum_amd64`、`checksum_arm64`）を
+  `extra_versions` のキーとして宣言することは拒否されます
+  （`[plugins.versions]` が予約フィールドとして消費するため、宣言しても
+  ユーザーが上書きできない no-op になるため）。`default` は必須・非空。
+  プラグイン側 `default` と workspace 側 override のどちらも
+  `"` / `\` / `\n` / `\r` / `$` / backtick を含む値は拒否されます
+  （値は Dockerfile の RUN 行の `KEY="..."` 環境変数に展開される
+  ため、前 4 文字は shell quoting を破壊し、`$` / backtick は
+  parameter / command substitution を引き起こしてリテラルな
+  バージョン文字列として渡らなくなる）。
+- `workspace.toml` の `[plugins.versions].<id>` インラインテーブルが、
+  予約済み 3 キー（`pin` / `checksum_amd64` / `checksum_arm64`）に加えて、
+  プラグインが `[install.extra_versions]` で宣言した任意のキーを受け
+  入れるようになりました。例:
+  `android-sdk = { pin = "14742923", api_level = "36", build_tools = "36.0.0" }`。
+  未宣言キー（typo や削除済み宣言）は `cocoon gen` が拒否するため、
+  default に silently fallback する事故を防ぎます。`cocoon plugin pin
+  <id> --write` は既存行の extra キーを保全し、`pin` / `checksum_*`
+  のみ書き換えます。
+
 ### 変更
 
 - `cocoon self-update` がインストール先ディレクトリに現ユーザーの書込権限が

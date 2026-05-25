@@ -455,6 +455,72 @@ pin = "1.0.46"
 	}
 }
 
+// TestUpsertPinLinePreservesExtras pins the regression contract: when
+// the existing inline-table line carries extra keys declared by the
+// plugin via [install.extra_versions] (e.g. android-sdk's api_level /
+// build_tools), `pin --write` rewrites pin / checksum_* in place
+// without dropping those extras. Without this guard the user's
+// subcomponent versions silently vanish on every pin bump.
+func TestUpsertPinLinePreservesExtras(t *testing.T) {
+	t.Parallel()
+	body := `[plugins]
+enable = ["android-sdk"]
+
+[plugins.versions]
+android-sdk = { pin = "14742923", api_level = "35", build_tools = "35.0.0" }
+`
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "ws.toml")
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if err := plugin.UpsertPinLine(path, "android-sdk", "14999999",
+		"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", ""); err != nil {
+		t.Fatalf("UpsertPinLine: %v", err)
+	}
+	got, rerr := os.ReadFile(path) //nolint:gosec // tmp path
+	if rerr != nil {
+		t.Fatalf("read after upsert: %v", rerr)
+	}
+	want := `[plugins]
+enable = ["android-sdk"]
+
+[plugins.versions]
+android-sdk = { pin = "14999999", checksum_amd64 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", api_level = "35", build_tools = "35.0.0" }
+`
+	if string(got) != want {
+		t.Errorf("extras were not preserved:\n--- got ---\n%s\n--- want ---\n%s", got, want)
+	}
+}
+
+// TestUpsertPinLineNoExtrasUnchanged is the regression mirror: a line
+// without extras must not gain extras after rewrite (the parse-and-
+// re-emit path can't fabricate keys it didn't see).
+func TestUpsertPinLineNoExtrasUnchanged(t *testing.T) {
+	t.Parallel()
+	body := `[plugins.versions]
+go = { pin = "1.22.5" }
+`
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "ws.toml")
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if err := plugin.UpsertPinLine(path, "go", "1.23.4", "", ""); err != nil {
+		t.Fatalf("UpsertPinLine: %v", err)
+	}
+	got, rerr := os.ReadFile(path) //nolint:gosec // tmp path
+	if rerr != nil {
+		t.Fatalf("read: %v", rerr)
+	}
+	want := `[plugins.versions]
+go = { pin = "1.23.4" }
+`
+	if string(got) != want {
+		t.Errorf("got:\n%s\nwant:\n%s", got, want)
+	}
+}
+
 // Legacy `[plugins.versions.<id>]` subsection blocks (cocoon's previous
 // emission form) collide with the new inline-table layout. The mutator
 // must refuse so the user explicitly migrates the file.
