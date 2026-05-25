@@ -16,7 +16,11 @@ adheres to [Semantic Versioning](https://semver.org/).
   `env` must match `^[A-Z_][A-Z0-9_]*$` and must not collide with
   cocoon-reserved env variables (`PIN`, `CHECKSUM_*`, `RC_FILE`,
   `RC_SYNTAX`, `LOGIN_SHELL`, `COCOON_INSTALL_METHOD`, `USERNAME`)
-  or with any name in `[install].build_args`. Reserved keys
+  or with any name in `[install].build_args`. Plugin `[install].build_args`
+  entries themselves are now rejected when they collide with the
+  same reserved env set: the `build_args` pair is appended to the
+  RUN env prefix after the framework values and would silently
+  shadow them. Reserved keys
   (`pin`, `checksum_amd64`, `checksum_arm64`) are rejected as
   `extra_versions` keys (declaring one would be a no-op because the
   user can never override it via `[plugins.versions]`). `default` is

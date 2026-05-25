@@ -17,6 +17,10 @@ cocoon の主要な変更を記録します。フォーマットは
   予約 env 名（`PIN`、`CHECKSUM_*`、`RC_FILE`、`RC_SYNTAX`、
   `LOGIN_SHELL`、`COCOON_INSTALL_METHOD`、`USERNAME`）や
   `[install].build_args` の名前と衝突できません。
+  プラグインの `[install].build_args` エントリ自体も同じ予約 env
+  集合と衝突する名前は拒否されるようになりました — `build_args`
+  ペアは framework value の後に RUN env プレフィックスへ追加される
+  ため、衝突すると silent shadow が起きるため。
   予約キー名（`pin`、`checksum_amd64`、`checksum_arm64`）を
   `extra_versions` のキーとして宣言することは拒否されます
   （`[plugins.versions]` が予約フィールドとして消費するため、宣言しても

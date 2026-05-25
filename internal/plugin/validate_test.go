@@ -51,6 +51,49 @@ version_capable = false
 	require.Contains(t, err.Error(), "duplicate")
 }
 
+// TestValidate_BuildArgsRejectsReservedEnv covers the cases where a
+// plugin would silently shadow a framework-provided env variable by
+// declaring its name in install.build_args. Every entry of
+// reservedExtraVersionEnvs is exercised so adding a new reserved name
+// to that set automatically gets caught by this test if the validator
+// drift away.
+func TestValidate_BuildArgsRejectsReservedEnv(t *testing.T) {
+	t.Parallel()
+	cases := []string{
+		"PIN",
+		"CHECKSUM_AMD64",
+		"CHECKSUM_ARM64",
+		"RC_FILE",
+		"RC_SYNTAX",
+		"LOGIN_SHELL",
+		"COCOON_INSTALL_METHOD",
+		"USERNAME",
+	}
+	for _, name := range cases {
+		name := name
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			tmp := t.TempDir() + "/plugin.toml"
+			body := `
+[metadata]
+name = "x"
+description = "y"
+url = "https://example.com/x"
+default = false
+[install]
+requires_root = false
+build_args = ["` + name + `"]
+[version]
+version_capable = false
+`
+			require.NoError(t, os.WriteFile(tmp, []byte(body), 0o600))
+			_, err := plugin.Load(tmp)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "collides with a cocoon-reserved variable")
+		})
+	}
+}
+
 func TestValidate_InstallEnvKey(t *testing.T) {
 	t.Parallel()
 	tmp := t.TempDir() + "/plugin.toml"

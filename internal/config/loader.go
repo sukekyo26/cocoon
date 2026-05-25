@@ -39,10 +39,14 @@ func LoadWorkspace(path string) (*Workspace, error) {
 // PluginsSpec.Versions map. Reserved keys (pin / checksum_amd64 /
 // checksum_arm64) populate the dedicated fields; any remaining keys go
 // into Extra so a plugin's [install.extra_versions] can pick them up at
-// generation time. Non-string values and extra-keys carrying shell-unsafe
-// runes ('"', '\\', '\n', '\r') produce a *ValidationError. Plugin ids and
-// per-entry keys are iterated in sorted order so the FieldError sequence
-// (and hence the "first error" summary) is deterministic across runs.
+// generation time. Non-string values and extra-key values containing
+// any rune in UnsafeExtraVersionRune's reject set
+// ('"', '\\', '\n', '\r', '$', '`') produce a *ValidationError — see
+// UnsafeExtraVersionRune's doc for the rationale (Dockerfile RUN-prefix
+// shell-quoting / parameter / command-substitution hazards). Plugin
+// ids and per-entry keys are iterated in sorted order so the
+// FieldError sequence (and hence the "first error" summary) is
+// deterministic across runs.
 func materializePluginVersions(path string, ws *Workspace) error {
 	if len(ws.Plugins.VersionsRaw) == 0 {
 		return nil

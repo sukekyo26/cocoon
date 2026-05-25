@@ -35,10 +35,22 @@ var reservedExtraVersionKeys = map[string]struct{}{
 
 // reservedExtraVersionEnvs lists env variable names cocoon supplies to
 // every install script. A plugin's [install.extra_versions].<key>.env
-// must not collide with these — otherwise the user-overridable value
-// would silently shadow (or be shadowed by) the framework-provided
-// value, with no fail-fast at decode time. Kept in sync with
-// internal/generate/dockerfile/plugins.go's buildInstallEnvPairs.
+// — and any name in [install].build_args — must not collide with
+// these: otherwise the user-overridable value would silently shadow
+// (or be shadowed by) the framework-provided value, with no fail-fast
+// at decode time.
+//
+// The set has two sources cocoon must keep in lockstep:
+//
+//   - Per-RUN env injected by buildInstallEnvPairs in
+//     internal/generate/dockerfile/plugins.go: PIN, CHECKSUM_AMD64,
+//     CHECKSUM_ARM64, RC_FILE, RC_SYNTAX, LOGIN_SHELL,
+//     COCOON_INSTALL_METHOD.
+//   - Image-wide ARG/ENV emitted by the Dockerfile generator outside
+//     buildInstallEnvPairs: USERNAME. It is still off-limits because
+//     a colliding extra_versions.env / build_args entry would create
+//     `USERNAME="${USERNAME}"` in the RUN prefix and reduce to a
+//     redundant no-op (or, worse, mislead readers about its source).
 //
 //nolint:gochecknoglobals // pin-down table for validation.
 var reservedExtraVersionEnvs = map[string]struct{}{
@@ -108,6 +120,18 @@ func (i *Install) validate(a *config.Accumulator) {
 	for idx, b := range i.BuildArgs {
 		if !rxBuildArg.MatchString(b) {
 			a.Add("build_arg does not match "+rxBuildArg.String(), "build_args", fmt.Sprintf("%d", idx))
+			continue
+		}
+		if _, reserved := reservedExtraVersionEnvs[b]; reserved {
+			// install.build_args entries are appended to the RUN env prefix
+			// as `<NAME>="${<NAME>}"` after the framework-provided env
+			// pairs. A name colliding with a reserved variable would
+			// silently shadow the framework value (or expand to empty when
+			// no --build-arg is supplied), so reject the collision at
+			// decode time. Mirrors the [install.extra_versions].<k>.env
+			// collision check.
+			a.Add(fmt.Sprintf("build_arg %q collides with a cocoon-reserved variable", b),
+				"build_args", fmt.Sprintf("%d", idx))
 		}
 	}
 	if config.HasDuplicates(i.Volumes) {
