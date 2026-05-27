@@ -3,9 +3,12 @@
 #
 # Inputs (env):
 #   PIN                       : commandline-tools BUILD_NUMBER (e.g. "11076708"); required
-#   CHECKSUM_AMD64            : sha256 of commandline-tools zip; empty to skip verification
-#   CHECKSUM_ARM64            : sha256 of commandline-tools zip; empty to skip verification
-#                               (the zip is JVM-only / arch-agnostic, so the same SHA pins both)
+#   CHECKSUM_AMD64            : sha256 of commandline-tools zip; falls back to
+#                               CHECKSUM_ARM64 when empty (verification is skipped only
+#                               when both are empty)
+#   CHECKSUM_ARM64            : same artifact — the zip is JVM-only / arch-agnostic,
+#                               so the same SHA pins both; consulted as a fallback
+#                               when CHECKSUM_AMD64 is empty
 #   ANDROID_SDK_API_LEVEL     : platform API level (e.g. "35"); supplied via [install.extra_versions]
 #   ANDROID_SDK_BUILD_TOOLS   : build-tools version (e.g. "35.0.0"); supplied via [install.extra_versions]
 set -euo pipefail
@@ -25,12 +28,14 @@ fi
 
 # Resolve the per-arch checksum. The Android command-line tools zip is JVM
 # bytecode plus shell wrappers — it is the same payload on amd64 and arm64,
-# so users pin the same SHA on both halves.
+# so users typically pin the same SHA on both halves. When only one half is
+# set, fall back to the other rather than silently skipping verification: the
+# SHA the user supplied still validates this download.
 ARCH="$(dpkg --print-architecture)"
 case "$ARCH" in
-  amd64) CHECKSUM="$CHECKSUM_AMD64" ;;
-  arm64) CHECKSUM="$CHECKSUM_ARM64" ;;
-  *) CHECKSUM="$CHECKSUM_AMD64" ;;
+  amd64) CHECKSUM="${CHECKSUM_AMD64:-$CHECKSUM_ARM64}" ;;
+  arm64) CHECKSUM="${CHECKSUM_ARM64:-$CHECKSUM_AMD64}" ;;
+  *) CHECKSUM="${CHECKSUM_AMD64:-$CHECKSUM_ARM64}" ;;
 esac
 
 # PIN is required. Google does not publish a stable "latest" manifest for
