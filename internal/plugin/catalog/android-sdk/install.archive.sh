@@ -14,6 +14,15 @@
 #   ANDROID_SDK_BUILD_TOOLS   : build-tools version (e.g. "35.0.0"); supplied via [install.extra_versions]
 set -euo pipefail
 
+# The two extra_versions inputs are always emitted by the generator (with
+# the plugin.toml default when [plugins.versions] omits them). Guard at the
+# entry rather than at the sdkmanager call: ${VAR:?msg} identifies the
+# offending plugin input by name, instead of bash's generic "unbound" or
+# sdkmanager's confusing "platforms;android-" / "build-tools;" error on
+# an empty workspace override.
+: "${ANDROID_SDK_API_LEVEL:?empty/unset — set api_level on android-sdk in [plugins.versions], or restore the plugin.toml default}"
+: "${ANDROID_SDK_BUILD_TOOLS:?empty/unset — set build_tools on android-sdk in [plugins.versions], or restore the plugin.toml default}"
+
 # Yellow WARNING when stderr is a TTY (and NO_COLOR is unset) or
 # FORCE_COLOR is set. NO_COLOR wins per no-color.org.
 if [ -n "${NO_COLOR:-}" ]; then
