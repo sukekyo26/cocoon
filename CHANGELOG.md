@@ -48,9 +48,10 @@ adheres to [Semantic Versioning](https://semver.org/).
   `build-tools;<build_tools>`. Exposes `ANDROID_HOME`,
   `ANDROID_SDK_ROOT`, and prepends `cmdline-tools/latest/bin` +
   `platform-tools` to `PATH`. Ships OpenJDK 17 (AGP 8.x baseline)
-  via apt. `pin` is the commandline-tools `BUILD_NUMBER` (required;
-  no `latest` resolution, since Google does not publish a stable
-  manifest for it). `api_level` (default `35`) and `build_tools`
+  via apt. `pin` is the commandline-tools `BUILD_NUMBER`; an empty
+  `pin` resolves to the latest BUILD_NUMBER advertised on
+  <https://developer.android.com/studio> at build time, matching the
+  `version_capable` contract. `api_level` (default `35`) and `build_tools`
   (default `35.0.0`) are exposed via `[install.extra_versions]` so
   workspaces can override the platform / build-tools versions without
   touching the catalog. Linux amd64 / arm64 both supported (the ZIP

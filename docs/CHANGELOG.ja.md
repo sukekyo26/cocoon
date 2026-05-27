@@ -48,8 +48,10 @@ cocoon の主要な変更を記録します。フォーマットは
   `ANDROID_SDK_ROOT` を export し、`PATH` の先頭に
   `cmdline-tools/latest/bin` と `platform-tools` を追加します。
   apt で OpenJDK 17 (AGP 8.x baseline) も同梱。`pin` は
-  commandline-tools の `BUILD_NUMBER` で必須（Google が安定 manifest
-  を公開していないため latest 解決はしない）。`api_level`（default
+  commandline-tools の `BUILD_NUMBER`。空 `pin` を指定したときは
+  <https://developer.android.com/studio> の HTML を build 時にスクレイプして
+  最新 BUILD_NUMBER に解決します（`version_capable` 契約に合わせた挙動）。
+  `api_level`（default
   `35`）と `build_tools`（default `35.0.0`）を `[install.extra_versions]`
   で公開しているため、catalog に手を加えずに workspace 側で platform /
   build-tools のバージョンを上書きできます。Linux amd64 / arm64 両対応

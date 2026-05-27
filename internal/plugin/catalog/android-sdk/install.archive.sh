@@ -2,7 +2,8 @@
 # Install Android SDK command-line tools (https://developer.android.com/tools)
 #
 # Inputs (env):
-#   PIN                       : commandline-tools BUILD_NUMBER (e.g. "11076708"); required
+#   PIN                       : commandline-tools BUILD_NUMBER (e.g. "11076708"); empty = latest
+#                               (scraped from https://developer.android.com/studio)
 #   CHECKSUM_AMD64            : sha256 of commandline-tools zip; falls back to
 #                               CHECKSUM_ARM64 when empty (verification is skipped only
 #                               when both are empty)
@@ -38,13 +39,26 @@ case "$ARCH" in
   *) CHECKSUM="${CHECKSUM_AMD64:-$CHECKSUM_ARM64}" ;;
 esac
 
-# PIN is required. Google does not publish a stable "latest" manifest for
-# commandline-tools — the download index is HTML and the filename embeds the
-# BUILD_NUMBER, so latest-resolution via scraping is brittle.
-if [ -z "$PIN" ]; then
-  echo "ERROR: android-sdk requires [plugins.versions].android-sdk.pin (commandline-tools BUILD_NUMBER)." >&2
-  echo "       See https://developer.android.com/studio#command-line-tools-only for the current build number." >&2
-  exit 1
+# Resolve the BUILD_NUMBER. Google does not publish a stable JSON / XML
+# manifest for commandline-tools, but the /studio page embeds the current
+# download URL with BUILD_NUMBER baked into the filename. Scrape it as the
+# "upstream latest" the version_capable contract (docs/plugins.md) requires
+# when $PIN is empty. If the page shape changes and scraping fails, fail
+# loud rather than guessing a stale default.
+if [ -n "$PIN" ]; then
+  BUILD_NUMBER="$PIN"
+else
+  STUDIO_HTML=$(curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+    https://developer.android.com/studio)
+  BUILD_NUMBER=$(printf '%s' "$STUDIO_HTML" | tr -d '\n' |
+    grep -oE 'commandlinetools-linux-[0-9]+_latest\.zip' | head -n 1 |
+    sed -n 's/commandlinetools-linux-\([0-9]*\)_latest\.zip/\1/p') || true
+  if [ -z "$BUILD_NUMBER" ]; then
+    echo "ERROR: failed to resolve latest commandline-tools BUILD_NUMBER from https://developer.android.com/studio." >&2
+    echo "       Pin explicitly via [plugins.versions].android-sdk.pin = \"<BUILD_NUMBER>\"" >&2
+    echo "       (find the current BUILD_NUMBER under \"Command line tools only\" at the URL above)." >&2
+    exit 1
+  fi
 fi
 
 # Local mirror of [install.env].ANDROID_HOME. The Dockerfile emits the ENV
@@ -53,7 +67,7 @@ fi
 ANDROID_SDK_ROOT="/usr/local/android-sdk"
 
 curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
-  "https://dl.google.com/android/repository/commandlinetools-linux-${PIN}_latest.zip" \
+  "https://dl.google.com/android/repository/commandlinetools-linux-${BUILD_NUMBER}_latest.zip" \
   -o /tmp/android-cmdline-tools.zip
 
 if [ -n "$CHECKSUM" ]; then
