@@ -41,6 +41,24 @@ adheres to [Semantic Versioning](https://semver.org/).
   falling back to the plugin default. `cocoon plugin pin <id> --write`
   preserves any extra keys present on the existing line — it rewrites
   `pin` / `checksum_*` only.
+- `android-sdk` plugin (catalog id `android-sdk`, `archive` method).
+  Installs Android command-line tools (`sdkmanager`) at
+  `/usr/local/android-sdk` and runs `sdkmanager` in the same RUN to
+  pull `platform-tools`, `platforms;android-<api_level>`, and
+  `build-tools;<build_tools>`. Exposes `ANDROID_HOME`,
+  `ANDROID_SDK_ROOT`, and prepends `cmdline-tools/latest/bin` +
+  `platform-tools` to `PATH`. Ships OpenJDK 17 (AGP 8.x baseline)
+  via apt. `pin` is the commandline-tools `BUILD_NUMBER`; an empty
+  `pin` resolves to the latest BUILD_NUMBER advertised on
+  <https://developer.android.com/studio> at build time, matching the
+  `version_capable` contract. `api_level` (default `35`) and `build_tools`
+  (default `35.0.0`) are exposed via `[install.extra_versions]` so
+  workspaces can override the platform / build-tools versions without
+  touching the catalog. Linux amd64 / arm64 both supported (the ZIP
+  is JVM-only; the same SHA pins both halves). The Android emulator
+  and `system-images` are deliberately out of scope for the initial
+  drop. Combine with `flutter` to turn the `flutter doctor` Android
+  toolchain check green.
 
 ### Changed
 

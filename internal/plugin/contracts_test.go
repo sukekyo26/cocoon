@@ -83,6 +83,20 @@ func TestPluginContracts(t *testing.T) {
 
 	specs := []spec{
 		{
+			id: "android-sdk", name: "Android SDK",
+			requiresRoot: true, versionCapable: true, firstVolume: "android",
+			mustContain: []string{
+				"android-sdk", "dl.google.com/android/repository", "cmdline-tools",
+				"sdkmanager", "platform-tools", "sha256sum -c -",
+				"tlsv1.2", "retry 3", "dpkg --print-architecture", "unzip",
+				"ANDROID_HOME", "ANDROID_SDK_ROOT",
+				"ANDROID_SDK_API_LEVEL", "ANDROID_SDK_BUILD_TOOLS",
+				"--licenses", "yes",
+				"PIN",
+			},
+			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
+		},
+		{
 			id: "aws-cli", name: "AWS CLI v2",
 			requiresRoot: false, versionCapable: true, verify: "pgp", firstVolume: "aws",
 			mustContain:    []string{"AWS", "retry 3", "tlsv1.2", "gpg --batch --verify", "PIN"},

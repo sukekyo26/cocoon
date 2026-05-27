@@ -1,0 +1,37 @@
+[metadata]
+name = "Android SDK"
+description = "Android command-line tools (sdkmanager) and platform-tools"
+url = "https://developer.android.com/tools"
+default = false
+
+[apt]
+packages = [
+  "openjdk-17-jdk-headless",
+  "unzip",
+  "git",
+  "curl",
+  "ca-certificates",
+]
+
+[install]
+requires_root = true
+volumes = [
+  "/home/${USERNAME}/.android",
+  "/home/${USERNAME}/.gradle",
+]
+default_method = "archive"
+
+[install.methods.archive]
+description = "Android command-line tools zip from dl.google.com/android/repository"
+
+[install.env]
+ANDROID_HOME = "/usr/local/android-sdk"
+ANDROID_SDK_ROOT = "/usr/local/android-sdk"
+PATH = "/usr/local/android-sdk/cmdline-tools/latest/bin:/usr/local/android-sdk/platform-tools:$PATH"
+
+[install.extra_versions]
+api_level = { env = "ANDROID_SDK_API_LEVEL", default = "35" }
+build_tools = { env = "ANDROID_SDK_BUILD_TOOLS", default = "35.0.0" }
+
+[version]
+version_capable = true

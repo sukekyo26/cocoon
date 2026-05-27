@@ -375,6 +375,11 @@ android-sdk = { pin = "14742923", api_level = "36", build_tools = "36.0.0" }
   catalog プラグイン。`install.installer.sh` / `install.binary.sh` を
   併読すると、multi-method 専用の `$COCOON_INSTALL_METHOD` fail-fast
   パターンが見られる。
+- **`android-sdk`** — `archive` メソッド。ZIP を取得した上で同じ RUN 内で
+  追加のインストーラ (`sdkmanager`) を走らせる例。`[install.extra_versions]`
+  の参考にもなる: `commandline-tools` の `pin` とは独立に platform /
+  build-tools のバージョンをユーザーが指定できるよう `api_level` /
+  `build_tools` を宣言している。
 
 ## トラブルシューティング
 
