@@ -4,7 +4,7 @@
 > cocoon is in v0.x (alpha). By using it, please understand and accept that the plugin contracts (`plugin.toml` schema, install-script env vars, version-pin layout) may change before 1.0, and that breaking changes can land in any release. See the [CHANGELOG](../CHANGELOG.md) and the README's "Project status" section.
 
 This page is the single source of truth for **plugin authoring**:
-the `plugin.toml` schema, the rules for `install.sh` and
+the `plugin.toml` schema, the rules for `install.<name>.sh` and
 `install_user.sh`, the environment variables those scripts receive,
 and the version-pin contract.
 
@@ -19,13 +19,13 @@ A plugin is a self-contained installer that the dockerfile generator
 folds into the build. It has one required file — `plugin.toml`,
 which describes the plugin — and up to two optional shell scripts:
 
-- `install.sh` runs during `docker build` to install the tool. It
+- `install.<name>.sh` runs during `docker build` to install the tool. It
   may run as root or as the unprivileged user depending on
   `[install].requires_root`.
 - `install_user.sh` runs **always** as the unprivileged user
-  after `install.sh`. It exists to handle the small set of cases
+  after `install.<name>.sh`. It exists to handle the small set of cases
   where root-owned install needs to be paired with user-owned
-  configuration (see "`install.sh` vs `install_user.sh`" below).
+  configuration (see "`install.<name>.sh` vs `install_user.sh`" below).
 
 The whole point of plugins is to keep cocoon's generator small while
 still letting users add anything that is not in `[apt].packages`.
@@ -142,12 +142,12 @@ known sections are rejected loud. If you see `unknown field "foo"`
 when loading a plugin, something in `plugin.toml` was renamed or
 removed — check this page for the current schema.
 
-## `install.sh` vs `install_user.sh`
+## `install.<name>.sh` vs `install_user.sh`
 
-Most plugins only need `install.sh`. Reach for `install_user.sh`
+Most plugins only need `install.<name>.sh`. Reach for `install_user.sh`
 when **all** of these are true:
 
-1. `[install].requires_root = true` (so `install.sh` runs as root), and
+1. `[install].requires_root = true` (so `install.<name>.sh` runs as root), and
 2. The plugin must touch user-owned files (`~/.bashrc`,
    `~/.config/<tool>/`, `~/.local/share/`, …) **or** run a setup
    command that has to execute as the unprivileged user (`<tool> init`,
@@ -162,14 +162,14 @@ second hook keeps that boundary explicit and obvious.
 
 | Situation | Pick |
 |---|---|
-| `requires_root = false`; no rc edit needed | `install.sh` only |
-| `requires_root = false`; rc edit needed | `install.sh` only — write to `$RC_FILE` from inside `install.sh` |
-| `requires_root = true`; only `apt-get` / `/usr/local/bin` work | `install.sh` only |
-| `requires_root = true`; rc edit / `~/.config/<tool>` write / `<tool> init` | `install.sh` **and** `install_user.sh` |
+| `requires_root = false`; no rc edit needed | `install.<name>.sh` only |
+| `requires_root = false`; rc edit needed | `install.<name>.sh` only — write to `$RC_FILE` from inside `install.<name>.sh` |
+| `requires_root = true`; only `apt-get` / `/usr/local/bin` work | `install.<name>.sh` only |
+| `requires_root = true`; rc edit / `~/.config/<tool>` write / `<tool> init` | `install.<name>.sh` **and** `install_user.sh` |
 
 ### Concrete examples
 
-| Plugin | `install.sh` does | `install_user.sh` does |
+| Plugin | `install.<name>.sh` does | `install_user.sh` does |
 |---|---|---|
 | starship (real)              | downloads & places `/usr/local/bin/starship` (root)        | appends `eval "$(starship init …)"` to `$RC_FILE` (user) |
 | fzf (hypothetical)           | `apt-get install fzf` (root)                               | `git clone https://github.com/junegunn/fzf.git ~/.fzf && ~/.fzf/install --bash` (user) |
@@ -285,7 +285,7 @@ runs the body inside the build environment, with the env composed as
 above.
 
 The literal string `COCOON_PLUGIN_EOF` must not appear on a line by
-itself anywhere in `install.sh` / `install_user.sh` — that would
+itself anywhere in `install.<name>.sh` / `install_user.sh` — that would
 close the heredoc early. The generator detects this and fails loud
 (`ErrHeredocCollision`).
 
@@ -415,7 +415,7 @@ Use these embedded plugins as templates when writing your own:
   schema. Common offenders are old fields that were dropped during
   refactors.
 - **`ErrHeredocCollision: plugin "x" contains the literal
-  COCOON_PLUGIN_EOF`** — your `install.sh` has a line that exactly
+  COCOON_PLUGIN_EOF`** — your `install.<name>.sh` has a line that exactly
   matches the heredoc terminator. Rename the marker inside the
   script.
 - **`ErrNilPluginsFS`** — internal: a caller built a

@@ -228,6 +228,13 @@ drop = ["AUDIT_WRITE"]
 | `apparmor` | string | Same. |
 | `no_new_privileges` | bool | Block setuid privilege escalation. |
 
+> **Note:** `no_new_privileges = true` blocks **all** setuid privilege
+> escalation, including `sudo`. cocoon's generated image installs `sudo` and
+> grants the container user passwordless sudo — plugin install steps use
+> `sudo -u` and `cocoon exec` relies on it — so enabling this makes `sudo`
+> inside the running container a silent no-op. Leave it unset unless your
+> workflow never needs runtime privilege escalation.
+
 ### `[[container.skel]]`
 
 Dotfiles seeded into the new user's home via `/etc/skel`. Repeatable.
@@ -268,6 +275,24 @@ go = { pin = "1.22.5" }
 uv = { pin = "0.5.7", checksum_amd64 = "<sha256>", checksum_arm64 = "<sha256>" }
 aws-cli = { pin = "2.34.48" }
 ```
+
+#### Subcomponent versions
+
+Some plugins expose extra version knobs (declared under
+`[install.extra_versions]` — run `cocoon plugin show <id>` to see them). Set
+them as additional inline-table keys next to `pin`:
+
+```toml
+[plugins.versions]
+android-sdk = { pin = "14742923", api_level = "36", build_tools = "36.0.0" }
+```
+
+Only keys the plugin declares are accepted — an unknown key (a typo, or a
+declaration removed upstream) is rejected by `cocoon gen` instead of silently
+falling back to the default. Override values follow the same rule as `pin`:
+no `"`, `\`, `\n`, `\r`, `$`, or backtick, since each flows into the
+Dockerfile RUN-prefix `KEY="..."` env pair. See the
+[plugin authoring guide](plugins.md) for how a plugin declares these.
 
 ---
 

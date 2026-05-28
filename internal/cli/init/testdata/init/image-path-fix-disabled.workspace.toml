@@ -68,6 +68,7 @@ image_version = "22-bookworm-slim"
 
 # [container.security_opt] — Compose security_opt: seccomp / apparmor / no_new_privileges.
 #   "unconfined" relaxes sandboxing; no_new_privileges blocks setuid escalation.
+#   Note: no_new_privileges = true also disables sudo (the image grants the user passwordless sudo).
 # [container.security_opt]
 # seccomp           = "unconfined"
 # no_new_privileges = true
