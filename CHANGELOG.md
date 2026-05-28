@@ -73,6 +73,16 @@ adheres to [Semantic Versioning](https://semver.org/).
   read-only by design and skips this preflight, so a version check still
   works without sudo on root-owned install paths.
 
+### Fixed
+
+- **Security**: Reject `[plugins.versions].<id>.pin` values containing `"`,
+  `\`, `\n`, `\r`, `$`, or backtick. The pin flows into a `PIN="..."` env pair
+  on the Dockerfile RUN line; a bare quote could previously break out of the
+  quoting and `$` / backtick could trigger parameter or command substitution,
+  so a crafted `workspace.toml` could run arbitrary commands at `docker build`
+  time. This matches the guard already applied to `[install.extra_versions]`
+  override values.
+
 ## [0.7.6] - 2026-05-24
 
 ### Added

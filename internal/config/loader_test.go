@@ -245,3 +245,71 @@ android-sdk = { pin = "14742923", ` + tc.extraExpr + ` }
 		})
 	}
 }
+
+// TestLoadWorkspace_PluginVersionsPinUnsafeValue pins that the `pin` field
+// gets the same UnsafeExtraVersionRune guard as extra override values: it
+// flows into the identical Dockerfile RUN-prefix `PIN="..."` env pair, so a
+// bare ", \, \n, \r, $, or backtick must be rejected at decode time rather
+// than enabling shell injection at docker build.
+func TestLoadWorkspace_PluginVersionsPinUnsafeValue(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name       string
+		pinExpr    string
+		wantUnsafe bool
+	}{
+		{"plain", `pin = "14742923"`, false},
+		{"double_quote", `pin = "1.0.0\" rm -rf / \""`, true},
+		{"backslash", `pin = "1.0.0\\nfoo"`, true},
+		{"newline", `pin = "1.0.0\nfoo"`, true},
+		{"carriage_return", `pin = "1.0.0\rfoo"`, true},
+		{"dollar", `pin = "$(date)"`, true},
+		// The exact injection PoC from the evaluation report: a closing
+		// quote lets the rest break out of the PIN="..." env pair.
+		{"injection_poc", `pin = "1.0.0\"; echo PWNED > /tmp/pwn; PIN2=\""`, true},
+		{"backtick", "pin = \"`whoami`\"", true},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			body := `
+[container]
+service_name = "dev"
+username = "developer"
+image = "ubuntu"
+image_version = "24.04"
+
+[plugins]
+enable = []
+
+[plugins.versions]
+go = { ` + tc.pinExpr + ` }
+`
+			tmp := t.TempDir() + "/ws.toml"
+			require.NoError(t, os.WriteFile(tmp, []byte(body), 0o600))
+			_, err := config.LoadWorkspace(tmp)
+			if !tc.wantUnsafe {
+				require.NoError(t, err)
+				return
+			}
+			require.Error(t, err)
+			// Assert the failure class and the exact field location, not
+			// just a substring: the guard must surface as a decode-time
+			// *ValidationError pointing at plugins.versions.<id>.pin (a
+			// regression that moved to a different validator or key would
+			// still match the substring otherwise).
+			verr, ok := config.AsValidationError(err)
+			require.Truef(t, ok, "expected *ValidationError, got %T: %v", err, err)
+			var hit *config.FieldError
+			for i := range verr.Errors {
+				if verr.Errors[i].LocString() == "plugins.versions.go.pin" {
+					hit = &verr.Errors[i]
+					break
+				}
+			}
+			require.NotNilf(t, hit, "no FieldError at plugins.versions.go.pin; errors = %+v", verr.Errors)
+			require.Contains(t, hit.Message, "unsafe character")
+		})
+	}
+}
