@@ -209,7 +209,7 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ### 変更
 
-- **BREAKING (プラグイン作者向け)**: プラグインの install スクリプト名 `install.sh` は廃止しました。catalog の全 26 プラグインは `install.<category>.sh` を持ち、`plugin.toml` には対応する `[install.methods.<category>]` の宣言が必須となります。loader はリテラル `install.sh` を reject し、エラーメッセージで移行手順を案内します。`<category>` は catalog 共通の 4 語彙語: **`binary`** (単一バイナリ配置)、**`installer`** (vendor の curl-to-bash 経由)、**`apt`** (apt repo / .deb)、**`archive`** (複数ファイルの tar/zip 展開) のいずれか。`~/.cocoon/plugins/<id>/install.sh` を持つカスタムプラグインを使っている場合のみ影響 (リネーム + plugin.toml に `[install.methods.<category>]` 追加が必要)。catalog 同梱のプラグインを使うエンドユーザーは影響なし。
+- **BREAKING (プラグイン作者向け)**: プラグインの install スクリプト名 `install.sh` は廃止しました。catalog の各プラグインは `install.<category>.sh` を持ち、`plugin.toml` には対応する `[install.methods.<category>]` の宣言が必須となります。loader はリテラル `install.sh` を reject し、エラーメッセージで移行手順を案内します。`<category>` は catalog 共通の 4 語彙語: **`binary`** (単一バイナリ配置)、**`installer`** (vendor の curl-to-bash 経由)、**`apt`** (apt repo / .deb)、**`archive`** (複数ファイルの tar/zip 展開) のいずれか。`~/.cocoon/plugins/<id>/install.sh` を持つカスタムプラグインを使っている場合のみ影響 (リネーム + plugin.toml に `[install.methods.<category>]` 追加が必要)。catalog 同梱のプラグインを使うエンドユーザーは影響なし。
 - **BREAKING**: `cocoon plugin scaffold --template` は catalog 4 語彙 (`installer` / `binary` / `apt` / `archive`) を受理するようになりました (旧名 `curl-pipe` / `tarball` / `generic` は廃止)。scaffold 出力は `install.<category>.sh` 形式となり、生成される `plugin.toml` には `[install.methods.<category>]` と `default_method` が自動挿入されます (どちらも loader 必須化のため)。`--template tarball` は "unknown template" エラーで reject されるので `--template binary --version-capable` に置き換えてください。
 
 ## [0.3.1] - 2026-05-14

@@ -40,6 +40,7 @@ var messagesEN_initTemplates = map[string]string{
 		"# drop = [\"AUDIT_WRITE\"]",
 	"init_toml_template_container_security_opt": "# [container.security_opt] — Compose security_opt: seccomp / apparmor / no_new_privileges.\n" +
 		"#   \"unconfined\" relaxes sandboxing; no_new_privileges blocks setuid escalation.\n" +
+		"#   Note: no_new_privileges = true also disables sudo (the image grants the user passwordless sudo).\n" +
 		"# [container.security_opt]\n" +
 		"# seccomp           = \"unconfined\"\n" +
 		"# no_new_privileges = true",
@@ -209,6 +210,7 @@ var messagesJA_initTemplates = map[string]string{
 		"# drop = [\"AUDIT_WRITE\"]",
 	"init_toml_template_container_security_opt": "# [container.security_opt] — Compose の security_opt (seccomp / apparmor / no_new_privileges)。\n" +
 		"#   \"unconfined\" でサンドボックス緩和、no_new_privileges で setuid 権限昇格を遮断。\n" +
+		"#   注意: no_new_privileges = true は sudo も無効化する (イメージはユーザーに passwordless sudo を付与)。\n" +
 		"# [container.security_opt]\n" +
 		"# seccomp           = \"unconfined\"\n" +
 		"# no_new_privileges = true",
