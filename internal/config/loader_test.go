@@ -294,7 +294,22 @@ go = { ` + tc.pinExpr + ` }
 				return
 			}
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "value contains unsafe character")
+			// Assert the failure class and the exact field location, not
+			// just a substring: the guard must surface as a decode-time
+			// *ValidationError pointing at plugins.versions.<id>.pin (a
+			// regression that moved to a different validator or key would
+			// still match the substring otherwise).
+			verr, ok := config.AsValidationError(err)
+			require.Truef(t, ok, "expected *ValidationError, got %T: %v", err, err)
+			var hit *config.FieldError
+			for i := range verr.Errors {
+				if verr.Errors[i].LocString() == "plugins.versions.go.pin" {
+					hit = &verr.Errors[i]
+					break
+				}
+			}
+			require.NotNilf(t, hit, "no FieldError at plugins.versions.go.pin; errors = %+v", verr.Errors)
+			require.Contains(t, hit.Message, "unsafe character")
 		})
 	}
 }
