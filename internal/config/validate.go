@@ -594,10 +594,11 @@ func UnsafeExtraVersionRune(s string) (bool, rune) {
 // UnsafeExtraVersionRune flagged. label names the offending field so the
 // same explanation of the Dockerfile RUN-prefix shell-quoting hazard is
 // shared by every caller (workspace pin/override values and plugin.toml
-// extra_versions defaults all flow into the same `KEY="..."` env pair).
+// extra_versions defaults all flow into the same `<name>="..."` env pair —
+// `PIN="..."` for a pin, `<ENV>="..."` for an extra version).
 func UnsafeExtraVersionMessage(label string, r rune) string {
 	return fmt.Sprintf("%s contains unsafe character %q "+
-		`(the value flows into the Dockerfile RUN prefix's KEY="..." env pair; `+
+		`(the value flows into the Dockerfile RUN prefix as a <name>="..." env pair; `+
 		"a bare \", \\, \\n, \\r, $, or backtick would break the shell quoting "+
 		"or trigger parameter/command substitution)", label, r)
 }
