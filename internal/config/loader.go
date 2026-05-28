@@ -90,6 +90,13 @@ func materializeOneOverride(a *Accumulator, id string, raw map[string]any) Plugi
 		}
 		switch k {
 		case "pin":
+			// pin flows into the same Dockerfile RUN-prefix `PIN="..."` env
+			// pair as the extra values below, so it gets the same unsafe-rune
+			// guard (checksums are constrained by rxSha256 in validate).
+			if bad, r := UnsafeExtraVersionRune(s); bad {
+				a.Add(UnsafeExtraVersionMessage("value", r), "plugins", "versions", id, k)
+				continue
+			}
 			entry.Pin = s
 		case "checksum_amd64":
 			cs := s
@@ -99,11 +106,7 @@ func materializeOneOverride(a *Accumulator, id string, raw map[string]any) Plugi
 			entry.ChecksumArm64 = &cs
 		default:
 			if bad, r := UnsafeExtraVersionRune(s); bad {
-				a.Add(fmt.Sprintf("value contains unsafe character %q "+
-					`(the value flows into the Dockerfile RUN prefix's KEY="..." env pair; `+
-					"a bare \", \\, \\n, \\r, $, or backtick would break the shell quoting "+
-					"or trigger parameter/command substitution)", r),
-					"plugins", "versions", id, k)
+				a.Add(UnsafeExtraVersionMessage("value", r), "plugins", "versions", id, k)
 				continue
 			}
 			if entry.Extra == nil {

@@ -250,11 +250,7 @@ func checkExtraVersionDefault(a *config.Accumulator, k, def string) {
 		return
 	}
 	if bad, r := config.UnsafeExtraVersionRune(def); bad {
-		a.Add(fmt.Sprintf("default contains unsafe character %q "+
-			`(the value flows into the Dockerfile RUN prefix's KEY="..." env pair; `+
-			"a bare \", \\, \\n, \\r, $, or backtick would break the shell quoting "+
-			"or trigger parameter/command substitution)", r),
-			"extra_versions", k, "default")
+		a.Add(config.UnsafeExtraVersionMessage("default", r), "extra_versions", k, "default")
 	}
 }
 
