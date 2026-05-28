@@ -1,0 +1,11 @@
+# Plugins excluded from the arm64-full e2e preset because their install
+# script hard-codes amd64 or fails fast on arm64. One plugin id per line;
+# blank lines and #-comments are ignored. docker-roundtrip.sh subtracts
+# these from the catalog-derived plugin set for PRESET=arm64-full, and
+# internal/plugin/e2e_arm64_exclude_test.go guards that every id here is a
+# real catalog plugin.
+flutter
+google-chrome
+lazygit
+starship
+zig
