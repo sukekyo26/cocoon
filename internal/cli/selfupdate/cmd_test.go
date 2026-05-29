@@ -75,7 +75,7 @@ func TestDownloadFile(t *testing.T) {
 
 // TestReadChecksum exercises the SHA256SUMS line parser: bare and
 // `*`-prefixed asset names, malformed lines that must be skipped, a
-// missing asset mapped to errAssetMissing, and an unreadable file.
+// missing asset mapped to ErrAssetMissing, and an unreadable file.
 func TestReadChecksum(t *testing.T) {
 	t.Parallel()
 
@@ -107,7 +107,7 @@ func TestReadChecksum(t *testing.T) {
 		{
 			name:    "asset absent",
 			content: hash + "  other-asset\n",
-			wantErr: errAssetMissing,
+			wantErr: ErrAssetMissing,
 		},
 	}
 	for _, tc := range cases {
@@ -139,8 +139,8 @@ func TestReadChecksum(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected an error for a missing SHA256SUMS file, got nil")
 		}
-		if errors.Is(err, errAssetMissing) {
-			t.Errorf("a read failure must not collapse into errAssetMissing: %v", err)
+		if errors.Is(err, ErrAssetMissing) {
+			t.Errorf("a read failure must not collapse into ErrAssetMissing: %v", err)
 		}
 	})
 }
