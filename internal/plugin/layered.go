@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
+	"slices"
 	"sort"
 	"time"
 )
@@ -170,11 +172,7 @@ func (l *LayeredFS) openRoot() fs.File {
 }
 
 func (l *LayeredFS) readRoot() ([]fs.DirEntry, error) {
-	ids := make([]string, 0, len(l.sources))
-	for id := range l.sources {
-		ids = append(ids, id)
-	}
-	sort.Strings(ids)
+	ids := slices.Sorted(maps.Keys(l.sources))
 	out := make([]fs.DirEntry, 0, len(ids))
 	for _, id := range ids {
 		target := l.layerFor(id)

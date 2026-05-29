@@ -485,7 +485,7 @@ Dockerfile の所定フックポイントへ独自フラグメントを注入。
 | フィールド | 型 | 実行タイミング |
 |---|---|---|
 | `pre_user_setup` | string | `useradd` の前。 |
-| `post_plugins` | string | 各プラグインの `install.sh` の後。 |
+| `post_plugins` | string | 各プラグインの `install.<category>.sh` の後。 |
 
 ```toml
 [dockerfile]

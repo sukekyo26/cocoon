@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"fmt"
+	"maps"
 	"regexp"
 	"slices"
 
@@ -155,11 +156,7 @@ func (i *Install) validateExtraVersions(a *config.Accumulator) {
 		buildArgs[b] = struct{}{}
 	}
 	// Sort keys so the first-error summary is stable across runs.
-	keys := make([]string, 0, len(i.ExtraVersions))
-	for k := range i.ExtraVersions {
-		keys = append(keys, k)
-	}
-	slices.Sort(keys)
+	keys := slices.Sorted(maps.Keys(i.ExtraVersions))
 	seenEnv := make(map[string]string, len(keys))
 	for _, k := range keys {
 		validateOneExtraVersion(a, k, i.ExtraVersions[k], buildArgs, seenEnv)
@@ -268,11 +265,7 @@ func (i *Install) validateMethods(a *config.Accumulator) {
 	}
 	// Sort method names so ValidationError.Error()'s "first error"
 	// summary stays stable across runs (map iteration is randomised).
-	names := make([]string, 0, len(i.Methods))
-	for name := range i.Methods {
-		names = append(names, name)
-	}
-	slices.Sort(names)
+	names := slices.Sorted(maps.Keys(i.Methods))
 	for _, name := range names {
 		m := i.Methods[name]
 		if !rxMethodName.MatchString(name) {

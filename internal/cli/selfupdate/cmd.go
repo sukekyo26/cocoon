@@ -214,7 +214,7 @@ func readChecksum(sumsPath, asset string) (string, error) {
 			return fields[0], nil
 		}
 	}
-	return "", fmt.Errorf("%w: %s", errAssetMissing, asset)
+	return "", fmt.Errorf("%w: %s", ErrAssetMissing, asset)
 }
 
 func sha256File(path string) (string, error) {

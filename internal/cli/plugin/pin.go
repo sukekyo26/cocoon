@@ -4,8 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -160,11 +161,7 @@ func validateMethodForPin(p *plugin.Plugin, id, method string) error {
 			clihelpers.ErrUsage, id)
 	}
 	if _, ok := p.Install.Methods[method]; !ok {
-		declared := make([]string, 0, len(p.Install.Methods))
-		for name := range p.Install.Methods {
-			declared = append(declared, name)
-		}
-		sort.Strings(declared)
+		declared := slices.Sorted(maps.Keys(p.Install.Methods))
 		return fmt.Errorf(
 			"%w: plugin %q has no method %q in [install.methods] (declared: %s)",
 			clihelpers.ErrUsage, id, method, strings.Join(declared, ", "))

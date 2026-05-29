@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"path"
+	"slices"
 	"sort"
 	"strings"
 
@@ -559,11 +561,7 @@ func appendExtraVersionPairs(
 	if len(extraVersions) == 0 {
 		return pairs
 	}
-	keys := make([]string, 0, len(extraVersions))
-	for k := range extraVersions {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
+	keys := slices.Sorted(maps.Keys(extraVersions))
 	for _, k := range keys {
 		spec := extraVersions[k]
 		val := spec.Default
@@ -582,11 +580,7 @@ func validateVersionOverrides(
 	overrides map[string]config.PluginVersionOverride,
 	warnings io.Writer,
 ) error {
-	ids := make([]string, 0, len(overrides))
-	for id := range overrides {
-		ids = append(ids, id)
-	}
-	sort.Strings(ids)
+	ids := slices.Sorted(maps.Keys(overrides))
 
 	for _, id := range ids {
 		override := overrides[id]
@@ -712,10 +706,5 @@ func expandUserDirs(userDirs []string) []string {
 			all[d] = struct{}{}
 		}
 	}
-	sorted := make([]string, 0, len(all))
-	for p := range all {
-		sorted = append(sorted, p)
-	}
-	sort.Strings(sorted)
-	return sorted
+	return slices.Sorted(maps.Keys(all))
 }

@@ -251,7 +251,7 @@ packages = [
 # lang     = "ja_JP.UTF-8"
 
 # [dockerfile] — inject custom Dockerfile fragments at well-defined hook points.
-#   pre_user_setup runs before useradd; post_plugins runs after plugin install.sh's.
+#   pre_user_setup runs before useradd; post_plugins runs after plugin install.<category>.sh's.
 # [dockerfile]
 # pre_user_setup = """RUN apt-get install -y my-extra-pkg"""
 # post_plugins   = """RUN echo done"""

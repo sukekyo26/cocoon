@@ -502,7 +502,7 @@ Inject custom Dockerfile fragments at well-defined hook points. The injected con
 | Field | Type | When |
 |---|---|---|
 | `pre_user_setup` | string | Runs before `useradd`. |
-| `post_plugins` | string | Runs after every plugin's `install.sh`. |
+| `post_plugins` | string | Runs after every plugin's `install.<category>.sh`. |
 
 ```toml
 [dockerfile]

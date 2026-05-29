@@ -7,7 +7,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"sort"
+	"maps"
+	"slices"
 	"strings"
 
 	"github.com/sukekyo26/cocoon/internal/generate"
@@ -153,11 +154,7 @@ func normalizeKey(v any) any {
 // new keys are appended in sorted order so the output is deterministic across
 // Go map iteration.
 func deepMerge(base *orderedMap, override map[string]any) {
-	keys := make([]string, 0, len(override))
-	for k := range override {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
+	keys := slices.Sorted(maps.Keys(override))
 	for _, k := range keys {
 		v := override[k]
 		existing, has := base.get(k)

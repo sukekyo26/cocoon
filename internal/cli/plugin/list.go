@@ -3,7 +3,8 @@ package plugincli
 import (
 	"fmt"
 	"io"
-	"sort"
+	"maps"
+	"slices"
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
@@ -47,11 +48,7 @@ func runList(stdout, _ io.Writer, sourceFilter string) error {
 		return err
 	}
 	sources := layered.Sources()
-	ids := make([]string, 0, len(sources))
-	for id := range sources {
-		ids = append(ids, id)
-	}
-	sort.Strings(ids)
+	ids := slices.Sorted(maps.Keys(sources))
 
 	tw := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(tw, "ID\tSOURCE\tDEFAULT\tDESCRIPTION\tURL")

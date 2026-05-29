@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"slices"
 
@@ -53,11 +54,7 @@ func materializePluginVersions(path string, ws *Workspace) error {
 	}
 	out := make(map[string]PluginVersionOverride, len(ws.Plugins.VersionsRaw))
 	a := NewAccumulator()
-	ids := make([]string, 0, len(ws.Plugins.VersionsRaw))
-	for id := range ws.Plugins.VersionsRaw {
-		ids = append(ids, id)
-	}
-	slices.Sort(ids)
+	ids := slices.Sorted(maps.Keys(ws.Plugins.VersionsRaw))
 	for _, id := range ids {
 		out[id] = materializeOneOverride(a, id, ws.Plugins.VersionsRaw[id])
 	}
@@ -75,11 +72,7 @@ func materializePluginVersions(path string, ws *Workspace) error {
 // accumulated errors).
 func materializeOneOverride(a *Accumulator, id string, raw map[string]any) PluginVersionOverride {
 	entry := PluginVersionOverride{} //nolint:exhaustruct // filled below
-	keys := make([]string, 0, len(raw))
-	for k := range raw {
-		keys = append(keys, k)
-	}
-	slices.Sort(keys)
+	keys := slices.Sorted(maps.Keys(raw))
 	for _, k := range keys {
 		v := raw[k]
 		s, ok := v.(string)

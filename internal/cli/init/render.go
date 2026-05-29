@@ -2,7 +2,8 @@ package initcli
 
 import (
 	"fmt"
-	"sort"
+	"maps"
+	"slices"
 	"strings"
 
 	"github.com/sukekyo26/cocoon/internal/i18n"
@@ -299,11 +300,7 @@ func writePluginMethods(sb *strings.Builder, cat *i18n.Catalog, picks map[string
 		emitTemplate(sb, cat, "init_toml_template_plugins_methods")
 		return
 	}
-	ids := make([]string, 0, len(picks))
-	for id := range picks {
-		ids = append(ids, id)
-	}
-	sort.Strings(ids)
+	ids := slices.Sorted(maps.Keys(picks))
 	sb.WriteString(cat.Msg("init_toml_section_plugins_methods"))
 	sb.WriteByte('\n')
 	sb.WriteString("[plugins.methods]\n")
@@ -347,11 +344,7 @@ func emitTemplate(sb *strings.Builder, cat *i18n.Catalog, key string) {
 // `[container.shell] aliases = { ... }` so the generated workspace.toml
 // stays diff-friendly when the user re-runs `cocoon init --force`.
 func writeInlineTable(sb *strings.Builder, m map[string]string) {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
+	keys := slices.Sorted(maps.Keys(m))
 	sb.WriteByte('{')
 	for i, k := range keys {
 		if i > 0 {

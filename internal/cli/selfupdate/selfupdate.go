@@ -11,6 +11,7 @@ package selfupdatecli
 
 import "errors"
 
-// errAssetMissing is wrapped when the SHA256SUMS file does not list
-// the asset we just downloaded.
-var errAssetMissing = errors.New("asset checksum missing")
+// ErrAssetMissing is wrapped when the SHA256SUMS file does not list
+// the asset we just downloaded. Callers can identify the class via
+// errors.Is.
+var ErrAssetMissing = errors.New("asset checksum missing")
