@@ -5,8 +5,10 @@
 #
 # Inputs (env):
 #   PIN              : version (without leading "v"); empty = latest
-#   CHECKSUM_AMD64   : sha256 of amd64 asset; empty to skip verification
-#   CHECKSUM_ARM64   : sha256 of arm64 asset; empty to skip verification
+#   CHECKSUM_AMD64   : sha256 of amd64 asset; empty = verify against the
+#                      upstream-published checksum (see the else branch below)
+#   CHECKSUM_ARM64   : sha256 of arm64 asset; empty = verify against the
+#                      upstream-published checksum (see the else branch below)
 set -euo pipefail
 
 ARCH="$(dpkg --print-architecture)"
@@ -41,7 +43,16 @@ curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-erro
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /usr/local/bin/demo" | sha256sum -c -
 else
-  echo "WARNING: SHA256 verification skipped for Demo Bin (no checksum for demo in [plugins.versions])" >&2
+  # No user pin: verify against the checksum the upstream publishes with the
+  # release. Replace the URL + asset name to match your upstream's layout
+  # (a "<asset>.sha256" sidecar, a "checksums.txt", or "SHA256SUMS"); see
+  # docs/plugins.md. Fall back to a loud "WARNING: ... skipped" only if the
+  # upstream ships no fetchable checksum.
+  curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+    "https://github.com/OWNER/REPO/releases/download/v${VERSION}/checksums.txt" -o /tmp/demo.sums
+  expected="$(grep "REPO-${DOWNLOAD_ARCH}-unknown-linux-musl\$" /tmp/demo.sums | cut -d ' ' -f1)"
+  echo "${expected}  /usr/local/bin/demo" | sha256sum -c -
+  rm -f /tmp/demo.sums
 fi
 
 chmod 0755 /usr/local/bin/demo

@@ -120,8 +120,10 @@ var installBinaryTmpl = tmplx.MustParse("install.binary.sh", `#!/usr/bin/env bas
 #
 # Inputs (env):
 #   PIN              : version (without leading "v"); empty = latest
-#   CHECKSUM_AMD64   : sha256 of amd64 asset; empty to skip verification
-#   CHECKSUM_ARM64   : sha256 of arm64 asset; empty to skip verification
+#   CHECKSUM_AMD64   : sha256 of amd64 asset; empty = verify against the
+#                      upstream-published checksum (see the else branch below)
+#   CHECKSUM_ARM64   : sha256 of arm64 asset; empty = verify against the
+#                      upstream-published checksum (see the else branch below)
 set -euo pipefail
 
 ARCH="$(dpkg --print-architecture)"
@@ -156,7 +158,16 @@ curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-erro
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /usr/local/bin/{{ .ID }}" | sha256sum -c -
 else
-  echo "WARNING: SHA256 verification skipped for {{ .Name }} (no checksum for {{ .ID }} in [plugins.versions])" >&2
+  # No user pin: verify against the checksum the upstream publishes with the
+  # release. Replace the URL + asset name to match your upstream's layout
+  # (a "<asset>.sha256" sidecar, a "checksums.txt", or "SHA256SUMS"); see
+  # docs/plugins.md. Fall back to a loud "WARNING: ... skipped" only if the
+  # upstream ships no fetchable checksum.
+  curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+    "https://github.com/OWNER/REPO/releases/download/v${VERSION}/checksums.txt" -o /tmp/{{ .ID }}.sums
+  expected="$(grep "REPO-${DOWNLOAD_ARCH}-unknown-linux-musl\$" /tmp/{{ .ID }}.sums | cut -d ' ' -f1)"
+  echo "${expected}  /usr/local/bin/{{ .ID }}" | sha256sum -c -
+  rm -f /tmp/{{ .ID }}.sums
 fi
 
 chmod 0755 /usr/local/bin/{{ .ID }}
@@ -196,8 +207,10 @@ var installArchiveTmpl = tmplx.MustParse("install.archive.sh", `#!/usr/bin/env b
 {{- if .VersionCapable }}
 #   PIN              : version to install; empty = latest
 {{- end }}
-#   CHECKSUM_AMD64   : sha256 of amd64 archive (optional)
-#   CHECKSUM_ARM64   : sha256 of arm64 archive (optional)
+#   CHECKSUM_AMD64   : sha256 of amd64 archive; empty = verify against the
+#                      upstream-published checksum (see the else branch below)
+#   CHECKSUM_ARM64   : sha256 of arm64 archive; empty = verify against the
+#                      upstream-published checksum (see the else branch below)
 set -euo pipefail
 
 ARCH="$(dpkg --print-architecture)"
@@ -215,6 +228,16 @@ curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-erro
   "https://example.com/{{ .ID }}-${DOWNLOAD_ARCH}.tar.gz" -o /tmp/{{ .ID }}.tar.gz
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/{{ .ID }}.tar.gz" | sha256sum -c -
+else
+  # No user pin: verify against the checksum the upstream publishes with the
+  # release (a "<asset>.sha256" / ".sha256sum" sidecar, a "checksums.txt" /
+  # "SHA256SUMS", or a field in a release JSON); see docs/plugins.md.
+  # Replace the URL below to match your upstream's layout.
+  curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+    "https://example.com/{{ .ID }}-${DOWNLOAD_ARCH}.tar.gz.sha256" -o /tmp/{{ .ID }}.sum
+  expected="$(cut -d ' ' -f1 /tmp/{{ .ID }}.sum)"
+  echo "${expected}  /tmp/{{ .ID }}.tar.gz" | sha256sum -c -
+  rm -f /tmp/{{ .ID }}.sum
 fi
 mkdir -p /usr/local/{{ .ID }}
 tar -C /usr/local/{{ .ID }} --strip-components=1 -xzf /tmp/{{ .ID }}.tar.gz
