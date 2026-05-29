@@ -13,6 +13,13 @@ adheres to [Semantic Versioning](https://semver.org/).
   the `.deb` over TLS and installing it unverified. apt verifies every
   Chrome package against Google's pinned signing key, matching the
   `docker-cli` / `github-cli` plugins. Chrome for Linux remains amd64-only.
+- The `docker-cli` plugin no longer needs the `gnupg` package (the `vcs`
+  apt category) at build time: it stores the Docker signing key
+  ASCII-armored and references it directly via `signed-by` instead of
+  piping it through `gpg --dearmor`. Enabling `docker-cli` while the
+  `vcs` category was deselected previously failed with
+  `gpg: command not found` on the minimal base. apt package signature
+  verification is unchanged.
 
 ## [0.8.0] - 2026-05-30
 

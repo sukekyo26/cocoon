@@ -151,7 +151,9 @@ func TestPluginContracts(t *testing.T) {
 		{
 			id: "docker-cli", name: "Docker CLI",
 			requiresRoot: true,
-			mustContain:  []string{"Docker", "retry 3"},
+			mustContain:  []string{"Docker", "retry 3", "tlsv1.2", "signed-by", "docker.asc"},
+			// Keyless: the armored key is consumed directly, no gpg needed.
+			mustNotContain: []string{"gpg --dearmor"},
 		},
 		{
 			id: "github-cli", name: "GitHub CLI",

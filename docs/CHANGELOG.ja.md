@@ -13,6 +13,12 @@ cocoon の主要な変更を記録します。フォーマットは
   従来の「`.deb` を TLS 取得して未検証のままインストール」を廃止し、apt が
   Google の固定署名鍵で全 Chrome パッケージを検証します（`docker-cli` /
   `github-cli` と同じ方式）。Chrome の Linux 版は引き続き amd64 のみです。
+- `docker-cli` プラグインがビルド時に `gnupg`（`vcs` apt カテゴリ）を必要と
+  しなくなりました。Docker 署名鍵を ASCII-armored のまま保存し `signed-by`
+  で直接参照する方式に変更し、`gpg --dearmor` を廃止しました。従来は `vcs`
+  カテゴリを外して `docker-cli` を有効にすると最小ベースで
+  `gpg: command not found` で失敗していました。apt のパッケージ署名検証は
+  変更ありません。
 
 ## [0.8.0] - 2026-05-30
 
