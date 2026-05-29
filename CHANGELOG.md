@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Security**: the `google-chrome` plugin now installs Chrome from
+  Google's signed apt repository (`signed-by` keyring) instead of fetching
+  the `.deb` over TLS and installing it unverified. apt verifies every
+  Chrome package against Google's pinned signing key, matching the
+  `docker-cli` / `github-cli` plugins. Chrome for Linux remains amd64-only.
+
 ## [0.8.0] - 2026-05-30
 
 ### Added

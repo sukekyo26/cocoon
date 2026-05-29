@@ -188,7 +188,13 @@ func TestPluginContracts(t *testing.T) {
 		{
 			id: "google-chrome", name: "Google Chrome",
 			requiresRoot: true,
-			mustContain:  []string{"google-chrome-stable_current_amd64.deb", "retry 3", "tlsv1.2"},
+			mustContain: []string{
+				"dl.google.com/linux/chrome/deb", "signed-by",
+				"linux_signing_key.pub", "google-chrome-stable",
+				"retry 3", "tlsv1.2",
+			},
+			// The pre-signed-by direct .deb download must be gone.
+			mustNotContain: []string{"linux/direct", "_current_amd64.deb"},
 		},
 		{
 			id: "lazygit", name: "lazygit",
