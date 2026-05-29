@@ -18,7 +18,9 @@ const arm64ExcludePath = "../../e2e/arm64-exclude.txt"
 
 // readArm64Exclude parses the shared exclude file the same way
 // docker-roundtrip.sh does: one plugin id per line, skipping blanks and
-// #-comments.
+// #-comments. The TrimSpace mirrors the script's trimming reader — keep
+// them in lockstep so a stray surrounding space can't pass this guard
+// yet fail to exclude the plugin at runtime.
 func readArm64Exclude(t *testing.T) []string {
 	t.Helper()
 	data, err := os.ReadFile(arm64ExcludePath)

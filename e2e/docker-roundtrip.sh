@@ -35,6 +35,13 @@ set -euxo pipefail
 : "${IMAGE:?IMAGE unset (base image id)}"
 : "${IMAGE_VERSION:?IMAGE_VERSION unset}"
 
+# Resolve the script and catalog dirs to absolute paths up front, before
+# the `cd e2e/test-project` below, so they survive the cwd change. $0 may
+# be relative (e.g. `bash e2e/docker-roundtrip.sh` from the repo root), so
+# resolve it while still at the original cwd or the `cd` here would fail.
+script_dir="$(cd "$(dirname "$0")" && pwd)"
+catalog_dir="$(cd "$script_dir/../internal/plugin/catalog" && pwd)"
+
 # Wipe any leftover project dir before init so reruns (local debugging,
 # self-hosted runner with cached workspace) are idempotent — `cocoon
 # init` refuses to overwrite an existing workspace.toml without --force.
@@ -45,10 +52,7 @@ git init -q
 
 # Derive the enabled plugin set from the embedded catalog so adding a
 # plugin under internal/plugin/catalog/ auto-enrolls it here (no
-# hand-kept list to drift). Resolve the catalog and exclude paths before
-# the `cd` below so they are independent of the test-project cwd.
-script_dir="$(cd "$(dirname "$0")" && pwd)"
-catalog_dir="$(cd "$script_dir/../internal/plugin/catalog" && pwd)"
+# hand-kept list to drift).
 
 all_plugins=()
 for d in "$catalog_dir"/*/; do
@@ -57,8 +61,11 @@ done
 
 # arm64-unsafe plugins, kept in a shared data file that
 # internal/plugin/e2e_arm64_exclude_test.go validates against the catalog.
+# Trim each line (plain `read`, default IFS) so this parser matches that
+# Go guard, which TrimSpace's before comparing; a trailing space must not
+# turn an excluded id into a silent no-op.
 arm64_exclude=()
-while IFS= read -r line || [ -n "$line" ]; do
+while read -r line || [ -n "$line" ]; do
   case "$line" in
     '' | '#'*) continue ;;
   esac
@@ -121,6 +128,32 @@ pins_for() {
   done
   join_csv "${out[@]}"
 }
+
+# Fail fast on a stale or mistyped pin: every pin_entries id must be a
+# real, version-capable catalog plugin. pins_for silently drops a pin
+# whose id matches no enabled plugin, so without this check a renamed or
+# typo'd id would quietly demote that plugin to LATEST — yet the same id
+# passed straight to `cocoon init --plugin-versions` is rejected, so the
+# e2e harness must reject it too.
+for entry in "${pin_entries[@]}"; do
+  name="${entry%%=*}"
+  found=""
+  for p in "${all_plugins[@]}"; do
+    if [ "$p" = "$name" ]; then
+      found=1
+      break
+    fi
+  done
+  if [ -z "$found" ]; then
+    echo "pin_entries: '$name' is not a catalog plugin (typo or renamed?)" >&2
+    exit 1
+  fi
+  if ! grep -Eq '^version_capable[[:space:]]*=[[:space:]]*true[[:space:]]*$' \
+    "$catalog_dir/$name/plugin.toml"; then
+    echo "pin_entries: '$name' is not version_capable; it cannot be pinned" >&2
+    exit 1
+  fi
+done
 
 case "$PRESET" in
   minimal)
