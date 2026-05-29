@@ -139,7 +139,7 @@ var messagesEN_initTemplates = map[string]string{
 		"# [certificates]\n" +
 		"# enable = true",
 	"init_toml_template_dockerfile": "# [dockerfile] — inject custom Dockerfile fragments at well-defined hook points.\n" +
-		"#   pre_user_setup runs before useradd; post_plugins runs after plugin install.sh's.\n" +
+		"#   pre_user_setup runs before useradd; post_plugins runs after plugin install.<category>.sh's.\n" +
 		"# [dockerfile]\n" +
 		"# pre_user_setup = \"\"\"RUN apt-get install -y my-extra-pkg\"\"\"\n" +
 		"# post_plugins   = \"\"\"RUN echo done\"\"\"",
@@ -306,7 +306,7 @@ var messagesJA_initTemplates = map[string]string{
 		"# [certificates]\n" +
 		"# enable = true",
 	"init_toml_template_dockerfile": "# [dockerfile] — Dockerfile の所定フックポイントにカスタムフラグメントを注入。\n" +
-		"#   pre_user_setup は useradd の前、post_plugins はプラグイン install.sh の後に実行。\n" +
+		"#   pre_user_setup は useradd の前、post_plugins はプラグイン install.<category>.sh の後に実行。\n" +
 		"# [dockerfile]\n" +
 		"# pre_user_setup = \"\"\"RUN apt-get install -y my-extra-pkg\"\"\"\n" +
 		"# post_plugins   = \"\"\"RUN echo done\"\"\"",
