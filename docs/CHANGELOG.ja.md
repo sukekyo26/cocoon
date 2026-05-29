@@ -17,6 +17,15 @@ cocoon の主要な変更を記録します。フォーマットは
   が拒否。`aws-cli` と同様）。`pin` でのバージョン指定は引き続き可能です。
   リリース毎の checksum 保守は不要で、上流鍵が失効しても過去の署名は検証
   できます（実際の鍵ローテーション時のみ鍵の更新が必要）。
+- `lazygit` / `gitleaks` / `just` / `shfmt` / `starship` / `deno` /
+  `docker-buildx` / `helm` / `copilot-cli` プラグインが、`[plugins.versions]`
+  に `checksum_amd64` / `checksum_arm64` を pin していない場合でも、上流が各
+  リリースで公開する checksum マニフェスト（`checksums.txt` / `SHA256SUMS`
+  ファイル、または資産ごとの `.sha256` / `.sha256sum`）と照合するように
+  なりました。従来は pin 無しビルドが警告のみで検証をスキップしていましたが、
+  デフォルトビルドが常時検証されます。ユーザー指定の checksum が引き続き優先
+  され、リリース毎の checksum 保守は不要です（マニフェストは資産と同じ
+  リリースから取得）。
 
 ### 修正
 

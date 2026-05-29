@@ -3,22 +3,11 @@
 #
 # Inputs (env):
 #   PIN              : Deno version without leading "v" (e.g. "2.7.14"); empty = latest stable
-#   CHECKSUM_AMD64   : sha256 of x86_64-unknown-linux-gnu zip; empty to skip verification
-#   CHECKSUM_ARM64   : sha256 of aarch64-unknown-linux-gnu zip; empty to skip verification
+#   CHECKSUM_AMD64   : sha256 of x86_64-unknown-linux-gnu zip; empty = verify
+#                      against the per-asset .sha256sum published with the release
+#   CHECKSUM_ARM64   : sha256 of aarch64-unknown-linux-gnu zip; empty = verify
+#                      against the per-asset .sha256sum published with the release
 set -euo pipefail
-
-# Yellow WARNING when stderr is a TTY (and NO_COLOR is unset) or
-# FORCE_COLOR is set. NO_COLOR wins per no-color.org.
-if [ -n "${NO_COLOR:-}" ]; then
-  C_YEL=''
-  C_RST=''
-elif [ -n "${FORCE_COLOR:-}" ] || [ -t 2 ]; then
-  C_YEL=$'\033[33m'
-  C_RST=$'\033[0m'
-else
-  C_YEL=''
-  C_RST=''
-fi
 
 ARCH="$(dpkg --print-architecture)"
 case "$ARCH" in
@@ -49,13 +38,20 @@ else
   fi
 fi
 
+url="https://github.com/denoland/deno/releases/download/${VERSION_TAG}/deno-${DENO_ARCH}-unknown-linux-gnu.zip"
 curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
-  "https://github.com/denoland/deno/releases/download/${VERSION_TAG}/deno-${DENO_ARCH}-unknown-linux-gnu.zip" -o /tmp/deno.zip
+  "$url" -o /tmp/deno.zip
 
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/deno.zip" | sha256sum -c -
 else
-  printf '%sWARNING: SHA256 verification skipped for Deno (no checksum for deno in [plugins.versions])%s\n' "$C_YEL" "$C_RST" >&2
+  # No user pin: verify against the per-asset .sha256sum the release publishes
+  # next to the zip.
+  curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+    "${url}.sha256sum" -o /tmp/deno.sum
+  expected="$(cut -d ' ' -f1 /tmp/deno.sum)"
+  echo "${expected}  /tmp/deno.zip" | sha256sum -c -
+  rm -f /tmp/deno.sum
 fi
 
 unzip -q -o /tmp/deno.zip -d /usr/local/bin

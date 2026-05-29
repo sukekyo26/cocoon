@@ -141,7 +141,7 @@ func TestPluginContracts(t *testing.T) {
 				// installer method (install.installer.sh)
 				"gh.io/copilot-install", `PREFIX="$HOME/.local"`,
 				// binary method (install.binary.sh)
-				"github.com/github/copilot-cli", "sha256sum -c -",
+				"github.com/github/copilot-cli", "sha256sum -c -", "SHA256SUMS.txt",
 				"dpkg --print-architecture",
 				// method-aware fail-fast
 				`COCOON_INSTALL_METHOD`,
@@ -169,7 +169,7 @@ func TestPluginContracts(t *testing.T) {
 			id: "gitleaks", name: "gitleaks",
 			requiresRoot: true, versionCapable: true,
 			mustContain: []string{
-				"gitleaks", "github.com/gitleaks/gitleaks", "sha256sum -c -",
+				"gitleaks", "github.com/gitleaks/gitleaks", "sha256sum -c -", "checksums.txt",
 				"tlsv1.2", "retry 3", "dpkg --print-architecture", "tar -xz",
 				// gitleaks asset names use x64 / arm64 (not x86_64 / aarch64);
 				// pin to catch lazygit copy-paste accidents.
@@ -211,7 +211,7 @@ func TestPluginContracts(t *testing.T) {
 		{
 			id: "lazygit", name: "lazygit",
 			requiresRoot: true, versionCapable: true,
-			mustContain:    []string{"lazygit", "sha256sum -c -", "tlsv1.2", "retry 3"},
+			mustContain:    []string{"lazygit", "sha256sum -c -", "tlsv1.2", "retry 3", "checksums.txt"},
 			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
 		},
 		{
@@ -252,7 +252,7 @@ func TestPluginContracts(t *testing.T) {
 			id: "deno", name: "Deno",
 			requiresRoot: true, versionCapable: true, firstVolume: "deno",
 			mustContain: []string{
-				"deno", "DENO_ARCH", "github.com/denoland/deno", "sha256sum -c -",
+				"deno", "DENO_ARCH", "github.com/denoland/deno", "sha256sum -c -", ".sha256sum",
 				"tlsv1.2", "retry 3", "dpkg --print-architecture", "unzip",
 			},
 			mustNotContain: append(append([]string{}, noPlaceholders...), "api.github.com", "| jq "),
@@ -301,7 +301,7 @@ func TestPluginContracts(t *testing.T) {
 			id: "helm", name: "Helm",
 			requiresRoot: true, versionCapable: true,
 			mustContain: []string{
-				"helm", "get.helm.sh", "sha256sum -c -",
+				"helm", "get.helm.sh", "sha256sum -c -", ".sha256sum",
 				"tlsv1.2", "retry 3", "dpkg --print-architecture", "tar",
 			},
 			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
@@ -319,7 +319,7 @@ func TestPluginContracts(t *testing.T) {
 			id: "shfmt", name: "shfmt",
 			requiresRoot: true, versionCapable: true,
 			mustContain: []string{
-				"shfmt", "github.com/mvdan/sh", "sha256sum -c -",
+				"shfmt", "github.com/mvdan/sh", "sha256sum -c -", "sha256sums.txt",
 				"tlsv1.2", "retry 3", "dpkg --print-architecture",
 			},
 			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
@@ -328,7 +328,7 @@ func TestPluginContracts(t *testing.T) {
 			id: "just", name: "just",
 			requiresRoot: true, versionCapable: true,
 			mustContain: []string{
-				"just", "github.com/casey/just", "sha256sum -c -",
+				"just", "github.com/casey/just", "sha256sum -c -", "SHA256SUMS",
 				"tlsv1.2", "retry 3", "dpkg --print-architecture", "tar -xz",
 			},
 			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
@@ -337,7 +337,7 @@ func TestPluginContracts(t *testing.T) {
 			id: "docker-buildx", name: "Docker Buildx",
 			requiresRoot: true, versionCapable: true,
 			mustContain: []string{
-				"buildx", "github.com/docker/buildx", "sha256sum -c -",
+				"buildx", "github.com/docker/buildx", "sha256sum -c -", "checksums.txt",
 				"tlsv1.2", "retry 3", "dpkg --print-architecture",
 				"/usr/libexec/docker/cli-plugins",
 			},
@@ -359,7 +359,7 @@ func TestPluginContracts(t *testing.T) {
 			id: "starship", name: "Starship",
 			requiresRoot: true, versionCapable: true, firstVolume: "config",
 			mustContain: []string{
-				"starship", "sha256sum", "tlsv1.2", "retry 3",
+				"starship", "sha256sum", ".sha256", "tlsv1.2", "retry 3",
 				`"$RC_FILE"`, "LOGIN_SHELL", "starship init",
 			},
 			mustNotContain: append(append([]string{}, noApiNoJq...), `>> ~/.bashrc`),

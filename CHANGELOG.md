@@ -18,6 +18,16 @@ adheres to [Semantic Versioning](https://semver.org/).
   version. No per-release checksum maintenance is required, and an expired
   upstream key still verifies past signatures — only an actual key rotation
   needs a key refresh.
+- The `lazygit`, `gitleaks`, `just`, `shfmt`, `starship`, `deno`,
+  `docker-buildx`, `helm`, and `copilot-cli` plugins now verify their
+  download against the checksum manifest the upstream publishes with each
+  release (a `checksums.txt` / `SHA256SUMS` file, or a per-asset `.sha256`
+  / `.sha256sum`) when no `checksum_amd64` / `checksum_arm64` is pinned in
+  `[plugins.versions]`. Previously an unpinned build skipped verification
+  with a warning; now the default build is always checked. A user-supplied
+  checksum still takes precedence, and there is no per-release checksum
+  maintenance — the manifest is fetched from the same release as the
+  artifact.
 
 ### Fixed
 

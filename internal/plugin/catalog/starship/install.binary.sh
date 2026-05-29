@@ -3,22 +3,11 @@
 #
 # Inputs (env):
 #   PIN              : Starship version (without leading "v"); empty = latest
-#   CHECKSUM_AMD64   : sha256 of amd64 tarball; empty to skip verification
-#   CHECKSUM_ARM64   : sha256 of arm64 tarball; empty to skip verification
+#   CHECKSUM_AMD64   : sha256 of amd64 tarball; empty = verify against the
+#                      per-asset .sha256 published with the release
+#   CHECKSUM_ARM64   : sha256 of arm64 tarball; empty = verify against the
+#                      per-asset .sha256 published with the release
 set -euo pipefail
-
-# Yellow WARNING when stderr is a TTY (and NO_COLOR is unset) or
-# FORCE_COLOR is set. NO_COLOR wins per no-color.org.
-if [ -n "${NO_COLOR:-}" ]; then
-  C_YEL=''
-  C_RST=''
-elif [ -n "${FORCE_COLOR:-}" ] || [ -t 2 ]; then
-  C_YEL=$'\033[33m'
-  C_RST=$'\033[0m'
-else
-  C_YEL=''
-  C_RST=''
-fi
 
 ARCH="$(dpkg --print-architecture)"
 case "$ARCH" in
@@ -44,14 +33,20 @@ else
     sed 's|.*/tag/v||')
 fi
 
+url="https://github.com/starship/starship/releases/download/v${VERSION}/starship-${DOWNLOAD_ARCH}-unknown-linux-musl.tar.gz"
 curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
-  "https://github.com/starship/starship/releases/download/v${VERSION}/starship-${DOWNLOAD_ARCH}-unknown-linux-musl.tar.gz" \
-  -o /tmp/starship.tar.gz
+  "$url" -o /tmp/starship.tar.gz
 
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/starship.tar.gz" | sha256sum -c -
 else
-  printf '%sWARNING: SHA256 verification skipped for Starship (no checksum for starship in [plugins.versions])%s\n' "$C_YEL" "$C_RST" >&2
+  # No user pin: verify against the per-asset .sha256 (a bare hash) the
+  # release publishes next to the tarball.
+  curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+    "${url}.sha256" -o /tmp/starship.sum
+  expected="$(cut -d ' ' -f1 /tmp/starship.sum)"
+  echo "${expected}  /tmp/starship.tar.gz" | sha256sum -c -
+  rm -f /tmp/starship.sum
 fi
 
 tar -xzf /tmp/starship.tar.gz -C /usr/local/bin starship
