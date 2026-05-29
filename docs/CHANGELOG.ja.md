@@ -26,6 +26,17 @@ cocoon の主要な変更を記録します。フォーマットは
   デフォルトビルドが常時検証されます。ユーザー指定の checksum が引き続き優先
   され、リリース毎の checksum 保守は不要です（マニフェストは資産と同じ
   リリースから取得）。
+- `kubectl` / `go` / `node` / `zig` / `dart` / `flutter` / `nerd-fonts` /
+  `cocoon` プラグインが、`[plugins.versions]` に `checksum_amd64` /
+  `checksum_arm64` を pin していない場合でも、上流が公開する checksum
+  （`.sha256` / `.sha256sum` サイドカー、`SHASUMS256.txt` / `SHA-256.txt`
+  / `SHA256SUMS` マニフェスト、または上流リリース JSON の `shasum` /
+  `sha256` フィールド）と照合するようになりました。従来は pin 無しビルドが
+  警告のみで検証をスキップしていましたが、デフォルトビルドが常時検証され
+  ます。ユーザー指定の checksum が引き続き優先され、リリース毎の checksum
+  保守は不要です。`go` は `go.dev/dl` がリダイレクトする CDN
+  `dl.google.com/go` から取得するようになり、tarball と `.sha256` が同一
+  ホストになりました。
 
 ### 修正
 

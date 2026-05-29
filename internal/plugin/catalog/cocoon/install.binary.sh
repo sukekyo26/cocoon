@@ -9,22 +9,11 @@
 #
 # Inputs (env):
 #   PIN              : cocoon version (without leading "v"); empty = latest
-#   CHECKSUM_AMD64   : sha256 of amd64 binary; empty to skip verification
-#   CHECKSUM_ARM64   : sha256 of arm64 binary; empty to skip verification
+#   CHECKSUM_AMD64   : sha256 of amd64 binary; empty = verify against the
+#                      SHA256SUMS published in the Pages mirror
+#   CHECKSUM_ARM64   : sha256 of arm64 binary; empty = verify against the
+#                      SHA256SUMS published in the Pages mirror
 set -euo pipefail
-
-# Yellow WARNING when stderr is a TTY (and NO_COLOR is unset) or
-# FORCE_COLOR is set. NO_COLOR wins per no-color.org.
-if [ -n "${NO_COLOR:-}" ]; then
-  C_YEL=''
-  C_RST=''
-elif [ -n "${FORCE_COLOR:-}" ] || [ -t 2 ]; then
-  C_YEL=$'\033[33m'
-  C_RST=$'\033[0m'
-else
-  C_YEL=''
-  C_RST=''
-fi
 
 ARCH="$(dpkg --print-architecture)"
 case "$ARCH" in
@@ -59,14 +48,20 @@ else
     https://sukekyo26.github.io/cocoon/VERSION | tr -d '[:space:]')
 fi
 
+base="https://sukekyo26.github.io/cocoon/v${VERSION}"
 curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
-  "https://sukekyo26.github.io/cocoon/v${VERSION}/cocoon-linux-${DOWNLOAD_ARCH}" \
-  -o /tmp/cocoon
+  "${base}/cocoon-linux-${DOWNLOAD_ARCH}" -o /tmp/cocoon
 
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/cocoon" | sha256sum -c -
 else
-  printf '%sWARNING: SHA256 verification skipped for cocoon (no checksum for cocoon in [plugins.versions])%s\n' "$C_YEL" "$C_RST" >&2
+  # No user pin: verify against the SHA256SUMS the Pages mirror publishes
+  # alongside the binaries for this version.
+  curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+    "${base}/SHA256SUMS" -o /tmp/cocoon.sums
+  expected="$(grep "cocoon-linux-${DOWNLOAD_ARCH}\$" /tmp/cocoon.sums | cut -d ' ' -f1)"
+  echo "${expected}  /tmp/cocoon" | sha256sum -c -
+  rm -f /tmp/cocoon.sums
 fi
 
 install -m 0755 /tmp/cocoon /usr/local/bin/cocoon
