@@ -6,6 +6,85 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-05-30
+
+### Added
+
+- New `[install.extra_versions]` section in `plugin.toml` lets a plugin
+  expose subcomponent versions as user-overridable knobs. Each entry
+  declares a key (used in `[plugins.versions].<id>` to override),
+  an `env` name (passed to the install script as that env variable),
+  and a `default` (used when the workspace.toml override is absent).
+  `env` must match `^[A-Z_][A-Z0-9_]*$` and must not collide with
+  cocoon-reserved env variables (`PIN`, `CHECKSUM_*`, `RC_FILE`,
+  `RC_SYNTAX`, `LOGIN_SHELL`, `COCOON_INSTALL_METHOD`, `USERNAME`)
+  or with any name in `[install].build_args`. Plugin `[install].build_args`
+  entries themselves are now rejected when they collide with the
+  same reserved env set: the `build_args` pair is appended to the
+  RUN env prefix after the framework values and would silently
+  shadow them. Reserved keys
+  (`pin`, `checksum_amd64`, `checksum_arm64`) are rejected as
+  `extra_versions` keys (declaring one would be a no-op because the
+  user can never override it via `[plugins.versions]`). `default` is
+  required and non-empty. Both the plugin-side `default` and any
+  workspace-side override are rejected if they contain `"`, `\`,
+  `\n`, `\r`, `$`, or backtick: the value flows into a `KEY="..."`
+  env pair on the Dockerfile RUN line, where the first four runes
+  would break the shell quoting and `$` / backtick would trigger
+  parameter or command substitution at build time instead of passing
+  through as a literal version string.
+- `[plugins.versions].<id>` inline tables in `workspace.toml` now
+  accept keys beyond the reserved `pin` / `checksum_amd64` /
+  `checksum_arm64` triple, provided the named plugin declares them
+  under `[install.extra_versions]`. Example:
+  `android-sdk = { pin = "14742923", api_level = "36", build_tools = "36.0.0" }`.
+  Unknown keys (typos, removed declarations) are rejected by
+  `cocoon gen` so misconfigurations fail fast instead of silently
+  falling back to the plugin default. `cocoon plugin pin <id> --write`
+  preserves any extra keys present on the existing line — it rewrites
+  `pin` / `checksum_*` only.
+- `android-sdk` plugin (catalog id `android-sdk`, `archive` method).
+  Installs Android command-line tools (`sdkmanager`) at
+  `/usr/local/android-sdk` and runs `sdkmanager` in the same RUN to
+  pull `platform-tools`, `platforms;android-<api_level>`, and
+  `build-tools;<build_tools>`. Exposes `ANDROID_HOME`,
+  `ANDROID_SDK_ROOT`, and prepends `cmdline-tools/latest/bin` +
+  `platform-tools` to `PATH`. Ships OpenJDK 17 (AGP 8.x baseline)
+  via apt. `pin` is the commandline-tools `BUILD_NUMBER`; an empty
+  `pin` resolves to the latest BUILD_NUMBER advertised on
+  <https://developer.android.com/studio> at build time, matching the
+  `version_capable` contract. `api_level` (default `35`) and `build_tools`
+  (default `35.0.0`) are exposed via `[install.extra_versions]` so
+  workspaces can override the platform / build-tools versions without
+  touching the catalog. Linux amd64 / arm64 both supported (the ZIP
+  is JVM-only; the same SHA pins both halves). The Android emulator
+  and `system-images` are deliberately out of scope for the initial
+  drop. Combine with `flutter` to turn the `flutter doctor` Android
+  toolchain check green.
+
+### Changed
+
+- `cocoon self-update` now fails fast with a remediation hint when the
+  install directory is not writable by the current user (e.g. the binary
+  lives at a root-owned location like `/usr/local/bin/cocoon`). Previously
+  the command downloaded the new asset (~12 MB) and verified its SHA256
+  before failing at the `rename` step with a raw `permission denied` that
+  exposed an internal `*.cocoon-update.tmp` path. The error now points at
+  the offending directory and tells the user to rerun with
+  `sudo <selfPath> self-update`. `cocoon self-update --check-only` is
+  read-only by design and skips this preflight, so a version check still
+  works without sudo on root-owned install paths.
+
+### Fixed
+
+- **Security**: Reject `[plugins.versions].<id>.pin` values containing `"`,
+  `\`, `\n`, `\r`, `$`, or backtick. The pin flows into a `PIN="..."` env pair
+  on the Dockerfile RUN line; a bare quote could previously break out of the
+  quoting and `$` / backtick could trigger parameter or command substitution,
+  so a crafted `workspace.toml` could run arbitrary commands at `docker build`
+  time. This matches the guard already applied to `[install.extra_versions]`
+  override values.
+
 ## [0.7.6] - 2026-05-24
 
 ### Added
@@ -258,7 +337,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Add `COMPOSE_PROJECT_NAME` derivation from the project directory basename so docker compose namespacing matches the host directory.
 - Add i18n catalog (English / Japanese) covering every CLI prompt, error message, and inline `workspace.toml` comment, switched via `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG`.
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.7.6...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/sukekyo26/cocoon/compare/v0.7.6...v0.8.0
 [0.7.6]: https://github.com/sukekyo26/cocoon/compare/v0.7.5...v0.7.6
 [0.7.5]: https://github.com/sukekyo26/cocoon/compare/v0.7.4...v0.7.5
 [0.7.4]: https://github.com/sukekyo26/cocoon/compare/v0.7.3...v0.7.4

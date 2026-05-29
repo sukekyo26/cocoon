@@ -6,6 +6,85 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-05-30
+
+### 追加
+
+- `plugin.toml` に新しい `[install.extra_versions]` セクションを追加。
+  プラグインがサブコンポーネントのバージョンを「ユーザーが上書き可能な
+  つまみ」として公開できます。各エントリは
+  「キー名（`[plugins.versions].<id>` に書く名前）」「`env`（install
+  スクリプトに渡る環境変数名）」「`default`（workspace.toml で未指定時
+  の値）」を宣言します。`env` は `^[A-Z_][A-Z0-9_]*$` に一致し、cocoon
+  予約 env 名（`PIN`、`CHECKSUM_*`、`RC_FILE`、`RC_SYNTAX`、
+  `LOGIN_SHELL`、`COCOON_INSTALL_METHOD`、`USERNAME`）や
+  `[install].build_args` の名前と衝突できません。
+  プラグインの `[install].build_args` エントリ自体も同じ予約 env
+  集合と衝突する名前は拒否されるようになりました — `build_args`
+  ペアは framework value の後に RUN env プレフィックスへ追加される
+  ため、衝突すると silent shadow が起きるため。
+  予約キー名（`pin`、`checksum_amd64`、`checksum_arm64`）を
+  `extra_versions` のキーとして宣言することは拒否されます
+  （`[plugins.versions]` が予約フィールドとして消費するため、宣言しても
+  ユーザーが上書きできない no-op になるため）。`default` は必須・非空。
+  プラグイン側 `default` と workspace 側 override のどちらも
+  `"` / `\` / `\n` / `\r` / `$` / backtick を含む値は拒否されます
+  （値は Dockerfile の RUN 行の `KEY="..."` 環境変数に展開される
+  ため、前 4 文字は shell quoting を破壊し、`$` / backtick は
+  parameter / command substitution を引き起こしてリテラルな
+  バージョン文字列として渡らなくなる）。
+- `workspace.toml` の `[plugins.versions].<id>` インラインテーブルが、
+  予約済み 3 キー（`pin` / `checksum_amd64` / `checksum_arm64`）に加えて、
+  プラグインが `[install.extra_versions]` で宣言した任意のキーを受け
+  入れるようになりました。例:
+  `android-sdk = { pin = "14742923", api_level = "36", build_tools = "36.0.0" }`。
+  未宣言キー（typo や削除済み宣言）は `cocoon gen` が拒否するため、
+  default に silently fallback する事故を防ぎます。`cocoon plugin pin
+  <id> --write` は既存行の extra キーを保全し、`pin` / `checksum_*`
+  のみ書き換えます。
+- `android-sdk` プラグイン（catalog id `android-sdk`、`archive` メソッド）。
+  Android command-line tools (`sdkmanager`) を
+  `/usr/local/android-sdk` にインストールし、同じ RUN 内で `sdkmanager`
+  を実行して `platform-tools` / `platforms;android-<api_level>` /
+  `build-tools;<build_tools>` を取得します。`ANDROID_HOME` /
+  `ANDROID_SDK_ROOT` を export し、`PATH` の先頭に
+  `cmdline-tools/latest/bin` と `platform-tools` を追加します。
+  apt で OpenJDK 17 (AGP 8.x baseline) も同梱。`pin` は
+  commandline-tools の `BUILD_NUMBER`。空 `pin` を指定したときは
+  <https://developer.android.com/studio> の HTML を build 時にスクレイプして
+  最新 BUILD_NUMBER に解決します（`version_capable` 契約に合わせた挙動）。
+  `api_level`（default
+  `35`）と `build_tools`（default `35.0.0`）を `[install.extra_versions]`
+  で公開しているため、catalog に手を加えずに workspace 側で platform /
+  build-tools のバージョンを上書きできます。Linux amd64 / arm64 両対応
+  （ZIP は JVM-only で arch 非依存、同じ SHA を両方に pin します）。
+  Android emulator と `system-images` は初期版のスコープ外です。
+  `flutter` と組み合わせると `flutter doctor` の Android toolchain
+  チェックが緑になります。
+
+### 変更
+
+- `cocoon self-update` がインストール先ディレクトリに現ユーザーの書込権限が
+  無いケース（例: `/usr/local/bin/cocoon` のような root 所有ロケーション）
+  で早期に失敗し、対処方法を提示するようになりました。従来は新バイナリ
+  (~12 MB) をダウンロードして SHA256 検証を通したあとで `rename` 時に失敗
+  し、内部の `*.cocoon-update.tmp` パスを露出した `permission denied` のみ
+  が表示されていました。エラーメッセージが書込不可ディレクトリを名指しし、
+  `sudo <selfPath> self-update` で再実行するよう案内します。
+  `cocoon self-update --check-only` は read-only 操作なのでこの preflight
+  をスキップし、root 所有のインストール先でも sudo なしにバージョン確認
+  ができます。
+
+### 修正
+
+- **セキュリティ**: `[plugins.versions].<id>.pin` の値に `"`, `\`, `\n`,
+  `\r`, `$`, backtick が含まれる場合に拒否するよう修正。pin は Dockerfile の
+  RUN 行の `PIN="..."` env ペアに展開されるため、従来は裸のクォートで
+  クォートを抜け出せ、`$` / backtick でパラメータ・コマンド置換が起きました。
+  つまり細工された `workspace.toml` で `docker build` 時に任意コマンドが
+  実行され得ました。これは `[install.extra_versions]` の override 値に既に
+  適用されているガードと同じものです。
+
 ## [0.7.6] - 2026-05-24
 
 ### 追加
@@ -142,7 +221,7 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ### 変更
 
-- **BREAKING (プラグイン作者向け)**: プラグインの install スクリプト名 `install.sh` は廃止しました。catalog の全 26 プラグインは `install.<category>.sh` を持ち、`plugin.toml` には対応する `[install.methods.<category>]` の宣言が必須となります。loader はリテラル `install.sh` を reject し、エラーメッセージで移行手順を案内します。`<category>` は catalog 共通の 4 語彙語: **`binary`** (単一バイナリ配置)、**`installer`** (vendor の curl-to-bash 経由)、**`apt`** (apt repo / .deb)、**`archive`** (複数ファイルの tar/zip 展開) のいずれか。`~/.cocoon/plugins/<id>/install.sh` を持つカスタムプラグインを使っている場合のみ影響 (リネーム + plugin.toml に `[install.methods.<category>]` 追加が必要)。catalog 同梱のプラグインを使うエンドユーザーは影響なし。
+- **BREAKING (プラグイン作者向け)**: プラグインの install スクリプト名 `install.sh` は廃止しました。catalog の各プラグインは `install.<category>.sh` を持ち、`plugin.toml` には対応する `[install.methods.<category>]` の宣言が必須となります。loader はリテラル `install.sh` を reject し、エラーメッセージで移行手順を案内します。`<category>` は catalog 共通の 4 語彙語: **`binary`** (単一バイナリ配置)、**`installer`** (vendor の curl-to-bash 経由)、**`apt`** (apt repo / .deb)、**`archive`** (複数ファイルの tar/zip 展開) のいずれか。`~/.cocoon/plugins/<id>/install.sh` を持つカスタムプラグインを使っている場合のみ影響 (リネーム + plugin.toml に `[install.methods.<category>]` 追加が必要)。catalog 同梱のプラグインを使うエンドユーザーは影響なし。
 - **BREAKING**: `cocoon plugin scaffold --template` は catalog 4 語彙 (`installer` / `binary` / `apt` / `archive`) を受理するようになりました (旧名 `curl-pipe` / `tarball` / `generic` は廃止)。scaffold 出力は `install.<category>.sh` 形式となり、生成される `plugin.toml` には `[install.methods.<category>]` と `default_method` が自動挿入されます (どちらも loader 必須化のため)。`--template tarball` は "unknown template" エラーで reject されるので `--template binary --version-capable` に置き換えてください。
 
 ## [0.3.1] - 2026-05-14
@@ -260,7 +339,8 @@ cocoon の主要な変更を記録します。フォーマットは
 - `COMPOSE_PROJECT_NAME` をプロジェクトディレクトリの basename から導出するように変更。docker compose の namespace がホストディレクトリと一致する。
 - 国際化 (英語 / 日本語) カタログを追加。CLI プロンプト・エラーメッセージ・`workspace.toml` インラインコメントすべてを `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` で切替可能。
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.7.6...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/sukekyo26/cocoon/compare/v0.7.6...v0.8.0
 [0.7.6]: https://github.com/sukekyo26/cocoon/compare/v0.7.5...v0.7.6
 [0.7.5]: https://github.com/sukekyo26/cocoon/compare/v0.7.4...v0.7.5
 [0.7.4]: https://github.com/sukekyo26/cocoon/compare/v0.7.3...v0.7.4

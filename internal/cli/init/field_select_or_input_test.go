@@ -716,3 +716,31 @@ func TestSelectOrInputField_RunAccessibleEOFBeforeAnswer(t *testing.T) {
 		t.Fatalf("RunAccessible(empty stdin) err = %v, want an error wrapping io.EOF", err)
 	}
 }
+
+// TestSelectOrInputField_RunAccessiblePath drives Run() down its accessible
+// branch (f.access == true) — the only branch reachable without a tty, since
+// the GUI branch blocks on huh.Form.Run(). A verbatim tag answer must commit
+// to the target.
+//
+//nolint:paralleltest // redirects process-global os.Stdin / os.Stdout.
+func TestSelectOrInputField_RunAccessiblePath(t *testing.T) {
+	var target string
+	f := newSelectOrInputField("image_version", &target, []string{"26.04", "24.04"}, "Other").
+		Validate(func(string) error { return nil })
+	f.WithAccessible(true)
+
+	withScriptedStdin(t, "26.04\n")
+	readStdout := captureStdout(t)
+	err := f.Run()
+	out := readStdout()
+
+	if err != nil {
+		t.Fatalf("Run (accessible) err = %v", err)
+	}
+	if target != "26.04" {
+		t.Errorf("target = %q, want %q", target, "26.04")
+	}
+	if !strings.Contains(out, "Choose by number or type a tag:") {
+		t.Errorf("accessible prompt header missing from stdout: %q", out)
+	}
+}

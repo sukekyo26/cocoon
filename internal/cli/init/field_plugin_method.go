@@ -2,7 +2,8 @@ package initcli
 
 import (
 	"fmt"
-	"sort"
+	"maps"
+	"slices"
 
 	"github.com/charmbracelet/huh"
 
@@ -50,11 +51,7 @@ func promptPluginMethodsForMulti(
 // pre-selected so pressing Enter on the prompt is a no-op for the common
 // case (user accepts the recommendation).
 func promptOnePluginMethod(cat *i18n.Catalog, id string, p *plugin.Plugin) (string, error) {
-	names := make([]string, 0, len(p.Install.Methods))
-	for name := range p.Install.Methods {
-		names = append(names, name)
-	}
-	sort.Strings(names)
+	names := slices.Sorted(maps.Keys(p.Install.Methods))
 
 	options := make([]huh.Option[string], 0, len(names))
 	for _, name := range names {

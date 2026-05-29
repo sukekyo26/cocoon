@@ -5,13 +5,18 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
+	"slices"
 
 	"github.com/pelletier/go-toml/v2"
 )
 
 // LoadWorkspace parses and validates a workspace.toml file. Unknown top-level
-// or nested keys are rejected as *ValidationError.
+// or nested keys are rejected as *ValidationError, except inside
+// [plugins.versions] inline tables where extra keys are carried into
+// PluginVersionOverride.Extra (cross-checked later against the plugin's
+// declared [install.extra_versions]).
 func LoadWorkspace(path string) (*Workspace, error) {
 	data, err := os.ReadFile(path) //nolint:gosec // path provided by trusted caller
 	if err != nil {
@@ -21,10 +26,89 @@ func LoadWorkspace(path string) (*Workspace, error) {
 	if err := StrictUnmarshal(path, data, &ws); err != nil {
 		return nil, err
 	}
+	if err := materializePluginVersions(path, &ws); err != nil {
+		return nil, err
+	}
 	if err := ws.Validate(path); err != nil {
 		return nil, err
 	}
 	return &ws, nil
+}
+
+// materializePluginVersions converts PluginsSpec.VersionsRaw (the
+// map-of-any shape that survived strict unmarshal) into the typed
+// PluginsSpec.Versions map. Reserved keys (pin / checksum_amd64 /
+// checksum_arm64) populate the dedicated fields; any remaining keys go
+// into Extra so a plugin's [install.extra_versions] can pick them up at
+// generation time. Non-string values and extra-key values containing
+// any rune in UnsafeExtraVersionRune's reject set
+// ('"', '\\', '\n', '\r', '$', '`') produce a *ValidationError — see
+// UnsafeExtraVersionRune's doc for the rationale (Dockerfile RUN-prefix
+// shell-quoting / parameter / command-substitution hazards). Plugin
+// ids and per-entry keys are iterated in sorted order so the
+// FieldError sequence (and hence the "first error" summary) is
+// deterministic across runs.
+func materializePluginVersions(path string, ws *Workspace) error {
+	if len(ws.Plugins.VersionsRaw) == 0 {
+		return nil
+	}
+	out := make(map[string]PluginVersionOverride, len(ws.Plugins.VersionsRaw))
+	a := NewAccumulator()
+	ids := slices.Sorted(maps.Keys(ws.Plugins.VersionsRaw))
+	for _, id := range ids {
+		out[id] = materializeOneOverride(a, id, ws.Plugins.VersionsRaw[id])
+	}
+	if errs := a.Errors(); len(errs) > 0 {
+		return &ValidationError{Path: path, Errors: errs}
+	}
+	ws.Plugins.Versions = out
+	return nil
+}
+
+// materializeOneOverride pulls the per-plugin loop body out of
+// materializePluginVersions so the outer fn stays under the gocognit
+// threshold. Errors accumulate on a; the returned override is always
+// safe to store even on partial failure (later validation surfaces the
+// accumulated errors).
+func materializeOneOverride(a *Accumulator, id string, raw map[string]any) PluginVersionOverride {
+	entry := PluginVersionOverride{} //nolint:exhaustruct // filled below
+	keys := slices.Sorted(maps.Keys(raw))
+	for _, k := range keys {
+		v := raw[k]
+		s, ok := v.(string)
+		if !ok {
+			a.Add(fmt.Sprintf("value for %q must be a string, got %T", k, v),
+				"plugins", "versions", id, k)
+			continue
+		}
+		switch k {
+		case "pin":
+			// pin flows into the same Dockerfile RUN-prefix `PIN="..."` env
+			// pair as the extra values below, so it gets the same unsafe-rune
+			// guard (checksums are constrained by rxSha256 in validate).
+			if bad, r := UnsafeExtraVersionRune(s); bad {
+				a.Add(UnsafeExtraVersionMessage("value", r), "plugins", "versions", id, k)
+				continue
+			}
+			entry.Pin = s
+		case "checksum_amd64":
+			cs := s
+			entry.ChecksumAmd64 = &cs
+		case "checksum_arm64":
+			cs := s
+			entry.ChecksumArm64 = &cs
+		default:
+			if bad, r := UnsafeExtraVersionRune(s); bad {
+				a.Add(UnsafeExtraVersionMessage("value", r), "plugins", "versions", id, k)
+				continue
+			}
+			if entry.Extra == nil {
+				entry.Extra = make(map[string]string)
+			}
+			entry.Extra[k] = s
+		}
+	}
+	return entry
 }
 
 // StrictUnmarshal decodes data into v with DisallowUnknownFields enabled. The

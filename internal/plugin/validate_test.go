@@ -51,6 +51,49 @@ version_capable = false
 	require.Contains(t, err.Error(), "duplicate")
 }
 
+// TestValidate_BuildArgsRejectsReservedEnv covers the cases where a
+// plugin would silently shadow a framework-provided env variable by
+// declaring its name in install.build_args. Every entry of
+// reservedExtraVersionEnvs is exercised so adding a new reserved name
+// to that set automatically gets caught by this test if the validator
+// drift away.
+func TestValidate_BuildArgsRejectsReservedEnv(t *testing.T) {
+	t.Parallel()
+	cases := []string{
+		"PIN",
+		"CHECKSUM_AMD64",
+		"CHECKSUM_ARM64",
+		"RC_FILE",
+		"RC_SYNTAX",
+		"LOGIN_SHELL",
+		"COCOON_INSTALL_METHOD",
+		"USERNAME",
+	}
+	for _, name := range cases {
+		name := name
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			tmp := t.TempDir() + "/plugin.toml"
+			body := `
+[metadata]
+name = "x"
+description = "y"
+url = "https://example.com/x"
+default = false
+[install]
+requires_root = false
+build_args = ["` + name + `"]
+[version]
+version_capable = false
+`
+			require.NoError(t, os.WriteFile(tmp, []byte(body), 0o600))
+			_, err := plugin.Load(tmp)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "collides with a cocoon-reserved variable")
+		})
+	}
+}
+
 func TestValidate_InstallEnvKey(t *testing.T) {
 	t.Parallel()
 	tmp := t.TempDir() + "/plugin.toml"
@@ -390,6 +433,193 @@ func TestVersion_VerifiesByChecksum(t *testing.T) {
 			t.Parallel()
 			v := plugin.Version{VersionCapable: true, Verify: tc.verify}
 			require.Equal(t, tc.want, v.VerifiesByChecksum())
+		})
+	}
+}
+
+// TestValidate_ExtraVersionsAccepted pins that a well-formed
+// [install.extra_versions] block passes validation: two declarations
+// with distinct lowercase keys, uppercase env names, non-empty defaults.
+func TestValidate_ExtraVersionsAccepted(t *testing.T) {
+	t.Parallel()
+	p := &plugin.Plugin{
+		Metadata: validMetadata(),
+		Install: plugin.Install{
+			DefaultMethod: "archive",
+			Methods:       map[string]plugin.InstallMethod{"archive": {Description: "x"}},
+			ExtraVersions: map[string]plugin.ExtraVersionSpec{
+				"api_level":   {Env: "ANDROID_SDK_API_LEVEL", Default: "35"},
+				"build_tools": {Env: "ANDROID_SDK_BUILD_TOOLS", Default: "35.0.0"},
+			},
+		},
+	}
+	require.NoError(t, p.Validate("test/plugin.toml"))
+}
+
+// TestValidate_ExtraVersionsRejects sweeps the rejection cases for
+// [install.extra_versions]: bad key shape, bad env shape, empty env,
+// reserved env collision, build_args collision, and duplicate env
+// across two declarations.
+func TestValidate_ExtraVersionsRejects(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name        string
+		buildArgs   []string
+		extras      map[string]plugin.ExtraVersionSpec
+		wantSnippet string
+	}{
+		{
+			name: "key_uppercase",
+			extras: map[string]plugin.ExtraVersionSpec{
+				"API_LEVEL": {Env: "ANDROID_SDK_API_LEVEL", Default: "35"},
+			},
+			wantSnippet: "extra_versions key does not match",
+		},
+		{
+			name: "key_starts_with_digit",
+			extras: map[string]plugin.ExtraVersionSpec{
+				"1level": {Env: "ANDROID_SDK_API_LEVEL", Default: "35"},
+			},
+			wantSnippet: "extra_versions key does not match",
+		},
+		{
+			name: "env_empty",
+			extras: map[string]plugin.ExtraVersionSpec{
+				"api_level": {Env: "", Default: "35"},
+			},
+			wantSnippet: "env must not be empty",
+		},
+		{
+			name: "env_lowercase",
+			extras: map[string]plugin.ExtraVersionSpec{
+				"api_level": {Env: "android_sdk_api_level", Default: "35"},
+			},
+			wantSnippet: "env does not match",
+		},
+		{
+			name: "env_reserved_pin",
+			extras: map[string]plugin.ExtraVersionSpec{
+				"api_level": {Env: "PIN", Default: "35"},
+			},
+			wantSnippet: "collides with a cocoon-reserved variable",
+		},
+		{
+			name: "env_reserved_checksum_amd64",
+			extras: map[string]plugin.ExtraVersionSpec{
+				"api_level": {Env: "CHECKSUM_AMD64", Default: "35"},
+			},
+			wantSnippet: "collides with a cocoon-reserved variable",
+		},
+		{
+			name:      "env_collides_with_build_args",
+			buildArgs: []string{"ANDROID_SDK_API_LEVEL"},
+			extras: map[string]plugin.ExtraVersionSpec{
+				"api_level": {Env: "ANDROID_SDK_API_LEVEL", Default: "35"},
+			},
+			wantSnippet: "collides with an install.build_args entry",
+		},
+		{
+			name: "env_duplicate_across_extras",
+			extras: map[string]plugin.ExtraVersionSpec{
+				"api_level":   {Env: "ANDROID_X", Default: "35"},
+				"build_tools": {Env: "ANDROID_X", Default: "35.0.0"},
+			},
+			wantSnippet: "is also used by extra_versions.",
+		},
+		{
+			name: "default_empty",
+			extras: map[string]plugin.ExtraVersionSpec{
+				"api_level": {Env: "ANDROID_SDK_API_LEVEL", Default: ""},
+			},
+			wantSnippet: "default must not be empty",
+		},
+		{
+			name: "key_reserved_pin",
+			extras: map[string]plugin.ExtraVersionSpec{
+				"pin": {Env: "ANDROID_PIN", Default: "35"},
+			},
+			wantSnippet: `extra_versions key "pin" is reserved`,
+		},
+		{
+			name: "key_reserved_checksum_amd64",
+			extras: map[string]plugin.ExtraVersionSpec{
+				"checksum_amd64": {Env: "ANDROID_CSUM_AMD", Default: "35"},
+			},
+			wantSnippet: `"checksum_amd64" is reserved`,
+		},
+		{
+			name: "key_reserved_checksum_arm64",
+			extras: map[string]plugin.ExtraVersionSpec{
+				"checksum_arm64": {Env: "ANDROID_CSUM_ARM", Default: "35"},
+			},
+			wantSnippet: `"checksum_arm64" is reserved`,
+		},
+		{
+			name: "default_contains_double_quote",
+			extras: map[string]plugin.ExtraVersionSpec{
+				"api_level": {Env: "ANDROID_SDK_API_LEVEL", Default: `36" rm -rf / "`},
+			},
+			wantSnippet: "default contains unsafe character",
+		},
+		{
+			name: "default_contains_backslash",
+			extras: map[string]plugin.ExtraVersionSpec{
+				"api_level": {Env: "ANDROID_SDK_API_LEVEL", Default: `36\nfoo`},
+			},
+			wantSnippet: "default contains unsafe character",
+		},
+		{
+			name: "default_contains_newline",
+			extras: map[string]plugin.ExtraVersionSpec{
+				"api_level": {Env: "ANDROID_SDK_API_LEVEL", Default: "36\nfoo"},
+			},
+			wantSnippet: "default contains unsafe character",
+		},
+		{
+			name: "default_contains_cr",
+			extras: map[string]plugin.ExtraVersionSpec{
+				"api_level": {Env: "ANDROID_SDK_API_LEVEL", Default: "36\rfoo"},
+			},
+			wantSnippet: "default contains unsafe character",
+		},
+		{
+			name: "default_contains_dollar",
+			extras: map[string]plugin.ExtraVersionSpec{
+				"api_level": {Env: "ANDROID_SDK_API_LEVEL", Default: "$HOME/sdk"},
+			},
+			wantSnippet: "default contains unsafe character",
+		},
+		{
+			name: "default_contains_command_substitution",
+			extras: map[string]plugin.ExtraVersionSpec{
+				"api_level": {Env: "ANDROID_SDK_API_LEVEL", Default: "$(date)"},
+			},
+			wantSnippet: "default contains unsafe character",
+		},
+		{
+			name: "default_contains_backtick",
+			extras: map[string]plugin.ExtraVersionSpec{
+				"api_level": {Env: "ANDROID_SDK_API_LEVEL", Default: "`whoami`"},
+			},
+			wantSnippet: "default contains unsafe character",
+		},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			p := &plugin.Plugin{
+				Metadata: validMetadata(),
+				Install: plugin.Install{
+					DefaultMethod: "archive",
+					Methods:       map[string]plugin.InstallMethod{"archive": {Description: "x"}},
+					BuildArgs:     tc.buildArgs,
+					ExtraVersions: tc.extras,
+				},
+			}
+			err := p.Validate("test/plugin.toml")
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.wantSnippet)
 		})
 	}
 }

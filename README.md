@@ -114,7 +114,7 @@ Each answer becomes a self-documenting line in `workspace.toml`. Pass `--yes` to
 
 Plugins shipped inside the binary via `go:embed`:
 
-`aws-cli`, `aws-sam-cli`, `bun`, `claude-code`, `cocoon`, `copilot-cli`, `dart`, `deno`, `docker-buildx`, `docker-cli`, `flutter`, `github-cli`, `go`, `google-chrome`, `helm`, `kubectl`, `lazygit`, `mise`, `nerd-fonts`, `node`, `opentofu`, `proto`, `rust`, `shellcheck`, `shfmt`, `starship`, `terraform`, `uv`, `zig`
+`android-sdk`, `aws-cli`, `aws-sam-cli`, `bun`, `claude-code`, `cocoon`, `copilot-cli`, `dart`, `deno`, `docker-buildx`, `docker-cli`, `flutter`, `github-cli`, `gitleaks`, `go`, `google-chrome`, `helm`, `just`, `kubectl`, `lazygit`, `mise`, `nerd-fonts`, `node`, `opentofu`, `proto`, `rust`, `shellcheck`, `shfmt`, `starship`, `terraform`, `uv`, `zig`
 
 Override or add your own under `~/.cocoon/plugins/<id>/` (user scope) or `<project>/.cocoon/plugins/<id>/` (project scope, checked into the repo) — both layers win over the embedded catalog. See [`docs/plugins.md`](docs/plugins.md) for the authoring guide.
 
@@ -142,11 +142,11 @@ Every prompt, error message, and inline `workspace.toml` comment renders in Engl
 
 ## Developing
 
-`just ci` is the single pre-push gate (Go fmt/vet/lint/test/vuln/mod-verify + `shellcheck` + `shfmt-check`). Optional pre-commit integration runs the same shell hooks at commit time:
+`just ci` is the single pre-push gate (Go fmt/vet/lint/test/vuln/mod-verify + `shellcheck` + `shfmt-check`). Optional pre-commit integration runs the fast subset on each `git commit` — `shellcheck`, `shfmt`, `golangci-lint fmt --diff`, `go vet`, `golangci-lint run`, `go mod verify`, and a `go mod tidy` drift check. Slow gates (test / coverage / govulncheck / cross-compile) stay in `just ci`.
 
 ```bash
 pip install pre-commit  # or `brew install pre-commit`
-pre-commit install      # shellcheck + shfmt fire on each `git commit`
+pre-commit install      # hooks fire on each `git commit`
 ```
 
-`shellcheck` and `shfmt` must be on `$PATH`. macOS: `brew install shellcheck shfmt`. Linux/WSL: `apt-get install shellcheck` + download `shfmt` from <https://github.com/mvdan/sh/releases>.
+Required on `$PATH`: `shellcheck`, `shfmt`, `go`, `golangci-lint`. macOS: `brew install shellcheck shfmt golangci-lint`. Linux/WSL: `apt-get install shellcheck`, download `shfmt` from <https://github.com/mvdan/sh/releases>, install `golangci-lint` per <https://golangci-lint.run/welcome/install/>.

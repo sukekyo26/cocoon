@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"path"
+	"slices"
 	"sort"
 	"strings"
 
@@ -194,6 +196,7 @@ func buildPluginSnippets(
 		hasOverride:    hasOverride,
 		override:       override,
 		buildArgs:      install.BuildArgs,
+		extraVersions:  install.ExtraVersions,
 		method:         method,
 		sh:             sh,
 	}
@@ -234,6 +237,7 @@ type runSpec struct {
 	hasOverride    bool
 	override       config.PluginVersionOverride
 	buildArgs      []string
+	extraVersions  map[string]plugin.ExtraVersionSpec
 	method         string
 	sh             shellEnv
 }
@@ -265,7 +269,7 @@ func renderInstallSnippet(rs runSpec, hasInstall bool, installPath string) (stri
 			return "", err
 		}
 		snippet, err := renderInstallRun(rs.id, "# Install "+rs.comment, rs.argLines, body,
-			rs.versionCapable, rs.checksumVerify, rs.hasOverride, rs.override, rs.buildArgs, rs.method, rs.sh)
+			rs.versionCapable, rs.checksumVerify, rs.hasOverride, rs.override, rs.buildArgs, rs.extraVersions, rs.method, rs.sh)
 		if err != nil {
 			return "", err
 		}
@@ -293,7 +297,7 @@ func renderUserInstallSnippet(rs runSpec, userPath string, argLines []string) (s
 		return "", err
 	}
 	return renderInstallRun(rs.id, "# Configure "+rs.comment+" (user)", argLines, body,
-		rs.versionCapable, rs.checksumVerify, rs.hasOverride, rs.override, rs.buildArgs, rs.method, rs.sh)
+		rs.versionCapable, rs.checksumVerify, rs.hasOverride, rs.override, rs.buildArgs, rs.extraVersions, rs.method, rs.sh)
 }
 
 func renderEnvBlock(env map[string]string, pluginsFS fs.FS, id string) (string, error) {
@@ -468,10 +472,14 @@ func renderInstallRun(
 	versionCapable, checksumVerify, hasOverride bool,
 	override config.PluginVersionOverride,
 	buildArgs []string,
+	extraVersions map[string]plugin.ExtraVersionSpec,
 	method string,
 	sh shellEnv,
 ) (string, error) {
-	envPairs := buildInstallEnvPairs(versionCapable, checksumVerify, hasOverride, override, buildArgs, method, sh)
+	envPairs := buildInstallEnvPairs(
+		versionCapable, checksumVerify, hasOverride, override,
+		buildArgs, extraVersions, method, sh,
+	)
 	body := string(scriptBody)
 	if !strings.HasSuffix(body, "\n") {
 		body += "\n"
@@ -492,6 +500,7 @@ func buildInstallEnvPairs(
 	versionCapable, checksumVerify, hasOverride bool,
 	override config.PluginVersionOverride,
 	buildArgs []string,
+	extraVersions map[string]plugin.ExtraVersionSpec,
 	method string,
 	sh shellEnv,
 ) []string {
@@ -531,8 +540,37 @@ func buildInstallEnvPairs(
 			)
 		}
 	}
+	pairs = appendExtraVersionPairs(pairs, hasOverride, override, extraVersions)
 	for _, a := range buildArgs {
 		pairs = append(pairs, fmt.Sprintf(`%s="${%s}"`, a, a))
+	}
+	return pairs
+}
+
+// appendExtraVersionPairs adds one env pair per [install.extra_versions]
+// entry, with the workspace.toml override (if any) taking precedence
+// over the plugin.toml default. Keys are sorted so the env order is
+// stable across builds (Go map iteration is randomised, which would
+// otherwise drift the generated Dockerfile snapshot).
+func appendExtraVersionPairs(
+	pairs []string,
+	hasOverride bool,
+	override config.PluginVersionOverride,
+	extraVersions map[string]plugin.ExtraVersionSpec,
+) []string {
+	if len(extraVersions) == 0 {
+		return pairs
+	}
+	keys := slices.Sorted(maps.Keys(extraVersions))
+	for _, k := range keys {
+		spec := extraVersions[k]
+		val := spec.Default
+		if hasOverride {
+			if v, ok := override.Extra[k]; ok {
+				val = v
+			}
+		}
+		pairs = append(pairs, fmt.Sprintf(`%s="%s"`, spec.Env, val))
 	}
 	return pairs
 }
@@ -542,11 +580,7 @@ func validateVersionOverrides(
 	overrides map[string]config.PluginVersionOverride,
 	warnings io.Writer,
 ) error {
-	ids := make([]string, 0, len(overrides))
-	for id := range overrides {
-		ids = append(ids, id)
-	}
-	sort.Strings(ids)
+	ids := slices.Sorted(maps.Keys(overrides))
 
 	for _, id := range ids {
 		override := overrides[id]
@@ -566,6 +600,9 @@ func validateVersionOverrides(
 				" remove checksum_amd64/checksum_arm64 from [plugins.versions.%s]",
 				ErrInvalidVersionOverride, id, id, p.Version.Verify, id)
 		}
+		if err := checkExtraOverrideKeys(id, override, p.Install.ExtraVersions); err != nil {
+			return err
+		}
 		// The missing-checksum warning applies only to checksum-verified
 		// plugins; a pgp plugin pinned without a checksum is fully verified.
 		if override.Pin != "" && p.Version.VerifiesByChecksum() {
@@ -573,6 +610,33 @@ func validateVersionOverrides(
 		}
 	}
 	return nil
+}
+
+// checkExtraOverrideKeys rejects [plugins.versions].<id>.<key> entries
+// (beyond the reserved pin / checksum_* triple) that the plugin does not
+// declare under [install.extra_versions]. Keys are sorted so the error
+// message stays stable across runs.
+func checkExtraOverrideKeys(
+	id string,
+	override config.PluginVersionOverride,
+	declared map[string]plugin.ExtraVersionSpec,
+) error {
+	if len(override.Extra) == 0 {
+		return nil
+	}
+	unknown := make([]string, 0, len(override.Extra))
+	for k := range override.Extra {
+		if _, ok := declared[k]; !ok {
+			unknown = append(unknown, k)
+		}
+	}
+	if len(unknown) == 0 {
+		return nil
+	}
+	sort.Strings(unknown)
+	return fmt.Errorf("%w: [plugins.versions.%s] sets %v; plugin '%s' does not declare these keys"+
+		" under [install.extra_versions]; remove them or fix the typo",
+		ErrUnknownExtraVersion, id, unknown, id)
 }
 
 // warnMissingChecksum emits the "pin without checksum" advisory for a
@@ -642,10 +706,5 @@ func expandUserDirs(userDirs []string) []string {
 			all[d] = struct{}{}
 		}
 	}
-	sorted := make([]string, 0, len(all))
-	for p := range all {
-		sorted = append(sorted, p)
-	}
-	sort.Strings(sorted)
-	return sorted
+	return slices.Sorted(maps.Keys(all))
 }

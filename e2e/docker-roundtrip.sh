@@ -16,12 +16,14 @@
 #   - minimal (push/PR e2e.yml)  — 0 plugins, runs across every supported
 #     base image so generator image-family branching (apt-mirror, OS
 #     family) is exercised on every PR.
-#   - amd64-full / arm64-full (scheduled-e2e.yml) — every shipped plugin
-#     enabled with all version_capable plugins pinned. Catches
-#     plugin-vs-base-image and plugin-vs-plugin breakage; bumping a pinned
-#     version surfaces here as a deliberate diff. arm64-full is the
-#     arm64-safe subset (excludes lazygit / zig / starship / google-chrome
-#     / flutter where install.sh hard-codes amd64 or fails fast on arm64).
+#   - amd64-full / arm64-full (scheduled-e2e.yml) — every catalog plugin
+#     enabled, pinned to the versions in pin_map below (un-pinned plugins
+#     float to LATEST). Catches plugin-vs-base-image and plugin-vs-plugin
+#     breakage; bumping a pin_map entry surfaces here as a deliberate diff.
+#     The enabled set is derived from internal/plugin/catalog/ at runtime
+#     so a new plugin auto-enrolls. arm64-full subtracts the arm64-unsafe
+#     plugins in e2e/arm64-exclude.txt (install.sh hard-codes amd64 or
+#     fails fast on arm64).
 #
 # Local WSL2 cannot run this (gcc missing for `-race`); GHA-hosted
 # ubuntu-latest / ubuntu-24.04-arm ship docker + buildx out of the box.
@@ -33,6 +35,13 @@ set -euxo pipefail
 : "${IMAGE:?IMAGE unset (base image id)}"
 : "${IMAGE_VERSION:?IMAGE_VERSION unset}"
 
+# Resolve the script and catalog dirs to absolute paths up front, before
+# the `cd e2e/test-project` below, so they survive the cwd change. $0 may
+# be relative (e.g. `bash e2e/docker-roundtrip.sh` from the repo root), so
+# resolve it while still at the original cwd or the `cd` here would fail.
+script_dir="$(cd "$(dirname "$0")" && pwd)"
+catalog_dir="$(cd "$script_dir/../internal/plugin/catalog" && pwd)"
+
 # Wipe any leftover project dir before init so reruns (local debugging,
 # self-hosted runner with cached workspace) are idempotent — `cocoon
 # init` refuses to overwrite an existing workspace.toml without --force.
@@ -41,12 +50,111 @@ mkdir -p e2e/test-project
 cd e2e/test-project
 git init -q
 
-# Resolve --plugins / --plugin-versions per preset. The lists are inlined
-# (vs. a fixture TOML) so a pin bump is a one-line edit. Keep this
-# case-stmt and the testdata snapshots in
-# internal/cli/init/testdata/init/ in lockstep — they share the same
-# plugin sets so the goldens act as a structural check on whatever this
-# script generates at runtime.
+# Derive the enabled plugin set from the embedded catalog so adding a
+# plugin under internal/plugin/catalog/ auto-enrolls it here (no
+# hand-kept list to drift).
+
+all_plugins=()
+for d in "$catalog_dir"/*/; do
+  all_plugins+=("$(basename "$d")")
+done
+
+# arm64-unsafe plugins, kept in a shared data file that
+# internal/plugin/e2e_arm64_exclude_test.go validates against the catalog.
+# Trim each line (plain `read`, default IFS) so this parser matches that
+# Go guard, which TrimSpace's before comparing; a trailing space must not
+# turn an excluded id into a silent no-op.
+arm64_exclude=()
+while read -r line || [ -n "$line" ]; do
+  case "$line" in
+    '' | '#'*) continue ;;
+  esac
+  arm64_exclude+=("$line")
+done <"$script_dir/arm64-exclude.txt"
+
+# Manual version pins as "name=version" entries. Plugins absent here
+# install LATEST; pins for plugins not enabled in the active preset are
+# pruned automatically (see pins_for), so this single list serves both
+# amd64-full and arm64-full. Bump an entry to roll a pinned version
+# (surfaces as a deliberate diff in the e2e logs).
+pin_entries=(
+  aws-cli=2.34.48
+  aws-sam-cli=1.160.1
+  bun=1.3.3
+  cocoon=0.7.4
+  copilot-cli=1.0.47
+  dart=3.12.0
+  deno=2.7.14
+  docker-buildx=0.24.0
+  flutter=3.44.0
+  gitleaks=8.30.1
+  go=1.23.4
+  helm=3.16.0
+  just=1.51.0
+  kubectl=1.31.0
+  lazygit=0.44.1
+  mise=2025.12.0
+  nerd-fonts=3.4.0
+  node=24.15.0
+  opentofu=1.9.0
+  proto=0.46.1
+  shellcheck=0.10.0
+  shfmt=3.10.0
+  starship=1.21.1
+  terraform=1.10.5
+  uv=0.5.7
+  zig=0.13.0
+)
+
+# join_csv prints its args as a single comma-separated string.
+join_csv() {
+  local IFS=,
+  echo "$*"
+}
+
+# pins_for prints the name=version CSV for the pin_entries whose plugin is
+# in the given enabled set, dropping pins for plugins this preset omits.
+pins_for() {
+  local enabled=("$@")
+  local entry name p out=()
+  for entry in "${pin_entries[@]}"; do
+    name="${entry%%=*}"
+    for p in "${enabled[@]}"; do
+      if [ "$p" = "$name" ]; then
+        out+=("$entry")
+        break
+      fi
+    done
+  done
+  join_csv "${out[@]}"
+}
+
+# Fail fast on a stale or mistyped pin: every pin_entries id must be a
+# real, version-capable catalog plugin. pins_for silently drops a pin
+# whose id matches no enabled plugin, so without this check a renamed or
+# typo'd id would quietly demote that plugin to LATEST — yet the same id
+# passed straight to `cocoon init --plugin-versions` is rejected, so the
+# e2e harness must reject it too.
+for entry in "${pin_entries[@]}"; do
+  name="${entry%%=*}"
+  found=""
+  for p in "${all_plugins[@]}"; do
+    if [ "$p" = "$name" ]; then
+      found=1
+      break
+    fi
+  done
+  if [ -z "$found" ]; then
+    echo "pin_entries: '$name' is not a catalog plugin (typo or renamed?)" >&2
+    exit 1
+  fi
+  if ! grep -Eq '^version_capable[[:space:]]*=[[:space:]]*true[[:space:]]*$' \
+    "$catalog_dir/$name/plugin.toml"; then
+    echo "pin_entries: '$name' is not version_capable; it cannot be pinned" >&2
+    exit 1
+  fi
+done
+
 case "$PRESET" in
   minimal)
     plugins=""
@@ -54,8 +162,9 @@ case "$PRESET" in
     methods=""
     ;;
   amd64-full)
-    plugins="docker-cli,docker-buildx,aws-cli,aws-sam-cli,github-cli,gitleaks,claude-code,copilot-cli,proto,mise,uv,bun,node,deno,dart,flutter,zig,rust,go,lazygit,starship,nerd-fonts,google-chrome,terraform,opentofu,kubectl,helm,shellcheck,shfmt,just,cocoon"
-    pins="aws-cli=2.34.48,aws-sam-cli=1.160.1,bun=1.3.3,cocoon=0.7.4,copilot-cli=1.0.47,dart=3.12.0,deno=2.7.14,docker-buildx=0.24.0,flutter=3.44.0,gitleaks=8.30.1,go=1.23.4,helm=3.16.0,just=1.51.0,kubectl=1.31.0,lazygit=0.44.1,mise=2025.12.0,nerd-fonts=3.4.0,node=24.15.0,opentofu=1.9.0,proto=0.46.1,shellcheck=0.10.0,shfmt=3.10.0,starship=1.21.1,terraform=1.10.5,uv=0.5.7,zig=0.13.0"
+    enabled=("${all_plugins[@]}")
+    plugins="$(join_csv "${enabled[@]}")"
+    pins="$(pins_for "${enabled[@]}")"
     # Exercise the [install.methods]=binary path for copilot-cli on this
     # preset (matches the Zscaler-style use case the method was added
     # for). arm64-full keeps the default gh-cli method so both install
@@ -63,10 +172,21 @@ case "$PRESET" in
     methods="copilot-cli=binary"
     ;;
   arm64-full)
-    # Excluded vs amd64-full (install.sh hard-codes amd64 or fails fast on arm64):
-    #   lazygit, zig, starship, google-chrome, flutter.
-    plugins="docker-cli,docker-buildx,aws-cli,aws-sam-cli,github-cli,gitleaks,claude-code,copilot-cli,proto,mise,uv,bun,node,deno,dart,rust,go,nerd-fonts,terraform,opentofu,kubectl,helm,shellcheck,shfmt,just,cocoon"
-    pins="aws-cli=2.34.48,aws-sam-cli=1.160.1,bun=1.3.3,cocoon=0.7.4,copilot-cli=1.0.47,dart=3.12.0,deno=2.7.14,docker-buildx=0.24.0,gitleaks=8.30.1,go=1.23.4,helm=3.16.0,just=1.51.0,kubectl=1.31.0,mise=2025.12.0,nerd-fonts=3.4.0,node=24.15.0,opentofu=1.9.0,proto=0.46.1,shellcheck=0.10.0,shfmt=3.10.0,terraform=1.10.5,uv=0.5.7"
+    enabled=()
+    for p in "${all_plugins[@]}"; do
+      skip=""
+      for x in "${arm64_exclude[@]}"; do
+        if [ "$p" = "$x" ]; then
+          skip=1
+          break
+        fi
+      done
+      if [ -z "$skip" ]; then
+        enabled+=("$p")
+      fi
+    done
+    plugins="$(join_csv "${enabled[@]}")"
+    pins="$(pins_for "${enabled[@]}")"
     # No --plugin-methods on arm64-full — exercises the default method
     # (gh-cli) end-to-end as the counterpart to amd64-full's binary path.
     # Both real-Docker installs run per release.

@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/huh"
+
 	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
 	"github.com/sukekyo26/cocoon/internal/i18n"
 	"github.com/sukekyo26/cocoon/internal/plugin"
@@ -259,5 +261,48 @@ func TestI18n_PluginMethodKeysDefinedBothLocales(t *testing.T) {
 				t.Errorf("[%s] %q resolves to the bare key (undefined entry)", lang, k)
 			}
 		}
+	}
+}
+
+// TestPromptOnePluginMethod_AcceptsDefault drives promptOnePluginMethod with
+// a no-op form runner — the accessible equivalent of the user pressing Enter
+// on the pre-selected DefaultMethod — and confirms it returns that default.
+//
+//nolint:paralleltest // withFakePrompt swaps the shared runSingleFieldForm seam.
+func TestPromptOnePluginMethod_AcceptsDefault(t *testing.T) {
+	withFakePrompt(t, func(huh.Field) error { return nil })
+	cat := i18n.New(i18n.LangEN)
+	p := methodFixturePlugins()["multi"] // DefaultMethod = "official"
+
+	got, err := promptOnePluginMethod(cat, "multi", p)
+	if err != nil {
+		t.Fatalf("promptOnePluginMethod err = %v", err)
+	}
+	if got != "official" {
+		t.Errorf("picked = %q, want %q (the pre-selected DefaultMethod)", got, "official")
+	}
+}
+
+// TestPromptOnePluginMethod_PropagatesFormError pins the (value, error)
+// contract: a form failure surfaces verbatim with an empty pick. It also
+// confirms the seam is handed a non-nil field to run.
+//
+//nolint:paralleltest // withFakePrompt swaps the shared runSingleFieldForm seam.
+func TestPromptOnePluginMethod_PropagatesFormError(t *testing.T) {
+	sentinel := errors.New("form blew up")
+	var gotField huh.Field
+	withFakePrompt(t, func(f huh.Field) error { gotField = f; return sentinel })
+	cat := i18n.New(i18n.LangEN)
+	p := methodFixturePlugins()["multi"]
+
+	got, err := promptOnePluginMethod(cat, "multi", p)
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("err = %v, want the form error", err)
+	}
+	if got != "" {
+		t.Errorf("picked = %q, want empty on error", got)
+	}
+	if gotField == nil {
+		t.Error("runSingleFieldForm was handed a nil field")
 	}
 }

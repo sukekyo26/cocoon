@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"maps"
 	"net"
 	"regexp"
 	"slices"
@@ -558,6 +559,51 @@ func containsWhitespaceOrCtrl(s string) bool {
 	return false
 }
 
+// UnsafeExtraVersionRune reports the first rune in s that would break or
+// alter the generated Dockerfile RUN-prefix `KEY="..."` env pair if the
+// value were interpolated verbatim:
+//
+//   - `"` would close the env value early and turn the rest into
+//     garbage tokens.
+//   - `\` is the shell's escape character inside double quotes.
+//   - `\n` / `\r` terminate the RUN line.
+//   - `$` triggers parameter / command substitution
+//     (`$VAR`, `${VAR}`, `$(...)`), which would silently change the
+//     value seen by the install script (or execute commands at build
+//     time) instead of passing the literal version string through.
+//   - backtick triggers legacy command substitution with the same
+//     concern.
+//
+// Returns (false, 0) when the value is safe to embed.
+//
+// Both the plugin-author-side default (plugin.toml's
+// [install.extra_versions].<key>.default) and the user-side override
+// (workspace.toml's [plugins.versions].<id>.<key>) are checked through
+// this helper so the failure surfaces at decode/validate time, not at
+// docker build.
+func UnsafeExtraVersionRune(s string) (bool, rune) {
+	for _, r := range s {
+		switch r {
+		case '"', '\\', '\n', '\r', '$', '`':
+			return true, r
+		}
+	}
+	return false, 0
+}
+
+// UnsafeExtraVersionMessage builds the rejection message for a value that
+// UnsafeExtraVersionRune flagged. label names the offending field so the
+// same explanation of the Dockerfile RUN-prefix shell-quoting hazard is
+// shared by every caller (workspace pin/override values and plugin.toml
+// extra_versions defaults all flow into the same `<name>="..."` env pair —
+// `PIN="..."` for a pin, `<ENV>="..."` for an extra version).
+func UnsafeExtraVersionMessage(label string, r rune) string {
+	return fmt.Sprintf("%s contains unsafe character %q "+
+		`(the value flows into the Dockerfile RUN prefix as a <name>="..." env pair; `+
+		"a bare \", \\, \\n, \\r, $, or backtick would break the shell quoting "+
+		"or trigger parameter/command substitution)", label, r)
+}
+
 func (s *SecurityOptSpec) validate(a *Accumulator) {
 	if s.Seccomp != nil && *s.Seccomp == "" {
 		a.Add("seccomp must not be empty (omit the key to use Docker's default)", "seccomp")
@@ -700,11 +746,7 @@ func (p *PluginsSpec) validate(a *Accumulator) {
 	}
 	// Sort plugin ids so ValidationError.Error()'s "first error"
 	// summary stays stable across runs (map iteration is randomised).
-	methodIDs := make([]string, 0, len(p.Methods))
-	for id := range p.Methods {
-		methodIDs = append(methodIDs, id)
-	}
-	slices.Sort(methodIDs)
+	methodIDs := slices.Sorted(maps.Keys(p.Methods))
 	for _, id := range methodIDs {
 		method := p.Methods[id]
 		if !rxPluginID.MatchString(id) {

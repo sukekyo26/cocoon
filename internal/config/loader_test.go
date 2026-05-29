@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -92,4 +93,223 @@ func TestValidationError_LocStringEmpty(t *testing.T) {
 
 	fe := config.FieldError{Loc: nil, Message: "x"}
 	require.Equal(t, "(root)", fe.LocString())
+}
+
+// TestLoadWorkspace_PluginVersionsExtra pins that workspace.toml's
+// [plugins.versions].<id> inline-table accepts keys beyond the reserved
+// triple (pin / checksum_amd64 / checksum_arm64) and routes them into
+// PluginVersionOverride.Extra. Without this, an Android SDK plugin
+// declaring api_level / build_tools under [install.extra_versions]
+// could not surface the workspace override into the install script.
+//
+// Four input shapes covered: pin only (Extra nil), pin + extras, pin +
+// checksum + extras, and a quoted bare-key form ("api_level" = "36").
+func TestLoadWorkspace_PluginVersionsExtra(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name        string
+		versionLine string
+		wantPin     string
+		wantExtra   map[string]string
+	}{
+		{
+			name:        "pin_only_no_extra",
+			versionLine: `go = { pin = "1.23.4" }`,
+			wantPin:     "1.23.4",
+			wantExtra:   nil,
+		},
+		{
+			name:        "pin_plus_extras",
+			versionLine: `android-sdk = { pin = "14742923", api_level = "36", build_tools = "36.0.0" }`,
+			wantPin:     "14742923",
+			wantExtra:   map[string]string{"api_level": "36", "build_tools": "36.0.0"},
+		},
+		{
+			name:        "pin_with_checksum_and_extra",
+			versionLine: `android-sdk = { pin = "14742923", checksum_amd64 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", api_level = "35" }`,
+			wantPin:     "14742923",
+			wantExtra:   map[string]string{"api_level": "35"},
+		},
+		{
+			name:        "quoted_keys",
+			versionLine: `android-sdk = { "pin" = "14742923", "api_level" = "36" }`,
+			wantPin:     "14742923",
+			wantExtra:   map[string]string{"api_level": "36"},
+		},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			body := `
+[container]
+service_name = "dev"
+username = "developer"
+image = "ubuntu"
+image_version = "24.04"
+
+[plugins]
+enable = []
+
+[plugins.versions]
+` + tc.versionLine + "\n"
+			tmp := t.TempDir() + "/ws.toml"
+			require.NoError(t, os.WriteFile(tmp, []byte(body), 0o600))
+			ws, err := config.LoadWorkspace(tmp)
+			require.NoError(t, err)
+			require.NotNil(t, ws.Plugins.Versions)
+			var id string
+			for k := range ws.Plugins.Versions {
+				id = k
+				break
+			}
+			ov := ws.Plugins.Versions[id]
+			require.Equal(t, tc.wantPin, ov.Pin)
+			require.Equal(t, tc.wantExtra, ov.Extra)
+		})
+	}
+}
+
+// TestLoadWorkspace_PluginVersionsExtraNonString pins that a non-string
+// value under [plugins.versions].<id>.<key> is rejected as a
+// *ValidationError rather than silently dropped.
+func TestLoadWorkspace_PluginVersionsExtraNonString(t *testing.T) {
+	t.Parallel()
+	body := `
+[container]
+service_name = "dev"
+username = "developer"
+image = "ubuntu"
+image_version = "24.04"
+
+[plugins]
+enable = []
+
+[plugins.versions]
+android-sdk = { pin = "14742923", api_level = 36 }
+`
+	tmp := t.TempDir() + "/ws.toml"
+	require.NoError(t, os.WriteFile(tmp, []byte(body), 0o600))
+	_, err := config.LoadWorkspace(tmp)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "must be a string")
+}
+
+// TestLoadWorkspace_PluginVersionsExtraUnsafeValue covers the rune
+// classes UnsafeExtraVersionRune rejects on a workspace override value.
+// A bare ", \, \n, or \r would break the Dockerfile RUN-prefix
+// `KEY="..."` env pair the value is later embedded into, so they have
+// to be rejected at decode time (well before docker build).
+func TestLoadWorkspace_PluginVersionsExtraUnsafeValue(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name      string
+		extraExpr string
+	}{
+		// TOML basic strings forbid raw control chars but accept escapes;
+		// \" / \\ / \n / \r all decode to the literal rune the validator rejects.
+		{"double_quote", `api_level = "36\" rm -rf / \""`},
+		{"backslash", `api_level = "36\\nfoo"`},
+		{"newline", `api_level = "36\nfoo"`},
+		{"carriage_return", `api_level = "36\rfoo"`},
+		// $ and backtick trigger shell parameter / command substitution
+		// inside the generated Dockerfile RUN-prefix KEY="..." pair —
+		// rejected for the same fail-fast reason as the runes above.
+		{"dollar", `api_level = "$HOME/sdk"`},
+		{"command_substitution", `api_level = "$(date)"`},
+		{"backtick", "api_level = \"`whoami`\""},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			body := `
+[container]
+service_name = "dev"
+username = "developer"
+image = "ubuntu"
+image_version = "24.04"
+
+[plugins]
+enable = []
+
+[plugins.versions]
+android-sdk = { pin = "14742923", ` + tc.extraExpr + ` }
+`
+			tmp := t.TempDir() + "/ws.toml"
+			require.NoError(t, os.WriteFile(tmp, []byte(body), 0o600))
+			_, err := config.LoadWorkspace(tmp)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "value contains unsafe character")
+		})
+	}
+}
+
+// TestLoadWorkspace_PluginVersionsPinUnsafeValue pins that the `pin` field
+// gets the same UnsafeExtraVersionRune guard as extra override values: it
+// flows into the identical Dockerfile RUN-prefix `PIN="..."` env pair, so a
+// bare ", \, \n, \r, $, or backtick must be rejected at decode time rather
+// than enabling shell injection at docker build.
+func TestLoadWorkspace_PluginVersionsPinUnsafeValue(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name       string
+		pinExpr    string
+		wantUnsafe bool
+	}{
+		{"plain", `pin = "14742923"`, false},
+		{"double_quote", `pin = "1.0.0\" rm -rf / \""`, true},
+		{"backslash", `pin = "1.0.0\\nfoo"`, true},
+		{"newline", `pin = "1.0.0\nfoo"`, true},
+		{"carriage_return", `pin = "1.0.0\rfoo"`, true},
+		{"dollar", `pin = "$(date)"`, true},
+		// The exact injection PoC from the evaluation report: a closing
+		// quote lets the rest break out of the PIN="..." env pair.
+		{"injection_poc", `pin = "1.0.0\"; echo PWNED > /tmp/pwn; PIN2=\""`, true},
+		{"backtick", "pin = \"`whoami`\"", true},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			body := `
+[container]
+service_name = "dev"
+username = "developer"
+image = "ubuntu"
+image_version = "24.04"
+
+[plugins]
+enable = []
+
+[plugins.versions]
+go = { ` + tc.pinExpr + ` }
+`
+			tmp := t.TempDir() + "/ws.toml"
+			require.NoError(t, os.WriteFile(tmp, []byte(body), 0o600))
+			_, err := config.LoadWorkspace(tmp)
+			if !tc.wantUnsafe {
+				require.NoError(t, err)
+				return
+			}
+			require.Error(t, err)
+			// Assert the failure class and the exact field location, not
+			// just a substring: the guard must surface as a decode-time
+			// *ValidationError pointing at plugins.versions.<id>.pin (a
+			// regression that moved to a different validator or key would
+			// still match the substring otherwise).
+			verr, ok := config.AsValidationError(err)
+			require.Truef(t, ok, "expected *ValidationError, got %T: %v", err, err)
+			var hit *config.FieldError
+			for i := range verr.Errors {
+				if verr.Errors[i].LocString() == "plugins.versions.go.pin" {
+					hit = &verr.Errors[i]
+					break
+				}
+			}
+			require.NotNilf(t, hit, "no FieldError at plugins.versions.go.pin; errors = %+v", verr.Errors)
+			require.Contains(t, hit.Message, "unsafe character")
+		})
+	}
 }

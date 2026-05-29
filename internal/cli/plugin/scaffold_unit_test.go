@@ -3,6 +3,7 @@ package plugincli
 
 import (
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
 	"github.com/sukekyo26/cocoon/internal/i18n"
+	"github.com/sukekyo26/cocoon/internal/logx"
 )
 
 func TestValidateNameInput(t *testing.T) {
@@ -267,4 +269,53 @@ func TestDirExists(t *testing.T) {
 			t.Errorf("err = %v, want errors.Is(err, errPathNotADir)", err)
 		}
 	})
+}
+
+// TestHuhPrompterRunEmptyGroups pins the short-circuit: with no groups to
+// show, Run returns nil without constructing a form (which would block on
+// a TTY in tests).
+func TestHuhPrompterRunEmptyGroups(t *testing.T) {
+	t.Parallel()
+	if err := (huhPrompter{}).Run(nil); err != nil {
+		t.Errorf("Run(nil) = %v, want nil", err)
+	}
+	if err := (huhPrompter{}).Run([]*huh.Group{}); err != nil {
+		t.Errorf("Run(empty slice) = %v, want nil", err)
+	}
+}
+
+// TestRenderAndWrite_RenderError pins that a failing render triggers
+// cleanup and returns ErrFailure (so the caller aborts the scaffold).
+func TestRenderAndWrite_RenderError(t *testing.T) {
+	t.Parallel()
+	var cleaned bool
+	log := logx.New(io.Discard, io.Discard)
+	_, err := renderAndWrite(t.TempDir(), "plugin.toml", 0o644,
+		func() (string, error) { return "", errors.New("boom") },
+		log, func() { cleaned = true })
+	if !errors.Is(err, clihelpers.ErrFailure) {
+		t.Fatalf("err = %v, want ErrFailure", err)
+	}
+	if !cleaned {
+		t.Error("cleanup was not called on render error")
+	}
+}
+
+// TestRenderAndWrite_WriteError pins the write-failure branch: the target
+// directory does not exist, so the atomic write cannot create its temp
+// file. cleanup must still run and the error must be ErrFailure.
+func TestRenderAndWrite_WriteError(t *testing.T) {
+	t.Parallel()
+	var cleaned bool
+	log := logx.New(io.Discard, io.Discard)
+	missingDir := filepath.Join(t.TempDir(), "does-not-exist")
+	_, err := renderAndWrite(missingDir, "plugin.toml", 0o644,
+		func() (string, error) { return "body", nil },
+		log, func() { cleaned = true })
+	if !errors.Is(err, clihelpers.ErrFailure) {
+		t.Fatalf("err = %v, want ErrFailure", err)
+	}
+	if !cleaned {
+		t.Error("cleanup was not called on write error")
+	}
 }

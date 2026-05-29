@@ -10,9 +10,7 @@ package updatecheck
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -94,13 +92,11 @@ func Check(ctx context.Context, currentVersion string, opts Options) *Notice {
 
 	if cacheOK {
 		// Cache write errors are silent — retry tomorrow.
-		if err := writeCache(cachePath, cacheState{
+		_ = writeCache(cachePath, cacheState{ //nolint:errcheck // silent fail by design (see package doc)
 			CheckedAt:     now(),
 			LatestVersion: latest,
 			SchemaVersion: cacheSchemaVersion,
-		}); err != nil {
-			_ = err //nolint:errcheck // silent fail by design
-		}
+		})
 	}
 
 	return buildNotice(currentVersion, latest)
@@ -136,22 +132,20 @@ func resolveCachePath(override string) (string, bool) {
 }
 
 func readCache(path string) (cacheState, bool) {
+	var zero cacheState
 	data, err := os.ReadFile(path) //nolint:gosec // path resolved via os.UserCacheDir or test-supplied tempdir.
 	if err != nil {
-		if !errors.Is(err, fs.ErrNotExist) {
-			return cacheState{CheckedAt: time.Time{}, LatestVersion: "", SchemaVersion: 0}, false
-		}
-		return cacheState{CheckedAt: time.Time{}, LatestVersion: "", SchemaVersion: 0}, false
+		return zero, false
 	}
 	var c cacheState
 	if err := json.Unmarshal(data, &c); err != nil {
-		return cacheState{CheckedAt: time.Time{}, LatestVersion: "", SchemaVersion: 0}, false
+		return zero, false
 	}
 	if c.SchemaVersion != cacheSchemaVersion {
-		return cacheState{CheckedAt: time.Time{}, LatestVersion: "", SchemaVersion: 0}, false
+		return zero, false
 	}
 	if c.LatestVersion == "" {
-		return cacheState{CheckedAt: time.Time{}, LatestVersion: "", SchemaVersion: 0}, false
+		return zero, false
 	}
 	return c, true
 }

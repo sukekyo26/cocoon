@@ -3,7 +3,8 @@ package plugin
 import (
 	"errors"
 	"fmt"
-	"sort"
+	"maps"
+	"slices"
 )
 
 // ErrConflict lets callers detect the category via errors.Is.
@@ -16,11 +17,7 @@ var ErrConflict = errors.New("plugin conflict")
 // same on every run. A plugin that lists its own id is ignored — a plugin
 // cannot conflict with itself.
 func CheckConflicts(plugins map[string]*Plugin) error {
-	ids := make([]string, 0, len(plugins))
-	for id := range plugins {
-		ids = append(ids, id)
-	}
-	sort.Strings(ids)
+	ids := slices.Sorted(maps.Keys(plugins))
 
 	for _, id := range ids {
 		p := plugins[id]

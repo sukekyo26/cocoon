@@ -102,7 +102,7 @@ jobs:
       # automatically; a hand-written shell step does not, so we surface
       # them explicitly here.
       - uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
-      - uses: taiki-e/install-action@b1fb785e72add1aaabe1e13115c2292ca8925d3f # just
+      - uses: taiki-e/install-action@b1fb785e72add1aaabe1e13115c2292ca8925d3f # v2.75.27 (just)
       - name: Build cocoon binary
         run: just build
       - name: cocoon init + gen + docker compose round-trip

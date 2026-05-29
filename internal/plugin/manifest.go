@@ -38,18 +38,32 @@ type Apt struct {
 // workspace.toml's [plugins.methods] map; absent overrides fall back
 // to DefaultMethod.
 type Install struct {
-	RequiresRoot  bool                     `toml:"requires_root"`
-	BuildArgs     []string                 `toml:"build_args,omitempty"`
-	Env           map[string]string        `toml:"env,omitempty"`
-	Volumes       []string                 `toml:"volumes,omitempty"`
-	DefaultMethod string                   `toml:"default_method,omitempty"`
-	Methods       map[string]InstallMethod `toml:"methods,omitempty"`
+	RequiresRoot  bool                        `toml:"requires_root"`
+	BuildArgs     []string                    `toml:"build_args,omitempty"`
+	Env           map[string]string           `toml:"env,omitempty"`
+	Volumes       []string                    `toml:"volumes,omitempty"`
+	DefaultMethod string                      `toml:"default_method,omitempty"`
+	Methods       map[string]InstallMethod    `toml:"methods,omitempty"`
+	ExtraVersions map[string]ExtraVersionSpec `toml:"extra_versions,omitempty"`
 }
 
 // InstallMethod mirrors plugin.toml [install.methods.<name>]. The
 // script file lives at <plugin-dir>/install.<name>.sh.
 type InstallMethod struct {
 	Description string `toml:"description"`
+}
+
+// ExtraVersionSpec mirrors plugin.toml [install.extra_versions.<key>].
+// It declares one user-overridable subcomponent version: workspace.toml
+// can write `<key> = "..."` inside [plugins.versions].<id> and the value
+// is exported into the install script as the env variable named in Env.
+// Default is used when the workspace.toml override is absent. Both Env
+// and Default are required (an empty Env is rejected during validation
+// and an empty Default would make the install script unstable across
+// invocations).
+type ExtraVersionSpec struct {
+	Env     string `toml:"env"`
+	Default string `toml:"default"`
 }
 
 // Verification methods for [version].verify.

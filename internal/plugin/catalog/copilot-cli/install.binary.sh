@@ -2,7 +2,7 @@
 # Install GitHub Copilot CLI from the GitHub Releases binary tarball
 # (https://github.com/github/copilot-cli/releases). Picked when gh.io is
 # blocked (e.g. Zscaler) or corporate policy forbids the `curl | bash`
-# pattern that install.gh-cli.sh uses.
+# pattern that install.installer.sh uses.
 #
 # Inputs (env):
 #   PIN                   : Copilot CLI version (without leading "v"); empty = latest

@@ -228,6 +228,13 @@ drop = ["AUDIT_WRITE"]
 | `apparmor` | string | 同上。 |
 | `no_new_privileges` | bool | setuid 権限昇格を遮断。 |
 
+> **注意:** `no_new_privileges = true` は `sudo` を含む **すべての** setuid
+> 権限昇格を遮断します。cocoon が生成するイメージは `sudo` をインストールし
+> コンテナユーザーに passwordless sudo を付与します（プラグインの install
+> 手順が `sudo -u` を使い、`cocoon exec` も依存）。そのため有効化すると実行中
+> コンテナ内の `sudo` が黙って no-op になります。実行時の権限昇格が一切不要な
+> ワークフロー以外では未設定のままにしてください。
+
 ### `[[container.skel]]`
 
 `/etc/skel` 経由で新規ユーザーのホームに dotfiles を配置。配列なので複数指定可能。
@@ -268,6 +275,23 @@ go = { pin = "1.22.5" }
 uv = { pin = "0.5.7", checksum_amd64 = "<sha256>", checksum_arm64 = "<sha256>" }
 aws-cli = { pin = "2.34.48" }
 ```
+
+#### サブコンポーネントバージョン
+
+一部のプラグインは追加のバージョン指定（`[install.extra_versions]` で宣言。
+`cocoon plugin show <id>` で確認可能）を公開します。`pin` と並べてインライン
+テーブルのキーとして指定します:
+
+```toml
+[plugins.versions]
+android-sdk = { pin = "14742923", api_level = "36", build_tools = "36.0.0" }
+```
+
+宣言済みのキーのみ受理されます — 未知のキー（typo や上流で削除された宣言）は
+default に黙ってフォールバックせず `cocoon gen` が拒否します。override 値は
+`pin` と同じ制約に従います: `"`, `\`, `\n`, `\r`, `$`, backtick は不可
+（いずれも Dockerfile の RUN プレフィックス `KEY="..."` env ペアに展開される
+ため）。宣言方法は[プラグイン作成ガイド](plugins.ja.md)を参照。
 
 ---
 
@@ -461,7 +485,7 @@ Dockerfile の所定フックポイントへ独自フラグメントを注入。
 | フィールド | 型 | 実行タイミング |
 |---|---|---|
 | `pre_user_setup` | string | `useradd` の前。 |
-| `post_plugins` | string | 各プラグインの `install.sh` の後。 |
+| `post_plugins` | string | 各プラグインの `install.<category>.sh` の後。 |
 
 ```toml
 [dockerfile]

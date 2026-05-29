@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
@@ -84,11 +85,7 @@ func validateMethodScripts(label string, p *Plugin, fsys fs.FS, scriptDir string
 	// stable across runs — ValidationError.Error() summarises the first
 	// entry, and a map-iteration order would make the "leading" error
 	// flicker between runs.
-	names := make([]string, 0, len(p.Install.Methods))
-	for name := range p.Install.Methods {
-		names = append(names, name)
-	}
-	slices.Sort(names)
+	names := slices.Sorted(maps.Keys(p.Install.Methods))
 	for _, name := range names {
 		scriptPath := path.Join(scriptDir, "install."+name+".sh")
 		st, statErr := fs.Stat(fsys, scriptPath)

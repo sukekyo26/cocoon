@@ -75,7 +75,7 @@ func TestDownloadFile(t *testing.T) {
 
 // TestReadChecksum exercises the SHA256SUMS line parser: bare and
 // `*`-prefixed asset names, malformed lines that must be skipped, a
-// missing asset mapped to errAssetMissing, and an unreadable file.
+// missing asset mapped to ErrAssetMissing, and an unreadable file.
 func TestReadChecksum(t *testing.T) {
 	t.Parallel()
 
@@ -107,7 +107,7 @@ func TestReadChecksum(t *testing.T) {
 		{
 			name:    "asset absent",
 			content: hash + "  other-asset\n",
-			wantErr: errAssetMissing,
+			wantErr: ErrAssetMissing,
 		},
 	}
 	for _, tc := range cases {
@@ -139,8 +139,8 @@ func TestReadChecksum(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected an error for a missing SHA256SUMS file, got nil")
 		}
-		if errors.Is(err, errAssetMissing) {
-			t.Errorf("a read failure must not collapse into errAssetMissing: %v", err)
+		if errors.Is(err, ErrAssetMissing) {
+			t.Errorf("a read failure must not collapse into ErrAssetMissing: %v", err)
 		}
 	})
 }
@@ -563,5 +563,228 @@ func TestAtomicReplace_EXDEVFallback(t *testing.T) {
 	}
 	if _, err := os.Stat(dst + ".cocoon-update.tmp"); !os.IsNotExist(err) {
 		t.Errorf("fallback left its temp file behind (err = %v)", err)
+	}
+}
+
+// forceEXDEV makes renameFn always fail so atomicReplace takes the
+// copy fallback. The cleanup restores the original seam.
+//
+//nolint:thelper // inline seam setup, not a generic helper
+func forceEXDEV(t *testing.T) {
+	orig := renameFn
+	t.Cleanup(func() { renameFn = orig })
+	renameFn = func(_, _ string) error { return errSimulatedEXDEV }
+}
+
+// TestAtomicReplace_OpenSrcError pins the fallback's "open src" branch:
+// the fast-path rename is forced to fail, then the source does not exist.
+//
+//nolint:paralleltest // mutates the package-level renameFn seam
+func TestAtomicReplace_OpenSrcError(t *testing.T) {
+	forceEXDEV(t)
+	dst := filepath.Join(t.TempDir(), "cocoon")
+	err := atomicReplace(filepath.Join(t.TempDir(), "does-not-exist"), dst)
+	if err == nil || !strings.Contains(err.Error(), "open src") {
+		t.Fatalf("err = %v, want an \"open src\" error", err)
+	}
+}
+
+// TestAtomicReplace_CreateTmpError pins the "create" branch: the dst's
+// parent directory does not exist, so the sibling temp file cannot be
+// created.
+//
+//nolint:paralleltest // mutates the package-level renameFn seam
+func TestAtomicReplace_CreateTmpError(t *testing.T) {
+	forceEXDEV(t)
+	src := filepath.Join(t.TempDir(), "src")
+	if err := os.WriteFile(src, []byte("x"), 0o600); err != nil {
+		t.Fatalf("write src: %v", err)
+	}
+	dst := filepath.Join(t.TempDir(), "no-such-subdir", "cocoon")
+	err := atomicReplace(src, dst)
+	if err == nil || !strings.Contains(err.Error(), "create") {
+		t.Fatalf("err = %v, want a \"create\" error", err)
+	}
+}
+
+// TestAtomicReplace_CopyError pins the "copy" branch: a directory opens
+// fine but cannot be read by io.Copy, and the partial temp file is
+// cleaned up.
+//
+//nolint:paralleltest // mutates the package-level renameFn seam
+func TestAtomicReplace_CopyError(t *testing.T) {
+	forceEXDEV(t)
+	srcDir := t.TempDir() // a directory passed as the source file
+	dst := filepath.Join(t.TempDir(), "cocoon")
+	err := atomicReplace(srcDir, dst)
+	if err == nil || !strings.Contains(err.Error(), "copy") {
+		t.Fatalf("err = %v, want a \"copy\" error", err)
+	}
+	if _, statErr := os.Stat(dst + ".cocoon-update.tmp"); !os.IsNotExist(statErr) {
+		t.Errorf("temp file left behind after copy error (stat = %v)", statErr)
+	}
+}
+
+// TestAtomicReplace_FinalRenameError pins the "rename ->" branch: the
+// copy succeeds but the final tmp -> dst rename fails, and the temp file
+// is cleaned up.
+//
+//nolint:paralleltest // mutates the package-level renameFn seam
+func TestAtomicReplace_FinalRenameError(t *testing.T) {
+	forceEXDEV(t)
+	src := filepath.Join(t.TempDir(), "src")
+	if err := os.WriteFile(src, []byte("payload"), 0o600); err != nil {
+		t.Fatalf("write src: %v", err)
+	}
+	dst := filepath.Join(t.TempDir(), "cocoon")
+	err := atomicReplace(src, dst)
+	if err == nil || !strings.Contains(err.Error(), "rename") {
+		t.Fatalf("err = %v, want a \"rename\" error", err)
+	}
+	if _, statErr := os.Stat(dst + ".cocoon-update.tmp"); !os.IsNotExist(statErr) {
+		t.Errorf("temp file left behind after final-rename error (stat = %v)", statErr)
+	}
+}
+
+// TestCheckInstallDirWritable_OK pins the happy path: when the parent
+// dir is writable, the preflight returns nil and leaves no artefacts
+// (the temp probe file must be removed even on success).
+func TestCheckInstallDirWritable_OK(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	self := filepath.Join(dir, "cocoon")
+	if err := checkInstallDirWritable(self); err != nil {
+		t.Fatalf("checkInstallDirWritable: %v", err)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("read dir: %v", err)
+	}
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), ".cocoon-update-preflight-") {
+			t.Errorf("preflight left a probe file behind: %s", e.Name())
+		}
+	}
+}
+
+// TestCheckInstallDirWritable_ReadOnlyReturnsSentinel covers the
+// permission-denied branch: when the parent dir refuses CreateTemp,
+// the helper must return ErrInstallDirReadOnly (so callers can attach
+// the actionable hint via errors.Is) and the message must name the
+// offending directory.
+func TestCheckInstallDirWritable_ReadOnlyReturnsSentinel(t *testing.T) {
+	t.Parallel()
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses DAC; preflight can't be triggered without dropping privileges")
+	}
+
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0o555); err != nil {
+		t.Fatalf("chmod dir read-only: %v", err)
+	}
+	// Restore writable mode so t.TempDir() cleanup can rm -rf the tree.
+	t.Cleanup(func() {
+		if err := os.Chmod(dir, 0o755); err != nil {
+			t.Logf("chmod cleanup failed (t.TempDir rm may struggle): %v", err)
+		}
+	})
+
+	self := filepath.Join(dir, "cocoon")
+	err := checkInstallDirWritable(self)
+	if !errors.Is(err, ErrInstallDirReadOnly) {
+		t.Fatalf("err = %v, want errors.Is ErrInstallDirReadOnly", err)
+	}
+	if !strings.Contains(err.Error(), dir) {
+		t.Errorf("err = %v, want substring %q (offending dir)", err, dir)
+	}
+}
+
+// TestRunSelfUpdate_CheckOnlySkipsPreflight pins the contract that
+// `--check-only` is a read-only operation: the install-dir writability
+// preflight must be skipped so users whose binary lives in a root-owned
+// dir (e.g. /usr/local/bin) can still query the latest release without
+// sudo. The test stages a read-only directory, points executablePath at
+// it, and asserts that runSelfUpdate reaches fetchLatest and exits with
+// the "already up to date" no-op rather than ErrInstallDirReadOnly.
+//
+//nolint:paralleltest // mutates the package-level fetchLatest / executablePath seams
+func TestRunSelfUpdate_CheckOnlySkipsPreflight(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses DAC; preflight can't be triggered without dropping privileges")
+	}
+	withSelfUpdateSeams(t)
+	withVersion(t, "1.0.0")
+
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0o555); err != nil {
+		t.Fatalf("chmod dir read-only: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chmod(dir, 0o755); err != nil {
+			t.Logf("chmod cleanup failed (t.TempDir rm may struggle): %v", err)
+		}
+	})
+	target := filepath.Join(dir, "cocoon")
+	executablePath = func() (string, error) {
+		t.Error("executablePath must not be called when --check-only skips the preflight")
+		return target, nil
+	}
+	fetchLatest = func(context.Context, ...release.Option) (*release.Release, error) {
+		return &release.Release{TagName: "v1.0.0"}, nil
+	}
+
+	var stdout bytes.Buffer
+	err := runSelfUpdate(context.Background(), &stdout, &bytes.Buffer{}, true, false)
+	if err != nil {
+		t.Fatalf("err = %v, want nil (--check-only on a read-only install dir must not fail)", err)
+	}
+	if !strings.Contains(stdout.String(), "already up to date") {
+		t.Errorf("stdout = %q, want substring %q", stdout.String(), "already up to date")
+	}
+}
+
+// TestRunSelfUpdate_ReadOnlyInstallDirShortCircuits is the fail-fast
+// contract: when the install dir is read-only, runSelfUpdate must
+// surface ErrInstallDirReadOnly + the remediation hint *before* any
+// network I/O. The fetchLatest seam is wired to fail the test if
+// invoked — that guarantees no 12MB download happens after a guaranteed
+// permission failure.
+//
+//nolint:paralleltest // mutates the package-level fetchLatest / executablePath seams
+func TestRunSelfUpdate_ReadOnlyInstallDirShortCircuits(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses DAC; preflight can't be triggered without dropping privileges")
+	}
+	withSelfUpdateSeams(t)
+	withVersion(t, "1.0.0")
+
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0o555); err != nil {
+		t.Fatalf("chmod dir read-only: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chmod(dir, 0o755); err != nil {
+			t.Logf("chmod cleanup failed (t.TempDir rm may struggle): %v", err)
+		}
+	})
+	target := filepath.Join(dir, "cocoon")
+	executablePath = func() (string, error) { return target, nil }
+	fetchLatest = func(context.Context, ...release.Option) (*release.Release, error) {
+		t.Error("fetchLatest must not run when the install dir preflight fails")
+		return nil, errors.New("fetchLatest should not be reached")
+	}
+
+	err := runSelfUpdate(context.Background(), &bytes.Buffer{}, &bytes.Buffer{}, false, false)
+	if !errors.Is(err, clihelpers.ErrFailure) {
+		t.Fatalf("err = %v, want errors.Is ErrFailure", err)
+	}
+	if !errors.Is(err, ErrInstallDirReadOnly) {
+		t.Fatalf("err = %v, want errors.Is ErrInstallDirReadOnly", err)
+	}
+	for _, want := range []string{"sudo", target} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("err = %v, want substring %q", err, want)
+		}
 	}
 }

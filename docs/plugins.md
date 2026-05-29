@@ -4,7 +4,7 @@
 > cocoon is in v0.x (alpha). By using it, please understand and accept that the plugin contracts (`plugin.toml` schema, install-script env vars, version-pin layout) may change before 1.0, and that breaking changes can land in any release. See the [CHANGELOG](../CHANGELOG.md) and the README's "Project status" section.
 
 This page is the single source of truth for **plugin authoring**:
-the `plugin.toml` schema, the rules for `install.sh` and
+the `plugin.toml` schema, the rules for `install.<name>.sh` and
 `install_user.sh`, the environment variables those scripts receive,
 and the version-pin contract.
 
@@ -19,13 +19,13 @@ A plugin is a self-contained installer that the dockerfile generator
 folds into the build. It has one required file — `plugin.toml`,
 which describes the plugin — and up to two optional shell scripts:
 
-- `install.sh` runs during `docker build` to install the tool. It
+- `install.<name>.sh` runs during `docker build` to install the tool. It
   may run as root or as the unprivileged user depending on
   `[install].requires_root`.
 - `install_user.sh` runs **always** as the unprivileged user
-  after `install.sh`. It exists to handle the small set of cases
+  after `install.<name>.sh`. It exists to handle the small set of cases
   where root-owned install needs to be paired with user-owned
-  configuration (see "`install.sh` vs `install_user.sh`" below).
+  configuration (see "`install.<name>.sh` vs `install_user.sh`" below).
 
 The whole point of plugins is to keep cocoon's generator small while
 still letting users add anything that is not in `[apt].packages`.
@@ -128,11 +128,12 @@ of the install phase and the named-volume declaration in
 | `[metadata]` | `conflicts`       | list of strings    | `[]`  |   | Plugin ids that must not be enabled at the same time. |
 | `[apt]`      | `packages`        | list of strings    | `[]`  |   | Apt packages installed before the install scripts run. |
 | `[install]`  | `requires_root`   | bool               | —     | ✓ | If true, the `install.<name>.sh` scripts run as root; otherwise as the unprivileged user. |
-| `[install]`  | `build_args`      | list of strings    | `[]`  |   | Names of build-time variables the plugin consumes. The generator emits matching `ARG <name>` lines once per plugin (next to whichever of the install scripts runs first) and threads `<name>="${<name>}"` into the per-RUN env prefix of every hook, so both `install.<name>.sh` and `install_user.sh` can read `$<name>` as a normal env var. ARG scope is stage-wide, so a single declaration covers both RUNs. Names match `^[A-Z_][A-Z0-9_]*$`. |
+| `[install]`  | `build_args`      | list of strings    | `[]`  |   | Names of build-time variables the plugin consumes. The generator emits matching `ARG <name>` lines once per plugin (next to whichever of the install scripts runs first) and threads `<name>="${<name>}"` into the per-RUN env prefix of every hook, so both `install.<name>.sh` and `install_user.sh` can read `$<name>` as a normal env var. ARG scope is stage-wide, so a single declaration covers both RUNs. Names match `^[A-Z_][A-Z0-9_]*$` and must not collide with cocoon-reserved env variables (`PIN`, `CHECKSUM_AMD64`, `CHECKSUM_ARM64`, `RC_FILE`, `RC_SYNTAX`, `LOGIN_SHELL`, `COCOON_INSTALL_METHOD`, `USERNAME`) — the `build_args` pair is appended to the RUN prefix after the framework values and would silently shadow them. |
 | `[install]`  | `env`             | map<string,string> | `{}`  |   | `ENV` lines emitted after the install runs. Values can reference earlier `ENV`/`ARG` vars. |
 | `[install]`  | `volumes`         | list of strings    | `[]`  |   | Per-user paths under `/home/${USERNAME}/<dir>`; each one is `mkdir -p`'d, `chown`'d, and declared as a docker named volume so its contents persist across rebuilds. |
 | `[install]`  | `default_method`  | string             | —     | ✓ | Name of the method picked when `workspace.toml`'s `[plugins.methods]` does not pin one. Must be a key under `[install.methods]`. Required because `[install.methods]` is now mandatory (single-method plugins still declare one entry). |
 | `[install.methods.<name>]` | `description` | string | — | ✓ | One-line description shown in `cocoon init`'s method picker. `<name>` matches `^[a-z][a-z0-9_-]*$` and must have a matching `install.<name>.sh` file on disk. **At least one method entry is required** per plugin; the legacy `install.sh` shape is no longer supported. Pick `<name>` from the 4 category words (see "Method name categories"). |
+| `[install.extra_versions.<key>]` | `env`, `default` | inline table | — |   | Declare a user-overridable subcomponent version. `<key>` matches `^[a-z][a-z0-9_]*$`; `env` is the variable name passed to the install script (`^[A-Z_][A-Z0-9_]*$`, must not collide with reserved env names or `build_args`); `default` is used when `[plugins.versions].<id>` does not set the key. See "Subcomponent versions" below. |
 | `[version]`  | `version_capable` | bool               | —     | ✓ | If true, the install script accepts `$PIN` for version pinning (see "Versioned plugins" below). |
 | `[version]`  | `verify`          | string             | `"checksum"` |   | Integrity mechanism: `"checksum"` (the install script verifies `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64`) or `"pgp"` (the script verifies a bundled signature in-script and takes no per-workspace checksum). Only meaningful when `version_capable = true`. |
 
@@ -141,12 +142,12 @@ known sections are rejected loud. If you see `unknown field "foo"`
 when loading a plugin, something in `plugin.toml` was renamed or
 removed — check this page for the current schema.
 
-## `install.sh` vs `install_user.sh`
+## `install.<name>.sh` vs `install_user.sh`
 
-Most plugins only need `install.sh`. Reach for `install_user.sh`
+Most plugins only need `install.<name>.sh`. Reach for `install_user.sh`
 when **all** of these are true:
 
-1. `[install].requires_root = true` (so `install.sh` runs as root), and
+1. `[install].requires_root = true` (so `install.<name>.sh` runs as root), and
 2. The plugin must touch user-owned files (`~/.bashrc`,
    `~/.config/<tool>/`, `~/.local/share/`, …) **or** run a setup
    command that has to execute as the unprivileged user (`<tool> init`,
@@ -161,14 +162,14 @@ second hook keeps that boundary explicit and obvious.
 
 | Situation | Pick |
 |---|---|
-| `requires_root = false`; no rc edit needed | `install.sh` only |
-| `requires_root = false`; rc edit needed | `install.sh` only — write to `$RC_FILE` from inside `install.sh` |
-| `requires_root = true`; only `apt-get` / `/usr/local/bin` work | `install.sh` only |
-| `requires_root = true`; rc edit / `~/.config/<tool>` write / `<tool> init` | `install.sh` **and** `install_user.sh` |
+| `requires_root = false`; no rc edit needed | `install.<name>.sh` only |
+| `requires_root = false`; rc edit needed | `install.<name>.sh` only — write to `$RC_FILE` from inside `install.<name>.sh` |
+| `requires_root = true`; only `apt-get` / `/usr/local/bin` work | `install.<name>.sh` only |
+| `requires_root = true`; rc edit / `~/.config/<tool>` write / `<tool> init` | `install.<name>.sh` **and** `install_user.sh` |
 
 ### Concrete examples
 
-| Plugin | `install.sh` does | `install_user.sh` does |
+| Plugin | `install.<name>.sh` does | `install_user.sh` does |
 |---|---|---|
 | starship (real)              | downloads & places `/usr/local/bin/starship` (root)        | appends `eval "$(starship init …)"` to `$RC_FILE` (user) |
 | fzf (hypothetical)           | `apt-get install fzf` (root)                               | `git clone https://github.com/junegunn/fzf.git ~/.fzf && ~/.fzf/install --bash` (user) |
@@ -277,13 +278,14 @@ bash's environment for that step is composed from two sources:
 | `CHECKSUM_AMD64` | per-RUN env, only when `version_capable = true` and `verify = "checksum"` | `sha256` of the amd64 artifact, or empty (script must skip verification with a warning). Not passed to `verify = "pgp"` plugins. |
 | `CHECKSUM_ARM64` | same as above | `sha256` of the arm64 artifact. |
 | `<BUILD_ARG>`    | per-RUN env (also declared as `ARG`), only when listed in `[install].build_args` | The generator emits one `ARG <name>` line per plugin (next to whichever hook runs first) and threads `<name>="${<name>}"` into the per-RUN prefix of every hook. The Dockerfile substitutes the value on each prefix line at build time. No catalog plugin currently declares one; the mechanism is for custom plugins. |
+| `<EXTRA_ENV>`    | per-RUN env, when declared under `[install.extra_versions]` | One env var per declared subcomponent version. The plugin spells out the env name and a default; the user can override the value from `workspace.toml`'s `[plugins.versions].<id>` inline table by writing the same key (e.g. `android-sdk = { pin = "...", api_level = "36" }`). The reserved env names above (`PIN`, `CHECKSUM_AMD64`, `CHECKSUM_ARM64`, `RC_FILE`, `RC_SYNTAX`, `LOGIN_SHELL`, `COCOON_INSTALL_METHOD`, `USERNAME`) are off-limits for collision reasons. See "Subcomponent versions" below. |
 
 Nothing on the developer's host machine evaluates the script — bash
 runs the body inside the build environment, with the env composed as
 above.
 
 The literal string `COCOON_PLUGIN_EOF` must not appear on a line by
-itself anywhere in `install.sh` / `install_user.sh` — that would
+itself anywhere in `install.<name>.sh` / `install_user.sh` — that would
 close the heredoc early. The generator detects this and fails loud
 (`ErrHeredocCollision`).
 
@@ -325,6 +327,57 @@ A plugin where `version_capable = false` cannot be pinned: `cocoon gen`
 rejects any `[plugins.versions]` entry for it, and `cocoon plugin pin`
 refuses to emit one.
 
+### Subcomponent versions (`[install.extra_versions]`)
+
+Some plugins install a primary artifact (pinned via `$PIN`) and then
+fetch additional components whose versions the user may want to choose
+independently — Android SDK's `cmdline-tools` (pinned) plus
+`platforms;android-<level>` and `build-tools;<ver>` (separately
+selectable) is the motivating example.
+
+To expose a subcomponent as a user-overridable knob, declare it under
+`[install.extra_versions]`:
+
+```toml
+[install.extra_versions]
+api_level   = { env = "ANDROID_SDK_API_LEVEL",   default = "35" }
+build_tools = { env = "ANDROID_SDK_BUILD_TOOLS", default = "35.0.0" }
+```
+
+- **Key** (`api_level`, `build_tools`) — what the user writes in
+  `[plugins.versions].<id>`. Matches `^[a-z][a-z0-9_]*$`. `pin`,
+  `checksum_amd64`, and `checksum_arm64` are reserved by
+  `[plugins.versions]` and are rejected as extra keys (declaring them
+  would be a no-op — the user could never override the value).
+- **`env`** — the env name the install script reads. Matches
+  `^[A-Z_][A-Z0-9_]*$`, must not collide with the reserved env
+  variables above, with any name in `[install].build_args`, or with
+  another declared `env` inside `extra_versions`.
+- **`default`** — required, non-empty. Used when `workspace.toml` does
+  not override the key. The install script should treat the env as
+  required (e.g. `: "${ANDROID_SDK_API_LEVEL:?...}"`) so a misconfigured
+  generator fails fast instead of producing a half-installed SDK. Both
+  the `default` and any workspace override are rejected if they contain
+  `"`, `\`, `\n`, `\r`, `$`, or backtick: the value is interpolated
+  into the Dockerfile RUN-prefix `KEY="..."` env pair, where the first
+  four runes would break the shell quoting and `$` / backtick would
+  trigger parameter or command substitution at build time instead of
+  passing through as a literal version string.
+
+End-user override looks like any other `[plugins.versions]` entry:
+
+```toml
+[plugins.versions]
+android-sdk = { pin = "14742923", api_level = "36", build_tools = "36.0.0" }
+```
+
+Keys that are **not** declared under the plugin's
+`[install.extra_versions]` are rejected by `cocoon gen` with
+`ErrUnknownExtraVersion` so a typo (`api_levle = "..."`) does not
+silently fall through to the default. `cocoon plugin pin <id> <ref>
+--write` preserves any extra keys present on the existing line — it
+rewrites `pin` / `checksum_*` only.
+
 ## Catalog tour
 
 Use these embedded plugins as templates when writing your own:
@@ -348,6 +401,11 @@ Use these embedded plugins as templates when writing your own:
   (`installer` + `binary`). Read both `install.installer.sh` and
   `install.binary.sh` to see the multi-method `$COCOON_INSTALL_METHOD`
   fail-fast pattern in action.
+- **`android-sdk`** — `archive` method that downloads a ZIP and then
+  drives a follow-up installer (`sdkmanager`) inside the same RUN.
+  Reference for `[install.extra_versions]`: `api_level` and
+  `build_tools` are declared so users can pin platform / build-tools
+  versions independently of the `commandline-tools` `pin`.
 
 ## Troubleshooting
 
@@ -357,7 +415,7 @@ Use these embedded plugins as templates when writing your own:
   schema. Common offenders are old fields that were dropped during
   refactors.
 - **`ErrHeredocCollision: plugin "x" contains the literal
-  COCOON_PLUGIN_EOF`** — your `install.sh` has a line that exactly
+  COCOON_PLUGIN_EOF`** — your `install.<name>.sh` has a line that exactly
   matches the heredoc terminator. Rename the marker inside the
   script.
 - **`ErrNilPluginsFS`** — internal: a caller built a
