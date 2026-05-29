@@ -138,7 +138,7 @@ func TestPluginContracts(t *testing.T) {
 			requiresRoot: false, versionCapable: true, firstVolume: "copilot",
 			mustContain: []string{
 				"Copilot", "curl -fsSL", "retry 3", "tlsv1.2",
-				// gh-cli method (install.gh-cli.sh)
+				// installer method (install.installer.sh)
 				"gh.io/copilot-install", `PREFIX="$HOME/.local"`,
 				// binary method (install.binary.sh)
 				"github.com/github/copilot-cli", "sha256sum -c -",
