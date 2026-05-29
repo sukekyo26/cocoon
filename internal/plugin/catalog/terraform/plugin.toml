@@ -16,3 +16,4 @@ description = "Single terraform binary extracted from a releases.hashicorp.com z
 
 [version]
 version_capable = true
+verify = "pgp"

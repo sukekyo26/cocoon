@@ -6,6 +6,19 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- The `terraform` and `opentofu` plugins now verify every download against
+  the upstream GPG release signature (the HashiCorp / OpenTofu signing keys
+  are bundled in the install scripts), the same `verify = "pgp"` model as
+  `aws-cli`. Verification is **always on** — previously an unpinned build
+  skipped the integrity check with a warning. As a result, `[plugins.versions]`
+  no longer accepts `checksum_amd64` / `checksum_arm64` for these two
+  (`cocoon gen` rejects them, matching `aws-cli`); a `pin` still selects the
+  version. No per-release checksum maintenance is required, and an expired
+  upstream key still verifies past signatures — only an actual key rotation
+  needs a key refresh.
+
 ### Fixed
 
 - **Security**: the `google-chrome` plugin now installs Chrome from

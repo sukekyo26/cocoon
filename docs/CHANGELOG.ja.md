@@ -6,6 +6,18 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+### 変更
+
+- `terraform` / `opentofu` プラグインが、ダウンロードを毎回上流の GPG
+  リリース署名（HashiCorp / OpenTofu の署名鍵をインストールスクリプトに同梱）
+  で検証するようになりました。`aws-cli` と同じ `verify = "pgp"` 方式で、検証は
+  **常時有効**です（従来は pin 無しビルドが警告のみで整合性チェックをスキップ
+  していました）。これに伴い、この 2 つは `[plugins.versions]` の
+  `checksum_amd64` / `checksum_arm64` を受け付けなくなりました（`cocoon gen`
+  が拒否。`aws-cli` と同様）。`pin` でのバージョン指定は引き続き可能です。
+  リリース毎の checksum 保守は不要で、上流鍵が失効しても過去の署名は検証
+  できます（実際の鍵ローテーション時のみ鍵の更新が必要）。
+
 ### 修正
 
 - **Security**: `google-chrome` プラグインが Chrome を Google の署名付き

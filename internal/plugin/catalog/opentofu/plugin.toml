@@ -13,3 +13,4 @@ description = "Single tofu binary extracted from a GitHub Release tarball"
 
 [version]
 version_capable = true
+verify = "pgp"
