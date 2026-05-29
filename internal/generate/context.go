@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"slices"
 	"strings"
 
@@ -415,11 +416,7 @@ func (c *WorkspaceContext) BuildEnvironment() []string {
 // output.
 func (c *WorkspaceContext) envOrder() []string {
 	m := c.UserEnv()
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	slices.Sort(keys)
+	keys := slices.Sorted(maps.Keys(m))
 	return keys
 }
 
@@ -559,11 +556,7 @@ func (c *WorkspaceContext) Sidecars() map[string]config.SidecarService {
 // SidecarNames returns sidecar service names in alphabetical order.
 func (c *WorkspaceContext) SidecarNames() []string {
 	m := c.Sidecars()
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	slices.Sort(keys)
+	keys := slices.Sorted(maps.Keys(m))
 	return keys
 }
 

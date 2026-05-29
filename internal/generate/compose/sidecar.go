@@ -2,7 +2,8 @@ package compose
 
 import (
 	"fmt"
-	"sort"
+	"maps"
+	"slices"
 
 	"gopkg.in/yaml.v3"
 
@@ -25,11 +26,7 @@ func buildSidecar(name string, spec config.SidecarService) (*yaml.Node, []yamlx.
 		pairs = append(pairs, yamlx.Pair{Key: "ports", Value: yamlx.Seq(items...)})
 	}
 	if len(spec.Env) > 0 {
-		keys := make([]string, 0, len(spec.Env))
-		for k := range spec.Env {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
+		keys := slices.Sorted(maps.Keys(spec.Env))
 		items := make([]*yaml.Node, 0, len(keys))
 		for _, k := range keys {
 			items = append(items, yamlx.QuotedIfSpecial(k+"="+spec.Env[k]))
@@ -61,11 +58,7 @@ func buildSidecar(name string, spec config.SidecarService) (*yaml.Node, []yamlx.
 }
 
 func buildSidecarVolumes(name string, spec config.SidecarService) ([]*yaml.Node, []yamlx.Pair) {
-	keys := make([]string, 0, len(spec.Volumes))
-	for k := range spec.Volumes {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
+	keys := slices.Sorted(maps.Keys(spec.Volumes))
 	mounts := make([]*yaml.Node, 0, len(keys)+len(spec.Mounts))
 	vols := make([]yamlx.Pair, 0, len(keys))
 	for _, k := range keys {
@@ -103,11 +96,7 @@ func scalarString(v any) string {
 // anyMap converts a map[string]any into an ordered yaml node by sorting keys.
 // Used for healthcheck entries which the schema declares as extra-allow.
 func anyMap(m map[string]any) *yaml.Node {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
+	keys := slices.Sorted(maps.Keys(m))
 	pairs := make([]yamlx.Pair, 0, len(keys))
 	for _, k := range keys {
 		pairs = append(pairs, yamlx.Pair{Key: k, Value: anyNode(m[k])})

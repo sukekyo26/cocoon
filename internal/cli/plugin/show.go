@@ -3,6 +3,8 @@ package plugincli
 import (
 	"fmt"
 	"io"
+	"maps"
+	"slices"
 	"sort"
 	"strings"
 
@@ -79,11 +81,7 @@ func runShow(stdout, stderr io.Writer, id string) error {
 	}
 
 	if len(p.Install.Env) > 0 {
-		keys := make([]string, 0, len(p.Install.Env))
-		for k := range p.Install.Env {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
+		keys := slices.Sorted(maps.Keys(p.Install.Env))
 		log.Info(log.Bold("env:"))
 		for _, k := range keys {
 			log.Infof("  %s=%s", k, p.Install.Env[k])
