@@ -65,7 +65,7 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - uses: taiki-e/install-action@b1fb785e72add1aaabe1e13115c2292ca8925d3f # just
+      - uses: taiki-e/install-action@b1fb785e72add1aaabe1e13115c2292ca8925d3f # v2.75.27 (just)
         with:
           tool: just
 
