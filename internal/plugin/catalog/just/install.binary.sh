@@ -47,7 +47,14 @@ else
   # No user pin: verify against the release's own SHA256SUMS.
   curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
     "${base}/SHA256SUMS" -o /tmp/just.sums
-  expected="$(grep "${asset}\$" /tmp/just.sums | cut -d ' ' -f1)"
+  # Match the asset name literally (awk field compare, not a regex) and fail
+  # loudly if it is absent so a manifest-shape change does not collapse into
+  # an opaque sha256sum error.
+  expected="$(awk -v f="$asset" '$2 == f { print $1; exit }' /tmp/just.sums)"
+  if [ -z "$expected" ]; then
+    echo "just: ${asset} not found in SHA256SUMS" >&2
+    exit 1
+  fi
   echo "${expected}  /tmp/just.tar.gz" | sha256sum -c -
   rm -f /tmp/just.sums
 fi

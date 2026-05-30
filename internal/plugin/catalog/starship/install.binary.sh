@@ -45,6 +45,10 @@ else
   curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
     "${url}.sha256" -o /tmp/starship.sum
   expected="$(cut -d ' ' -f1 /tmp/starship.sum)"
+  if [ -z "$expected" ]; then
+    echo "starship: empty checksum from ${url}.sha256" >&2
+    exit 1
+  fi
   echo "${expected}  /tmp/starship.tar.gz" | sha256sum -c -
   rm -f /tmp/starship.sum
 fi

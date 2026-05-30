@@ -384,7 +384,14 @@ else
   # the same release. -i tolerates the manifest's "Linux" capitalisation.
   curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
     "${base}/checksums.txt" -o /tmp/lazygit.sums
-  expected="$(grep -i "${asset}\$" /tmp/lazygit.sums | cut -d ' ' -f1)"
+  # Match the asset name literally (awk field compare, not a regex);
+  # tolower() tolerates the manifest's "Linux" capitalisation. Fail loudly if
+  # absent so a manifest-shape change does not collapse into an opaque error.
+  expected="$(awk -v f="$asset" 'tolower($2) == tolower(f) { print $1; exit }' /tmp/lazygit.sums)"
+  if [ -z "$expected" ]; then
+    echo "lazygit: ${asset} not found in checksums.txt" >&2
+    exit 1
+  fi
   echo "${expected}  /tmp/lazygit.tar.gz" | sha256sum -c -
   rm -f /tmp/lazygit.sums
 fi

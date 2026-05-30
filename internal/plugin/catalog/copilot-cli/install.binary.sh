@@ -55,7 +55,14 @@ else
   # No user pin: verify against the release's own SHA256SUMS.txt.
   curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
     "${base}/SHA256SUMS.txt" -o /tmp/copilot.sums
-  expected="$(grep "${TARBALL}\$" /tmp/copilot.sums | cut -d ' ' -f1)"
+  # Match the asset name literally (awk field compare, not a regex) and fail
+  # loudly if it is absent so a manifest-shape change does not collapse into
+  # an opaque sha256sum error.
+  expected="$(awk -v f="$TARBALL" '$2 == f { print $1; exit }' /tmp/copilot.sums)"
+  if [ -z "$expected" ]; then
+    echo "copilot-cli: ${TARBALL} not found in SHA256SUMS.txt" >&2
+    exit 1
+  fi
   echo "${expected}  /tmp/${TARBALL}" | sha256sum -c -
   rm -f /tmp/copilot.sums
 fi

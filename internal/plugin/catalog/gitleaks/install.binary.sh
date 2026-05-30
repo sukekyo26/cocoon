@@ -46,7 +46,14 @@ else
   # No user pin: verify against the release's own checksums file.
   curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
     "${base}/gitleaks_${VERSION}_checksums.txt" -o /tmp/gitleaks.sums
-  expected="$(grep "${asset}\$" /tmp/gitleaks.sums | cut -d ' ' -f1)"
+  # Match the asset name literally (awk field compare, not a regex) and fail
+  # loudly if it is absent so a manifest-shape change does not collapse into
+  # an opaque sha256sum error.
+  expected="$(awk -v f="$asset" '$2 == f { print $1; exit }' /tmp/gitleaks.sums)"
+  if [ -z "$expected" ]; then
+    echo "gitleaks: ${asset} not found in checksums file" >&2
+    exit 1
+  fi
   echo "${expected}  /tmp/gitleaks.tar.gz" | sha256sum -c -
   rm -f /tmp/gitleaks.sums
 fi

@@ -37,6 +37,10 @@ else
   curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
     "${url}.sha256sum" -o /tmp/helm.sum
   expected="$(cut -d ' ' -f1 /tmp/helm.sum)"
+  if [ -z "$expected" ]; then
+    echo "helm: empty checksum from ${url}.sha256sum" >&2
+    exit 1
+  fi
   echo "${expected}  /tmp/helm.tar.gz" | sha256sum -c -
   rm -f /tmp/helm.sum
 fi

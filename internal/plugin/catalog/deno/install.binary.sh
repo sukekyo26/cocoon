@@ -50,6 +50,10 @@ else
   curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
     "${url}.sha256sum" -o /tmp/deno.sum
   expected="$(cut -d ' ' -f1 /tmp/deno.sum)"
+  if [ -z "$expected" ]; then
+    echo "deno: empty checksum from ${url}.sha256sum" >&2
+    exit 1
+  fi
   echo "${expected}  /tmp/deno.zip" | sha256sum -c -
   rm -f /tmp/deno.sum
 fi
