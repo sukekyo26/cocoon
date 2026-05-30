@@ -263,7 +263,8 @@ func TestPluginContracts(t *testing.T) {
 			mustContain: []string{
 				"opentofu", "tofu", "sha256sum -c -", "tlsv1.2", "retry 3",
 				"github.com/opentofu/opentofu", "SHA256SUMS",
-				"gpg --batch --verify",
+				// gpg verification needs the gpg binary; gnupg must be an apt dep.
+				"gpg --batch --verify", "gnupg",
 				"E3E6E43D84CB852EADB0051D0C0AF313E5FD9F80",
 			},
 			mustNotContain: append(append([]string{}, noPlaceholders...), "api.github.com", "| jq "),
@@ -348,7 +349,8 @@ func TestPluginContracts(t *testing.T) {
 			mustContain: []string{
 				"terraform", "releases.hashicorp.com", "sha256sum -c -",
 				"tlsv1.2", "retry 3", "dpkg --print-architecture", "unzip",
-				"SHA256SUMS", "gpg --batch --verify",
+				// gpg verification needs the gpg binary; gnupg must be an apt dep.
+				"SHA256SUMS", "gpg --batch --verify", "gnupg",
 				"C874011F0AB405110D02105534365D9472D7468F",
 			},
 			mustNotContain: append(append([]string{}, noPlaceholders...), "api.github.com", "| jq "),
