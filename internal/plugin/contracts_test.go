@@ -192,6 +192,9 @@ func TestPluginContracts(t *testing.T) {
 				"dl.google.com/linux/chrome/deb", "signed-by",
 				"linux_signing_key.pub", "google-chrome-stable",
 				"retry 3", "tlsv1.2",
+				// Keyrings dir mode normalized so apt's _apt user can traverse
+				// it under a restrictive umask (matches github-cli / docker-cli).
+				"chmod 755 /etc/apt/keyrings",
 			},
 			// The pre-signed-by direct .deb download must be gone — both the
 			// install script markers and the stale plugin.toml description that
