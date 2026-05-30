@@ -3,20 +3,11 @@
 #
 # Inputs (env):
 #   PIN              : gitleaks version (without leading "v"); empty = latest
-#   CHECKSUM_AMD64   : sha256 of amd64 tarball; empty to skip verification
-#   CHECKSUM_ARM64   : sha256 of arm64 tarball; empty to skip verification
+#   CHECKSUM_AMD64   : sha256 of amd64 tarball; empty = verify against the
+#                      release checksums file
+#   CHECKSUM_ARM64   : sha256 of arm64 tarball; empty = verify against the
+#                      release checksums file
 set -euo pipefail
-
-if [ -n "${NO_COLOR:-}" ]; then
-  C_YEL=''
-  C_RST=''
-elif [ -n "${FORCE_COLOR:-}" ] || [ -t 2 ]; then
-  C_YEL=$'\033[33m'
-  C_RST=$'\033[0m'
-else
-  C_YEL=''
-  C_RST=''
-fi
 
 # gitleaks asset names use x64 / arm64 (NOT x86_64 / aarch64).
 ARCH="$(dpkg --print-architecture)"
@@ -43,14 +34,28 @@ else
     sed 's|.*/tag/v||')
 fi
 
+base="https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}"
+asset="gitleaks_${VERSION}_linux_${DOWNLOAD_ARCH}.tar.gz"
+
 curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
-  "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_${DOWNLOAD_ARCH}.tar.gz" \
-  -o /tmp/gitleaks.tar.gz
+  "${base}/${asset}" -o /tmp/gitleaks.tar.gz
 
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/gitleaks.tar.gz" | sha256sum -c -
 else
-  printf '%sWARNING: SHA256 verification skipped for gitleaks (no checksum for gitleaks in [plugins.versions])%s\n' "$C_YEL" "$C_RST" >&2
+  # No user pin: verify against the release's own checksums file.
+  curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+    "${base}/gitleaks_${VERSION}_checksums.txt" -o /tmp/gitleaks.sums
+  # Match the asset name literally (awk field compare, not a regex) and fail
+  # loudly if it is absent so a manifest-shape change does not collapse into
+  # an opaque sha256sum error.
+  expected="$(awk -v f="$asset" '$2 == f { print $1; exit }' /tmp/gitleaks.sums)"
+  if [ -z "$expected" ]; then
+    echo "gitleaks: ${asset} not found in checksums file" >&2
+    exit 1
+  fi
+  echo "${expected}  /tmp/gitleaks.tar.gz" | sha256sum -c -
+  rm -f /tmp/gitleaks.sums
 fi
 
 tar -xzf /tmp/gitleaks.tar.gz -C /usr/local/bin gitleaks

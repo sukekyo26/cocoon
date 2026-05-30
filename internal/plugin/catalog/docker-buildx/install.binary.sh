@@ -7,22 +7,11 @@
 #
 # Inputs (env):
 #   PIN              : Buildx version without leading "v" (e.g. "0.24.0"); empty = latest
-#   CHECKSUM_AMD64   : sha256 of the amd64 binary; empty to skip verification
-#   CHECKSUM_ARM64   : sha256 of the arm64 binary; empty to skip verification
+#   CHECKSUM_AMD64   : sha256 of the amd64 binary; empty = verify against the
+#                      release checksums.txt
+#   CHECKSUM_ARM64   : sha256 of the arm64 binary; empty = verify against the
+#                      release checksums.txt
 set -euo pipefail
-
-# Yellow WARNING when stderr is a TTY (and NO_COLOR is unset) or
-# FORCE_COLOR is set. NO_COLOR wins per no-color.org.
-if [ -n "${NO_COLOR:-}" ]; then
-  C_YEL=''
-  C_RST=''
-elif [ -n "${FORCE_COLOR:-}" ] || [ -t 2 ]; then
-  C_YEL=$'\033[33m'
-  C_RST=$'\033[0m'
-else
-  C_YEL=''
-  C_RST=''
-fi
 
 ARCH="$(dpkg --print-architecture)"
 case "$ARCH" in
@@ -39,14 +28,28 @@ else
     sed 's|.*/tag/v||')
 fi
 
+base="https://github.com/docker/buildx/releases/download/v${VERSION}"
+asset="buildx-v${VERSION}.linux-${ARCH}"
+
 curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
-  "https://github.com/docker/buildx/releases/download/v${VERSION}/buildx-v${VERSION}.linux-${ARCH}" \
-  -o /tmp/docker-buildx
+  "${base}/${asset}" -o /tmp/docker-buildx
 
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/docker-buildx" | sha256sum -c -
 else
-  printf '%sWARNING: SHA256 verification skipped for Docker Buildx (no checksum for docker-buildx in [plugins.versions])%s\n' "$C_YEL" "$C_RST" >&2
+  # No user pin: verify against the release's own checksums.txt.
+  curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+    "${base}/checksums.txt" -o /tmp/docker-buildx.sums
+  # Match the asset name literally (awk field compare, not a regex) and fail
+  # loudly if it is absent so a manifest-shape change does not collapse into
+  # an opaque sha256sum error.
+  expected="$(awk -v f="$asset" '$2 == f { print $1; exit }' /tmp/docker-buildx.sums)"
+  if [ -z "$expected" ]; then
+    echo "docker-buildx: ${asset} not found in checksums.txt" >&2
+    exit 1
+  fi
+  echo "${expected}  /tmp/docker-buildx" | sha256sum -c -
+  rm -f /tmp/docker-buildx.sums
 fi
 
 # /usr/libexec/docker/cli-plugins/ is the Docker CLI plugin lookup path

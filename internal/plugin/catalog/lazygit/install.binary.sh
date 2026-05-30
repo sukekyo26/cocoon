@@ -3,22 +3,11 @@
 #
 # Inputs (env):
 #   PIN              : lazygit version (without leading "v"); empty = latest
-#   CHECKSUM_AMD64   : sha256 of amd64 tarball; empty to skip verification
-#   CHECKSUM_ARM64   : sha256 of arm64 tarball; empty to skip verification
+#   CHECKSUM_AMD64   : sha256 of amd64 tarball; empty = verify against the
+#                      release checksums.txt
+#   CHECKSUM_ARM64   : sha256 of arm64 tarball; empty = verify against the
+#                      release checksums.txt
 set -euo pipefail
-
-# Yellow WARNING when stderr is a TTY (and NO_COLOR is unset) or
-# FORCE_COLOR is set. NO_COLOR wins per no-color.org.
-if [ -n "${NO_COLOR:-}" ]; then
-  C_YEL=''
-  C_RST=''
-elif [ -n "${FORCE_COLOR:-}" ] || [ -t 2 ]; then
-  C_YEL=$'\033[33m'
-  C_RST=$'\033[0m'
-else
-  C_YEL=''
-  C_RST=''
-fi
 
 ARCH="$(dpkg --print-architecture)"
 case "$ARCH" in
@@ -44,14 +33,29 @@ else
     sed 's|.*/tag/v||')
 fi
 
+base="https://github.com/jesseduffield/lazygit/releases/download/v${VERSION}"
+asset="lazygit_${VERSION}_linux_${DOWNLOAD_ARCH}.tar.gz"
+
 curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
-  "https://github.com/jesseduffield/lazygit/releases/download/v${VERSION}/lazygit_${VERSION}_linux_${DOWNLOAD_ARCH}.tar.gz" \
-  -o /tmp/lazygit.tar.gz
+  "${base}/${asset}" -o /tmp/lazygit.tar.gz
 
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/lazygit.tar.gz" | sha256sum -c -
 else
-  printf '%sWARNING: SHA256 verification skipped for lazygit (no checksum for lazygit in [plugins.versions])%s\n' "$C_YEL" "$C_RST" >&2
+  # No user pin: verify against the release's own checksums.txt, fetched from
+  # the same release.
+  curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+    "${base}/checksums.txt" -o /tmp/lazygit.sums
+  # Match the asset name literally (awk field compare, not a regex);
+  # tolower() tolerates the manifest's "Linux" capitalisation. Fail loudly if
+  # absent so a manifest-shape change does not collapse into an opaque error.
+  expected="$(awk -v f="$asset" 'tolower($2) == tolower(f) { print $1; exit }' /tmp/lazygit.sums)"
+  if [ -z "$expected" ]; then
+    echo "lazygit: ${asset} not found in checksums.txt" >&2
+    exit 1
+  fi
+  echo "${expected}  /tmp/lazygit.tar.gz" | sha256sum -c -
+  rm -f /tmp/lazygit.sums
 fi
 
 tar -xzf /tmp/lazygit.tar.gz -C /usr/local/bin lazygit
