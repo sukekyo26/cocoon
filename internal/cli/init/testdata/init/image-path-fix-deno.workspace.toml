@@ -222,7 +222,7 @@ deno = "/home/${USERNAME}/.deno"
 #   When enable = true, `cocoon gen` wires the host directory into the build via
 #   docker-compose's additional_contexts and the Dockerfile's RUN --mount=type=bind,
 #   so any *.crt files placed there land in the container's trust store at build time.
-#   Useful for Zscaler / corporate proxies / private CAs. Default off → no cert wiring
+#   Useful when the build must trust a private or self-signed CA. Default off → no cert wiring
 #   in any generated artifact.
 # [certificates]
 # enable = true

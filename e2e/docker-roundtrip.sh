@@ -166,7 +166,7 @@ case "$PRESET" in
     plugins="$(join_csv "${enabled[@]}")"
     pins="$(pins_for "${enabled[@]}")"
     # Exercise the [install.methods]=binary path for copilot-cli on this
-    # preset (matches the Zscaler-style use case the method was added
+    # preset (matches the offline / no-curl|sh use case the method was added
     # for). arm64-full keeps the default gh-cli method so both install
     # paths get real docker-build coverage per release.
     methods="copilot-cli=binary"
@@ -308,7 +308,7 @@ esac
 
 # The generated docker-compose.yml declares
 # `additional_contexts: cocoon_user_certs: ${HOME}/.cocoon/certs` so
-# users can drop corp CA certs (e.g. Zscaler) into a host-side directory
+# users can drop private CA certs into a host-side directory
 # and have them auto-baked at build time.
 #
 # Two CI-side concerns we have to handle that end users don't:

@@ -186,7 +186,7 @@ default_method = "installer"
 description = "Install via the upstream gh.io install script (default)"
 
 [install.methods.binary]
-description = "Direct binary from GitHub Releases (Zscaler-friendly)"
+description = "Direct binary from GitHub Releases (no curl|sh)"
 ```
 
 対応する `install.installer.sh` / `install.binary.sh` を置けば、2 つの
