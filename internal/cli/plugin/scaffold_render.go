@@ -151,21 +151,28 @@ else
     sed 's|.*/tag/v||')
 fi
 
+asset="REPO-${DOWNLOAD_ARCH}-unknown-linux-musl"
 curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
-  "https://github.com/OWNER/REPO/releases/download/v${VERSION}/REPO-${DOWNLOAD_ARCH}-unknown-linux-musl" \
+  "https://github.com/OWNER/REPO/releases/download/v${VERSION}/${asset}" \
   -o /usr/local/bin/{{ .ID }}
 
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /usr/local/bin/{{ .ID }}" | sha256sum -c -
 else
-  # No user pin: verify against the checksum the upstream publishes with the
-  # release. Replace the URL + asset name to match your upstream's layout
+  # No user checksum: verify against the checksum the upstream publishes with
+  # the release. Replace the URL + asset name to match your upstream's layout
   # (a "<asset>.sha256" sidecar, a "checksums.txt", or "SHA256SUMS"); see
   # docs/plugins.md. Fall back to a loud "WARNING: ... skipped" only if the
   # upstream ships no fetchable checksum.
   curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
     "https://github.com/OWNER/REPO/releases/download/v${VERSION}/checksums.txt" -o /tmp/{{ .ID }}.sums
-  expected="$(grep "REPO-${DOWNLOAD_ARCH}-unknown-linux-musl\$" /tmp/{{ .ID }}.sums | cut -d ' ' -f1)"
+  # awk field compare (literal, not a regex; strip the binary-mode '*' marker
+  # some manifests prepend), first match wins, and fail loudly if absent.
+  expected="$(awk -v f="$asset" '{ n = $2; sub(/^\*/, "", n); if (n == f) { print $1; exit } }' /tmp/{{ .ID }}.sums)"
+  if [ -z "$expected" ]; then
+    echo "{{ .ID }}: $asset not found in checksums.txt" >&2
+    exit 1
+  fi
   echo "${expected}  /usr/local/bin/{{ .ID }}" | sha256sum -c -
   rm -f /tmp/{{ .ID }}.sums
 fi
@@ -229,13 +236,17 @@ curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-erro
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/{{ .ID }}.tar.gz" | sha256sum -c -
 else
-  # No user pin: verify against the checksum the upstream publishes with the
-  # release (a "<asset>.sha256" / ".sha256sum" sidecar, a "checksums.txt" /
+  # No user checksum: verify against the checksum the upstream publishes with
+  # the release (a "<asset>.sha256" / ".sha256sum" sidecar, a "checksums.txt" /
   # "SHA256SUMS", or a field in a release JSON); see docs/plugins.md.
   # Replace the URL below to match your upstream's layout.
   curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
     "https://example.com/{{ .ID }}-${DOWNLOAD_ARCH}.tar.gz.sha256" -o /tmp/{{ .ID }}.sum
   expected="$(cut -d ' ' -f1 /tmp/{{ .ID }}.sum)"
+  if [ -z "$expected" ]; then
+    echo "{{ .ID }}: empty checksum from the .sha256 sidecar" >&2
+    exit 1
+  fi
   echo "${expected}  /tmp/{{ .ID }}.tar.gz" | sha256sum -c -
   rm -f /tmp/{{ .ID }}.sum
 fi

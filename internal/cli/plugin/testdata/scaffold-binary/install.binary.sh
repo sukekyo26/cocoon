@@ -36,21 +36,28 @@ else
     sed 's|.*/tag/v||')
 fi
 
+asset="REPO-${DOWNLOAD_ARCH}-unknown-linux-musl"
 curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
-  "https://github.com/OWNER/REPO/releases/download/v${VERSION}/REPO-${DOWNLOAD_ARCH}-unknown-linux-musl" \
+  "https://github.com/OWNER/REPO/releases/download/v${VERSION}/${asset}" \
   -o /usr/local/bin/demo
 
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /usr/local/bin/demo" | sha256sum -c -
 else
-  # No user pin: verify against the checksum the upstream publishes with the
-  # release. Replace the URL + asset name to match your upstream's layout
+  # No user checksum: verify against the checksum the upstream publishes with
+  # the release. Replace the URL + asset name to match your upstream's layout
   # (a "<asset>.sha256" sidecar, a "checksums.txt", or "SHA256SUMS"); see
   # docs/plugins.md. Fall back to a loud "WARNING: ... skipped" only if the
   # upstream ships no fetchable checksum.
   curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
     "https://github.com/OWNER/REPO/releases/download/v${VERSION}/checksums.txt" -o /tmp/demo.sums
-  expected="$(grep "REPO-${DOWNLOAD_ARCH}-unknown-linux-musl\$" /tmp/demo.sums | cut -d ' ' -f1)"
+  # awk field compare (literal, not a regex; strip the binary-mode '*' marker
+  # some manifests prepend), first match wins, and fail loudly if absent.
+  expected="$(awk -v f="$asset" '{ n = $2; sub(/^\*/, "", n); if (n == f) { print $1; exit } }' /tmp/demo.sums)"
+  if [ -z "$expected" ]; then
+    echo "demo: $asset not found in checksums.txt" >&2
+    exit 1
+  fi
   echo "${expected}  /usr/local/bin/demo" | sha256sum -c -
   rm -f /tmp/demo.sums
 fi
