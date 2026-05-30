@@ -3,22 +3,11 @@
 #
 # Inputs (env):
 #   PIN              : Dart SDK version (e.g. "3.12.0"); empty = latest stable
-#   CHECKSUM_AMD64   : sha256 of linux-x64 zip; empty to skip verification
-#   CHECKSUM_ARM64   : sha256 of linux-arm64 zip; empty to skip verification
+#   CHECKSUM_AMD64   : sha256 of linux-x64 zip; empty = verify against the
+#                      upstream .sha256sum served next to the zip
+#   CHECKSUM_ARM64   : sha256 of linux-arm64 zip; empty = verify against the
+#                      upstream .sha256sum served next to the zip
 set -euo pipefail
-
-# Yellow WARNING when stderr is a TTY (and NO_COLOR is unset) or
-# FORCE_COLOR is set. NO_COLOR wins per no-color.org.
-if [ -n "${NO_COLOR:-}" ]; then
-  C_YEL=''
-  C_RST=''
-elif [ -n "${FORCE_COLOR:-}" ] || [ -t 2 ]; then
-  C_YEL=$'\033[33m'
-  C_RST=$'\033[0m'
-else
-  C_YEL=''
-  C_RST=''
-fi
 
 ARCH="$(dpkg --print-architecture)"
 case "$ARCH" in
@@ -51,14 +40,24 @@ else
   fi
 fi
 
+url="https://storage.googleapis.com/dart-archive/channels/stable/release/${VERSION}/sdk/dartsdk-linux-${DART_ARCH}-release.zip"
 curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
-  "https://storage.googleapis.com/dart-archive/channels/stable/release/${VERSION}/sdk/dartsdk-linux-${DART_ARCH}-release.zip" \
-  -o /tmp/dart.zip
+  "$url" -o /tmp/dart.zip
 
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/dart.zip" | sha256sum -c -
 else
-  printf '%sWARNING: SHA256 verification skipped for Dart (no checksum for dart in [plugins.versions])%s\n' "$C_YEL" "$C_RST" >&2
+  # No user pin: verify against the .sha256sum dart-archive serves next to
+  # the zip.
+  curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+    "${url}.sha256sum" -o /tmp/dart.sum
+  expected="$(cut -d ' ' -f1 /tmp/dart.sum)"
+  if [ -z "$expected" ]; then
+    echo "dart: empty checksum from ${url}.sha256sum" >&2
+    exit 1
+  fi
+  echo "${expected}  /tmp/dart.zip" | sha256sum -c -
+  rm -f /tmp/dart.sum
 fi
 
 # ZIP root is "dart-sdk/" — extract into a scratch dir then move to /usr/local/dart.

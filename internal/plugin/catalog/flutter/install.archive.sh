@@ -3,7 +3,8 @@
 #
 # Inputs (env):
 #   PIN              : Flutter version (e.g. "3.44.0"); empty = latest stable
-#   CHECKSUM_AMD64   : sha256 of linux-x64 tarball; empty to skip verification
+#   CHECKSUM_AMD64   : sha256 of linux-x64 tarball; empty = verify against the
+#                      sha256 recorded in Flutter's releases_linux.json
 #   CHECKSUM_ARM64   : unused — Flutter Linux is x86_64 only
 #
 # Note: Flutter does not publish official Linux/arm64 builds. On arm64 hosts
@@ -11,19 +12,6 @@
 # `docker --platform linux/amd64` (Docker Desktop does this automatically on
 # Apple Silicon, so this only affects native arm64 Linux hosts).
 set -euo pipefail
-
-# Yellow WARNING when stderr is a TTY (and NO_COLOR is unset) or
-# FORCE_COLOR is set. NO_COLOR wins per no-color.org.
-if [ -n "${NO_COLOR:-}" ]; then
-  C_YEL=''
-  C_RST=''
-elif [ -n "${FORCE_COLOR:-}" ] || [ -t 2 ]; then
-  C_YEL=$'\033[33m'
-  C_RST=$'\033[0m'
-else
-  C_YEL=''
-  C_RST=''
-fi
 
 ARCH="$(dpkg --print-architecture)"
 case "$ARCH" in
@@ -38,14 +26,17 @@ case "$ARCH" in
     ;;
 esac
 
+# The releases manifest carries both the version->hash mapping and each
+# build's sha256, so fetch it once and reuse it for version resolution and
+# integrity verification.
+MANIFEST=$(curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+  https://storage.googleapis.com/flutter_infra_release/releases/releases_linux.json)
+
 if [ -n "$PIN" ]; then
   VERSION="$PIN"
 else
-  # Resolve latest stable from the official releases manifest. Cross-reference
-  # current_release.stable -> releases[].hash to pick the correct version
-  # without depending on jq or the GitHub API.
-  MANIFEST=$(curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
-    https://storage.googleapis.com/flutter_infra_release/releases/releases_linux.json)
+  # Cross-reference current_release.stable -> releases[].hash to pick the
+  # correct version without depending on jq or the GitHub API.
   STABLE_HASH=$(printf '%s' "$MANIFEST" | tr -d '\n' |
     sed -n 's/.*"current_release"[[:space:]]*:[[:space:]]*{[^}]*"stable"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
   if [ -z "$STABLE_HASH" ]; then
@@ -55,8 +46,7 @@ else
   # `|| true` keeps the command substitution non-fatal: under `set -euo
   # pipefail`, a no-match from `grep -oE` (e.g. manifest shape change) would
   # otherwise exit the script via the pipeline's non-zero status before the
-  # friendly `-z "$VERSION"` check below could run. Let the empty-VERSION
-  # branch emit the actionable error instead.
+  # friendly `-z "$VERSION"` check below could run.
   VERSION=$(printf '%s' "$MANIFEST" | tr -d '\n' |
     grep -oE "\\{[^{}]*\"hash\"[[:space:]]*:[[:space:]]*\"${STABLE_HASH}\"[^{}]*\\}" |
     sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1) || true
@@ -66,14 +56,26 @@ else
   fi
 fi
 
+archive="stable/linux/flutter_linux_${VERSION}-stable.tar.xz"
 curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
-  "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${VERSION}-stable.tar.xz" \
+  "https://storage.googleapis.com/flutter_infra_release/releases/${archive}" \
   -o /tmp/flutter.tar.xz
 
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/flutter.tar.xz" | sha256sum -c -
 else
-  printf '%sWARNING: SHA256 verification skipped for Flutter (no checksum for flutter in [plugins.versions])%s\n' "$C_YEL" "$C_RST" >&2
+  # No user pin: verify against the sha256 the manifest records for this build.
+  # Escape the dots in the archive path so they match literally rather than as
+  # ERE wildcards (the path carries version dots like 3.44.0 and .tar.xz).
+  archive_re="${archive//./\\.}"
+  expected=$(printf '%s' "$MANIFEST" | tr -d '\n' |
+    grep -oE "\\{[^{}]*\"archive\"[[:space:]]*:[[:space:]]*\"${archive_re}\"[^{}]*\\}" |
+    sed -n 's/.*"sha256"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1) || true
+  if [ -z "$expected" ]; then
+    echo "Failed to read sha256 for ${archive} from Flutter manifest" >&2
+    exit 1
+  fi
+  echo "${expected}  /tmp/flutter.tar.xz" | sha256sum -c -
 fi
 
 # Tarball root is "flutter/" — extract directly into /usr/local.

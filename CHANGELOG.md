@@ -28,6 +28,17 @@ adheres to [Semantic Versioning](https://semver.org/).
   checksum still takes precedence, and there is no per-release checksum
   maintenance — the manifest is fetched from the same release as the
   artifact.
+- The `kubectl`, `go`, `node`, `zig`, `dart`, `flutter`, `nerd-fonts`, and
+  `cocoon` plugins now verify their download against the checksum the
+  upstream publishes (a `.sha256` / `.sha256sum` sidecar, a `SHASUMS256.txt`
+  / `SHA-256.txt` / `SHA256SUMS` manifest, or the `shasum` / `sha256` field
+  in the upstream's release JSON) when no `checksum_amd64` / `checksum_arm64`
+  is pinned in `[plugins.versions]`. Previously an unpinned build skipped
+  verification with a warning; now the default build is always checked. A
+  user-supplied checksum still takes precedence, and no per-release checksum
+  maintenance is required. `go` now downloads from `dl.google.com/go` (the
+  CDN `go.dev/dl` already redirects to) so the tarball and its `.sha256`
+  share one host.
 
 ### Fixed
 

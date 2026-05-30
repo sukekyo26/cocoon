@@ -129,7 +129,7 @@ func TestPluginContracts(t *testing.T) {
 			requiresRoot: true, versionCapable: true,
 			mustContain: []string{
 				"cocoon", "sukekyo26.github.io/cocoon",
-				"sha256sum -c -", "retry 3", "tlsv1.2", "PIN",
+				"sha256sum -c -", "retry 3", "tlsv1.2", "PIN", "SHA256SUMS",
 			},
 			mustNotContain: append(append([]string{}, noPlaceholders...), "api.github.com", "| jq ", "raw.githubusercontent.com"),
 		},
@@ -183,14 +183,14 @@ func TestPluginContracts(t *testing.T) {
 			mustContain: []string{
 				"flutter_infra_release", "FLUTTER_ROOT", "sha256sum -c -",
 				"tlsv1.2", "retry 3", "dpkg --print-architecture", "tar",
-				"linux/amd64",
+				"linux/amd64", "releases_linux.json",
 			},
 			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
 		},
 		{
 			id: "go", name: "Go",
 			requiresRoot: true, versionCapable: true, firstVolume: "go",
-			mustContain: []string{"go.dev", "retry 3", "GOPATH", "tlsv1.2"},
+			mustContain: []string{"go.dev", "dl.google.com/go", ".sha256", "retry 3", "GOPATH", "tlsv1.2"},
 		},
 		{
 			id: "google-chrome", name: "Google Chrome",
@@ -227,14 +227,14 @@ func TestPluginContracts(t *testing.T) {
 			id: "nerd-fonts", name: "Nerd Fonts",
 			requiresRoot: false, versionCapable: true, firstVolume: "fonts",
 			mustContain: []string{
-				"Meslo", "retry 3", "fc-cache", "tlsv1.2", ".fonts", "sha256sum -c -", "PIN",
+				"Meslo", "retry 3", "fc-cache", "tlsv1.2", ".fonts", "sha256sum -c -", "PIN", "SHA-256.txt",
 			},
 		},
 		{
 			id: "node", name: "Node.js",
 			requiresRoot: true, versionCapable: true, firstVolume: "npm",
 			mustContain: []string{
-				"nodejs.org/dist", "NODE_ARCH", "sha256sum -c -",
+				"nodejs.org/dist", "NODE_ARCH", "sha256sum -c -", "SHASUMS256.txt",
 				"tlsv1.2", "retry 3", "dpkg --print-architecture", "tar",
 			},
 			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
@@ -243,7 +243,7 @@ func TestPluginContracts(t *testing.T) {
 			id: "dart", name: "Dart",
 			requiresRoot: true, versionCapable: true, firstVolume: "pub-cache",
 			mustContain: []string{
-				"dart-archive", "DART_ARCH", "sha256sum -c -",
+				"dart-archive", "DART_ARCH", "sha256sum -c -", ".sha256sum",
 				"tlsv1.2", "retry 3", "dpkg --print-architecture", "unzip",
 			},
 			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
@@ -292,7 +292,7 @@ func TestPluginContracts(t *testing.T) {
 			id: "kubectl", name: "kubectl",
 			requiresRoot: true, versionCapable: true,
 			mustContain: []string{
-				"kubectl", "dl.k8s.io", "sha256sum -c -",
+				"kubectl", "dl.k8s.io", "sha256sum -c -", ".sha256",
 				"tlsv1.2", "retry 3", "dpkg --print-architecture",
 			},
 			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
@@ -376,7 +376,7 @@ func TestPluginContracts(t *testing.T) {
 		{
 			id:           "zig", // metadata.name not asserted (kept loose to mirror old test).
 			requiresRoot: true, versionCapable: true,
-			mustContain:    []string{"ziglang.org", "retry 3", "sha256sum -c -"},
+			mustContain:    []string{"ziglang.org", "retry 3", "sha256sum -c -", ".shasum"},
 			mustNotContain: noPlaceholders,
 		},
 	}
