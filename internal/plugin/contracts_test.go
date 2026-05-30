@@ -151,7 +151,14 @@ func TestPluginContracts(t *testing.T) {
 		{
 			id: "docker-cli", name: "Docker CLI",
 			requiresRoot: true,
-			mustContain:  []string{"Docker", "retry 3"},
+			mustContain: []string{
+				"Docker", "retry 3", "tlsv1.2", "signed-by", "docker.asc",
+				// Keyrings dir mode normalized so apt's _apt user can traverse
+				// it under a restrictive umask (matches github-cli).
+				"chmod 755 /etc/apt/keyrings",
+			},
+			// Keyless: the armored key is consumed directly, no gpg needed.
+			mustNotContain: []string{"gpg --dearmor"},
 		},
 		{
 			id: "github-cli", name: "GitHub CLI",
