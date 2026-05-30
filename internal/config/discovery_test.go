@@ -117,6 +117,30 @@ func TestDiscover_NoWorkspaceFound(t *testing.T) {
 	}
 }
 
+// TestDiscover_PropagatesStatError pins that a stat failure other than
+// "not found" (here, a permission-denied directory) surfaces as an error
+// instead of being silently treated as "no workspace here".
+func TestDiscover_PropagatesStatError(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root bypasses directory permission bits")
+	}
+	t.Parallel()
+	locked := filepath.Join(t.TempDir(), "locked")
+	if err := os.MkdirAll(locked, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	// Drop all permissions so os.Stat on an entry inside locked fails with a
+	// permission error (not fs.ErrNotExist), exercising the propagation path.
+	if err := os.Chmod(locked, 0o000); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(locked, 0o755) }) //nolint:errcheck // best-effort cleanup
+
+	if _, err := config.Discover(locked); err == nil {
+		t.Fatal("expected a non-nil error for a permission-denied stat, got nil")
+	}
+}
+
 func mustWrite(t *testing.T, path, body string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {

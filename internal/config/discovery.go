@@ -1,7 +1,9 @@
 package config
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 )
@@ -22,7 +24,9 @@ import (
 //
 // When nothing is found, Discover returns "" with a nil error so callers
 // can decide how to respond (typically: ask the user to run `cocoon init`).
-// A non-nil error is returned only for filesystem-level failures.
+// A non-nil error is returned only for filesystem-level failures — an
+// os.Stat that fails for a reason other than the entry being absent (a
+// permission or I/O error while probing a candidate path or a .git marker).
 func Discover(cwd string) (string, error) {
 	abs, err := filepath.Abs(cwd)
 	if err != nil {
@@ -31,13 +35,25 @@ func Discover(cwd string) (string, error) {
 	home, _ := os.UserHomeDir() //nolint:errcheck // empty home just disables the boundary; not fatal
 
 	for dir := abs; ; {
-		if path := candidateAt(dir, "workspace.toml"); path != "" {
+		path, err := candidateAt(dir, "workspace.toml")
+		if err != nil {
+			return "", err
+		}
+		if path != "" {
 			return path, nil
 		}
-		if path := candidateAt(dir, filepath.Join(".cocoon", "workspace.toml")); path != "" {
+		path, err = candidateAt(dir, filepath.Join(".cocoon", "workspace.toml"))
+		if err != nil {
+			return "", err
+		}
+		if path != "" {
 			return path, nil
 		}
-		if hasGitMarker(dir) {
+		marker, err := hasGitMarker(dir)
+		if err != nil {
+			return "", err
+		}
+		if marker {
 			return "", nil
 		}
 		if home != "" && dir == home {
@@ -51,23 +67,35 @@ func Discover(cwd string) (string, error) {
 	}
 }
 
-// candidateAt returns the absolute path joining dir and rel when the
-// resulting entry exists and is a regular file, else "".
-func candidateAt(dir, rel string) string {
+// candidateAt returns the absolute path joining dir and rel when the entry
+// exists and is a regular file, and "" when it is absent or a directory. A
+// stat error other than fs.ErrNotExist (a permission or I/O failure) is
+// returned so Discover surfaces it instead of silently skipping the directory.
+func candidateAt(dir, rel string) (string, error) {
 	p := filepath.Join(dir, rel)
 	info, err := os.Stat(p)
 	if err != nil {
-		return ""
+		if errors.Is(err, fs.ErrNotExist) {
+			return "", nil
+		}
+		return "", fmt.Errorf("stat %s: %w", p, err)
 	}
 	if info.IsDir() {
-		return ""
+		return "", nil
 	}
-	return p
+	return p, nil
 }
 
-// hasGitMarker reports whether dir contains a .git entry (directory or
-// file — git worktrees use a regular file as the marker).
-func hasGitMarker(dir string) bool {
-	_, err := os.Stat(filepath.Join(dir, ".git"))
-	return err == nil
+// hasGitMarker reports whether dir contains a .git entry (directory or file —
+// git worktrees use a regular file as the marker). A stat error other than
+// fs.ErrNotExist is returned rather than masked as "no marker".
+func hasGitMarker(dir string) (bool, error) {
+	p := filepath.Join(dir, ".git")
+	if _, err := os.Stat(p); err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return false, nil
+		}
+		return false, fmt.Errorf("stat %s: %w", p, err)
+	}
+	return true, nil
 }
