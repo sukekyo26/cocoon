@@ -40,7 +40,7 @@ curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-erro
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/starship.tar.gz" | sha256sum -c -
 else
-  # No user pin: verify against the per-asset .sha256 (a bare hash) the
+  # No user checksum: verify against the per-asset .sha256 (a bare hash) the
   # release publishes next to the tarball.
   curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
     "${url}.sha256" -o /tmp/starship.sum

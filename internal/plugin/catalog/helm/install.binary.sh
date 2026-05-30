@@ -33,7 +33,7 @@ curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-erro
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/helm.tar.gz" | sha256sum -c -
 else
-  # No user pin: verify against the per-tarball .sha256sum on get.helm.sh.
+  # No user checksum: verify against the per-tarball .sha256sum on get.helm.sh.
   curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
     "${url}.sha256sum" -o /tmp/helm.sum
   expected="$(cut -d ' ' -f1 /tmp/helm.sum)"

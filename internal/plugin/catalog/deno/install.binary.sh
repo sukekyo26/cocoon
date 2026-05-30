@@ -45,7 +45,7 @@ curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-erro
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/deno.zip" | sha256sum -c -
 else
-  # No user pin: verify against the per-asset .sha256sum the release publishes
+  # No user checksum: verify against the per-asset .sha256sum the release publishes
   # next to the zip.
   curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
     "${url}.sha256sum" -o /tmp/deno.sum

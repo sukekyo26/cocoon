@@ -48,7 +48,7 @@ curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-erro
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/node.tar.xz" | sha256sum -c -
 else
-  # No user pin: verify against the release's own SHASUMS256.txt.
+  # No user checksum: verify against the release's own SHASUMS256.txt.
   curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
     "${dist}/SHASUMS256.txt" -o /tmp/node.sums
   # Match the asset name literally (awk field compare, not a regex; strip the

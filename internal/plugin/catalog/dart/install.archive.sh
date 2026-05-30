@@ -47,7 +47,7 @@ curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-erro
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/dart.zip" | sha256sum -c -
 else
-  # No user pin: verify against the .sha256sum dart-archive serves next to
+  # No user checksum: verify against the .sha256sum dart-archive serves next to
   # the zip.
   curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
     "${url}.sha256sum" -o /tmp/dart.sum

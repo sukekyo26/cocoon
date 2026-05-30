@@ -32,7 +32,7 @@ curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-erro
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/kubectl" | sha256sum -c -
 else
-  # No user pin: verify against the .sha256 (a bare hash) dl.k8s.io serves
+  # No user checksum: verify against the .sha256 (a bare hash) dl.k8s.io serves
   # next to the binary.
   curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
     "${url}.sha256" -o /tmp/kubectl.sum
