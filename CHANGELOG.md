@@ -390,9 +390,9 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 - Add `cocoon init` for interactive `workspace.toml` generation with prompts for service name, username, OS, OS version, login shell, mount range, devcontainer toggle, alias bundles, apt categories, and plugins.
 - Add non-interactive flags (`--yes`, `--service-name`, `--username`, `--os`, `--os-version`, `--shell`, `--mount-root`, `--devcontainer`, `--no-devcontainer`, `--apt-categories`, `--plugins`, `--alias-bundles`, `--force`) so CI and scripts can drive `cocoon init` without TTY interaction.
-- Add localized inline comments and 20 commented-out section templates to the generated `workspace.toml` for in-file feature discovery.
+- Add localized inline comments and commented-out section templates to the generated `workspace.toml` for in-file feature discovery.
 - Add `cocoon gen` to emit `.devcontainer/{Dockerfile, docker-compose.yml, docker-entrypoint.sh, .env, devcontainer.json}` from `workspace.toml`.
-- Add `cocoon plugin` noun group with `list`, `show`, `add`, `remove`, `pin`, and `scaffold` subcommands backed by an embedded 20-plugin catalog and `LayeredFS` (project > user > embedded) overrides.
+- Add `cocoon plugin` noun group with `list`, `show`, `add`, `remove`, `pin`, and `scaffold` subcommands backed by an embedded plugin catalog and `LayeredFS` (project > user > embedded) overrides.
 - Add `cocoon config` noun group exposing `get`, `list`, `volumes`, `plugin-get`, `plugin-list`, `plugin-volumes`, `plugins-table`, `validate-workspace`, `validate-plugins`, `has-section`, `list-sidecars`, `dump-devcontainer`, `dump-repositories`, `repositories`, and `format-repositories`.
 - Add `cocoon self-update` with GitHub release download, SHA256 verification, and atomic-rename swap.
 - Add `cocoon version`.
