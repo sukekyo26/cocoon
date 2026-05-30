@@ -37,6 +37,10 @@ else
   curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
     "${url}.sha256" -o /tmp/kubectl.sum
   expected="$(cut -d ' ' -f1 /tmp/kubectl.sum)"
+  if [ -z "$expected" ]; then
+    echo "kubectl: empty checksum from ${url}.sha256" >&2
+    exit 1
+  fi
   echo "${expected}  /tmp/kubectl" | sha256sum -c -
   rm -f /tmp/kubectl.sum
 fi

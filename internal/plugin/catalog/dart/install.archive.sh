@@ -52,6 +52,10 @@ else
   curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
     "${url}.sha256sum" -o /tmp/dart.sum
   expected="$(cut -d ' ' -f1 /tmp/dart.sum)"
+  if [ -z "$expected" ]; then
+    echo "dart: empty checksum from ${url}.sha256sum" >&2
+    exit 1
+  fi
   echo "${expected}  /tmp/dart.zip" | sha256sum -c -
   rm -f /tmp/dart.sum
 fi

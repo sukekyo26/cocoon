@@ -59,7 +59,15 @@ else
   # alongside the binaries for this version.
   curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
     "${base}/SHA256SUMS" -o /tmp/cocoon.sums
-  expected="$(grep "cocoon-linux-${DOWNLOAD_ARCH}\$" /tmp/cocoon.sums | cut -d ' ' -f1)"
+  # Match the asset name literally (awk field compare, not a regex) and fail
+  # loudly if it is absent so a mirror-layout change does not collapse into
+  # an opaque sha256sum error.
+  asset="cocoon-linux-${DOWNLOAD_ARCH}"
+  expected="$(awk -v f="$asset" '$2 == f { print $1 }' /tmp/cocoon.sums)"
+  if [ -z "$expected" ]; then
+    echo "cocoon: ${asset} not found in SHA256SUMS" >&2
+    exit 1
+  fi
   echo "${expected}  /tmp/cocoon" | sha256sum -c -
   rm -f /tmp/cocoon.sums
 fi

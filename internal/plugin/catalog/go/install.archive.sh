@@ -35,6 +35,10 @@ else
   curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
     "${url}.sha256" -o /tmp/go.sum
   expected="$(cut -d ' ' -f1 /tmp/go.sum)"
+  if [ -z "$expected" ]; then
+    echo "go: empty checksum from ${url}.sha256" >&2
+    exit 1
+  fi
   echo "${expected}  /tmp/go.tar.gz" | sha256sum -c -
   rm -f /tmp/go.sum
 fi

@@ -28,7 +28,14 @@ else
   # No user pin: verify against the release's own SHA-256.txt.
   curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
     "${base}/SHA-256.txt" -o /tmp/nerd.sums
-  expected="$(grep "Meslo.tar.xz\$" /tmp/nerd.sums | cut -d ' ' -f1)"
+  # Match the asset name literally (awk field compare, not a regex) and fail
+  # loudly if it is absent so a manifest-shape change does not collapse into
+  # an opaque sha256sum error.
+  expected="$(awk '$2 == "Meslo.tar.xz" { print $1 }' /tmp/nerd.sums)"
+  if [ -z "$expected" ]; then
+    echo "nerd-fonts: Meslo.tar.xz not found in SHA-256.txt" >&2
+    exit 1
+  fi
   echo "${expected}  /tmp/Meslo.tar.xz" | sha256sum -c -
   rm -f /tmp/nerd.sums
 fi

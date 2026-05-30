@@ -51,7 +51,14 @@ else
   # No user pin: verify against the release's own SHASUMS256.txt.
   curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
     "${dist}/SHASUMS256.txt" -o /tmp/node.sums
-  expected="$(grep "${asset}\$" /tmp/node.sums | cut -d ' ' -f1)"
+  # Match the asset name literally (awk field compare, not a regex) and fail
+  # loudly if it is absent so a manifest-shape change does not collapse into
+  # an opaque sha256sum error.
+  expected="$(awk -v f="$asset" '$2 == f { print $1 }' /tmp/node.sums)"
+  if [ -z "$expected" ]; then
+    echo "node: ${asset} not found in SHASUMS256.txt" >&2
+    exit 1
+  fi
   echo "${expected}  /tmp/node.tar.xz" | sha256sum -c -
   rm -f /tmp/node.sums
 fi
