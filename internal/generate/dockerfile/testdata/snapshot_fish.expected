@@ -375,10 +375,11 @@ else
   # the same release.
   curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
     "${base}/checksums.txt" -o /tmp/lazygit.sums
-  # Match the asset name literally (awk field compare, not a regex);
-  # tolower() tolerates the manifest's "Linux" capitalisation. Fail loudly if
-  # absent so a manifest-shape change does not collapse into an opaque error.
-  expected="$(awk -v f="$asset" 'tolower($2) == tolower(f) { print $1; exit }' /tmp/lazygit.sums)"
+  # Match the asset name literally (awk field compare, not a regex); tolower()
+  # tolerates the manifest's "Linux" capitalisation and we strip the binary-mode
+  # '*' marker some manifests prepend. Fail loudly if absent so a shape change
+  # does not collapse into an opaque error.
+  expected="$(awk -v f="$asset" '{ n = $2; sub(/^\*/, "", n); if (tolower(n) == tolower(f)) { print $1; exit } }' /tmp/lazygit.sums)"
   if [ -z "$expected" ]; then
     echo "lazygit: ${asset} not found in checksums.txt" >&2
     exit 1

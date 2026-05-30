@@ -40,10 +40,11 @@ else
   # No user pin: verify against the release's own checksums.txt.
   curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
     "${base}/checksums.txt" -o /tmp/docker-buildx.sums
-  # Match the asset name literally (awk field compare, not a regex) and fail
+  # Match the asset name literally (awk field compare, not a regex; strip the
+  # binary-mode '*' marker docker-buildx's checksums.txt prepends) and fail
   # loudly if it is absent so a manifest-shape change does not collapse into
   # an opaque sha256sum error.
-  expected="$(awk -v f="$asset" '$2 == f { print $1; exit }' /tmp/docker-buildx.sums)"
+  expected="$(awk -v f="$asset" '{ n = $2; sub(/^\*/, "", n); if (n == f) { print $1; exit } }' /tmp/docker-buildx.sums)"
   if [ -z "$expected" ]; then
     echo "docker-buildx: ${asset} not found in checksums.txt" >&2
     exit 1
