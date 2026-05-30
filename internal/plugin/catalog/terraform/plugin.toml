@@ -5,8 +5,9 @@ url = "https://github.com/hashicorp/terraform"
 default = false
 
 [apt]
-# gnupg: install.binary.sh verifies the release SHA256SUMS via `gpg --batch
-# --verify` (verify = "pgp"); the minimal base ships no gpg. Same as aws-cli.
+# gnupg: install.binary.sh verifies the release SHA256SUMS with
+# `gpg --batch --verify` (verify = "pgp"); the minimal base ships no gpg.
+# Same as aws-cli.
 packages = ["unzip", "gnupg"]
 
 [install]
