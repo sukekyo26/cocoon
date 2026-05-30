@@ -17,7 +17,7 @@ import (
 type Logger struct {
 	stdout, stderr io.Writer
 	// Per-sink ANSI sequences, empty when color is disabled for that sink.
-	stdoutBold, stdoutDim, stdoutGreen, stdoutReset string
+	stdoutBold, stdoutGreen, stdoutReset            string
 	stderrRed, stderrYellow, stderrCyan, stderrBold string
 	stderrDim, stderrReset                          string
 }
@@ -37,7 +37,6 @@ func NewWithMode(stdout, stderr io.Writer, mode ColorMode) *Logger {
 	}
 	if shouldColor(stdout, mode, os.Getenv) {
 		l.stdoutBold = ansiBold
-		l.stdoutDim = ansiDim
 		l.stdoutGreen = ansiGreen
 		l.stdoutReset = ansiReset
 	}
@@ -73,10 +72,6 @@ func (l *Logger) Warn(msg string) {
 	_, _ = fmt.Fprintf(l.stderr, "%s%s%s\n", l.stderrYellow, msg, l.stderrReset)
 }
 
-func (l *Logger) Warnf(format string, args ...any) {
-	l.Warn(fmt.Sprintf(format, args...))
-}
-
 // Error writes to stderr in red.
 func (l *Logger) Error(msg string) {
 	_, _ = fmt.Fprintf(l.stderr, "%s%s%s\n", l.stderrRed, msg, l.stderrReset)
@@ -89,10 +84,6 @@ func (l *Logger) Errorf(format string, args ...any) {
 // Notice writes to stderr in cyan (informational, e.g. update available).
 func (l *Logger) Notice(msg string) {
 	_, _ = fmt.Fprintf(l.stderr, "%s%s%s\n", l.stderrCyan, msg, l.stderrReset)
-}
-
-func (l *Logger) Noticef(format string, args ...any) {
-	l.Notice(fmt.Sprintf(format, args...))
 }
 
 // Progress writes to stderr in dim — transient lines that should not
@@ -111,12 +102,4 @@ func (l *Logger) Bold(s string) string {
 		return s
 	}
 	return l.stdoutBold + s + l.stdoutReset
-}
-
-// Dim wraps s in ANSI dim for the stdout sink.
-func (l *Logger) Dim(s string) string {
-	if l.stdoutDim == "" {
-		return s
-	}
-	return l.stdoutDim + s + l.stdoutReset
 }

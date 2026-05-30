@@ -284,7 +284,7 @@ func TestPin_MethodStdoutEmitsBothBlocks(t *testing.T) {
 
 // --method + --write: both [plugins.methods] and [plugins.versions]
 // receive a new line in the same file. Order of insertion is methods
-// after versions because UpsertMethodLine appends a new section at EOF
+// after versions because the method pass appends a new section at EOF
 // when the section is absent — both grow as new sections in the seed
 // workspace.
 //

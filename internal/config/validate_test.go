@@ -50,8 +50,8 @@ func TestValidate_ContainerInvalidServiceName(t *testing.T) {
 	body := strings.ReplaceAll(minimalWorkspace(), `service_name = "dev"`, `service_name = "Dev"`)
 	err := loadWS(t, body)
 	require.Error(t, err)
-	v, ok := config.AsValidationError(err)
-	require.True(t, ok)
+	var v *config.ValidationError
+	require.ErrorAs(t, err, &v)
 	require.Contains(t, v.Errors[0].Message, "service_name does not match")
 }
 
@@ -72,8 +72,8 @@ os_version = "24.04"`,
 	)
 	err := loadWS(t, body)
 	require.Error(t, err)
-	v, ok := config.AsValidationError(err)
-	require.True(t, ok)
+	var v *config.ValidationError
+	require.ErrorAs(t, err, &v)
 	var got *config.FieldError
 	for i := range v.Errors {
 		if len(v.Errors[i].Loc) > 0 && v.Errors[i].Loc[len(v.Errors[i].Loc)-1] == "os" {
@@ -107,8 +107,8 @@ os_version = "24.04"`,
 	)
 	err := loadWS(t, body)
 	require.Error(t, err)
-	v, ok := config.AsValidationError(err)
-	require.True(t, ok)
+	var v *config.ValidationError
+	require.ErrorAs(t, err, &v)
 	for i := range v.Errors {
 		loc := v.Errors[i].Loc
 		if len(loc) == 0 {
@@ -128,8 +128,8 @@ func TestValidate_DuplicatePlugins(t *testing.T) {
 	t.Parallel()
 	body := strings.ReplaceAll(minimalWorkspace(), "enable = []", `enable = ["go", "go"]`)
 	err := loadWS(t, body)
-	require.Error(t, err)
-	v, _ := config.AsValidationError(err)
+	var v *config.ValidationError
+	require.ErrorAs(t, err, &v)
 	require.Contains(t, v.Error(), "duplicate")
 }
 

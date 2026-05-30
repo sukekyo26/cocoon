@@ -61,11 +61,11 @@ version_capable = false
 	}
 }
 
-func TestLoadEnabled_WarnsOnMissingPlugin(t *testing.T) {
+func TestLoadEnabledFromFS_WarnsOnMissingPlugin(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	var warnings bytes.Buffer
-	out, err := plugin.LoadEnabled(dir, []string{"nonexistent"}, &warnings)
+	out, err := plugin.LoadEnabledFromFS(os.DirFS(dir), []string{"nonexistent"}, &warnings, dir)
 	require.NoError(t, err)
 	require.Empty(t, out)
 	if !strings.Contains(warnings.String(), "WARNING: Plugin 'nonexistent' not found") {
@@ -73,7 +73,7 @@ func TestLoadEnabled_WarnsOnMissingPlugin(t *testing.T) {
 	}
 }
 
-func TestLoadEnabled_LoadsExistingPlugin(t *testing.T) {
+func TestLoadEnabledFromFS_LoadsExistingPlugin(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	// Copy the sample plugin into the temp dir under id "sample". The
@@ -93,17 +93,17 @@ func TestLoadEnabled_LoadsExistingPlugin(t *testing.T) {
 	//nolint:gosec // pluginDir is built from t.TempDir + literal "sample".
 	require.NoError(t, os.WriteFile(filepath.Join(pluginDir, "install.installer.sh"), scriptBody, 0o600))
 
-	out, err := plugin.LoadEnabled(dir, []string{"sample", "ghost"}, &bytes.Buffer{})
+	out, err := plugin.LoadEnabledFromFS(os.DirFS(dir), []string{"sample", "ghost"}, &bytes.Buffer{}, dir)
 	require.NoError(t, err)
 	require.Len(t, out, 1)
 	require.Contains(t, out, "sample")
 }
 
-func TestLoadEnabled_NilWarnings(t *testing.T) {
+func TestLoadEnabledFromFS_NilWarnings(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	// nil warnings writer must not panic; missing plugins still skip.
-	_, err := plugin.LoadEnabled(dir, []string{"missing"}, nil)
+	_, err := plugin.LoadEnabledFromFS(os.DirFS(dir), []string{"missing"}, nil, dir)
 	require.NoError(t, err)
 }
 
