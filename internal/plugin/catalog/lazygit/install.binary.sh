@@ -43,7 +43,7 @@ if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/lazygit.tar.gz" | sha256sum -c -
 else
   # No user pin: verify against the release's own checksums.txt, fetched from
-  # the same release. -i tolerates the manifest's "Linux" capitalisation.
+  # the same release.
   curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
     "${base}/checksums.txt" -o /tmp/lazygit.sums
   # Match the asset name literally (awk field compare, not a regex);
