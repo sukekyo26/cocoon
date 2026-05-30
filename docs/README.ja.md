@@ -103,7 +103,7 @@ docker compose -f .devcontainer/docker-compose.yml up -d # または VS Code で
 7. **マウント範囲** — cwd のみ、または親ディレクトリ (兄弟リポジトリも見える fat ワークスペース向け)
 8. **コンテナ内 workdir 名** — `/home/<user>/` 配下の親ディレクトリ名 (既定 `workspace`。スラッシュで多段階層も可。例: `work/myproject`。AWS SAM などコンテナ内パスをホスト構成に合わせたいツール向け)
 9. **VS Code Dev Containers** 対応 — `devcontainer.json` を出力するかどうか
-10. **社内 CA 自動取り込み** — `~/.cocoon/certs/` 配下の `.crt` をビルド時に取り込むか opt-in (デフォルト off。下記参照)
+10. **社内 CA 自動取り込み** — `~/.cocoon/certs/` 配下の `.crt` / `.cer` をビルド時に取り込むか opt-in (デフォルト off。下記参照)
 11. **ポートフォワード** — カンマ区切りの docker-compose short form (例: `3000:3000,5432:5432`)。空 Enter で見送ると `[ports]` 雛形はコメント行のまま残る (後で有効化可能)
 12. **apt カテゴリ** — text-editors / vcs / utilities / build / network / … (複数選択)
 13. **プラグイン** — 同梱カタログから選択 (複数選択)
@@ -120,7 +120,7 @@ docker compose -f .devcontainer/docker-compose.yml up -d # または VS Code で
 
 ## 社内 CA 対応
 
-社内 CA をコンテナ内で信頼させたい (Zscaler、開発用自己署名 等) 場合は `cocoon init --certificates` (または `workspace.toml` に `[certificates] enable = true`) で opt-in したうえで、ホスト側の `~/.cocoon/certs/` に `.crt` を置いてください。コンテナビルド時に自動で取り込まれます。opt-in しないワークスペースの成果物には cert 関連の配線は一切乗りません。詳細は [`[certificates]`](configuration.ja.md#certificates) を参照。
+プライベート CA をコンテナ内で信頼させたい (TLS インターセプトプロキシ、開発用自己署名 等) 場合は `cocoon init --certificates` (または `workspace.toml` に `[certificates] enable = true`) で opt-in したうえで、ホスト側の `~/.cocoon/certs/` に `.crt` / `.cer` を置いてください。コンテナビルド時に自動で取り込まれます。opt-in しないワークスペースの成果物には cert 関連の配線は一切乗りません。詳細は [`[certificates]`](configuration.ja.md#certificates) を参照。
 
 ## 個人シェル設定の永続化
 

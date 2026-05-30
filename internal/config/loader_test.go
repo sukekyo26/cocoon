@@ -56,8 +56,8 @@ func TestLoadWorkspace_UnknownFieldRejected(t *testing.T) {
 	_, err := config.LoadWorkspace(filepath.Join("testdata", "config", "workspace_unknown_field.toml"))
 	require.Error(t, err)
 
-	verr, ok := config.AsValidationError(err)
-	require.True(t, ok, "expected *ValidationError, got %T", err)
+	var verr *config.ValidationError
+	require.ErrorAs(t, err, &verr, "expected *ValidationError, got %T", err)
 	require.Len(t, verr.Errors, 1)
 	require.Contains(t, verr.Errors[0].Message, "unknown")
 }
@@ -299,8 +299,8 @@ go = { ` + tc.pinExpr + ` }
 			// *ValidationError pointing at plugins.versions.<id>.pin (a
 			// regression that moved to a different validator or key would
 			// still match the substring otherwise).
-			verr, ok := config.AsValidationError(err)
-			require.Truef(t, ok, "expected *ValidationError, got %T: %v", err, err)
+			var verr *config.ValidationError
+			require.ErrorAsf(t, err, &verr, "expected *ValidationError, got %T: %v", err, err)
 			var hit *config.FieldError
 			for i := range verr.Errors {
 				if verr.Errors[i].LocString() == "plugins.versions.go.pin" {

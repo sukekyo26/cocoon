@@ -114,6 +114,49 @@ version_capable = false
 	require.Error(t, err)
 }
 
+func TestValidate_InstallEnvValueRejectsUnsafe(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		val  string
+	}{
+		{"newline", "a\nRUN echo pwned"},
+		{"carriage return", "a\rb"},
+		{"double quote", `a"b`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			p := &plugin.Plugin{
+				Metadata: validMetadata(),
+				Install: plugin.Install{
+					DefaultMethod: "binary",
+					Methods:       map[string]plugin.InstallMethod{"binary": {Description: "Direct binary"}},
+					Env:           map[string]string{"GOOD": tc.val},
+				},
+			}
+			err := p.Validate("test/plugin.toml")
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "unsafe character")
+		})
+	}
+}
+
+// TestValidate_InstallEnvValueAcceptsExpansion pins that $-references stay
+// legal in install.env values — only newline / double-quote are rejected.
+func TestValidate_InstallEnvValueAcceptsExpansion(t *testing.T) {
+	t.Parallel()
+	p := &plugin.Plugin{
+		Metadata: validMetadata(),
+		Install: plugin.Install{
+			DefaultMethod: "binary",
+			Methods:       map[string]plugin.InstallMethod{"binary": {Description: "Direct binary"}},
+			Env:           map[string]string{"PATH": "/usr/local/go/bin:$PATH"},
+		},
+	}
+	require.NoError(t, p.Validate("test/plugin.toml"))
+}
+
 func TestValidate_URLRequired(t *testing.T) {
 	t.Parallel()
 	tmp := t.TempDir() + "/plugin.toml"

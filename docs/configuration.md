@@ -418,8 +418,8 @@ at all** — no `additional_contexts`, no `RUN --mount=type=bind`, no
 `REQUESTS_CA_BUNDLE` / `NODE_EXTRA_CA_CERTS` ENV exports. Cert-free teams
 commit artifacts that have zero corp-CA machinery.
 
-When enabled, drop PEM-formatted `.crt` files into **`~/.cocoon/certs/`** on
-the host. They are picked up at container build time and merged into the
+When enabled, drop PEM-formatted `.crt` / `.cer` files into **`~/.cocoon/certs/`**
+on the host. They are picked up at container build time and merged into the
 trust store automatically.
 
 ```sh
@@ -458,12 +458,14 @@ team; opted-out workspaces share cert-free artifacts.
 ### How it works (when enabled)
 
 - `.devcontainer/docker-compose.yml`: declares `additional_contexts: cocoon_user_certs: ${HOME:?…}/.cocoon/certs` so the host directory is exposed to BuildKit as a named build context (no copy). The `${HOME:?…}` form fails fast if `HOME` is unset on the host.
-- `.devcontainer/Dockerfile`: emits a `RUN --mount=type=bind,from=cocoon_user_certs … if find … ; then … update-ca-certificates ; fi` block so any `*.crt` files are installed into the trust store at build time, before the main apt install. This lets the build complete on TLS-intercepting networks like Zscaler. The block also sets `SSL_CERT_FILE` / `CURL_CA_BUNDLE` / `REQUESTS_CA_BUNDLE` / `NODE_EXTRA_CA_CERTS` to the merged system bundle (`/etc/ssl/certs/ca-certificates.crt`) so language runtimes that read those env vars find the new CAs without further configuration.
+- `.devcontainer/Dockerfile`: emits a `RUN --mount=type=bind,from=cocoon_user_certs … if find … ; then … update-ca-certificates ; fi` block so any `*.crt` / `*.cer` files are installed into the trust store at build time, before the main apt install. `.cer` files are copied in renamed to `.crt`, because `update-ca-certificates` only ingests the `.crt` extension. This lets the build complete on networks that intercept TLS with a private CA. The block also sets `SSL_CERT_FILE` / `CURL_CA_BUNDLE` / `REQUESTS_CA_BUNDLE` / `NODE_EXTRA_CA_CERTS` to the merged system bundle (`/etc/ssl/certs/ca-certificates.crt`) so language runtimes that read those env vars find the new CAs without further configuration.
 - `.devcontainer/devcontainer.json`: emits `initializeCommand: "mkdir -p ${HOME:?…}/.cocoon/certs"` so VS Code Dev Containers users have the host directory created before the build, with no cocoon binary required.
 
 ### Caveats
 
-- **All** files in `~/.cocoon/certs/` flow through to BuildKit as the build context, not just `.crt` files. Do not store private keys (`.key`) or other sensitive material in this directory.
+- **All** files in `~/.cocoon/certs/` flow through to BuildKit as the build context, not just `.crt` / `.cer` files. Do not store private keys (`.key`) or other sensitive material in this directory.
+- Certificates must be **PEM-encoded** (the `-----BEGIN CERTIFICATE-----` text form). The `.crt` / `.cer` extension is only a naming convention and does not imply an encoding; a **DER-encoded** (binary) `.cer` is skipped by `update-ca-certificates` even after the rename. Convert it first: `openssl x509 -inform der -in corp.cer -out corp.crt`.
+- If both `corp.crt` and `corp.cer` exist, they map to the same destination filename and one overwrites the other — harmless, since `update-ca-certificates` deduplicates by content.
 - After updating a certificate, rebuild the container. BuildKit hashes the bind-mount content into the layer cache key, so the relevant RUN layer rebuilds automatically.
 
 ---

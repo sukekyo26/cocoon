@@ -52,7 +52,7 @@ func TestGenerate_Snapshot(t *testing.T) {
 			}
 
 			var warns bytes.Buffer
-			plugins, err := plugin.LoadEnabled(pluginsDir, ws.Plugins.Enable, &warns)
+			plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, &warns, pluginsDir)
 			if err != nil {
 				t.Fatalf("load plugins: %v", err)
 			}
@@ -124,7 +124,7 @@ func TestGenerate_FromLineForEachImage(t *testing.T) {
 			}
 
 			var warns bytes.Buffer
-			plugins, err := plugin.LoadEnabled(pluginsDir, ws.Plugins.Enable, &warns)
+			plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, &warns, pluginsDir)
 			if err != nil {
 				t.Fatalf("load plugins: %v", err)
 			}
@@ -253,7 +253,7 @@ func generateDebianWithMirrorURL(t *testing.T, mirrorURL string) string {
 	ws.Apt.Mirror.URL = mirrorURL
 
 	var warns bytes.Buffer
-	plugins, err := plugin.LoadEnabled(pluginsDir, ws.Plugins.Enable, &warns)
+	plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, &warns, pluginsDir)
 	if err != nil {
 		t.Fatalf("load plugins: %v", err)
 	}
@@ -397,7 +397,7 @@ func generateWithMirrorURLAndSources(t *testing.T, mirrorURL string, sources []c
 	}
 
 	var warns bytes.Buffer
-	plugins, err := plugin.LoadEnabled(pluginsDir, ws.Plugins.Enable, &warns)
+	plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, &warns, pluginsDir)
 	if err != nil {
 		t.Fatalf("load plugins: %v", err)
 	}
@@ -481,6 +481,27 @@ func TestGenerate_CertInstallEmittedWhenEnabled(t *testing.T) {
 	}
 }
 
+// TestGenerate_CertInstallIngestsCerAndCrt pins the .cer support contract:
+// the cert block must scan for both extensions, and .cer files must be
+// renamed to .crt on copy (update-ca-certificates only ingests *.crt, so a
+// verbatim .cer copy would be silently dropped from the trust store).
+func TestGenerate_CertInstallIngestsCerAndCrt(t *testing.T) {
+	t.Parallel()
+
+	root := stagingRoot(t)
+	got := generateInStagingRoot(t, root, "http://archive.ubuntu.com/ubuntu/")
+
+	if !strings.Contains(got, `\( -name '*.crt' -o -name '*.cer' \)`) {
+		t.Errorf("cert existence check must match both *.crt and *.cer:\n%s", got)
+	}
+	if !strings.Contains(got, `find /tmp/cocoon-user-certs -maxdepth 1 -name '*.cer'`) {
+		t.Errorf("cert install must scan for *.cer files:\n%s", got)
+	}
+	if !strings.Contains(got, `basename "$1" .cer).crt`) {
+		t.Errorf("*.cer files must be copied renamed to *.crt:\n%s", got)
+	}
+}
+
 // TestGenerate_CertInstallSuppressedWhenDisabled verifies that omitting
 // the [certificates] section (or setting enable=false) yields a
 // Dockerfile with zero cert-related content: no RUN block, no ENV
@@ -494,6 +515,7 @@ func TestGenerate_CertInstallSuppressedWhenDisabled(t *testing.T) {
 	for _, mustNot := range []string{
 		certInstallHeader,
 		"cocoon_user_certs",
+		"*.cer",
 		"/usr/local/share/ca-certificates/cocoon-user",
 		"ENV SSL_CERT_FILE",
 		"ENV CURL_CA_BUNDLE",
@@ -522,7 +544,7 @@ func generateWithCertificatesDisabled(t *testing.T) string {
 	ws.Certificates = nil
 
 	var warns bytes.Buffer
-	plugins, err := plugin.LoadEnabled(pluginsDir, ws.Plugins.Enable, &warns)
+	plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, &warns, pluginsDir)
 	if err != nil {
 		t.Fatalf("load plugins: %v", err)
 	}
@@ -584,7 +606,7 @@ func generateInStagingRootWithProxy(t *testing.T, root, mirrorURL, httpProxy str
 	}
 
 	var warns bytes.Buffer
-	plugins, err := plugin.LoadEnabled(pluginsDir, ws.Plugins.Enable, &warns)
+	plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, &warns, pluginsDir)
 	if err != nil {
 		t.Fatalf("load plugins: %v", err)
 	}
@@ -766,7 +788,7 @@ func generateFromSnapshotFixture(t *testing.T) string {
 		t.Fatalf("load workspace: %v", err)
 	}
 	var warns bytes.Buffer
-	plugins, err := plugin.LoadEnabled(pluginsDir, ws.Plugins.Enable, &warns)
+	plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, &warns, pluginsDir)
 	if err != nil {
 		t.Fatalf("load plugins: %v", err)
 	}
@@ -827,7 +849,7 @@ func TestGenerate_WorkspaceDirOverride(t *testing.T) {
 	ws.Workspace.Dir = "work/myapp"
 
 	var warns bytes.Buffer
-	plugins, err := plugin.LoadEnabled(pluginsDir, ws.Plugins.Enable, &warns)
+	plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, &warns, pluginsDir)
 	if err != nil {
 		t.Fatalf("load plugins: %v", err)
 	}
@@ -868,7 +890,7 @@ func TestGenerate_BindPathsIncludeHomeRootMount(t *testing.T) {
 	ws.Mounts = []config.Mount{{Source: "/host/x", Target: "/home/${USERNAME}"}}
 
 	var warns bytes.Buffer
-	plugins, err := plugin.LoadEnabled(pluginsDir, ws.Plugins.Enable, &warns)
+	plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, &warns, pluginsDir)
 	if err != nil {
 		t.Fatalf("load plugins: %v", err)
 	}

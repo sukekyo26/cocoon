@@ -6,6 +6,30 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-05-30
+
+### 変更
+
+- TLS 証明書の自動取り込み機能（`[certificates] enable = true`）が、`~/.cocoon/certs/`
+  の `*.crt` に加えて `*.cer` も取り込むようになりました。両拡張子とも build 時に
+  コンテナのトラストストアへマージされます（`update-ca-certificates` は `.crt`
+  拡張子しか取り込まないため、`.cer` は `.crt` にリネームしてコピーします）。証明書は
+  PEM 形式である必要があり、DER 形式の `.cer` はスキップされます（先に
+  `openssl x509 -inform der -in x.cer -out x.crt` で変換してください）。
+
+### 修正
+
+- **Security**: `cocoon gen` が `[container.shell.env]` / `[container.shell.aliases]`
+  の値に含まれる改行、およびプラグインの `[install.env]` の値に含まれる改行・
+  ダブルクォートを拒否するようになりました。これらの文字は従来、生成される
+  Dockerfile の heredoc / `ENV` 行を脱出し、ビルド時に任意のディレクティブを
+  注入できました。`$` 展開（`$HOME`・`$PATH`・`$(cmd)`）は引き続きサポートされます。
+- `cocoon gen` がロード／生成の失敗時に `failure: failure:` と prefix を
+  二重表示しなくなりました（prefix は 1 回になります）。
+- `cocoon gen` / `cocoon plugin pin` が `workspace.toml` の探索中に発生した
+  permission・I/O エラーを、ワークスペースなしとして黙殺せず報告するように
+  なりました。
+
 ## [0.9.0] - 2026-05-30
 
 ### 変更
@@ -265,7 +289,7 @@ cocoon の主要な変更を記録します。フォーマットは
 - `cocoon init` の対話モードで、`plugin.toml` の `[install.methods]` に 2 つ以上のエントリを宣言したプラグインに対して「インストール方式」のピッカーを表示するようにしました。各選択肢には method 名と description を併記し、プラグインの `default_method` を初期選択にしているので、推奨どおりで良ければそのまま Enter で確定できます。method を 1 つしか持たないプラグインはサイレントにスキップ — 一般プラグインに余計なプロンプトが増えることはありません。選択結果は生成される `workspace.toml` の新セクション `[plugins.methods]` (1 行 1 プラグインの `<id> = "<method>"` 形式) に書き出され、ここに現れないプラグインはインストール時に `default_method` にフォールバックします。method プロンプトは version プロンプトの **前** に走るので、選んだ method 固有の上流 URL が version ピッカーの説明欄に正しく出ます。
 - 新フラグ `cocoon init --plugin-methods` を追加: `--plugin-versions` フラグと同じ形式 (`--plugin-methods="<id>=<method>,<id>=<method>"`) で、指定されたプラグインの method プロンプトをスキップします (`<id>` は `--plugins` にも含まれている必要があり、`<method>` はそのプラグインの `[install.methods]` に宣言されたキーでなければなりません)。`--yes` と組み合わせれば method 選択も含めて CI で完全に non-interactive 実行できます。
 - `cocoon plugin pin` に `--method <name>` フラグを追加: pin は `[plugins.versions]` のインラインテーブル行に加えて `[plugins.methods]` 側の `<id> = "<method>"` 行も出力（`--write` 時は in-place で upsert）します。指定された method がプラグインの `plugin.toml` に宣言されているか検証し、未宣言だった場合は宣言済み method 名一覧をエラーに含めて出すので typo は即座に直せます。checksum (`--amd64-checksum` / `--arm64-checksum`) はワークスペーススコープのまま (method 別ではない) なので、method を切り替えるときは新しいアーティファクトに合う SHA256 を渡し直してください。
-- `copilot-cli` プラグインに 2 つのインストール方式を提供: 既定の **`installer`** (`gh.io` 経由の上流インストーラ) と **`binary`** (`github/copilot-cli` の GitHub Release から `copilot-linux-${arch}.tar.gz` を直接ダウンロードして `~/.local/bin/copilot` に展開)。`gh.io` が遮断されている (Zscaler 等) 環境や `curl|sh` を社内ポリシーが禁止する環境では `binary` を選びます。切替は `cocoon init --plugin-methods="copilot-cli=binary"`（または対話ピッカー）。切替後は新しいアーティファクトに合う `checksum_amd64` / `checksum_arm64` を `[plugins.versions]` 側で更新してください（install スクリプトの `sha256sum -c -` 検証が走るため）。
+- `copilot-cli` プラグインに 2 つのインストール方式を提供: 既定の **`installer`** (`gh.io` 経由の上流インストーラ) と **`binary`** (`github/copilot-cli` の GitHub Release から `copilot-linux-${arch}.tar.gz` を直接ダウンロードして `~/.local/bin/copilot` に展開)。`gh.io` に到達できない環境や `curl|sh` をポリシーが禁止する環境では `binary` を選びます。切替は `cocoon init --plugin-methods="copilot-cli=binary"`（または対話ピッカー）。切替後は新しいアーティファクトに合う `checksum_amd64` / `checksum_arm64` を `[plugins.versions]` 側で更新してください（install スクリプトの `sha256sum -c -` 検証が走るため）。
 
 ### 変更
 
@@ -341,7 +365,7 @@ cocoon の主要な変更を記録します。フォーマットは
 - コンテナ内 `/home/<user>/.cocoon` に named volume `cocoon` をマウント。ユーザー個人のシェル設定をコンテナリビルドを跨いで永続化する。コンテナの rc (bash / zsh / fish) が起動時に `~/.cocoon/.shellrc` (fish は `~/.cocoon/.shellrc.fish`) を自動 source するので、コンテナ内で編集した内容は `docker compose down && up --build` を跨いでも残る (リセットは `down -v` のみ)。
 - `cocoon init --plugin-versions=<id>=<ref>,...` を追加。1 コマンドで `[plugins] enable` と `[plugins.versions]` の両方を出力できる。各 `<id>` は `--plugins` に含まれ、かつ `version_capable` である必要があり、重複は不可。これまで `cocoon plugin pin` の出力を手で貼り付けていた運用を置き換える。
 - `cocoon plugin pin --write` を追加。`workspace.toml` の `[plugins.versions.<id>]` ブロックを直接挿入・置換する。行ベースのミューテータが対象ブロック外のコメント・空行を保持するため、既存ファイルを安全に編集できる。`--write` 無しの stdout-only 動作はデフォルトのまま。`[plugins.versions]` 直下に任意の key 代入 (例: `<id> = "..."` や `<id> = { ... }`) がある場合は重複ブロック追加を避けるため usage error で停止する。
-- `workspace.toml` に新セクション `[certificates]` を追加。`enable = true` のとき `~/.cocoon/certs/*.crt` を build 時にコンテナイメージへ自動取り込み、デフォルト (セクション不在 or `enable = false`) では生成された `Dockerfile` / `docker-compose.yml` / `devcontainer.json` に **cert 関連の配線が一切乗らない** (additional_contexts も RUN --mount=type=bind も initializeCommand も SSL_CERT_FILE ENV も出ない)。社内 CA を扱わないチームは corp-CA 機構ゼロの成果物を commit できる。有効時は compose 側で `additional_contexts: cocoon_user_certs: ${HOME:?…}/.cocoon/certs`、Dockerfile 側で `RUN --mount=type=bind,from=cocoon_user_certs …` により他の apt 操作より前に trust store へマージするため、Zscaler 等の TLS インターセプトが行われる corp ネットワーク環境でも build が成立する。
+- `workspace.toml` に新セクション `[certificates]` を追加。`enable = true` のとき `~/.cocoon/certs/*.crt` を build 時にコンテナイメージへ自動取り込み、デフォルト (セクション不在 or `enable = false`) では生成された `Dockerfile` / `docker-compose.yml` / `devcontainer.json` に **cert 関連の配線が一切乗らない** (additional_contexts も RUN --mount=type=bind も initializeCommand も SSL_CERT_FILE ENV も出ない)。社内 CA を扱わないチームは corp-CA 機構ゼロの成果物を commit できる。有効時は compose 側で `additional_contexts: cocoon_user_certs: ${HOME:?…}/.cocoon/certs`、Dockerfile 側で `RUN --mount=type=bind,from=cocoon_user_certs …` により他の apt 操作より前に trust store へマージするため、TLS インターセプトが行われる（プライベート CA を要する）ネットワーク環境でも build が成立する。
 - `cocoon init --certificates` / `--no-certificates` フラグ + 対話プロンプトで上記セクションを切り替え可能。有効化時は生成 `workspace.toml` に `[certificates] enable = true` が出力され、無効時はセクション省略 + コメントテンプレートで後から有効化する手順を案内する。
 - 生成 `.devcontainer/devcontainer.json` の `initializeCommand: "mkdir -p ${HOME:?…}/.cocoon/certs"` は `[certificates]` 有効時のみ出力される。有効化済みワークスペースの VS Code Dev Containers ユーザーは cocoon バイナリ無しでもホスト側ディレクトリが build 前に自動作成される。`docker compose build` を直接実行するユーザー (CI 等) はこのフックを通らないため、初回のみホスト側で `mkdir -p ~/.cocoon/certs` を実行する必要がある。
 - `cocoon gen` 実行時にホスト側 `~/.cocoon/certs/` (パーミッション 0700) を不在なら自動作成し、社内 / プライベート CA の `.crt` 配置先を案内するメッセージを出力する — ただし `[certificates] enable = true` のときのみ。無効ワークスペースではホスト側への副作用も notice 出力も発生しない。
@@ -375,9 +399,9 @@ cocoon の主要な変更を記録します。フォーマットは
 
 - `cocoon init` を追加。サービス名・ユーザー名・OS・OS バージョン・ログインシェル・マウント範囲・devcontainer 出力切替・エイリアスバンドル・apt カテゴリ・プラグインを対話で選んで `workspace.toml` を生成。
 - 非対話用フラグ (`--yes`, `--service-name`, `--username`, `--os`, `--os-version`, `--shell`, `--mount-root`, `--devcontainer`, `--no-devcontainer`, `--apt-categories`, `--plugins`, `--alias-bundles`, `--force`) を追加。CI やスクリプトから TTY なしで `cocoon init` を駆動可能。
-- 生成 `workspace.toml` にローカライズされたインラインコメントと 20 個のコメントアウト済セクション雛形を追加し、ファイル内で機能を発見できるようにする。
+- 生成 `workspace.toml` にローカライズされたインラインコメントとコメントアウト済セクション雛形を追加し、ファイル内で機能を発見できるようにする。
 - `cocoon gen` を追加。`workspace.toml` から `.devcontainer/{Dockerfile, docker-compose.yml, docker-entrypoint.sh, .env, devcontainer.json}` を生成。
-- `cocoon plugin` 名詞グループを追加 (`list` / `show` / `add` / `remove` / `pin` / `scaffold` の 6 サブコマンド)。20 プラグインの埋め込みカタログと `LayeredFS` (project > user > embedded) による上書きをサポート。
+- `cocoon plugin` 名詞グループを追加 (`list` / `show` / `add` / `remove` / `pin` / `scaffold` の 6 サブコマンド)。プラグインの埋め込みカタログと `LayeredFS` (project > user > embedded) による上書きをサポート。
 - `cocoon config` 名詞グループを追加 (`get` / `list` / `volumes` / `plugin-get` / `plugin-list` / `plugin-volumes` / `plugins-table` / `validate-workspace` / `validate-plugins` / `has-section` / `list-sidecars` / `dump-devcontainer` / `dump-repositories` / `repositories` / `format-repositories`)。
 - `cocoon self-update` を追加。GitHub リリースからのダウンロード、SHA256 検証、atomic rename による差し替えに対応。
 - `cocoon version` を追加。
@@ -387,7 +411,8 @@ cocoon の主要な変更を記録します。フォーマットは
 - `COMPOSE_PROJECT_NAME` をプロジェクトディレクトリの basename から導出するように変更。docker compose の namespace がホストディレクトリと一致する。
 - 国際化 (英語 / 日本語) カタログを追加。CLI プロンプト・エラーメッセージ・`workspace.toml` インラインコメントすべてを `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` で切替可能。
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/sukekyo26/cocoon/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/sukekyo26/cocoon/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/sukekyo26/cocoon/compare/v0.7.6...v0.8.0
 [0.7.6]: https://github.com/sukekyo26/cocoon/compare/v0.7.5...v0.7.6

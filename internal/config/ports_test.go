@@ -356,8 +356,8 @@ func TestPortsSpec_Validate_TypeMismatches(t *testing.T) {
 			if err == nil {
 				t.Fatalf("expected error")
 			}
-			ve, ok := config.AsValidationError(err)
-			if !ok {
+			var ve *config.ValidationError
+			if !errors.As(err, &ve) {
 				t.Fatalf("expected ValidationError")
 			}
 			joined := ""
@@ -544,8 +544,8 @@ func TestPortsSpec_Validate(t *testing.T) {
 			if err == nil {
 				t.Fatalf("expected error, got none")
 			}
-			ve, ok := config.AsValidationError(err)
-			if !ok {
+			var ve *config.ValidationError
+			if !errors.As(err, &ve) {
 				t.Fatalf("expected ValidationError, got %T", err)
 			}
 			joined := ""

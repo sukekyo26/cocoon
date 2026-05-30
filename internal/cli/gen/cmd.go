@@ -102,7 +102,9 @@ func loadGenContext(stderr io.Writer, workspaceFlag, outputFlag string) (
 
 	ctx, err = generatecli.LoadContext(wsPath, layered, "", stderr)
 	if err != nil {
-		return "", nil, fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+		// Returned as-is: generatecli attaches ErrFailure, so re-wrapping
+		// would double the "failure:" prefix (defensive-coding §3).
+		return "", nil, err //nolint:wrapcheck // ErrFailure already attached by generatecli
 	}
 	return outDir, ctx, nil
 }
@@ -116,10 +118,10 @@ func runGen(stdout, stderr io.Writer, workspaceFlag, outputFlag string) error {
 	}
 	arts, err := generatecli.BuildArtifacts(ctx, stderr)
 	if err != nil {
-		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+		return err //nolint:wrapcheck // ErrFailure already attached by generatecli
 	}
 	if err := generatecli.WriteArtifacts(arts, outDir); err != nil {
-		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+		return err //nolint:wrapcheck // ErrFailure already attached by generatecli
 	}
 	if ctx.CertificatesEnabled() {
 		if err := ensureUserCertsDir(log, cat); err != nil {

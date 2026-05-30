@@ -1,7 +1,6 @@
 package config
 
 import (
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -57,13 +56,4 @@ func (e *ValidationError) Sort() *ValidationError {
 		return strings.Join(out[i].Loc, ".") < strings.Join(out[j].Loc, ".")
 	})
 	return &ValidationError{Path: e.Path, Errors: out}
-}
-
-// AsValidationError returns the wrapped *ValidationError if err contains one.
-func AsValidationError(err error) (*ValidationError, bool) {
-	var v *ValidationError
-	if errors.As(err, &v) {
-		return v, true
-	}
-	return nil, false
 }

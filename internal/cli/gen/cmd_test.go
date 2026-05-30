@@ -100,6 +100,41 @@ func TestGen_DefaultRun(t *testing.T) {
 	}
 }
 
+// TestGen_LoadFailureHasSingleFailurePrefix pins that a workspace load
+// failure surfaces with a single "failure:" prefix. LoadContext already
+// wraps with ErrFailure, so the caller must not wrap again (defensive-coding
+// §3: wrap once per call chain).
+func TestGen_LoadFailureHasSingleFailurePrefix(t *testing.T) {
+	work := t.TempDir()
+	home := filepath.Join(work, "home")
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		t.Fatalf("mkdir home: %v", err)
+	}
+	t.Setenv("HOME", home)
+	pinEnglish(t)
+	t.Chdir(work)
+
+	// Invalid service_name → workspace validation fails inside LoadContext.
+	bad := strings.ReplaceAll(minimalWorkspaceTOML, `service_name = "demo"`, `service_name = "Demo"`)
+	if err := os.WriteFile(filepath.Join(work, "workspace.toml"), []byte(bad), 0o600); err != nil {
+		t.Fatalf("write workspace.toml: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	cmd := gencli.NewCommand(&stdout, &stderr)
+	cmd.SetArgs(nil)
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected an error for an invalid workspace.toml")
+	}
+	if !errors.Is(err, clihelpers.ErrFailure) {
+		t.Errorf("expected ErrFailure, got %v", err)
+	}
+	if strings.Contains(err.Error(), "failure: failure") {
+		t.Errorf("doubled \"failure:\" prefix in error: %q", err.Error())
+	}
+}
+
 // certsEnabledWorkspaceTOML is `minimalWorkspaceTOML` plus an explicit
 // `[certificates] enable = true` so cert auto-bake (mkdir + notice) is
 // turned on for the test.
@@ -155,7 +190,7 @@ func TestGen_CreatesUserCertsDir(t *testing.T) {
 		"created host directory",
 		"cocoon_user_certs build context",
 		"Host TLS certificates:",
-		"Drop *.crt files into ~/.cocoon/certs/",
+		"Drop *.crt / *.cer files into ~/.cocoon/certs/",
 		"Team members who skip VS Code Dev Containers",
 	} {
 		if !strings.Contains(out, want) {

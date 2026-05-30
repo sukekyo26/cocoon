@@ -386,7 +386,7 @@ enable = []
 		t.Fatal(err)
 	}
 	var errOut bytes.Buffer
-	// Pluginsdir does not exist; LoadEnabled with empty enable list still
+	// Pluginsdir does not exist; LoadEnabledFromFS with empty enable list still
 	// succeeds, so this exercises the "no enabled plugins" no-op path.
 	if err := runPipeline(t, wsPath, filepath.Join(work, "no-such-plugins"), work, &errOut); err != nil {
 		t.Fatalf("expected success with no enabled plugins, got %v", err)

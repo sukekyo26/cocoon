@@ -50,8 +50,8 @@ func TestValidate_ContainerInvalidServiceName(t *testing.T) {
 	body := strings.ReplaceAll(minimalWorkspace(), `service_name = "dev"`, `service_name = "Dev"`)
 	err := loadWS(t, body)
 	require.Error(t, err)
-	v, ok := config.AsValidationError(err)
-	require.True(t, ok)
+	var v *config.ValidationError
+	require.ErrorAs(t, err, &v)
 	require.Contains(t, v.Errors[0].Message, "service_name does not match")
 }
 
@@ -72,8 +72,8 @@ os_version = "24.04"`,
 	)
 	err := loadWS(t, body)
 	require.Error(t, err)
-	v, ok := config.AsValidationError(err)
-	require.True(t, ok)
+	var v *config.ValidationError
+	require.ErrorAs(t, err, &v)
 	var got *config.FieldError
 	for i := range v.Errors {
 		if len(v.Errors[i].Loc) > 0 && v.Errors[i].Loc[len(v.Errors[i].Loc)-1] == "os" {
@@ -107,8 +107,8 @@ os_version = "24.04"`,
 	)
 	err := loadWS(t, body)
 	require.Error(t, err)
-	v, ok := config.AsValidationError(err)
-	require.True(t, ok)
+	var v *config.ValidationError
+	require.ErrorAs(t, err, &v)
 	for i := range v.Errors {
 		loc := v.Errors[i].Loc
 		if len(loc) == 0 {
@@ -128,8 +128,8 @@ func TestValidate_DuplicatePlugins(t *testing.T) {
 	t.Parallel()
 	body := strings.ReplaceAll(minimalWorkspace(), "enable = []", `enable = ["go", "go"]`)
 	err := loadWS(t, body)
-	require.Error(t, err)
-	v, _ := config.AsValidationError(err)
+	var v *config.ValidationError
+	require.ErrorAs(t, err, &v)
 	require.Contains(t, v.Error(), "duplicate")
 }
 
@@ -396,6 +396,39 @@ func TestValidate_ContainerShellAcceptsFish(t *testing.T) {
 	body := minimalWorkspace() + "\n[container.shell]\ndefault = \"fish\"\nenv = { EDITOR = \"vim\" }\n"
 	err := loadWS(t, body)
 	require.NoError(t, err)
+}
+
+func TestValidate_ShellValueRejectsNewline(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		spec string
+	}{
+		{"env newline", `env = { EDITOR = "a\nb" }`},
+		{"env carriage return", `env = { EDITOR = "a\rb" }`},
+		{"alias newline", `aliases = { gs = "git status\nRUN echo pwned" }`},
+		{"alias carriage return", `aliases = { gs = "a\rb" }`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			body := minimalWorkspace() + "\n[container.shell]\n" + tc.spec + "\n"
+			err := loadWS(t, body)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "unsafe character")
+		})
+	}
+}
+
+// TestValidate_ShellValueAcceptsExpansion pins that $-expansion and command
+// substitution stay legal in shell env/alias values — only newlines are
+// rejected — so the documented $HOME / $(cmd) usage keeps working.
+func TestValidate_ShellValueAcceptsExpansion(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() + "\n[container.shell]\n" +
+		`env = { NPM_CONFIG_PREFIX = "$HOME/.local" }` + "\n" +
+		`aliases = { ll = "ls -la $(pwd)" }` + "\n"
+	require.NoError(t, loadWS(t, body))
 }
 
 func TestValidate_SidecarCollidesWithMain(t *testing.T) {

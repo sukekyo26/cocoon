@@ -6,6 +6,31 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-05-30
+
+### Changed
+
+- The TLS certificate auto-bake feature (`[certificates] enable = true`) now also
+  ingests `*.cer` files from `~/.cocoon/certs/`, in addition to `*.crt`. Both are
+  merged into the container trust store at build time (`.cer` files are copied in
+  renamed to `.crt`, since `update-ca-certificates` only ingests the `.crt`
+  extension). Certificates must be PEM-encoded; DER-encoded `.cer` files are
+  skipped — convert with `openssl x509 -inform der -in x.cer -out x.crt` first.
+
+### Fixed
+
+- **Security**: `cocoon gen` now rejects newline characters in
+  `[container.shell.env]` / `[container.shell.aliases]` values, and newlines or
+  double-quotes in plugin `[install.env]` values. Such characters could
+  previously break out of the generated Dockerfile heredoc / `ENV` line and
+  inject arbitrary build-time directives. `$`-expansion (`$HOME`, `$PATH`,
+  `$(cmd)`) stays supported.
+- `cocoon gen` no longer prints a doubled `failure: failure:` prefix when
+  loading or generation fails; the error now carries a single prefix.
+- `cocoon gen` / `cocoon plugin pin` now report a permission or I/O error
+  hit while searching for `workspace.toml`, instead of silently treating the
+  directory as having no workspace.
+
 ## [0.9.0] - 2026-05-30
 
 ### Changed
@@ -266,7 +291,7 @@ adheres to [Semantic Versioning](https://semver.org/).
 - `cocoon init` now prompts for an install method when an enabled plugin declares two or more entries under `[install.methods]` in its `plugin.toml`. Each option lists the method name and its description; the plugin's `default_method` is pre-selected so pressing Enter accepts the recommendation. Plugins with a single declared method are silently skipped — no prompt churn for the common case. The choice is written to a new `[plugins.methods]` table in the generated `workspace.toml` (`<plugin-id> = "<method-name>"` per line); plugins absent from the table fall back to `default_method` at install time. Method prompts run **before** version prompts so the per-method upstream URL surfaces correctly under the version picker description.
 - New `cocoon init --plugin-methods` flag, mirroring the existing `--plugin-versions` flag: `--plugin-methods="<id>=<method>,<id>=<method>"` skips the prompt for each named plugin (each `<id>` must also appear in `--plugins`; `<method>` must be a key under that plugin's `[install.methods]`). Used together with `--yes`, this drives the new method selection non-interactively from CI.
 - New `cocoon plugin pin --method <name>` flag: pin emits — or upserts under `--write` — both a `<id> = "<method>"` line under `[plugins.methods]` and the existing inline-table line under `[plugins.versions]`. The method is validated against the plugin's `plugin.toml` (error message lists declared method names so typos are easy to fix). Checksums (`--amd64-checksum` / `--arm64-checksum`) are workspace-scoped, not per-method; when switching methods refresh the checksums so the install script's SHA256 verification matches the new artifact.
-- `copilot-cli` plugin offers two install methods: the default **`installer`** (the upstream `gh.io` installer) and **`binary`** (a direct download of `copilot-linux-${arch}.tar.gz` from the `github/copilot-cli` GitHub Release, dropped at `~/.local/bin/copilot`). Pick `binary` when `gh.io` is firewalled (e.g. Zscaler) or corporate policy forbids the `curl|sh` pattern. Switching methods is `cocoon init --plugin-methods="copilot-cli=binary"` (or via the interactive prompt) — refresh `checksum_amd64` / `checksum_arm64` in `[plugins.versions]` so the install script's SHA256 verification still matches the new artifact.
+- `copilot-cli` plugin offers two install methods: the default **`installer`** (the upstream `gh.io` installer) and **`binary`** (a direct download of `copilot-linux-${arch}.tar.gz` from the `github/copilot-cli` GitHub Release, dropped at `~/.local/bin/copilot`). Pick `binary` when `gh.io` is unreachable or policy forbids the `curl|sh` pattern. Switching methods is `cocoon init --plugin-methods="copilot-cli=binary"` (or via the interactive prompt) — refresh `checksum_amd64` / `checksum_arm64` in `[plugins.versions]` so the install script's SHA256 verification still matches the new artifact.
 
 ### Changed
 
@@ -342,7 +367,7 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Mount a named Docker volume `cocoon` at `/home/<user>/.cocoon` inside the dev container so per-user shell tweaks survive container rebuilds. The container's rc file (bash / zsh / fish) sources `~/.cocoon/.shellrc` (or `~/.cocoon/.shellrc.fish` for fish) automatically; edit those files from inside the container and they persist across `docker compose down && up --build` (only `down -v` resets them).
 - Add `cocoon init --plugin-versions=<id>=<ref>,...` so a single command emits both `[plugins] enable` and `[plugins.versions]` blocks. Each `<id>` must already appear in `--plugins`, must be `version_capable`, and may not repeat. Replaces the prior workflow of pasting `cocoon plugin pin` output by hand.
 - Add `cocoon plugin pin --write` to insert (or replace) a `[plugins.versions.<id>]` block directly in `workspace.toml`. The line-based mutator preserves comments and blank lines outside the target block; the existing stdout-only behavior remains the default. If `workspace.toml` has any per-id key assignment under `[plugins.versions]` (e.g. `<id> = "..."` or `<id> = { ... }`), `--write` refuses with a usage error instead of appending a duplicate block.
-- New `[certificates]` section in `workspace.toml` toggles host TLS certificate auto-bake from `~/.cocoon/certs/*.crt`. **Default `enable = false`** — teams that never deal with corporate CAs commit `Dockerfile` / `docker-compose.yml` / `devcontainer.json` artifacts that contain no cert-related wiring at all (no `additional_contexts`, no `RUN --mount=type=bind`, no `initializeCommand`, no `SSL_CERT_FILE` ENV exports). When enabled, the compose generator declares `additional_contexts: cocoon_user_certs: ${HOME:?…}/.cocoon/certs` and the Dockerfile uses `RUN --mount=type=bind,from=cocoon_user_certs …` to install any certificates into the trust store before other apt operations, which is required for builds on networks that intercept TLS (e.g., Zscaler). The RUN body is a shell-side conditional, so the same enabled Dockerfile builds successfully whether the developer has user certs in `~/.cocoon/certs/` or not.
+- New `[certificates]` section in `workspace.toml` toggles host TLS certificate auto-bake from `~/.cocoon/certs/*.crt`. **Default `enable = false`** — teams that never deal with corporate CAs commit `Dockerfile` / `docker-compose.yml` / `devcontainer.json` artifacts that contain no cert-related wiring at all (no `additional_contexts`, no `RUN --mount=type=bind`, no `initializeCommand`, no `SSL_CERT_FILE` ENV exports). When enabled, the compose generator declares `additional_contexts: cocoon_user_certs: ${HOME:?…}/.cocoon/certs` and the Dockerfile uses `RUN --mount=type=bind,from=cocoon_user_certs …` to install any certificates into the trust store before other apt operations, which is required for builds on networks that intercept TLS with a private CA. The RUN body is a shell-side conditional, so the same enabled Dockerfile builds successfully whether the developer has user certs in `~/.cocoon/certs/` or not.
 - `cocoon init --certificates` / `--no-certificates` flags + interactive prompt drive the new section. When enabled, the generated `workspace.toml` carries `[certificates] enable = true` and the live wiring lands in `.devcontainer/*`; when disabled the section is omitted and a commented template documents how to opt in later.
 - Generated `.devcontainer/devcontainer.json` carries `initializeCommand: "mkdir -p ${HOME:?…}/.cocoon/certs"` only when `[certificates]` is enabled, so VS Code Dev Containers users in opted-in workspaces automatically have the host directory created before the build, without needing the cocoon binary themselves. Plain `docker compose build` users (CI etc.) bypass that hook and need to run `mkdir -p ~/.cocoon/certs` once on the host before the first build.
 - `cocoon gen` creates `~/.cocoon/certs/` on the host (mode 0700) when missing and prints a short notice describing where to drop corporate / private CA `.crt` files — but only when the workspace has `[certificates] enable = true`. Cert-free workspaces cause no host-side side effect and no notice in stdout.
@@ -376,9 +401,9 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 - Add `cocoon init` for interactive `workspace.toml` generation with prompts for service name, username, OS, OS version, login shell, mount range, devcontainer toggle, alias bundles, apt categories, and plugins.
 - Add non-interactive flags (`--yes`, `--service-name`, `--username`, `--os`, `--os-version`, `--shell`, `--mount-root`, `--devcontainer`, `--no-devcontainer`, `--apt-categories`, `--plugins`, `--alias-bundles`, `--force`) so CI and scripts can drive `cocoon init` without TTY interaction.
-- Add localized inline comments and 20 commented-out section templates to the generated `workspace.toml` for in-file feature discovery.
+- Add localized inline comments and commented-out section templates to the generated `workspace.toml` for in-file feature discovery.
 - Add `cocoon gen` to emit `.devcontainer/{Dockerfile, docker-compose.yml, docker-entrypoint.sh, .env, devcontainer.json}` from `workspace.toml`.
-- Add `cocoon plugin` noun group with `list`, `show`, `add`, `remove`, `pin`, and `scaffold` subcommands backed by an embedded 20-plugin catalog and `LayeredFS` (project > user > embedded) overrides.
+- Add `cocoon plugin` noun group with `list`, `show`, `add`, `remove`, `pin`, and `scaffold` subcommands backed by an embedded plugin catalog and `LayeredFS` (project > user > embedded) overrides.
 - Add `cocoon config` noun group exposing `get`, `list`, `volumes`, `plugin-get`, `plugin-list`, `plugin-volumes`, `plugins-table`, `validate-workspace`, `validate-plugins`, `has-section`, `list-sidecars`, `dump-devcontainer`, `dump-repositories`, `repositories`, and `format-repositories`.
 - Add `cocoon self-update` with GitHub release download, SHA256 verification, and atomic-rename swap.
 - Add `cocoon version`.
@@ -388,7 +413,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Add `COMPOSE_PROJECT_NAME` derivation from the project directory basename so docker compose namespacing matches the host directory.
 - Add i18n catalog (English / Japanese) covering every CLI prompt, error message, and inline `workspace.toml` comment, switched via `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG`.
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/sukekyo26/cocoon/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/sukekyo26/cocoon/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/sukekyo26/cocoon/compare/v0.7.6...v0.8.0
 [0.7.6]: https://github.com/sukekyo26/cocoon/compare/v0.7.5...v0.7.6
