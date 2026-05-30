@@ -47,7 +47,11 @@ description: 'Bump project version following Semantic Versioning. Use when asked
 3. 上記 1〜4 を更新（`echo x.y.z > VERSION`、`internal/version/version.go` の `var Version = "..."` を新値に書き換え）
 4. `## [Unreleased]` 見出しは残す（次の開発用）。見出しの下は空にする
 5. `just ci` を実行してグリーンを確認（`internal/version/version.go` 変更で test 影響がないか保険的に）
-6. コミット: `feat: release vX.Y.Z` を **`develop` ブランチに直接コミット** する（version bump は CLAUDE.md「機能単位で feature/ ブランチを切る」ルールの例外。`feature/release-vX.Y.Z` は作らない）。その後 `develop` を push し、`develop` → `main` のリリース PR を出す。`main` 上の VERSION 変更が `release.yml` をトリガしてタグを切る
+6. コミット: `feat: release vX.Y.Z` を **`develop` ブランチに直接コミット** する（version bump は CLAUDE.md「機能単位で feature/ ブランチを切る」ルールの例外。`feature/release-vX.Y.Z` は作らない）。その後 `develop` を push する。
+7. `develop` → `main` のリリース PR を **pr-create スキルの手順で**作成する。リリース PR ならではの要点:
+   - **タイトルは `develop` のリリースコミットと同じ `feat: release vX.Y.Z`**（`chore:` ではない）。
+   - **本文は通常の `.github/pull_request_template.md` ではなく、リリース専用テンプレート `.github/PULL_REQUEST_TEMPLATE/release.md` に従って埋める**。`## Released changes` には今回 `CHANGELOG.md` / `docs/CHANGELOG.ja.md` に追加した `## [x.y.z]` セクションの内容（Added/Changed/Fixed/Removed のうち実在カテゴリのみ）をそのまま転記し、Release checklist を確認する。
+   - マージ後、`main` 上の VERSION 変更が `release.yml` をトリガしてタグ・クロスコンパイル・`gh release` 公開が走る。
 
 > `justfile` の `version` 変数は `VERSION` ファイルの内容を読み込み `-ldflags "-X github.com/sukekyo26/cocoon/internal/version.Version=..."` を渡す。`just build` 経由のバイナリは ldflags が効くが、`go install github.com/sukekyo26/cocoon/cmd/cocoon@latest` 経由では効かないので、ソース側 `internal/version/version.go` の literal も同期させる必要がある。
 
