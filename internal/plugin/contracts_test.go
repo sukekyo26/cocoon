@@ -188,7 +188,18 @@ func TestPluginContracts(t *testing.T) {
 		{
 			id: "google-chrome", name: "Google Chrome",
 			requiresRoot: true,
-			mustContain:  []string{"google-chrome-stable_current_amd64.deb", "retry 3", "tlsv1.2"},
+			mustContain: []string{
+				"dl.google.com/linux/chrome/deb", "signed-by",
+				"linux_signing_key.pub", "google-chrome-stable",
+				"retry 3", "tlsv1.2",
+				// Keyrings dir mode normalized so apt's _apt user can traverse
+				// it under a restrictive umask (matches github-cli / docker-cli).
+				"chmod 755 /etc/apt/keyrings",
+			},
+			// The pre-signed-by direct .deb download must be gone — both the
+			// install script markers and the stale plugin.toml description that
+			// claimed a direct .deb fetch (the corpus includes plugin.toml).
+			mustNotContain: []string{"linux/direct", "_current_amd64.deb", "package fetched"},
 		},
 		{
 			id: "lazygit", name: "lazygit",

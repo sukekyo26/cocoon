@@ -6,6 +6,14 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+### 修正
+
+- **Security**: `google-chrome` プラグインが Chrome を Google の署名付き
+  apt リポジトリ（`signed-by` keyring）からインストールするようになりました。
+  従来の「`.deb` を TLS 取得して未検証のままインストール」を廃止し、apt が
+  Google の固定署名鍵で全 Chrome パッケージを検証します（`docker-cli` /
+  `github-cli` と同じ方式）。Chrome の Linux 版は引き続き amd64 のみです。
+
 ## [0.8.0] - 2026-05-30
 
 ### 追加
