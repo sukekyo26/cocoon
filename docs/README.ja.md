@@ -120,7 +120,7 @@ docker compose -f .devcontainer/docker-compose.yml up -d # または VS Code で
 
 ## 社内 CA 対応
 
-社内 CA をコンテナ内で信頼させたい (Zscaler、開発用自己署名 等) 場合は `cocoon init --certificates` (または `workspace.toml` に `[certificates] enable = true`) で opt-in したうえで、ホスト側の `~/.cocoon/certs/` に `.crt` を置いてください。コンテナビルド時に自動で取り込まれます。opt-in しないワークスペースの成果物には cert 関連の配線は一切乗りません。詳細は [`[certificates]`](configuration.ja.md#certificates) を参照。
+プライベート CA をコンテナ内で信頼させたい (TLS インターセプトプロキシ、開発用自己署名 等) 場合は `cocoon init --certificates` (または `workspace.toml` に `[certificates] enable = true`) で opt-in したうえで、ホスト側の `~/.cocoon/certs/` に `.crt` を置いてください。コンテナビルド時に自動で取り込まれます。opt-in しないワークスペースの成果物には cert 関連の配線は一切乗りません。詳細は [`[certificates]`](configuration.ja.md#certificates) を参照。
 
 ## 個人シェル設定の永続化
 

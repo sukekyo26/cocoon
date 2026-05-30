@@ -13,7 +13,7 @@ default_method = "installer"
 description = "Install via the upstream gh.io install script (default)"
 
 [install.methods.binary]
-description = "Direct binary tarball from GitHub Releases — required in environments where gh.io / npm registries are blocked (e.g. Zscaler) or where curl|sh is forbidden by policy"
+description = "Direct binary tarball from GitHub Releases — for environments where the gh.io installer host / npm registry is unreachable, or where piping curl|sh into a shell is forbidden by policy"
 
 [install.env]
 PATH = "/home/${USERNAME}/.local/bin:$PATH"

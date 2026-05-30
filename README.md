@@ -120,7 +120,7 @@ Override or add your own under `~/.cocoon/plugins/<id>/` (user scope) or `<proje
 
 ## Corporate CA support
 
-Need a corporate CA inside the container (Zscaler, dev self-signed, etc.)? Run `cocoon init --certificates` (or set `[certificates] enable = true` in `workspace.toml`), then drop the `.crt` files into `~/.cocoon/certs/` on the host. They are picked up automatically at container build time. Cert-free workspaces stay cert-free — no wiring lands in the generated artifacts unless you opt in. See [`[certificates]`](docs/configuration.md#certificates) for the team workflow.
+Need to trust a private CA inside the container (a TLS-intercepting proxy, a dev self-signed cert, etc.)? Run `cocoon init --certificates` (or set `[certificates] enable = true` in `workspace.toml`), then drop the `.crt` files into `~/.cocoon/certs/` on the host. They are picked up automatically at container build time. Cert-free workspaces stay cert-free — no wiring lands in the generated artifacts unless you opt in. See [`[certificates]`](docs/configuration.md#certificates) for the team workflow.
 
 ## Persistent personal shellrc
 
