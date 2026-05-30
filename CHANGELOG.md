@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- `cocoon gen` no longer prints a doubled `failure: failure:` prefix when
+  loading or generation fails; the error now carries a single prefix.
+
 ## [0.9.0] - 2026-05-30
 
 ### Changed

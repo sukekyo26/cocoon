@@ -6,6 +6,11 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+### 修正
+
+- `cocoon gen` がロード／生成の失敗時に `failure: failure:` と prefix を
+  二重表示しなくなりました（prefix は 1 回になります）。
+
 ## [0.9.0] - 2026-05-30
 
 ### 変更
