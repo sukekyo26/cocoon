@@ -131,12 +131,6 @@ func validateMethodScripts(label string, p *Plugin, fsys fs.FS, scriptDir string
 // missing plugins via errors.Is.
 var ErrNilPluginsFS = errors.New("plugin: source fs is nil")
 
-// LoadEnabled emits one stderr warning to `warnings` per missing plugin and
-// skips it.
-func LoadEnabled(pluginsDir string, enabled []string, warnings io.Writer) (map[string]*Plugin, error) {
-	return LoadEnabledFromFS(os.DirFS(pluginsDir), enabled, warnings, pluginsDir)
-}
-
 // LoadEnabledFromFS uses pathPrefix purely to decorate the missing-plugin
 // warning (pass "" for embedded sources). Returns ErrNilPluginsFS so a nil
 // src surfaces as a clear config bug rather than a fs.Stat panic.

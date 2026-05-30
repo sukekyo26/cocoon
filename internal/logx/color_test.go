@@ -23,20 +23,6 @@ func TestYellowWriter_ColorAlways(t *testing.T) { //nolint:paralleltest // t.Set
 	}
 }
 
-func TestRedWriter_ColorAlways(t *testing.T) { //nolint:paralleltest // t.Setenv
-	t.Setenv("NO_COLOR", "")
-	t.Setenv("FORCE_COLOR", "1")
-
-	var buf bytes.Buffer
-	w := logx.RedWriter(&buf)
-	if _, err := w.Write([]byte("error\n")); err != nil {
-		t.Fatalf("Write: %v", err)
-	}
-	if got, want := buf.String(), "\x1b[31merror\n\x1b[0m"; got != want {
-		t.Errorf("got %q, want %q", got, want)
-	}
-}
-
 func TestYellowWriter_NoColor_PassesThrough(t *testing.T) { //nolint:paralleltest // t.Setenv
 	t.Setenv("NO_COLOR", "1")
 	t.Setenv("FORCE_COLOR", "")

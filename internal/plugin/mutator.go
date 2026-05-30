@@ -14,17 +14,11 @@ import (
 	"github.com/sukekyo26/cocoon/internal/fsx"
 )
 
-// ErrPinLineEmptyID is returned by UpsertPinLine when called with an empty id.
-var ErrPinLineEmptyID = errors.New("UpsertPinLine: empty id")
+// ErrPinLineEmptyID is returned by UpsertPinAndMethod when called with an empty id.
+var ErrPinLineEmptyID = errors.New("UpsertPinAndMethod: empty id")
 
-// ErrPinLineEmptyRef is returned by UpsertPinLine when called with an empty ref.
-var ErrPinLineEmptyRef = errors.New("UpsertPinLine: empty ref")
-
-// ErrMethodLineEmptyID is returned by UpsertMethodLine when called with an empty id.
-var ErrMethodLineEmptyID = errors.New("UpsertMethodLine: empty id")
-
-// ErrMethodLineEmptyMethod is returned by UpsertMethodLine when called with an empty method.
-var ErrMethodLineEmptyMethod = errors.New("UpsertMethodLine: empty method")
+// ErrPinLineEmptyRef is returned by UpsertPinAndMethod when called with an empty ref.
+var ErrPinLineEmptyRef = errors.New("UpsertPinAndMethod: empty ref")
 
 // sectionHeaderRE matches a TOML table header: `[name.space]` with optional
 // surrounding whitespace and a trailing comment.
@@ -39,43 +33,6 @@ var ErrLegacyPinSubsection = errors.New(
 		"cocoon now emits inline tables under a single `[plugins.versions]` section. " +
 		"Convert each block to `<id> = { pin = \"...\" }` under `[plugins.versions]` " +
 		"before invoking --write")
-
-// UpsertPinLine atomically inserts or replaces an inline-table assignment
-// `<id> = { pin = "<ref>", ... }` under the [plugins.versions] section of
-// workspace.toml at path. Comments and blank lines outside the modified line
-// are preserved verbatim.
-//
-//   - existing inline line for <id>: replaced in place.
-//   - [plugins.versions] section present, <id> new: line appended at the
-//     section's last non-blank position so it sits adjacent to existing pins.
-//   - section absent: a fresh `[plugins.versions]\n<id> = { ... }\n` section
-//     is appended at EOF, separated from the previous non-blank line by at
-//     least one blank line (existing trailing blanks are preserved verbatim,
-//     so the separation may be more than one).
-func UpsertPinLine(path, id, ref, amd64Sum, arm64Sum string) error {
-	if id == "" {
-		return ErrPinLineEmptyID
-	}
-	if ref == "" {
-		return ErrPinLineEmptyRef
-	}
-	info, err := os.Stat(path)
-	if err != nil {
-		return fmt.Errorf("stat %s: %w", path, err)
-	}
-	body, err := os.ReadFile(path) //nolint:gosec // caller-provided workspace path
-	if err != nil {
-		return fmt.Errorf("read %s: %w", path, err)
-	}
-	out, err := upsertPinLineBytes(body, id, ref, amd64Sum, arm64Sum)
-	if err != nil {
-		return err
-	}
-	if err := fsx.AtomicWriteFile(path, out, info.Mode().Perm()); err != nil {
-		return fmt.Errorf("write %s: %w", path, err)
-	}
-	return nil
-}
 
 func upsertPinLineBytes(input []byte, id, ref, amd64Sum, arm64Sum string) ([]byte, error) {
 	hadTrailingNewline := bytes.HasSuffix(input, []byte("\n"))
@@ -145,44 +102,6 @@ func parseInlineTableExtras(value string) map[string]string {
 	return out
 }
 
-// UpsertMethodLine atomically inserts or replaces an assignment
-// `<id> = "<method>"` under the [plugins.methods] section of workspace.toml
-// at path. Comments and blank lines outside the modified line are preserved
-// verbatim, mirroring UpsertPinLine.
-//
-//   - existing line for <id>: replaced in place.
-//   - [plugins.methods] section present, <id> new: line appended at the
-//     section's last non-blank position so it sits adjacent to existing
-//     picks.
-//   - section absent: a fresh `[plugins.methods]\n<id> = "<method>"\n`
-//     section is appended at EOF, separated from the previous non-blank
-//     line by at least one blank line (existing trailing blanks are
-//     preserved verbatim).
-func UpsertMethodLine(path, id, method string) error {
-	if id == "" {
-		return ErrMethodLineEmptyID
-	}
-	if method == "" {
-		return ErrMethodLineEmptyMethod
-	}
-	info, err := os.Stat(path)
-	if err != nil {
-		return fmt.Errorf("stat %s: %w", path, err)
-	}
-	body, err := os.ReadFile(path) //nolint:gosec // caller-provided workspace path
-	if err != nil {
-		return fmt.Errorf("read %s: %w", path, err)
-	}
-	out, err := upsertMethodLineBytes(body, id, method)
-	if err != nil {
-		return err
-	}
-	if err := fsx.AtomicWriteFile(path, out, info.Mode().Perm()); err != nil {
-		return fmt.Errorf("write %s: %w", path, err)
-	}
-	return nil
-}
-
 func upsertMethodLineBytes(input []byte, id, method string) ([]byte, error) {
 	hadTrailingNewline := bytes.HasSuffix(input, []byte("\n"))
 	lines := splitToLines(input)
@@ -195,14 +114,12 @@ func upsertMethodLineBytes(input []byte, id, method string) ([]byte, error) {
 // pin line for id, and (when method != "") the [plugins.methods]
 // `<id> = "<method>"` line. Both upserts share a single read-modify-write
 // cycle so a transient I/O failure cannot leave workspace.toml in a half-
-// updated state (a separate UpsertPinLine + UpsertMethodLine sequence would
+// updated state (writing the pin and method in two separate passes would
 // be non-transactional: a failure between them would persist the pin without
-// the matching method). Pass method = "" to upsert the pin alone — the
-// behaviour is then equivalent to UpsertPinLine.
+// the matching method). Pass method = "" to upsert the pin alone.
 //
-// Returns ErrLegacyPinSubsection (same as UpsertPinLine) when the file
-// carries the legacy [plugins.versions.<id>] shape; the file is not
-// modified in that case.
+// Returns ErrLegacyPinSubsection when the file carries the legacy
+// [plugins.versions.<id>] shape; the file is not modified in that case.
 func UpsertPinAndMethod(path, id, ref, amd64Sum, arm64Sum, method string) error {
 	if id == "" {
 		return ErrPinLineEmptyID

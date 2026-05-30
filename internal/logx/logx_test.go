@@ -43,13 +43,12 @@ func TestErrorAndErrorf(t *testing.T) {
 	}
 }
 
-func TestWarnAndWarnf(t *testing.T) {
+func TestWarn(t *testing.T) {
 	t.Parallel()
 	l, stdout, stderr := newLogger(t)
 	l.Warn("ports collide")
-	l.Warnf("plugin %s missing", "foo")
 
-	if got, want := stderr.String(), "ports collide\nplugin foo missing\n"; got != want {
+	if got, want := stderr.String(), "ports collide\n"; got != want {
 		t.Fatalf("stderr = %q, want %q", got, want)
 	}
 	if stdout.Len() != 0 {
@@ -57,13 +56,12 @@ func TestWarnAndWarnf(t *testing.T) {
 	}
 }
 
-func TestNoticeAndNoticef(t *testing.T) {
+func TestNotice(t *testing.T) {
 	t.Parallel()
 	l, stdout, stderr := newLogger(t)
 	l.Notice("update available")
-	l.Noticef("v%s is out", "1.2.3")
 
-	if got, want := stderr.String(), "update available\nv1.2.3 is out\n"; got != want {
+	if got, want := stderr.String(), "update available\n"; got != want {
 		t.Fatalf("stderr = %q, want %q", got, want)
 	}
 	if stdout.Len() != 0 {
@@ -99,14 +97,11 @@ func TestSuccessAndSuccessf(t *testing.T) {
 	}
 }
 
-func TestBoldDim_NoColor(t *testing.T) {
+func TestBold_NoColor(t *testing.T) {
 	t.Parallel()
 	l, _, _ := newLogger(t)
 	if got := l.Bold("LBL"); got != "LBL" {
 		t.Errorf("Bold w/o color = %q, want %q", got, "LBL")
-	}
-	if got := l.Dim("dim"); got != "dim" {
-		t.Errorf("Dim w/o color = %q, want %q", got, "dim")
 	}
 }
 
@@ -130,8 +125,5 @@ func TestColorAlways(t *testing.T) {
 	}
 	if got := l.Bold("hdr"); got != "\x1b[1mhdr\x1b[0m" {
 		t.Errorf("Bold w/ color = %q", got)
-	}
-	if got := l.Dim("d"); got != "\x1b[2md\x1b[0m" {
-		t.Errorf("Dim w/ color = %q", got)
 	}
 }

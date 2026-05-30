@@ -58,7 +58,7 @@ func TestGenerate_Snapshot(t *testing.T) {
 			}
 
 			var warns bytes.Buffer
-			plugins, err := plugin.LoadEnabled(pluginsDir, ws.Plugins.Enable, &warns)
+			plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, &warns, pluginsDir)
 			if err != nil {
 				t.Fatalf("load plugins: %v", err)
 			}
@@ -110,7 +110,7 @@ func TestGenerate_CertificatesDisabled_NoAdditionalContexts(t *testing.T) {
 	ws.Certificates = nil
 
 	var warns bytes.Buffer
-	plugins, err := plugin.LoadEnabled(pluginsDir, ws.Plugins.Enable, &warns)
+	plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, &warns, pluginsDir)
 	if err != nil {
 		t.Fatalf("load plugins: %v", err)
 	}

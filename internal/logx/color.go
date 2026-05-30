@@ -82,11 +82,6 @@ func YellowWriter(w io.Writer) io.Writer {
 	return wrapColor(w, ansiYellow)
 }
 
-// RedWriter is the red counterpart of YellowWriter.
-func RedWriter(w io.Writer) io.Writer {
-	return wrapColor(w, ansiRed)
-}
-
 func wrapColor(w io.Writer, color string) io.Writer {
 	if !shouldColor(w, ColorAuto, os.Getenv) {
 		return w

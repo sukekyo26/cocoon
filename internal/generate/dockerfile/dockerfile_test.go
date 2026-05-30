@@ -52,7 +52,7 @@ func TestGenerate_Snapshot(t *testing.T) {
 			}
 
 			var warns bytes.Buffer
-			plugins, err := plugin.LoadEnabled(pluginsDir, ws.Plugins.Enable, &warns)
+			plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, &warns, pluginsDir)
 			if err != nil {
 				t.Fatalf("load plugins: %v", err)
 			}
@@ -124,7 +124,7 @@ func TestGenerate_FromLineForEachImage(t *testing.T) {
 			}
 
 			var warns bytes.Buffer
-			plugins, err := plugin.LoadEnabled(pluginsDir, ws.Plugins.Enable, &warns)
+			plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, &warns, pluginsDir)
 			if err != nil {
 				t.Fatalf("load plugins: %v", err)
 			}
@@ -253,7 +253,7 @@ func generateDebianWithMirrorURL(t *testing.T, mirrorURL string) string {
 	ws.Apt.Mirror.URL = mirrorURL
 
 	var warns bytes.Buffer
-	plugins, err := plugin.LoadEnabled(pluginsDir, ws.Plugins.Enable, &warns)
+	plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, &warns, pluginsDir)
 	if err != nil {
 		t.Fatalf("load plugins: %v", err)
 	}
@@ -397,7 +397,7 @@ func generateWithMirrorURLAndSources(t *testing.T, mirrorURL string, sources []c
 	}
 
 	var warns bytes.Buffer
-	plugins, err := plugin.LoadEnabled(pluginsDir, ws.Plugins.Enable, &warns)
+	plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, &warns, pluginsDir)
 	if err != nil {
 		t.Fatalf("load plugins: %v", err)
 	}
@@ -522,7 +522,7 @@ func generateWithCertificatesDisabled(t *testing.T) string {
 	ws.Certificates = nil
 
 	var warns bytes.Buffer
-	plugins, err := plugin.LoadEnabled(pluginsDir, ws.Plugins.Enable, &warns)
+	plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, &warns, pluginsDir)
 	if err != nil {
 		t.Fatalf("load plugins: %v", err)
 	}
@@ -584,7 +584,7 @@ func generateInStagingRootWithProxy(t *testing.T, root, mirrorURL, httpProxy str
 	}
 
 	var warns bytes.Buffer
-	plugins, err := plugin.LoadEnabled(pluginsDir, ws.Plugins.Enable, &warns)
+	plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, &warns, pluginsDir)
 	if err != nil {
 		t.Fatalf("load plugins: %v", err)
 	}
@@ -766,7 +766,7 @@ func generateFromSnapshotFixture(t *testing.T) string {
 		t.Fatalf("load workspace: %v", err)
 	}
 	var warns bytes.Buffer
-	plugins, err := plugin.LoadEnabled(pluginsDir, ws.Plugins.Enable, &warns)
+	plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, &warns, pluginsDir)
 	if err != nil {
 		t.Fatalf("load plugins: %v", err)
 	}
@@ -827,7 +827,7 @@ func TestGenerate_WorkspaceDirOverride(t *testing.T) {
 	ws.Workspace.Dir = "work/myapp"
 
 	var warns bytes.Buffer
-	plugins, err := plugin.LoadEnabled(pluginsDir, ws.Plugins.Enable, &warns)
+	plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, &warns, pluginsDir)
 	if err != nil {
 		t.Fatalf("load plugins: %v", err)
 	}
@@ -868,7 +868,7 @@ func TestGenerate_BindPathsIncludeHomeRootMount(t *testing.T) {
 	ws.Mounts = []config.Mount{{Source: "/host/x", Target: "/home/${USERNAME}"}}
 
 	var warns bytes.Buffer
-	plugins, err := plugin.LoadEnabled(pluginsDir, ws.Plugins.Enable, &warns)
+	plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, &warns, pluginsDir)
 	if err != nil {
 		t.Fatalf("load plugins: %v", err)
 	}

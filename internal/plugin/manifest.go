@@ -28,7 +28,7 @@ type Apt struct {
 // Install mirrors plugin.toml [install].
 //
 // Methods and DefaultMethod are required for any plugin loaded via the
-// public Load / LoadEnabled[FromFS] entry points: the loader's
+// public Load / LoadEnabledFromFS entry points: the loader's
 // validateMethodScripts rejects an empty Methods map and a literal
 // install.sh file. Each declared method must have a matching
 // install.<name>.sh on disk. The in-memory Validate() method, by
