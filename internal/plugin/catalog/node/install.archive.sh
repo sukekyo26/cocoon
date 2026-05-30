@@ -3,22 +3,11 @@
 #
 # Inputs (env):
 #   PIN              : Node.js version without leading "v" (e.g. "24.15.0"); empty = latest LTS
-#   CHECKSUM_AMD64   : sha256 of linux-x64 tarball; empty to skip verification
-#   CHECKSUM_ARM64   : sha256 of linux-arm64 tarball; empty to skip verification
+#   CHECKSUM_AMD64   : sha256 of linux-x64 tarball; empty = verify against the
+#                      release SHASUMS256.txt
+#   CHECKSUM_ARM64   : sha256 of linux-arm64 tarball; empty = verify against the
+#                      release SHASUMS256.txt
 set -euo pipefail
-
-# Yellow WARNING when stderr is a TTY (and NO_COLOR is unset) or
-# FORCE_COLOR is set. NO_COLOR wins per no-color.org.
-if [ -n "${NO_COLOR:-}" ]; then
-  C_YEL=''
-  C_RST=''
-elif [ -n "${FORCE_COLOR:-}" ] || [ -t 2 ]; then
-  C_YEL=$'\033[33m'
-  C_RST=$'\033[0m'
-else
-  C_YEL=''
-  C_RST=''
-fi
 
 ARCH="$(dpkg --print-architecture)"
 case "$ARCH" in
@@ -51,13 +40,27 @@ else
   fi
 fi
 
+dist="https://nodejs.org/dist/v${VERSION}"
+asset="node-v${VERSION}-linux-${NODE_ARCH}.tar.xz"
 curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
-  "https://nodejs.org/dist/v${VERSION}/node-v${VERSION}-linux-${NODE_ARCH}.tar.xz" -o /tmp/node.tar.xz
+  "${dist}/${asset}" -o /tmp/node.tar.xz
 
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/node.tar.xz" | sha256sum -c -
 else
-  printf '%sWARNING: SHA256 verification skipped for Node.js (no checksum for node in [plugins.versions])%s\n' "$C_YEL" "$C_RST" >&2
+  # No user checksum: verify against the release's own SHASUMS256.txt.
+  curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+    "${dist}/SHASUMS256.txt" -o /tmp/node.sums
+  # Match the asset name literally (awk field compare, not a regex; strip the
+  # binary-mode '*' marker some manifests prepend) and fail loudly if it is
+  # absent so a manifest-shape change does not collapse into an opaque error.
+  expected="$(awk -v f="$asset" '{ n = $2; sub(/^\*/, "", n); if (n == f) { print $1; exit } }' /tmp/node.sums)"
+  if [ -z "$expected" ]; then
+    echo "node: ${asset} not found in SHASUMS256.txt" >&2
+    exit 1
+  fi
+  echo "${expected}  /tmp/node.tar.xz" | sha256sum -c -
+  rm -f /tmp/node.sums
 fi
 
 mkdir -p /usr/local/node

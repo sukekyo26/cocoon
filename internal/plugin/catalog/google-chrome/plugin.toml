@@ -9,7 +9,7 @@ requires_root = true
 default_method = "apt"
 
 [install.methods.apt]
-description = ".deb package fetched from dl.google.com and installed via apt"
+description = "Official Google Chrome apt repository (dl.google.com)"
 
 [version]
 version_capable = false

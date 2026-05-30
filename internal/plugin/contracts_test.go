@@ -129,7 +129,7 @@ func TestPluginContracts(t *testing.T) {
 			requiresRoot: true, versionCapable: true,
 			mustContain: []string{
 				"cocoon", "sukekyo26.github.io/cocoon",
-				"sha256sum -c -", "retry 3", "tlsv1.2", "PIN",
+				"sha256sum -c -", "retry 3", "tlsv1.2", "PIN", "SHA256SUMS",
 			},
 			mustNotContain: append(append([]string{}, noPlaceholders...), "api.github.com", "| jq ", "raw.githubusercontent.com"),
 		},
@@ -141,7 +141,7 @@ func TestPluginContracts(t *testing.T) {
 				// installer method (install.installer.sh)
 				"gh.io/copilot-install", `PREFIX="$HOME/.local"`,
 				// binary method (install.binary.sh)
-				"github.com/github/copilot-cli", "sha256sum -c -",
+				"github.com/github/copilot-cli", "sha256sum -c -", "SHA256SUMS.txt",
 				"dpkg --print-architecture",
 				// method-aware fail-fast
 				`COCOON_INSTALL_METHOD`,
@@ -151,7 +151,14 @@ func TestPluginContracts(t *testing.T) {
 		{
 			id: "docker-cli", name: "Docker CLI",
 			requiresRoot: true,
-			mustContain:  []string{"Docker", "retry 3"},
+			mustContain: []string{
+				"Docker", "retry 3", "tlsv1.2", "signed-by", "docker.asc",
+				// Keyrings dir mode normalized so apt's _apt user can traverse
+				// it under a restrictive umask (matches github-cli).
+				"chmod 755 /etc/apt/keyrings",
+			},
+			// Keyless: the armored key is consumed directly, no gpg needed.
+			mustNotContain: []string{"gpg --dearmor"},
 		},
 		{
 			id: "github-cli", name: "GitHub CLI",
@@ -162,7 +169,7 @@ func TestPluginContracts(t *testing.T) {
 			id: "gitleaks", name: "gitleaks",
 			requiresRoot: true, versionCapable: true,
 			mustContain: []string{
-				"gitleaks", "github.com/gitleaks/gitleaks", "sha256sum -c -",
+				"gitleaks", "github.com/gitleaks/gitleaks", "sha256sum -c -", "checksums.txt",
 				"tlsv1.2", "retry 3", "dpkg --print-architecture", "tar -xz",
 				// gitleaks asset names use x64 / arm64 (not x86_64 / aarch64);
 				// pin to catch lazygit copy-paste accidents.
@@ -176,24 +183,35 @@ func TestPluginContracts(t *testing.T) {
 			mustContain: []string{
 				"flutter_infra_release", "FLUTTER_ROOT", "sha256sum -c -",
 				"tlsv1.2", "retry 3", "dpkg --print-architecture", "tar",
-				"linux/amd64",
+				"linux/amd64", "releases_linux.json",
 			},
 			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
 		},
 		{
 			id: "go", name: "Go",
 			requiresRoot: true, versionCapable: true, firstVolume: "go",
-			mustContain: []string{"go.dev", "retry 3", "GOPATH", "tlsv1.2"},
+			mustContain: []string{"go.dev", "dl.google.com/go", ".sha256", "retry 3", "GOPATH", "tlsv1.2"},
 		},
 		{
 			id: "google-chrome", name: "Google Chrome",
 			requiresRoot: true,
-			mustContain:  []string{"google-chrome-stable_current_amd64.deb", "retry 3", "tlsv1.2"},
+			mustContain: []string{
+				"dl.google.com/linux/chrome/deb", "signed-by",
+				"linux_signing_key.pub", "google-chrome-stable",
+				"retry 3", "tlsv1.2",
+				// Keyrings dir mode normalized so apt's _apt user can traverse
+				// it under a restrictive umask (matches github-cli / docker-cli).
+				"chmod 755 /etc/apt/keyrings",
+			},
+			// The pre-signed-by direct .deb download must be gone — both the
+			// install script markers and the stale plugin.toml description that
+			// claimed a direct .deb fetch (the corpus includes plugin.toml).
+			mustNotContain: []string{"linux/direct", "_current_amd64.deb", "package fetched"},
 		},
 		{
 			id: "lazygit", name: "lazygit",
 			requiresRoot: true, versionCapable: true,
-			mustContain:    []string{"lazygit", "sha256sum -c -", "tlsv1.2", "retry 3"},
+			mustContain:    []string{"lazygit", "sha256sum -c -", "tlsv1.2", "retry 3", "checksums.txt"},
 			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
 		},
 		{
@@ -209,14 +227,14 @@ func TestPluginContracts(t *testing.T) {
 			id: "nerd-fonts", name: "Nerd Fonts",
 			requiresRoot: false, versionCapable: true, firstVolume: "fonts",
 			mustContain: []string{
-				"Meslo", "retry 3", "fc-cache", "tlsv1.2", ".fonts", "sha256sum -c -", "PIN",
+				"Meslo", "retry 3", "fc-cache", "tlsv1.2", ".fonts", "sha256sum -c -", "PIN", "SHA-256.txt",
 			},
 		},
 		{
 			id: "node", name: "Node.js",
 			requiresRoot: true, versionCapable: true, firstVolume: "npm",
 			mustContain: []string{
-				"nodejs.org/dist", "NODE_ARCH", "sha256sum -c -",
+				"nodejs.org/dist", "NODE_ARCH", "sha256sum -c -", "SHASUMS256.txt",
 				"tlsv1.2", "retry 3", "dpkg --print-architecture", "tar",
 			},
 			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
@@ -225,7 +243,7 @@ func TestPluginContracts(t *testing.T) {
 			id: "dart", name: "Dart",
 			requiresRoot: true, versionCapable: true, firstVolume: "pub-cache",
 			mustContain: []string{
-				"dart-archive", "DART_ARCH", "sha256sum -c -",
+				"dart-archive", "DART_ARCH", "sha256sum -c -", ".sha256sum",
 				"tlsv1.2", "retry 3", "dpkg --print-architecture", "unzip",
 			},
 			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
@@ -234,17 +252,20 @@ func TestPluginContracts(t *testing.T) {
 			id: "deno", name: "Deno",
 			requiresRoot: true, versionCapable: true, firstVolume: "deno",
 			mustContain: []string{
-				"deno", "DENO_ARCH", "github.com/denoland/deno", "sha256sum -c -",
+				"deno", "DENO_ARCH", "github.com/denoland/deno", "sha256sum -c -", ".sha256sum",
 				"tlsv1.2", "retry 3", "dpkg --print-architecture", "unzip",
 			},
 			mustNotContain: append(append([]string{}, noPlaceholders...), "api.github.com", "| jq "),
 		},
 		{
 			id: "opentofu", name: "OpenTofu",
-			requiresRoot: true, versionCapable: true,
+			requiresRoot: true, versionCapable: true, verify: "pgp",
 			mustContain: []string{
 				"opentofu", "tofu", "sha256sum -c -", "tlsv1.2", "retry 3",
-				"github.com/opentofu/opentofu",
+				"github.com/opentofu/opentofu", "SHA256SUMS",
+				// gpg verification needs the gpg binary; gnupg must be an apt dep.
+				"gpg --batch --verify", "gnupg",
+				"E3E6E43D84CB852EADB0051D0C0AF313E5FD9F80",
 			},
 			mustNotContain: append(append([]string{}, noPlaceholders...), "api.github.com", "| jq "),
 		},
@@ -271,7 +292,7 @@ func TestPluginContracts(t *testing.T) {
 			id: "kubectl", name: "kubectl",
 			requiresRoot: true, versionCapable: true,
 			mustContain: []string{
-				"kubectl", "dl.k8s.io", "sha256sum -c -",
+				"kubectl", "dl.k8s.io", "sha256sum -c -", ".sha256",
 				"tlsv1.2", "retry 3", "dpkg --print-architecture",
 			},
 			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
@@ -280,7 +301,7 @@ func TestPluginContracts(t *testing.T) {
 			id: "helm", name: "Helm",
 			requiresRoot: true, versionCapable: true,
 			mustContain: []string{
-				"helm", "get.helm.sh", "sha256sum -c -",
+				"helm", "get.helm.sh", "sha256sum -c -", ".sha256sum",
 				"tlsv1.2", "retry 3", "dpkg --print-architecture", "tar",
 			},
 			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
@@ -298,7 +319,7 @@ func TestPluginContracts(t *testing.T) {
 			id: "shfmt", name: "shfmt",
 			requiresRoot: true, versionCapable: true,
 			mustContain: []string{
-				"shfmt", "github.com/mvdan/sh", "sha256sum -c -",
+				"shfmt", "github.com/mvdan/sh", "sha256sum -c -", "sha256sums.txt",
 				"tlsv1.2", "retry 3", "dpkg --print-architecture",
 			},
 			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
@@ -307,7 +328,7 @@ func TestPluginContracts(t *testing.T) {
 			id: "just", name: "just",
 			requiresRoot: true, versionCapable: true,
 			mustContain: []string{
-				"just", "github.com/casey/just", "sha256sum -c -",
+				"just", "github.com/casey/just", "sha256sum -c -", "SHA256SUMS",
 				"tlsv1.2", "retry 3", "dpkg --print-architecture", "tar -xz",
 			},
 			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
@@ -316,7 +337,7 @@ func TestPluginContracts(t *testing.T) {
 			id: "docker-buildx", name: "Docker Buildx",
 			requiresRoot: true, versionCapable: true,
 			mustContain: []string{
-				"buildx", "github.com/docker/buildx", "sha256sum -c -",
+				"buildx", "github.com/docker/buildx", "sha256sum -c -", "checksums.txt",
 				"tlsv1.2", "retry 3", "dpkg --print-architecture",
 				"/usr/libexec/docker/cli-plugins",
 			},
@@ -324,10 +345,13 @@ func TestPluginContracts(t *testing.T) {
 		},
 		{
 			id: "terraform", name: "Terraform",
-			requiresRoot: true, versionCapable: true,
+			requiresRoot: true, versionCapable: true, verify: "pgp",
 			mustContain: []string{
 				"terraform", "releases.hashicorp.com", "sha256sum -c -",
 				"tlsv1.2", "retry 3", "dpkg --print-architecture", "unzip",
+				// gpg verification needs the gpg binary; gnupg must be an apt dep.
+				"SHA256SUMS", "gpg --batch --verify", "gnupg",
+				"C874011F0AB405110D02105534365D9472D7468F",
 			},
 			mustNotContain: append(append([]string{}, noPlaceholders...), "api.github.com", "| jq "),
 		},
@@ -335,7 +359,7 @@ func TestPluginContracts(t *testing.T) {
 			id: "starship", name: "Starship",
 			requiresRoot: true, versionCapable: true, firstVolume: "config",
 			mustContain: []string{
-				"starship", "sha256sum", "tlsv1.2", "retry 3",
+				"starship", "sha256sum", ".sha256", "tlsv1.2", "retry 3",
 				`"$RC_FILE"`, "LOGIN_SHELL", "starship init",
 			},
 			mustNotContain: append(append([]string{}, noApiNoJq...), `>> ~/.bashrc`),
@@ -352,7 +376,7 @@ func TestPluginContracts(t *testing.T) {
 		{
 			id:           "zig", // metadata.name not asserted (kept loose to mirror old test).
 			requiresRoot: true, versionCapable: true,
-			mustContain:    []string{"ziglang.org", "retry 3", "sha256sum -c -"},
+			mustContain:    []string{"ziglang.org", "retry 3", "sha256sum -c -", ".shasum"},
 			mustNotContain: noPlaceholders,
 		},
 	}

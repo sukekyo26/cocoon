@@ -3,22 +3,11 @@
 #
 # Inputs (env):
 #   PIN              : just version (without leading "v"); empty = latest
-#   CHECKSUM_AMD64   : sha256 of amd64 tarball; empty to skip verification
-#   CHECKSUM_ARM64   : sha256 of arm64 tarball; empty to skip verification
+#   CHECKSUM_AMD64   : sha256 of amd64 tarball; empty = verify against the
+#                      release SHA256SUMS
+#   CHECKSUM_ARM64   : sha256 of arm64 tarball; empty = verify against the
+#                      release SHA256SUMS
 set -euo pipefail
-
-# Yellow WARNING when stderr is a TTY (and NO_COLOR is unset) or
-# FORCE_COLOR is set. NO_COLOR wins per no-color.org.
-if [ -n "${NO_COLOR:-}" ]; then
-  C_YEL=''
-  C_RST=''
-elif [ -n "${FORCE_COLOR:-}" ] || [ -t 2 ]; then
-  C_YEL=$'\033[33m'
-  C_RST=$'\033[0m'
-else
-  C_YEL=''
-  C_RST=''
-fi
 
 ARCH="$(dpkg --print-architecture)"
 case "$ARCH" in
@@ -46,14 +35,28 @@ else
     sed 's|.*/tag/||')
 fi
 
+base="https://github.com/casey/just/releases/download/${VERSION}"
+asset="just-${VERSION}-${DOWNLOAD_ARCH}-unknown-linux-musl.tar.gz"
+
 curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
-  "https://github.com/casey/just/releases/download/${VERSION}/just-${VERSION}-${DOWNLOAD_ARCH}-unknown-linux-musl.tar.gz" \
-  -o /tmp/just.tar.gz
+  "${base}/${asset}" -o /tmp/just.tar.gz
 
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/just.tar.gz" | sha256sum -c -
 else
-  printf '%sWARNING: SHA256 verification skipped for just (no checksum for just in [plugins.versions])%s\n' "$C_YEL" "$C_RST" >&2
+  # No user checksum: verify against the release's own SHA256SUMS.
+  curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+    "${base}/SHA256SUMS" -o /tmp/just.sums
+  # Match the asset name literally (awk field compare, not a regex; strip the
+  # binary-mode '*' marker some manifests prepend) and fail loudly if it is
+  # absent so a manifest-shape change does not collapse into an opaque error.
+  expected="$(awk -v f="$asset" '{ n = $2; sub(/^\*/, "", n); if (n == f) { print $1; exit } }' /tmp/just.sums)"
+  if [ -z "$expected" ]; then
+    echo "just: ${asset} not found in SHA256SUMS" >&2
+    exit 1
+  fi
+  echo "${expected}  /tmp/just.tar.gz" | sha256sum -c -
+  rm -f /tmp/just.sums
 fi
 
 tar -xzf /tmp/just.tar.gz -C /usr/local/bin just

@@ -3,22 +3,11 @@
 #
 # Inputs (env):
 #   PIN              : kubectl version without leading "v" (e.g. "1.31.0"); empty = latest stable
-#   CHECKSUM_AMD64   : sha256 of the amd64 binary; empty to skip verification
-#   CHECKSUM_ARM64   : sha256 of the arm64 binary; empty to skip verification
+#   CHECKSUM_AMD64   : sha256 of the amd64 binary; empty = verify against the
+#                      upstream kubectl.sha256
+#   CHECKSUM_ARM64   : sha256 of the arm64 binary; empty = verify against the
+#                      upstream kubectl.sha256
 set -euo pipefail
-
-# Yellow WARNING when stderr is a TTY (and NO_COLOR is unset) or
-# FORCE_COLOR is set. NO_COLOR wins per no-color.org.
-if [ -n "${NO_COLOR:-}" ]; then
-  C_YEL=''
-  C_RST=''
-elif [ -n "${FORCE_COLOR:-}" ] || [ -t 2 ]; then
-  C_YEL=$'\033[33m'
-  C_RST=$'\033[0m'
-else
-  C_YEL=''
-  C_RST=''
-fi
 
 ARCH="$(dpkg --print-architecture)"
 case "$ARCH" in
@@ -36,13 +25,24 @@ else
     https://dl.k8s.io/release/stable.txt | sed 's/^v//')
 fi
 
+url="https://dl.k8s.io/release/v${VERSION}/bin/linux/${ARCH}/kubectl"
 curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
-  "https://dl.k8s.io/release/v${VERSION}/bin/linux/${ARCH}/kubectl" -o /tmp/kubectl
+  "$url" -o /tmp/kubectl
 
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/kubectl" | sha256sum -c -
 else
-  printf '%sWARNING: SHA256 verification skipped for kubectl (no checksum for kubectl in [plugins.versions])%s\n' "$C_YEL" "$C_RST" >&2
+  # No user checksum: verify against the .sha256 (a bare hash) dl.k8s.io serves
+  # next to the binary.
+  curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+    "${url}.sha256" -o /tmp/kubectl.sum
+  expected="$(cut -d ' ' -f1 /tmp/kubectl.sum)"
+  if [ -z "$expected" ]; then
+    echo "kubectl: empty checksum from ${url}.sha256" >&2
+    exit 1
+  fi
+  echo "${expected}  /tmp/kubectl" | sha256sum -c -
+  rm -f /tmp/kubectl.sum
 fi
 
 install -o root -g root -m 0755 /tmp/kubectl /usr/local/bin/kubectl

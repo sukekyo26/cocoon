@@ -6,8 +6,10 @@
 #
 # Inputs (env):
 #   PIN                   : Copilot CLI version (without leading "v"); empty = latest
-#   CHECKSUM_AMD64        : sha256 of copilot-linux-x64.tar.gz; empty to skip verification
-#   CHECKSUM_ARM64        : sha256 of copilot-linux-arm64.tar.gz; empty to skip verification
+#   CHECKSUM_AMD64        : sha256 of copilot-linux-x64.tar.gz; empty = verify
+#                           against the release SHA256SUMS.txt
+#   CHECKSUM_ARM64        : sha256 of copilot-linux-arm64.tar.gz; empty = verify
+#                           against the release SHA256SUMS.txt
 #   COCOON_INSTALL_METHOD : selected install method; must equal "binary"
 set -euo pipefail
 
@@ -15,19 +17,6 @@ set -euo pipefail
 if [ "$COCOON_INSTALL_METHOD" != "binary" ]; then
   echo "install.binary.sh invoked with COCOON_INSTALL_METHOD=$COCOON_INSTALL_METHOD; expected binary" >&2
   exit 1
-fi
-
-# Yellow WARNING when stderr is a TTY (and NO_COLOR is unset) or
-# FORCE_COLOR is set. NO_COLOR wins per no-color.org.
-if [ -n "${NO_COLOR:-}" ]; then
-  C_YEL=''
-  C_RST=''
-elif [ -n "${FORCE_COLOR:-}" ] || [ -t 2 ]; then
-  C_YEL=$'\033[33m'
-  C_RST=$'\033[0m'
-else
-  C_YEL=''
-  C_RST=''
 fi
 
 ARCH="$(dpkg --print-architecture)"
@@ -54,15 +43,28 @@ else
     sed 's|.*/tag/v||')
 fi
 
+base="https://github.com/github/copilot-cli/releases/download/v${VERSION}"
 TARBALL="copilot-linux-${DOWNLOAD_ARCH}.tar.gz"
 curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
-  "https://github.com/github/copilot-cli/releases/download/v${VERSION}/${TARBALL}" \
+  "${base}/${TARBALL}" \
   -o "/tmp/${TARBALL}"
 
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/${TARBALL}" | sha256sum -c -
 else
-  printf '%sWARNING: SHA256 verification skipped for Copilot CLI (no checksum for copilot-cli in [plugins.versions])%s\n' "$C_YEL" "$C_RST" >&2
+  # No user checksum: verify against the release's own SHA256SUMS.txt.
+  curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+    "${base}/SHA256SUMS.txt" -o /tmp/copilot.sums
+  # Match the asset name literally (awk field compare, not a regex; strip the
+  # binary-mode '*' marker some manifests prepend) and fail loudly if it is
+  # absent so a manifest-shape change does not collapse into an opaque error.
+  expected="$(awk -v f="$TARBALL" '{ n = $2; sub(/^\*/, "", n); if (n == f) { print $1; exit } }' /tmp/copilot.sums)"
+  if [ -z "$expected" ]; then
+    echo "copilot-cli: ${TARBALL} not found in SHA256SUMS.txt" >&2
+    exit 1
+  fi
+  echo "${expected}  /tmp/${TARBALL}" | sha256sum -c -
+  rm -f /tmp/copilot.sums
 fi
 
 # The release tarball is a single self-contained ELF binary at the

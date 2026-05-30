@@ -6,6 +6,54 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-05-30
+
+### 変更
+
+- `terraform` / `opentofu` プラグインが、ダウンロードを毎回上流の GPG
+  リリース署名（HashiCorp / OpenTofu の署名鍵をインストールスクリプトに同梱）
+  で検証するようになりました。`aws-cli` と同じ `verify = "pgp"` 方式で、検証は
+  **常時有効**です（従来は pin 無しビルドが警告のみで整合性チェックをスキップ
+  していました）。これに伴い、この 2 つは `[plugins.versions]` の
+  `checksum_amd64` / `checksum_arm64` を受け付けなくなりました（`cocoon gen`
+  が拒否。`aws-cli` と同様）。`pin` でのバージョン指定は引き続き可能です。
+  リリース毎の checksum 保守は不要で、上流鍵が失効しても過去の署名は検証
+  できます（実際の鍵ローテーション時のみ鍵の更新が必要）。
+- `lazygit` / `gitleaks` / `just` / `shfmt` / `starship` / `deno` /
+  `docker-buildx` / `helm` / `copilot-cli` プラグインが、`[plugins.versions]`
+  に `checksum_amd64` / `checksum_arm64` を pin していない場合でも、上流が各
+  リリースで公開する checksum マニフェスト（`checksums.txt` / `SHA256SUMS`
+  ファイル、または資産ごとの `.sha256` / `.sha256sum`）と照合するように
+  なりました。従来は pin 無しビルドが警告のみで検証をスキップしていましたが、
+  デフォルトビルドが常時検証されます。ユーザー指定の checksum が引き続き優先
+  され、リリース毎の checksum 保守は不要です（マニフェストは資産と同じ
+  リリースから取得）。
+- `kubectl` / `go` / `node` / `zig` / `dart` / `flutter` / `nerd-fonts` /
+  `cocoon` プラグインが、`[plugins.versions]` に `checksum_amd64` /
+  `checksum_arm64` を pin していない場合でも、上流が公開する checksum
+  （`.sha256` / `.sha256sum` サイドカー、`SHASUMS256.txt` / `SHA-256.txt`
+  / `SHA256SUMS` マニフェスト、または上流リリース JSON の `shasum` /
+  `sha256` フィールド）と照合するようになりました。従来は pin 無しビルドが
+  警告のみで検証をスキップしていましたが、デフォルトビルドが常時検証され
+  ます。ユーザー指定の checksum が引き続き優先され、リリース毎の checksum
+  保守は不要です。`go` は `go.dev/dl` がリダイレクトする CDN
+  `dl.google.com/go` から取得するようになり、tarball と `.sha256` が同一
+  ホストになりました。
+
+### 修正
+
+- **Security**: `google-chrome` プラグインが Chrome を Google の署名付き
+  apt リポジトリ（`signed-by` keyring）からインストールするようになりました。
+  従来の「`.deb` を TLS 取得して未検証のままインストール」を廃止し、apt が
+  Google の固定署名鍵で全 Chrome パッケージを検証します（`docker-cli` /
+  `github-cli` と同じ方式）。Chrome の Linux 版は引き続き amd64 のみです。
+- `docker-cli` プラグインがビルド時に `gnupg`（`vcs` apt カテゴリ）を必要と
+  しなくなりました。Docker 署名鍵を ASCII-armored のまま保存し `signed-by`
+  で直接参照する方式に変更し、`gpg --dearmor` を廃止しました。従来は `vcs`
+  カテゴリを外して `docker-cli` を有効にすると最小ベースで
+  `gpg: command not found` で失敗していました。apt のパッケージ署名検証は
+  変更ありません。
+
 ## [0.8.0] - 2026-05-30
 
 ### 追加
@@ -339,7 +387,8 @@ cocoon の主要な変更を記録します。フォーマットは
 - `COMPOSE_PROJECT_NAME` をプロジェクトディレクトリの basename から導出するように変更。docker compose の namespace がホストディレクトリと一致する。
 - 国際化 (英語 / 日本語) カタログを追加。CLI プロンプト・エラーメッセージ・`workspace.toml` インラインコメントすべてを `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` で切替可能。
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/sukekyo26/cocoon/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/sukekyo26/cocoon/compare/v0.7.6...v0.8.0
 [0.7.6]: https://github.com/sukekyo26/cocoon/compare/v0.7.5...v0.7.6
 [0.7.5]: https://github.com/sukekyo26/cocoon/compare/v0.7.4...v0.7.5

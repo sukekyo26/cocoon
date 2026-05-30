@@ -6,6 +6,57 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-05-30
+
+### Changed
+
+- The `terraform` and `opentofu` plugins now verify every download against
+  the upstream GPG release signature (the HashiCorp / OpenTofu signing keys
+  are bundled in the install scripts), the same `verify = "pgp"` model as
+  `aws-cli`. Verification is **always on** — previously an unpinned build
+  skipped the integrity check with a warning. As a result, `[plugins.versions]`
+  no longer accepts `checksum_amd64` / `checksum_arm64` for these two
+  (`cocoon gen` rejects them, matching `aws-cli`); a `pin` still selects the
+  version. No per-release checksum maintenance is required, and an expired
+  upstream key still verifies past signatures — only an actual key rotation
+  needs a key refresh.
+- The `lazygit`, `gitleaks`, `just`, `shfmt`, `starship`, `deno`,
+  `docker-buildx`, `helm`, and `copilot-cli` plugins now verify their
+  download against the checksum manifest the upstream publishes with each
+  release (a `checksums.txt` / `SHA256SUMS` file, or a per-asset `.sha256`
+  / `.sha256sum`) when no `checksum_amd64` / `checksum_arm64` is pinned in
+  `[plugins.versions]`. Previously an unpinned build skipped verification
+  with a warning; now the default build is always checked. A user-supplied
+  checksum still takes precedence, and there is no per-release checksum
+  maintenance — the manifest is fetched from the same release as the
+  artifact.
+- The `kubectl`, `go`, `node`, `zig`, `dart`, `flutter`, `nerd-fonts`, and
+  `cocoon` plugins now verify their download against the checksum the
+  upstream publishes (a `.sha256` / `.sha256sum` sidecar, a `SHASUMS256.txt`
+  / `SHA-256.txt` / `SHA256SUMS` manifest, or the `shasum` / `sha256` field
+  in the upstream's release JSON) when no `checksum_amd64` / `checksum_arm64`
+  is pinned in `[plugins.versions]`. Previously an unpinned build skipped
+  verification with a warning; now the default build is always checked. A
+  user-supplied checksum still takes precedence, and no per-release checksum
+  maintenance is required. `go` now downloads from `dl.google.com/go` (the
+  CDN `go.dev/dl` already redirects to) so the tarball and its `.sha256`
+  share one host.
+
+### Fixed
+
+- **Security**: the `google-chrome` plugin now installs Chrome from
+  Google's signed apt repository (`signed-by` keyring) instead of fetching
+  the `.deb` over TLS and installing it unverified. apt verifies every
+  Chrome package against Google's pinned signing key, matching the
+  `docker-cli` / `github-cli` plugins. Chrome for Linux remains amd64-only.
+- The `docker-cli` plugin no longer needs the `gnupg` package (the `vcs`
+  apt category) at build time: it stores the Docker signing key
+  ASCII-armored and references it directly via `signed-by` instead of
+  piping it through `gpg --dearmor`. Enabling `docker-cli` while the
+  `vcs` category was deselected previously failed with
+  `gpg: command not found` on the minimal base. apt package signature
+  verification is unchanged.
+
 ## [0.8.0] - 2026-05-30
 
 ### Added
@@ -337,7 +388,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Add `COMPOSE_PROJECT_NAME` derivation from the project directory basename so docker compose namespacing matches the host directory.
 - Add i18n catalog (English / Japanese) covering every CLI prompt, error message, and inline `workspace.toml` comment, switched via `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG`.
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/sukekyo26/cocoon/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/sukekyo26/cocoon/compare/v0.7.6...v0.8.0
 [0.7.6]: https://github.com/sukekyo26/cocoon/compare/v0.7.5...v0.7.6
 [0.7.5]: https://github.com/sukekyo26/cocoon/compare/v0.7.4...v0.7.5

@@ -275,7 +275,7 @@ bash's environment for that step is composed from two sources:
 | `LOGIN_SHELL`    | per-RUN env, always | `bash`, `zsh`, or `fish`. |
 | `USERNAME`       | Dockerfile `ARG`, always | The unprivileged container user name (declared via `ARG USERNAME` near the top of the generated Dockerfile and promoted to env by BuildKit). |
 | `PIN`            | per-RUN env, only when `[version].version_capable = true` | Version string from `[plugins.versions]`'s `<id> = { pin = "..." }` entry in `workspace.toml`. Empty means "use upstream latest". |
-| `CHECKSUM_AMD64` | per-RUN env, only when `version_capable = true` and `verify = "checksum"` | `sha256` of the amd64 artifact, or empty (script must skip verification with a warning). Not passed to `verify = "pgp"` plugins. |
+| `CHECKSUM_AMD64` | per-RUN env, only when `version_capable = true` and `verify = "checksum"` | `sha256` of the amd64 artifact, or empty (the script then verifies against the upstream-published checksum, warning only if the upstream ships none). Not passed to `verify = "pgp"` plugins. |
 | `CHECKSUM_ARM64` | same as above | `sha256` of the arm64 artifact. |
 | `<BUILD_ARG>`    | per-RUN env (also declared as `ARG`), only when listed in `[install].build_args` | The generator emits one `ARG <name>` line per plugin (next to whichever hook runs first) and threads `<name>="${<name>}"` into the per-RUN prefix of every hook. The Dockerfile substitutes the value on each prefix line at build time. No catalog plugin currently declares one; the mechanism is for custom plugins. |
 | `<EXTRA_ENV>`    | per-RUN env, when declared under `[install.extra_versions]` | One env var per declared subcomponent version. The plugin spells out the env name and a default; the user can override the value from `workspace.toml`'s `[plugins.versions].<id>` inline table by writing the same key (e.g. `android-sdk = { pin = "...", api_level = "36" }`). The reserved env names above (`PIN`, `CHECKSUM_AMD64`, `CHECKSUM_ARM64`, `RC_FILE`, `RC_SYNTAX`, `LOGIN_SHELL`, `COCOON_INSTALL_METHOD`, `USERNAME`) are off-limits for collision reasons. See "Subcomponent versions" below. |
@@ -298,11 +298,20 @@ A versioned plugin agrees to:
 - Use `dpkg --print-architecture` (or equivalent) to choose the
   right artifact.
 - Verify the download. The `[version].verify` field picks how:
-  - `verify = "checksum"` (the default) — verify the artifact against
-    the architecture-matching checksum variable (`$CHECKSUM_AMD64` on
-    amd64, `$CHECKSUM_ARM64` on arm64; an architecture-independent
-    artifact may consult either) when it is non-empty, and **warn
-    loudly** when it is empty (do not silently skip).
+  - `verify = "checksum"` (the default) — when the user pins a checksum
+    (`$CHECKSUM_AMD64` on amd64, `$CHECKSUM_ARM64` on arm64; an
+    architecture-independent artifact may consult either) the script
+    verifies the artifact against it. When no checksum is pinned, the
+    script verifies the artifact against the checksum the **upstream
+    publishes with the release** — a `.sha256` / `.sha256sum` sidecar, a
+    `checksums.txt` / `SHA256SUMS` manifest, or a `shasum` / `sha256`
+    field in the upstream's release JSON — fetched from the same upstream
+    as the artifact. Only when the upstream publishes no fetchable
+    checksum does the script **warn loudly** (it never silently skips).
+    The fetched-checksum path defends against CDN/mirror corruption and
+    accidental swaps; on its own it is not proof against a fully
+    compromised upstream — pin a checksum, or prefer a `verify = "pgp"`
+    plugin, when you need that.
   - `verify = "pgp"` — for upstreams that publish a detached signature
     but no SHA256 (e.g. AWS CLI). The script verifies the download
     in-script against a signing key bundled in the install script;

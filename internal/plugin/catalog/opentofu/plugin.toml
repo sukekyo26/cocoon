@@ -4,6 +4,12 @@ description = "Open-source Infrastructure as Code, Terraform fork"
 url = "https://github.com/opentofu/opentofu"
 default = false
 
+[apt]
+# gnupg: install.binary.sh verifies the release SHA256SUMS with
+# `gpg --batch --verify` (verify = "pgp"); the minimal base ships no gpg.
+# Same as aws-cli.
+packages = ["gnupg"]
+
 [install]
 requires_root = true
 default_method = "binary"
@@ -13,3 +19,4 @@ description = "Single tofu binary extracted from a GitHub Release tarball"
 
 [version]
 version_capable = true
+verify = "pgp"

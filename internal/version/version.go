@@ -10,6 +10,6 @@ package version
 // `just build` overrides this at link time via:
 //
 //	go build -ldflags "-X github.com/sukekyo26/cocoon/internal/version.Version=$(cat VERSION)"
-var Version = "0.8.0"
+var Version = "0.9.0"
 
 func Get() string { return Version }
