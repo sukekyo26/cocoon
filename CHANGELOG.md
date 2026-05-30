@@ -8,6 +8,12 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **Security**: `cocoon gen` now rejects newline characters in
+  `[container.shell.env]` / `[container.shell.aliases]` values, and newlines or
+  double-quotes in plugin `[install.env]` values. Such characters could
+  previously break out of the generated Dockerfile heredoc / `ENV` line and
+  inject arbitrary build-time directives. `$`-expansion (`$HOME`, `$PATH`,
+  `$(cmd)`) stays supported.
 - `cocoon gen` no longer prints a doubled `failure: failure:` prefix when
   loading or generation fails; the error now carries a single prefix.
 

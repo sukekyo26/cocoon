@@ -722,6 +722,13 @@ func (s *ContainerShellSpec) validate(a *Accumulator) {
 	}
 	CheckMapKeys(a.At("aliases"), s.Aliases, rxAliasKey, "container.shell.aliases")
 	CheckMapKeys(a.At("env"), s.Env, rxShellEnvKey, "container.shell.env")
+	// Values flow verbatim into the Dockerfile heredoc that writes the shell
+	// rc (shellrc.RenderDockerfileBlock). $ / backtick stay legal so $HOME and
+	// $(cmd) expand, but an embedded newline would let the value forge a
+	// heredoc terminator and inject a top-level RUN directive.
+	const shellValueHazard = "a newline would let the value escape the Dockerfile heredoc that writes the shell rc"
+	CheckMapValues(a.At("aliases"), s.Aliases, "\n\r", shellValueHazard)
+	CheckMapValues(a.At("env"), s.Env, "\n\r", shellValueHazard)
 }
 
 func (p *PluginsSpec) validate(a *Accumulator) {
@@ -1017,6 +1024,23 @@ func CheckMapKeys(a *Accumulator, m map[string]string, rx *regexp.Regexp, label 
 	for k := range m {
 		if !rx.MatchString(k) {
 			a.Add(fmt.Sprintf("%s key %q does not match pattern %q", label, k, rx.String()), k)
+		}
+	}
+}
+
+// CheckMapValues reports each value in m that contains a rune from unsafe.
+// Where CheckMapKeys guards key syntax, this guards the value against runes
+// that would break out of the generated artifact the value is interpolated
+// into (e.g. a newline forging a Dockerfile heredoc terminator or escaping an
+// ENV line). reason explains the hazard in the rejection message. Keys are
+// visited in sorted order so the first-error summary is stable across runs.
+func CheckMapValues(a *Accumulator, m map[string]string, unsafe, reason string) {
+	for _, k := range slices.Sorted(maps.Keys(m)) {
+		for _, r := range m[k] {
+			if strings.ContainsRune(unsafe, r) {
+				a.Add(fmt.Sprintf("value contains unsafe character %q (%s)", r, reason), k)
+				break
+			}
 		}
 	}
 }

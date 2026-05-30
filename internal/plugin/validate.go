@@ -114,6 +114,12 @@ func (m *Metadata) validate(a *config.Accumulator) {
 func (i *Install) validate(a *config.Accumulator) {
 	if i.Env != nil {
 		config.CheckMapKeys(a.At("env"), i.Env, rxEnvKey, "install.env")
+		// Values are interpolated unquoted into a Dockerfile `ENV K="v"` line
+		// (dockerfile/plugins.go). $ stays legal so earlier ENV/ARG vars
+		// expand, but a newline or double-quote would break out of the line
+		// and inject a new directive.
+		config.CheckMapValues(a.At("env"), i.Env, "\n\r\"",
+			"a newline or double-quote would let the value escape the generated Dockerfile ENV line")
 	}
 	if config.HasDuplicates(i.BuildArgs) {
 		a.Add("install.build_args contains duplicate entries", "build_args")
