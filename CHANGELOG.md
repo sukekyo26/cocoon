@@ -17,6 +17,15 @@ adheres to [Semantic Versioning](https://semver.org/).
   verification is skipped with a warning and the build proceeds. Pin a version
   with its checksum for a fully verified, reproducible install.
 
+### Fixed
+
+- The `node` plugin failed to install at its default (unpinned, latest-LTS)
+  version. The version-resolution step piped `curl` of nodejs.org's ~200 KB
+  `index.tab` straight into `awk ... exit`; awk closing the pipe on the first
+  match aborted curl with a write error (exit 23) that `set -o pipefail` turned
+  into a build failure. The index is now downloaded before parsing. Pinned
+  `node` versions were unaffected.
+
 ## [0.9.1] - 2026-05-30
 
 ### Changed
