@@ -193,8 +193,10 @@ func TestPluginContracts(t *testing.T) {
 				"linux_signing_key.pub", "google-chrome-stable",
 				"retry 3", "tlsv1.2",
 			},
-			// The pre-signed-by direct .deb download must be gone.
-			mustNotContain: []string{"linux/direct", "_current_amd64.deb"},
+			// The pre-signed-by direct .deb download must be gone — both the
+			// install script markers and the stale plugin.toml description that
+			// claimed a direct .deb fetch (the corpus includes plugin.toml).
+			mustNotContain: []string{"linux/direct", "_current_amd64.deb", "package fetched"},
 		},
 		{
 			id: "lazygit", name: "lazygit",
