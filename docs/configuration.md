@@ -267,7 +267,7 @@ Run `cocoon plugin list` to see every available plugin (embedded + user / projec
 
 ### `[plugins.versions]`
 
-Pin specific versions for `version_capable` plugins. Optional checksums (64 lowercase hex chars) verify downloads (tarballs, zips, etc.). Plugins with `verify = "pgp"` (e.g. `aws-cli`) verify downloads against a bundled signature instead — pin them with `pin` only; adding `checksum_amd64` / `checksum_arm64` to such a plugin is rejected at `gen` time.
+Pin specific versions for `version_capable` plugins. `checksum_amd64` / `checksum_arm64` (64 lowercase hex chars) are **optional**: by default the install scripts already verify each download against the checksum the upstream publishes with the release, so pinning a checksum is an extra, user-controlled override (strongest when paired with a `pin`). Plugins with `verify = "pgp"` (e.g. `aws-cli`) verify downloads against a bundled signature instead — pin them with `pin` only; adding `checksum_amd64` / `checksum_arm64` to such a plugin is rejected at `gen` time.
 
 ```toml
 [plugins.versions]
