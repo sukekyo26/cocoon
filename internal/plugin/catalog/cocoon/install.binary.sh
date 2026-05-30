@@ -63,7 +63,7 @@ else
   # loudly if it is absent so a mirror-layout change does not collapse into
   # an opaque sha256sum error.
   asset="cocoon-linux-${DOWNLOAD_ARCH}"
-  expected="$(awk -v f="$asset" '$2 == f { print $1 }' /tmp/cocoon.sums)"
+  expected="$(awk -v f="$asset" '$2 == f { print $1; exit }' /tmp/cocoon.sums)"
   if [ -z "$expected" ]; then
     echo "cocoon: ${asset} not found in SHA256SUMS" >&2
     exit 1

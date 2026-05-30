@@ -65,8 +65,11 @@ if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/flutter.tar.xz" | sha256sum -c -
 else
   # No user pin: verify against the sha256 the manifest records for this build.
+  # Escape the dots in the archive path so they match literally rather than as
+  # ERE wildcards (the path carries version dots like 3.44.0 and .tar.xz).
+  archive_re="${archive//./\\.}"
   expected=$(printf '%s' "$MANIFEST" | tr -d '\n' |
-    grep -oE "\\{[^{}]*\"archive\"[[:space:]]*:[[:space:]]*\"${archive}\"[^{}]*\\}" |
+    grep -oE "\\{[^{}]*\"archive\"[[:space:]]*:[[:space:]]*\"${archive_re}\"[^{}]*\\}" |
     sed -n 's/.*"sha256"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1) || true
   if [ -z "$expected" ]; then
     echo "Failed to read sha256 for ${archive} from Flutter manifest" >&2

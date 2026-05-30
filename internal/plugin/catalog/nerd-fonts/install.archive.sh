@@ -31,7 +31,7 @@ else
   # Match the asset name literally (awk field compare, not a regex) and fail
   # loudly if it is absent so a manifest-shape change does not collapse into
   # an opaque sha256sum error.
-  expected="$(awk '$2 == "Meslo.tar.xz" { print $1 }' /tmp/nerd.sums)"
+  expected="$(awk '$2 == "Meslo.tar.xz" { print $1; exit }' /tmp/nerd.sums)"
   if [ -z "$expected" ]; then
     echo "nerd-fonts: Meslo.tar.xz not found in SHA-256.txt" >&2
     exit 1

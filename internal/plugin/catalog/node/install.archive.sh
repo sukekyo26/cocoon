@@ -54,7 +54,7 @@ else
   # Match the asset name literally (awk field compare, not a regex) and fail
   # loudly if it is absent so a manifest-shape change does not collapse into
   # an opaque sha256sum error.
-  expected="$(awk -v f="$asset" '$2 == f { print $1 }' /tmp/node.sums)"
+  expected="$(awk -v f="$asset" '$2 == f { print $1; exit }' /tmp/node.sums)"
   if [ -z "$expected" ]; then
     echo "node: ${asset} not found in SHASUMS256.txt" >&2
     exit 1
