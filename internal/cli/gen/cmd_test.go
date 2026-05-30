@@ -190,7 +190,7 @@ func TestGen_CreatesUserCertsDir(t *testing.T) {
 		"created host directory",
 		"cocoon_user_certs build context",
 		"Host TLS certificates:",
-		"Drop *.crt files into ~/.cocoon/certs/",
+		"Drop *.crt / *.cer files into ~/.cocoon/certs/",
 		"Team members who skip VS Code Dev Containers",
 	} {
 		if !strings.Contains(out, want) {

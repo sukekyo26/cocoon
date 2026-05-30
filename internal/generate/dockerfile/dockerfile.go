@@ -739,16 +739,20 @@ func generateCertificateInstall() (rootBlock, envBlock string) {
 //nolint:lll // Dockerfile RUN/ENV lines embed shell semantics verbatim.
 var certInstallRootBlock = `# Install custom CA certificates from ~/.cocoon/certs/ (no-op when the
 # host directory is empty). Runs before the main apt install so HTTPS
-# mirrors signed by a corporate CA can complete TLS handshake.
+# mirrors signed by a corporate CA can complete TLS handshake. *.cer files
+# are copied in renamed to *.crt because update-ca-certificates only ingests
+# the *.crt extension.
 RUN --mount=type=bind,from=` + generate.CertsBuildContextName + `,target=/tmp/cocoon-user-certs \
     --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    if [ -n "$(find /tmp/cocoon-user-certs -maxdepth 1 -name '*.crt' -print -quit)" ]; then \
+    if [ -n "$(find /tmp/cocoon-user-certs -maxdepth 1 \( -name '*.crt' -o -name '*.cer' \) -print -quit)" ]; then \
         apt-get update && \
         DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates && \
         mkdir -p /usr/local/share/ca-certificates/cocoon-user && \
         find /tmp/cocoon-user-certs -maxdepth 1 -name '*.crt' \
             -exec cp {} /usr/local/share/ca-certificates/cocoon-user/ \; && \
+        find /tmp/cocoon-user-certs -maxdepth 1 -name '*.cer' \
+            -exec sh -c 'cp "$1" "/usr/local/share/ca-certificates/cocoon-user/$(basename "$1" .cer).crt"' _ {} \; && \
         update-ca-certificates; \
     fi`
 

@@ -172,7 +172,7 @@ packages = [
 # [certificates] — TLS certificate auto-bake from ~/.cocoon/certs/ on the host.
 #   When enable = true the generators wire the host directory through to the build via
 #   docker-compose's additional_contexts and the Dockerfile's RUN --mount=type=bind, so any
-#   *.crt files placed there land in the container's trust store at build time. Default off.
+#   *.crt / *.cer files placed there land in the container's trust store at build time. Default off.
 [certificates]
 enable = true
 

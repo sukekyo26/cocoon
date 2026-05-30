@@ -103,7 +103,7 @@ docker compose -f .devcontainer/docker-compose.yml up -d # or VS Code → "Reope
 7. **Mount range** — cwd only, or its parent (for fat workspaces where sibling repos must be visible)
 8. **Container workdir name** — the parent directory under `/home/<user>/` (defaults to `workspace`; slashes allowed for nested paths like `work/myproject`, useful when a tool such as AWS SAM expects the in-container path to mirror a specific host layout)
 9. **VS Code Dev Containers** support — emit `devcontainer.json` or skip
-10. **Corporate CA auto-bake** — opt in to picking up `.crt` files from `~/.cocoon/certs/` at build time (off by default; see below)
+10. **Corporate CA auto-bake** — opt in to picking up `.crt` / `.cer` files from `~/.cocoon/certs/` at build time (off by default; see below)
 11. **Port forwards** — comma-separated docker-compose short forms (e.g. `3000:3000,5432:5432`); blank to skip and the `[ports]` template stays as a commented-out hint
 12. **apt categories** — text-editors, vcs, utilities, build, network, … (multi-select)
 13. **Plugins** to enable from the embedded catalog (multi-select)
@@ -120,7 +120,7 @@ Override or add your own under `~/.cocoon/plugins/<id>/` (user scope) or `<proje
 
 ## Corporate CA support
 
-Need to trust a private CA inside the container (a TLS-intercepting proxy, a dev self-signed cert, etc.)? Run `cocoon init --certificates` (or set `[certificates] enable = true` in `workspace.toml`), then drop the `.crt` files into `~/.cocoon/certs/` on the host. They are picked up automatically at container build time. Cert-free workspaces stay cert-free — no wiring lands in the generated artifacts unless you opt in. See [`[certificates]`](docs/configuration.md#certificates) for the team workflow.
+Need to trust a private CA inside the container (a TLS-intercepting proxy, a dev self-signed cert, etc.)? Run `cocoon init --certificates` (or set `[certificates] enable = true` in `workspace.toml`), then drop the `.crt` / `.cer` files into `~/.cocoon/certs/` on the host. They are picked up automatically at container build time. Cert-free workspaces stay cert-free — no wiring lands in the generated artifacts unless you opt in. See [`[certificates]`](docs/configuration.md#certificates) for the team workflow.
 
 ## Persistent personal shellrc
 
