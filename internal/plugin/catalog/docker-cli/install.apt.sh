@@ -9,6 +9,10 @@
 set -euo pipefail
 
 mkdir -p /etc/apt/keyrings
+# Normalize the dir mode so apt's sandboxed _apt user can traverse it under a
+# restrictive umask; otherwise apt-get update can fail to read the keyring even
+# though the key file is go+r. Matches github-cli's keyless flow.
+chmod 755 /etc/apt/keyrings
 
 # shellcheck disable=SC1091
 . /etc/os-release
