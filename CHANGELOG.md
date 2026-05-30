@@ -6,6 +6,17 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- The `shfmt` plugin no longer fetches the upstream `sha256sums.txt` manifest
+  to verify an unpinned (LATEST) download. shfmt removed that manifest upstream
+  as of v3.13.0 (GitHub now provides per-asset digests natively), which made an
+  unpinned `shfmt` build hard-fail. `shfmt` now follows the same model as
+  `shellcheck`: when `checksum_amd64` / `checksum_arm64` is pinned in
+  `[plugins.versions]` the download is verified against it; otherwise
+  verification is skipped with a warning and the build proceeds. Pin a version
+  with its checksum for a fully verified, reproducible install.
+
 ## [0.9.1] - 2026-05-30
 
 ### Changed
