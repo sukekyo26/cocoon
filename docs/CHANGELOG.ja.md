@@ -6,6 +6,8 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-05-30
+
 ### 変更
 
 - `terraform` / `opentofu` プラグインが、ダウンロードを毎回上流の GPG
@@ -385,7 +387,8 @@ cocoon の主要な変更を記録します。フォーマットは
 - `COMPOSE_PROJECT_NAME` をプロジェクトディレクトリの basename から導出するように変更。docker compose の namespace がホストディレクトリと一致する。
 - 国際化 (英語 / 日本語) カタログを追加。CLI プロンプト・エラーメッセージ・`workspace.toml` インラインコメントすべてを `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` で切替可能。
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/sukekyo26/cocoon/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/sukekyo26/cocoon/compare/v0.7.6...v0.8.0
 [0.7.6]: https://github.com/sukekyo26/cocoon/compare/v0.7.5...v0.7.6
 [0.7.5]: https://github.com/sukekyo26/cocoon/compare/v0.7.4...v0.7.5
