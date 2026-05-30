@@ -398,6 +398,39 @@ func TestValidate_ContainerShellAcceptsFish(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestValidate_ShellValueRejectsNewline(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		spec string
+	}{
+		{"env newline", `env = { EDITOR = "a\nb" }`},
+		{"env carriage return", `env = { EDITOR = "a\rb" }`},
+		{"alias newline", `aliases = { gs = "git status\nRUN echo pwned" }`},
+		{"alias carriage return", `aliases = { gs = "a\rb" }`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			body := minimalWorkspace() + "\n[container.shell]\n" + tc.spec + "\n"
+			err := loadWS(t, body)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "unsafe character")
+		})
+	}
+}
+
+// TestValidate_ShellValueAcceptsExpansion pins that $-expansion and command
+// substitution stay legal in shell env/alias values — only newlines are
+// rejected — so the documented $HOME / $(cmd) usage keeps working.
+func TestValidate_ShellValueAcceptsExpansion(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() + "\n[container.shell]\n" +
+		`env = { NPM_CONFIG_PREFIX = "$HOME/.local" }` + "\n" +
+		`aliases = { ll = "ls -la $(pwd)" }` + "\n"
+	require.NoError(t, loadWS(t, body))
+}
+
 func TestValidate_SidecarCollidesWithMain(t *testing.T) {
 	t.Parallel()
 	body := minimalWorkspace() + "\n[services.dev]\nimage = \"redis:7\"\n"

@@ -8,6 +8,11 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ### 修正
 
+- **Security**: `cocoon gen` が `[container.shell.env]` / `[container.shell.aliases]`
+  の値に含まれる改行、およびプラグインの `[install.env]` の値に含まれる改行・
+  ダブルクォートを拒否するようになりました。これらの文字は従来、生成される
+  Dockerfile の heredoc / `ENV` 行を脱出し、ビルド時に任意のディレクティブを
+  注入できました。`$` 展開（`$HOME`・`$PATH`・`$(cmd)`）は引き続きサポートされます。
 - `cocoon gen` がロード／生成の失敗時に `failure: failure:` と prefix を
   二重表示しなくなりました（prefix は 1 回になります）。
 - `cocoon gen` / `cocoon plugin pin` が `workspace.toml` の探索中に発生した
