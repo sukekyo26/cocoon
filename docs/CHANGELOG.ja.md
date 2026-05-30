@@ -6,7 +6,9 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
-### 追加
+## [0.9.1] - 2026-05-30
+
+### 変更
 
 - TLS 証明書の自動取り込み機能（`[certificates] enable = true`）が、`~/.cocoon/certs/`
   の `*.crt` に加えて `*.cer` も取り込むようになりました。両拡張子とも build 時に
@@ -409,7 +411,8 @@ cocoon の主要な変更を記録します。フォーマットは
 - `COMPOSE_PROJECT_NAME` をプロジェクトディレクトリの basename から導出するように変更。docker compose の namespace がホストディレクトリと一致する。
 - 国際化 (英語 / 日本語) カタログを追加。CLI プロンプト・エラーメッセージ・`workspace.toml` インラインコメントすべてを `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` で切替可能。
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/sukekyo26/cocoon/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/sukekyo26/cocoon/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/sukekyo26/cocoon/compare/v0.7.6...v0.8.0
 [0.7.6]: https://github.com/sukekyo26/cocoon/compare/v0.7.5...v0.7.6

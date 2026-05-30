@@ -6,7 +6,9 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Added
+## [0.9.1] - 2026-05-30
+
+### Changed
 
 - The TLS certificate auto-bake feature (`[certificates] enable = true`) now also
   ingests `*.cer` files from `~/.cocoon/certs/`, in addition to `*.crt`. Both are
@@ -411,7 +413,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Add `COMPOSE_PROJECT_NAME` derivation from the project directory basename so docker compose namespacing matches the host directory.
 - Add i18n catalog (English / Japanese) covering every CLI prompt, error message, and inline `workspace.toml` comment, switched via `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG`.
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/sukekyo26/cocoon/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/sukekyo26/cocoon/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/sukekyo26/cocoon/compare/v0.7.6...v0.8.0
 [0.7.6]: https://github.com/sukekyo26/cocoon/compare/v0.7.5...v0.7.6
