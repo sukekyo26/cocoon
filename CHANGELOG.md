@@ -10,6 +10,9 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 - `cocoon gen` no longer prints a doubled `failure: failure:` prefix when
   loading or generation fails; the error now carries a single prefix.
+- `cocoon gen` / `cocoon plugin pin` now report a permission or I/O error
+  hit while searching for `workspace.toml`, instead of silently treating the
+  directory as having no workspace.
 
 ## [0.9.0] - 2026-05-30
 

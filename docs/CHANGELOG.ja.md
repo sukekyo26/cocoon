@@ -10,6 +10,9 @@ cocoon の主要な変更を記録します。フォーマットは
 
 - `cocoon gen` がロード／生成の失敗時に `failure: failure:` と prefix を
   二重表示しなくなりました（prefix は 1 回になります）。
+- `cocoon gen` / `cocoon plugin pin` が `workspace.toml` の探索中に発生した
+  permission・I/O エラーを、ワークスペースなしとして黙殺せず報告するように
+  なりました。
 
 ## [0.9.0] - 2026-05-30
 
