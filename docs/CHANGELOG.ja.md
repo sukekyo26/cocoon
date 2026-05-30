@@ -6,6 +6,15 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+### 追加
+
+- TLS 証明書の自動取り込み機能（`[certificates] enable = true`）が、`~/.cocoon/certs/`
+  の `*.crt` に加えて `*.cer` も取り込むようになりました。両拡張子とも build 時に
+  コンテナのトラストストアへマージされます（`update-ca-certificates` は `.crt`
+  拡張子しか取り込まないため、`.cer` は `.crt` にリネームしてコピーします）。証明書は
+  PEM 形式である必要があり、DER 形式の `.cer` はスキップされます（先に
+  `openssl x509 -inform der -in x.cer -out x.crt` で変換してください）。
+
 ### 修正
 
 - **Security**: `cocoon gen` が `[container.shell.env]` / `[container.shell.aliases]`

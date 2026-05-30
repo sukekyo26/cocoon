@@ -481,6 +481,27 @@ func TestGenerate_CertInstallEmittedWhenEnabled(t *testing.T) {
 	}
 }
 
+// TestGenerate_CertInstallIngestsCerAndCrt pins the .cer support contract:
+// the cert block must scan for both extensions, and .cer files must be
+// renamed to .crt on copy (update-ca-certificates only ingests *.crt, so a
+// verbatim .cer copy would be silently dropped from the trust store).
+func TestGenerate_CertInstallIngestsCerAndCrt(t *testing.T) {
+	t.Parallel()
+
+	root := stagingRoot(t)
+	got := generateInStagingRoot(t, root, "http://archive.ubuntu.com/ubuntu/")
+
+	if !strings.Contains(got, `\( -name '*.crt' -o -name '*.cer' \)`) {
+		t.Errorf("cert existence check must match both *.crt and *.cer:\n%s", got)
+	}
+	if !strings.Contains(got, `find /tmp/cocoon-user-certs -maxdepth 1 -name '*.cer'`) {
+		t.Errorf("cert install must scan for *.cer files:\n%s", got)
+	}
+	if !strings.Contains(got, `basename "$1" .cer).crt`) {
+		t.Errorf("*.cer files must be copied renamed to *.crt:\n%s", got)
+	}
+}
+
 // TestGenerate_CertInstallSuppressedWhenDisabled verifies that omitting
 // the [certificates] section (or setting enable=false) yields a
 // Dockerfile with zero cert-related content: no RUN block, no ENV
@@ -494,6 +515,7 @@ func TestGenerate_CertInstallSuppressedWhenDisabled(t *testing.T) {
 	for _, mustNot := range []string{
 		certInstallHeader,
 		"cocoon_user_certs",
+		"*.cer",
 		"/usr/local/share/ca-certificates/cocoon-user",
 		"ENV SSL_CERT_FILE",
 		"ENV CURL_CA_BUNDLE",

@@ -111,7 +111,7 @@ var messagesEN_init = map[string]string{
 	"init_toml_section_certificates": "# [certificates] — TLS certificate auto-bake from ~/.cocoon/certs/ on the host.\n" +
 		"#   When enable = true the generators wire the host directory through to the build via\n" +
 		"#   docker-compose's additional_contexts and the Dockerfile's RUN --mount=type=bind, so any\n" +
-		"#   *.crt files placed there land in the container's trust store at build time. Default off.",
+		"#   *.crt / *.cer files placed there land in the container's trust store at build time. Default off.",
 	"init_toml_section_ports": "# [ports] — host ports forwarded into the container.\n" +
 		"#   Short form: [HOST_IP:][HOST:]CONTAINER[/PROTOCOL]. Ranges (3000-3005:3000-3005), UDP, and IPv6 [::1] binds are accepted.",
 	"init_toml_section_volumes": "# [volumes] — extra named volumes mapped under the container's home.\n" +
@@ -130,7 +130,7 @@ var messagesEN_init = map[string]string{
 	"gen_next_step_manage":    "  ./.devcontainer/manage.sh -h    (clean up / rebuild this project's Docker resources)",
 	"gen_certs_dir_created":   "created host directory %s (used as the cocoon_user_certs build context)",
 	"gen_certs_notice_header": "Host TLS certificates:",
-	"gen_certs_notice_path":   "  Drop *.crt files into ~/.cocoon/certs/ to bake corporate / private CAs into the container at build time.",
+	"gen_certs_notice_path":   "  Drop *.crt / *.cer files into ~/.cocoon/certs/ to bake corporate / private CAs into the container at build time.",
 	"gen_certs_notice_team":   "  Team members who skip VS Code Dev Containers must run `mkdir -p ~/.cocoon/certs` once on their host (VS Code users get this auto-created via initializeCommand).",
 	// gen home_files: host-side touch + notices
 	"gen_home_file_touched":                 "created %s (empty, 0600) for [home_files] bind",
@@ -249,7 +249,7 @@ var messagesJA_init = map[string]string{
 		"#   verify = \"checksum\" のプラグインは checksum_amd64 / checksum_arm64（64 文字小文字 hex）でダウンロードを検証できる。",
 	"init_toml_section_certificates": "# [certificates] — ホスト側 ~/.cocoon/certs/ の TLS 証明書をコンテナイメージに自動取り込み (opt-in)。\n" +
 		"#   enable = true のときジェネレータが docker-compose の additional_contexts と Dockerfile の\n" +
-		"#   RUN --mount=type=bind を配線し、ホスト側 *.crt が build 時にトラストストアへマージされる。\n" +
+		"#   RUN --mount=type=bind を配線し、ホスト側 *.crt / *.cer が build 時にトラストストアへマージされる。\n" +
 		"#   デフォルト off。",
 	"init_toml_section_apt": "# [apt] — cocoon の最小ベース + 選択カテゴリに追加する apt パッケージ。\n" +
 		"#   カテゴリのチェックを変えるなら `cocoon init --force` を再実行、または直接このリストを編集。",
@@ -271,7 +271,7 @@ var messagesJA_init = map[string]string{
 	"gen_next_step_manage":    "  ./.devcontainer/manage.sh -h    (このプロジェクトの Docker リソースの掃除 / リビルド)",
 	"gen_certs_dir_created":   "ホスト側ディレクトリ %s を作成しました (cocoon_user_certs ビルドコンテキストとして使用)",
 	"gen_certs_notice_header": "ホスト TLS 証明書:",
-	"gen_certs_notice_path":   "  社内 / プライベート CA を取り込む場合は `.crt` を `~/.cocoon/certs/` に置いてください。build 時に自動取り込みされます。",
+	"gen_certs_notice_path":   "  社内 / プライベート CA を取り込む場合は `.crt` / `.cer` を `~/.cocoon/certs/` に置いてください。build 時に自動取り込みされます。",
 	"gen_certs_notice_team":   "  VS Code Dev Containers を使わないチームメンバーは初回のみホストで `mkdir -p ~/.cocoon/certs` の実行が必要です (VS Code 経由は initializeCommand で自動)。",
 	// gen home_files: host-side touch + notices
 	"gen_home_file_touched":                 "[home_files] バインド用に %s を作成しました (空ファイル, 0600)",

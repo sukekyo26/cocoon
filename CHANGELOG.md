@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- The TLS certificate auto-bake feature (`[certificates] enable = true`) now also
+  ingests `*.cer` files from `~/.cocoon/certs/`, in addition to `*.crt`. Both are
+  merged into the container trust store at build time (`.cer` files are copied in
+  renamed to `.crt`, since `update-ca-certificates` only ingests the `.crt`
+  extension). Certificates must be PEM-encoded; DER-encoded `.cer` files are
+  skipped — convert with `openssl x509 -inform der -in x.cer -out x.crt` first.
+
 ### Fixed
 
 - **Security**: `cocoon gen` now rejects newline characters in
