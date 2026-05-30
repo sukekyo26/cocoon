@@ -64,7 +64,7 @@ curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-erro
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/flutter.tar.xz" | sha256sum -c -
 else
-  # No user pin: verify against the sha256 the manifest records for this build.
+  # No user checksum: verify against the sha256 the manifest records for this build.
   # Escape the dots in the archive path so they match literally rather than as
   # ERE wildcards (the path carries version dots like 3.44.0 and .tar.xz).
   archive_re="${archive//./\\.}"

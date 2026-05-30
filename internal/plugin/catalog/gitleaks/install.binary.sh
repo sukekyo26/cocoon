@@ -43,7 +43,7 @@ curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-erro
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/gitleaks.tar.gz" | sha256sum -c -
 else
-  # No user pin: verify against the release's own checksums file.
+  # No user checksum: verify against the release's own checksums file.
   curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
     "${base}/gitleaks_${VERSION}_checksums.txt" -o /tmp/gitleaks.sums
   # Match the asset name literally (awk field compare, not a regex; strip the

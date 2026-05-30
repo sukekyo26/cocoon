@@ -55,7 +55,7 @@ curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-erro
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/cocoon" | sha256sum -c -
 else
-  # No user pin: verify against the SHA256SUMS the Pages mirror publishes
+  # No user checksum: verify against the SHA256SUMS the Pages mirror publishes
   # alongside the binaries for this version.
   curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
     "${base}/SHA256SUMS" -o /tmp/cocoon.sums

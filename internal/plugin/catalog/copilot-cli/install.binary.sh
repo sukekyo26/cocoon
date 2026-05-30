@@ -52,7 +52,7 @@ curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-erro
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/${TARBALL}" | sha256sum -c -
 else
-  # No user pin: verify against the release's own SHA256SUMS.txt.
+  # No user checksum: verify against the release's own SHA256SUMS.txt.
   curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
     "${base}/SHA256SUMS.txt" -o /tmp/copilot.sums
   # Match the asset name literally (awk field compare, not a regex; strip the

@@ -46,7 +46,7 @@ curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-erro
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/zig.tar.xz" | sha256sum -c -
 else
-  # No user pin: verify against the shasum index.json publishes for this build.
+  # No user checksum: verify against the shasum index.json publishes for this build.
   if [ -z "$ZIG_SHA" ] || [ "$ZIG_SHA" = "null" ]; then
     echo "ERROR: index.json has no shasum for version=${VERSION_KEY} arch=${DOWNLOAD_ARCH}" >&2
     exit 1
