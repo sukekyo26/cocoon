@@ -17,6 +17,29 @@ type AptCategory struct {
 // AptCategories is the curated list `cocoon init` shows; slice order = UI order.
 var AptCategories = []AptCategory{
 	{
+		ID:    "agent",
+		Label: "AI agent essentials",
+		// One-click bundle for AI-agent workflows: jq/yq parse tool output,
+		// ripgrep/fd-find search the tree, tree gives a quick layout, and a
+		// plain system python3 (+pip/venv) stays on $PATH for one-liners —
+		// separate from the python image base and the uv plugin (no
+		// `uv run python` wrapping, no specific image required). ripgrep,
+		// fd-find, and tree also live in search / utilities; ExpandAptCategories
+		// dedupes, so selecting agent alongside them is idempotent.
+		Description: "jq, yq, ripgrep, fd-find, tree, python3 (+pip/venv)",
+		Packages: []string{
+			"jq",
+			"yq",
+			"ripgrep",
+			"fd-find",
+			"tree",
+			"python3",
+			"python3-pip",
+			"python3-venv",
+		},
+		Default: false,
+	},
+	{
 		ID:          "text-editors",
 		Label:       "Text editors",
 		Description: "vim, nano",
@@ -86,24 +109,6 @@ var AptCategories = []AptCategory{
 		Label:       "System monitoring",
 		Description: "htop, iotop, ncdu, procps",
 		Packages:    []string{"htop", "iotop", "ncdu", "procps"},
-		Default:     false,
-	},
-	{
-		ID:    "python3",
-		Label: "Python 3",
-		// system Python from Debian apt — separate from the python image
-		// base and the uv plugin. The point is to keep a plain `python3`
-		// reachable on $PATH for AI agents and shell one-liners (no
-		// `uv run python` wrapping, no specific image required).
-		Description: "python3 + pip + venv (system Python for AI / scripts)",
-		Packages:    []string{"python3", "python3-pip", "python3-venv"},
-		Default:     false,
-	},
-	{
-		ID:          "json-yaml",
-		Label:       "JSON/YAML tools",
-		Description: "jq, yq",
-		Packages:    []string{"jq", "yq"},
 		Default:     false,
 	},
 	{

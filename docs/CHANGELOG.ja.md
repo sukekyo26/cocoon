@@ -6,6 +6,23 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+### 追加
+
+- `cocoon init` で選択できる apt カテゴリ `agent` (デフォルト OFF) を追加しました。
+  `jq` / `yq` / `ripgrep` / `fd-find` / `tree` とシステム `python3` (+ `pip` /
+  `venv`) を 1 つのチェックボックスにまとめた、AI エージェント運用向けのバンドルです。
+  `search` (ripgrep, fd-find) と `utilities` (tree) のパッケージと重複しますが、
+  併せて選択しても冪等です (各パッケージは 1 回だけインストールされます)。
+
+### 削除
+
+- **BREAKING**: apt カテゴリ `json-yaml` と `python3` を新カテゴリ `agent` に統合し、
+  削除しました。移行方法: `--apt-categories json-yaml` / `--apt-categories python3`
+  を `--apt-categories agent` に置き換えてください — 未知のカテゴリ id は usage error
+  で即座に失敗します。`search` カテゴリ (`fzf` / `ripgrep` / `bat` / `fd-find`) は
+  変更していないため、`ripgrep` / `fd-find` は `agent` バンドル全体を選ばずとも
+  à la carte で入手できます。
+
 ## [0.10.2] - 2026-05-31
 
 ### 変更

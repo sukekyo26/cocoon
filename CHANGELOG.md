@@ -6,6 +6,24 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- New `agent` apt category (default OFF) selectable in `cocoon init`, bundling
+  `jq`, `yq`, `ripgrep`, `fd-find`, `tree`, and a system `python3` (+ `pip` /
+  `venv`) — the tools AI-agent workflows reach for, in one checkbox. It overlaps
+  `search` (ripgrep, fd-find) and `utilities` (tree); selecting it alongside
+  them is idempotent (each package is installed once).
+
+### Removed
+
+- **BREAKING**: The `json-yaml` and `python3` apt categories were folded into
+  the new `agent` category and removed. Migration: replace
+  `--apt-categories json-yaml` or `--apt-categories python3` with
+  `--apt-categories agent` — an unknown category id now fails fast with a usage
+  error. The `search` category (`fzf`, `ripgrep`, `bat`, `fd-find`) is
+  unchanged, so `ripgrep` / `fd-find` stay available à la carte without the full
+  `agent` bundle.
+
 ## [0.10.2] - 2026-05-31
 
 ### Changed

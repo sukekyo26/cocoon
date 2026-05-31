@@ -86,3 +86,43 @@ func TestExpandAptCategoriesDevTools(t *testing.T) {
 		}
 	}
 }
+
+func TestExpandAptCategoriesAgent(t *testing.T) {
+	t.Parallel()
+
+	// agent is the AI-agent bundle (default OFF); pin its package list and
+	// order so a silent change is caught at CI rather than at `apt-get install`
+	// time inside a built image.
+	got := aptcategories.ExpandAptCategories([]string{"agent"})
+	want := []string{
+		"jq", "yq", "ripgrep", "fd-find", "tree",
+		"python3", "python3-pip", "python3-venv",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("agent packages: got %v, want %v", got, want)
+	}
+	// Sanity: agent must NOT be in the default-on set (opt-in only).
+	for _, id := range aptcategories.DefaultAptCategoryIDs() {
+		if id == "agent" {
+			t.Fatal("agent is in DefaultAptCategoryIDs but must be default OFF")
+		}
+	}
+}
+
+func TestExpandAptCategoriesAgentDedupesWithNeighbors(t *testing.T) {
+	t.Parallel()
+
+	// agent overlaps search (ripgrep, fd-find) and utilities (tree). The doc
+	// claim is that selecting agent alongside them is idempotent: each shared
+	// package appears exactly once, in first-seen order.
+	got := aptcategories.ExpandAptCategories([]string{"agent", "search", "utilities"})
+	want := []string{
+		"jq", "yq", "ripgrep", "fd-find", "tree",
+		"python3", "python3-pip", "python3-venv",
+		"fzf", "bat",
+		"less", "rsync", "file", "bc", "wget", "gettext-base", "uuid-runtime",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("agent+search+utilities packages: got %v, want %v", got, want)
+	}
+}
