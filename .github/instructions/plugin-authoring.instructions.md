@@ -41,6 +41,12 @@ applyTo: "internal/plugin/catalog/**"
 - arm64 で動かない（amd64 ハードコード・fail-fast）プラグインは
   `e2e/arm64-exclude.txt` に `<id>` を追加。`TestArm64ExcludeIDsExist` が実在 id を
   ガードする。追加漏れは arm64 で壊れたまま素通りするので指摘。
+- **init スナップショットの手動ミラー** — `internal/cli/init/cmd_snapshot_test.go` の
+  `plugins-amd64-full` / `plugins-arm64-full` の `--plugins`（version_capable なら
+  `--plugin-versions` も）はハードコードで、e2e full preset と整合させる必要がある。
+  新規プラグインを両ケース（arm64 非対応なら amd64 のみ）に追記し
+  `just regen-snapshots` で golden を再生成しているか確認。**追記漏れはカタログとリストが
+  ドリフトしても `just ci` で落ちない**ので、レビューで指摘する。
 
 ## 4. $PIN / $CHECKSUM 契約とチェックサム検証
 

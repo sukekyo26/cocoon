@@ -115,6 +115,7 @@ enable = [
     "gitleaks",
     "claude-code",
     "copilot-cli",
+    "codex",
     "proto",
     "mise",
     "uv",
@@ -124,6 +125,7 @@ enable = [
     "dart",
     "rust",
     "go",
+    "golangci-lint",
     "nerd-fonts",
     "terraform",
     "opentofu",
@@ -148,12 +150,14 @@ aws-cli = { pin = "2.34.48" }
 aws-sam-cli = { pin = "1.160.1" }
 bun = { pin = "1.3.3" }
 cocoon = { pin = "0.7.4" }
+codex = { pin = "0.135.0" }
 copilot-cli = { pin = "1.0.47" }
 dart = { pin = "3.12.0" }
 deno = { pin = "2.7.14" }
 docker-buildx = { pin = "0.24.0" }
 gitleaks = { pin = "8.30.1" }
 go = { pin = "1.23.4" }
+golangci-lint = { pin = "2.12.2" }
 helm = { pin = "3.16.0" }
 just = { pin = "1.51.0" }
 kubectl = { pin = "1.31.0" }
