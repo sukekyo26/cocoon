@@ -111,6 +111,7 @@ enable = [
     "docker-buildx",
     "aws-cli",
     "aws-sam-cli",
+    "azure-cli",
     "github-cli",
     "gitleaks",
     "claude-code",
