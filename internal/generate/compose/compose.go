@@ -1,7 +1,7 @@
 // Package compose generates docker-compose.yml using ordered maps via the
 // yamlx wrapper: 2-space block indent, sequences indented relative to their
-// parent key, strings double-quoted only when they contain YAML-special
-// characters.
+// parent key, and string values always double-quoted (via yamlx.Quoted)
+// regardless of content.
 package compose
 
 import (

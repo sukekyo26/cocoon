@@ -29,7 +29,7 @@ const cacheFile = "update_check.json"
 const cacheSchemaVersion = 1
 
 // Notice signals the running binary is older than the latest published
-// release. Coloring is left to the caller (Logger.Noticef).
+// release. Coloring is left to the caller (Logger.Notice).
 type Notice struct {
 	Current, Latest string
 }
