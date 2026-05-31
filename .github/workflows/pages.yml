@@ -23,11 +23,21 @@ name: Pages mirror
 #
 # One-time manual step: Settings -> Pages -> Source: GitHub Actions
 # must be enabled on the repo for this workflow's deploy-pages step to
-# succeed. After that, every release.published event auto-deploys.
+# succeed. After that, every successful Release run auto-deploys.
+#
+# Trigger is `workflow_run` on the Release workflow, NOT `release:
+# published`: release.yml creates the GitHub Release with the default
+# GITHUB_TOKEN, and GitHub never starts a new workflow run from an event
+# raised by GITHUB_TOKEN (anti-recursion). So `on: release` here never
+# fired. `workflow_run` chains off Release's completion instead — that
+# event is exempt from the GITHUB_TOKEN block. Note: workflow_run only
+# fires from the copy of this file on the default branch, so the trigger
+# takes effect once this lands on main.
 
 on:
-  release:
-    types: [published]
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
   workflow_dispatch:
 
 permissions:
@@ -44,6 +54,10 @@ concurrency:
 jobs:
   mirror:
     name: Mirror releases to Pages
+    # workflow_run fires on every Release completion, including failed runs
+    # and no-op runs where VERSION was unchanged. Only mirror on success.
+    # Manual workflow_dispatch (back-fill) always runs.
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     environment:
       name: github-pages
