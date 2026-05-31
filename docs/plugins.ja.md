@@ -287,9 +287,11 @@ versioned プラグインは次の契約を守る:
     場合は、**上流がリリースと共に公開する checksum**（`.sha256` /
     `.sha256sum` サイドカー、`checksums.txt` / `SHA256SUMS` マニフェスト、
     または上流リリース JSON の `shasum` / `sha256` フィールド）をアーティ
-    ファクトと同じ上流から取得して検証する。上流が取得可能な checksum を
-    一切公開していない場合のみ **明示的に WARNING を出力** する（無言で
-    スキップは決してしない）。この取得 checksum 経路は CDN/mirror の破損や
+    ファクトと同じ上流から取得して検証する。一部の上流はリリース毎の
+    checksum を一切公開しておらず（例: `shfmt` / `shellcheck`）、その場合は
+    pin が無い限り **明示的に WARNING を出力** して続行する（無言で
+    スキップは決してしない）。検証付きの再現可能なインストールには
+    `checksum_amd64` / `checksum_arm64` を pin すること。この取得 checksum 経路は CDN/mirror の破損や
     取り違えを防ぐが、それ単体では上流が完全に侵害された場合の証明には
     ならない — それが必要なら checksum を pin するか `verify = "pgp"` の
     プラグインを選ぶこと。
