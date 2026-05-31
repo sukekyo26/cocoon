@@ -3,8 +3,8 @@ services:
   snapshot-test:
     container_name: "${CONTAINER_SERVICE_NAME}"
     build:
-      context: ..
-      dockerfile: .devcontainer/Dockerfile
+      context: ".."
+      dockerfile: ".devcontainer/Dockerfile"
       additional_contexts:
         cocoon_user_certs: "${HOME:?HOME must be set on the host}/.cocoon/certs"
       args:
@@ -32,27 +32,27 @@ services:
       - "corp.example:10.0.0.42"
       - "db.local:host-gateway"
     dns:
-      - 10.0.0.53
-      - 1.1.1.1
+      - "10.0.0.53"
+      - "1.1.1.1"
     dns_search:
-      - corp.example.com
+      - "corp.example.com"
     sysctls:
       net.ipv4.ip_unprivileged_port_start: 0
       vm.max_map_count: 262144
     cap_add:
-      - SYS_PTRACE
-      - NET_ADMIN
+      - "SYS_PTRACE"
+      - "NET_ADMIN"
     cap_drop:
-      - AUDIT_WRITE
+      - "AUDIT_WRITE"
     security_opt:
-      - seccomp=unconfined
+      - "seccomp=unconfined"
       - "no-new-privileges:true"
     working_dir: "/home/${USERNAME}/workspace/snapshot-test"
     tty: true
     init: true
-    command: sleep infinity
-    stop_grace_period: 30s
-    shm_size: 1gb
+    command: "sleep infinity"
+    stop_grace_period: "30s"
+    shm_size: "1gb"
     pids_limit: 4096
     ulimits:
       nofile:

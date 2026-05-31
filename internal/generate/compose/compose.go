@@ -255,28 +255,28 @@ func buildVolumeMounts(
 		3+len(pluginVols)+len(customVols)+len(ctx.Mounts())+len(homeFiles),
 	)
 	mounts = append(mounts,
-		yamlx.QuotedIfSpecial(workspaceBindMount(ctx)),
-		yamlx.QuotedIfSpecial("local:/home/${USERNAME}/.local"),
-		yamlx.QuotedIfSpecial("cocoon:/home/${USERNAME}/.cocoon"),
+		yamlx.Quoted(workspaceBindMount(ctx)),
+		yamlx.Quoted("local:/home/${USERNAME}/.local"),
+		yamlx.Quoted("cocoon:/home/${USERNAME}/.cocoon"),
 	)
 	if ctx.WS.Container.DockerSocketEnabled() {
-		mounts = append(mounts, yamlx.QuotedIfSpecial("/var/run/docker.sock:/var/run/docker.sock"))
+		mounts = append(mounts, yamlx.Quoted("/var/run/docker.sock:/var/run/docker.sock"))
 	}
 	for _, pv := range pluginVols {
-		mounts = append(mounts, yamlx.QuotedIfSpecial(pv.VolumeName+":"+pv.MountPath))
+		mounts = append(mounts, yamlx.Quoted(pv.VolumeName+":"+pv.MountPath))
 	}
 	for _, cv := range customVols {
-		mounts = append(mounts, yamlx.QuotedIfSpecial(cv.Name+":"+cv.Path))
+		mounts = append(mounts, yamlx.Quoted(cv.Name+":"+cv.Path))
 	}
 	for _, m := range ctx.Mounts() {
 		mount := m.Source + ":" + m.Target
 		if m.Readonly {
 			mount += ":ro"
 		}
-		mounts = append(mounts, yamlx.QuotedIfSpecial(mount))
+		mounts = append(mounts, yamlx.Quoted(mount))
 	}
 	for _, m := range homeFiles {
-		mounts = append(mounts, yamlx.QuotedIfSpecial(m.Source+":"+m.Target))
+		mounts = append(mounts, yamlx.Quoted(m.Source+":"+m.Target))
 	}
 	return mounts
 }
@@ -289,26 +289,26 @@ func buildService(ctx *generate.WorkspaceContext, mounts []*yaml.Node) *yaml.Nod
 	// (./Dockerfile) would point at the project root, not at our
 	// generated .devcontainer/Dockerfile.
 	buildPairs := []yamlx.Pair{
-		{Key: "context", Value: yamlx.QuotedIfSpecial("..")},
-		{Key: "dockerfile", Value: yamlx.QuotedIfSpecial(".devcontainer/Dockerfile")},
+		{Key: "context", Value: yamlx.Quoted("..")},
+		{Key: "dockerfile", Value: yamlx.Quoted(".devcontainer/Dockerfile")},
 	}
 	if ctx.CertificatesEnabled() {
 		buildPairs = append(buildPairs, yamlx.Pair{
 			Key: "additional_contexts",
 			Value: yamlx.Map(yamlx.Pair{
 				Key:   generate.CertsBuildContextName,
-				Value: yamlx.QuotedIfSpecial(generate.CertsHostPath),
+				Value: yamlx.Quoted(generate.CertsHostPath),
 			}),
 		})
 	}
 	buildPairs = append(buildPairs, yamlx.Pair{Key: "args", Value: yamlx.Seq(
-		yamlx.QuotedIfSpecial("IMAGE=${IMAGE}"),
-		yamlx.QuotedIfSpecial("IMAGE_VERSION=${IMAGE_VERSION}"),
-		yamlx.QuotedIfSpecial("USERNAME=${USERNAME}"),
+		yamlx.Quoted("IMAGE=${IMAGE}"),
+		yamlx.Quoted("IMAGE_VERSION=${IMAGE_VERSION}"),
+		yamlx.Quoted("USERNAME=${USERNAME}"),
 	)})
 
 	pairs := []yamlx.Pair{
-		{Key: "container_name", Value: yamlx.QuotedIfSpecial("${CONTAINER_SERVICE_NAME}")},
+		{Key: "container_name", Value: yamlx.Quoted("${CONTAINER_SERVICE_NAME}")},
 		{Key: "build", Value: yamlx.Map(buildPairs...)},
 		{Key: "environment", Value: stringSeq(ctx.BuildEnvironment())},
 		{Key: "volumes", Value: yamlx.Seq(mounts...)},
@@ -323,7 +323,7 @@ func buildService(ctx *generate.WorkspaceContext, mounts []*yaml.Node) *yaml.Nod
 	if hosts := ctx.ExtraHosts(); len(hosts) > 0 {
 		items := make([]*yaml.Node, 0, len(hosts))
 		for _, k := range slices.Sorted(maps.Keys(hosts)) {
-			items = append(items, yamlx.QuotedIfSpecial(k+":"+hosts[k]))
+			items = append(items, yamlx.Quoted(k+":"+hosts[k]))
 		}
 		pairs = append(pairs, yamlx.Pair{Key: "extra_hosts", Value: yamlx.Seq(items...)})
 	}
@@ -349,14 +349,14 @@ func buildService(ctx *generate.WorkspaceContext, mounts []*yaml.Node) *yaml.Nod
 		// into the image.
 		pairs = append(pairs, yamlx.Pair{
 			Key: "working_dir",
-			Value: yamlx.QuotedIfSpecial(
+			Value: yamlx.Quoted(
 				"/home/${USERNAME}/" + ctx.WS.Workspace.DirOrDefault() + "/" + ctx.ServiceName(),
 			),
 		})
 	}
 	pairs = append(pairs, yamlx.Pair{Key: "tty", Value: yamlx.Bool(true)})
 	pairs = append(pairs, yamlx.Pair{Key: "init", Value: yamlx.Bool(true)})
-	pairs = append(pairs, yamlx.Pair{Key: "command", Value: yamlx.QuotedIfSpecial("sleep infinity")})
+	pairs = append(pairs, yamlx.Pair{Key: "command", Value: yamlx.Quoted("sleep infinity")})
 	pairs = append(pairs, applyResources(ctx)...)
 	return yamlx.Map(pairs...)
 }
@@ -382,10 +382,10 @@ func runtimeOptionPairs(ctx *generate.WorkspaceContext) []yamlx.Pair {
 		pairs = append(pairs, yamlx.Pair{Key: "devices", Value: stringSeq(dev)})
 	}
 	if ipc := ctx.IPC(); ipc != "" {
-		pairs = append(pairs, yamlx.Pair{Key: "ipc", Value: yamlx.QuotedIfSpecial(ipc)})
+		pairs = append(pairs, yamlx.Pair{Key: "ipc", Value: yamlx.Quoted(ipc)})
 	}
 	if gpus := ctx.Gpus(); gpus != "" {
-		pairs = append(pairs, yamlx.Pair{Key: "gpus", Value: yamlx.QuotedIfSpecial(gpus)})
+		pairs = append(pairs, yamlx.Pair{Key: "gpus", Value: yamlx.Quoted(gpus)})
 	}
 	return pairs
 }
@@ -423,8 +423,8 @@ func applyResources(ctx *generate.WorkspaceContext) []yamlx.Pair {
 		}
 	}
 	pairs := []yamlx.Pair{
-		{Key: "stop_grace_period", Value: yamlx.QuotedIfSpecial(stopGrace)},
-		{Key: "shm_size", Value: yamlx.QuotedIfSpecial(shmSize)},
+		{Key: "stop_grace_period", Value: yamlx.Quoted(stopGrace)},
+		{Key: "shm_size", Value: yamlx.Quoted(shmSize)},
 		{Key: "pids_limit", Value: yamlx.Int(pidsLimit)},
 		{Key: "ulimits", Value: yamlx.Map(
 			yamlx.Pair{Key: "nofile", Value: yamlx.Map(
@@ -437,7 +437,7 @@ func applyResources(ctx *generate.WorkspaceContext) []yamlx.Pair {
 		pairs = append(pairs, yamlx.Pair{Key: "cpus", Value: floatNode(*cpus)})
 	}
 	if memory != "" {
-		pairs = append(pairs, yamlx.Pair{Key: "mem_limit", Value: yamlx.QuotedIfSpecial(memory)})
+		pairs = append(pairs, yamlx.Pair{Key: "mem_limit", Value: yamlx.Quoted(memory)})
 	}
 	return pairs
 }
@@ -470,13 +470,13 @@ func buildVolDefs(plugin []plugin.Volume, custom []volPair) []yamlx.Pair {
 }
 
 func namedVolume(name string) *yaml.Node {
-	return yamlx.Map(yamlx.Pair{Key: "name", Value: yamlx.QuotedIfSpecial(name)})
+	return yamlx.Map(yamlx.Pair{Key: "name", Value: yamlx.Quoted(name)})
 }
 
 func stringSeq(values []string) *yaml.Node {
 	items := make([]*yaml.Node, 0, len(values))
 	for _, v := range values {
-		items = append(items, yamlx.QuotedIfSpecial(v))
+		items = append(items, yamlx.Quoted(v))
 	}
 	return yamlx.Seq(items...)
 }
@@ -490,9 +490,9 @@ func sysctlNode(v any) *yaml.Node {
 	case int64:
 		return yamlx.Int(int(n))
 	case string:
-		return yamlx.QuotedIfSpecial(n)
+		return yamlx.Quoted(n)
 	default:
-		return yamlx.QuotedIfSpecial(fmt.Sprintf("%v", v))
+		return yamlx.Quoted(fmt.Sprintf("%v", v))
 	}
 }
 
@@ -514,7 +514,7 @@ func floatNode(f float64) *yaml.Node {
 // stable across runs regardless of TOML decoder map iteration.
 func portNode(p config.ComposePort) *yaml.Node {
 	if !p.IsLong() {
-		return yamlx.QuotedIfSpecial(p.Short)
+		return yamlx.Quoted(p.Short)
 	}
 	pairs := make([]yamlx.Pair, 0, len(p.Long))
 	for _, k := range config.LongFormKeyOrder() {
