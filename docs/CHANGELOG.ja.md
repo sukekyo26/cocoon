@@ -6,6 +6,8 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-05-31
+
 ### 変更
 
 - `shfmt` プラグインが、pin 無し（LATEST）ダウンロードの検証のために上流の
@@ -431,7 +433,8 @@ cocoon の主要な変更を記録します。フォーマットは
 - `COMPOSE_PROJECT_NAME` をプロジェクトディレクトリの basename から導出するように変更。docker compose の namespace がホストディレクトリと一致する。
 - 国際化 (英語 / 日本語) カタログを追加。CLI プロンプト・エラーメッセージ・`workspace.toml` インラインコメントすべてを `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` で切替可能。
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.9.2...HEAD
+[0.9.2]: https://github.com/sukekyo26/cocoon/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/sukekyo26/cocoon/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/sukekyo26/cocoon/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/sukekyo26/cocoon/compare/v0.7.6...v0.8.0
