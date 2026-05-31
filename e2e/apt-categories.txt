@@ -1,0 +1,18 @@
+# apt category ids the e2e round-trip selects, so every catalog package is
+# actually `apt-get install`ed in a built image — unit tests only pin the
+# package names, not that they exist and install in the target apt repos.
+# One category id per line; blank lines and #-comments are ignored.
+# docker-roundtrip.sh expands these via --apt-categories, and
+# internal/aptcategories/e2e_categories_test.go guards that this file lists
+# every category in internal/aptcategories/aptcategories.go (none missing,
+# none stale).
+agent
+text-editors
+vcs
+utilities
+compression
+build
+search
+network
+monitoring
+dev-tools
