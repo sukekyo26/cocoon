@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- `.devcontainer/devcontainer.json` `forwardPorts` now lists the container-side
+  port for `[ports].forward` entries whose host and container ports differ
+  (e.g. `"30002:3000"`, or long form `{ target = 5432, published = 15432 }`).
+  Previously the host port was emitted, which told VS Code to forward a
+  container port that nothing listens on. The generated `docker-compose.yml`
+  `ports:` mapping is unchanged; run `cocoon gen` to regenerate existing
+  `.devcontainer/` output.
+
 ## [0.10.1] - 2026-05-31
 
 ### Fixed

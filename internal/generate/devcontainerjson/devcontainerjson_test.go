@@ -294,8 +294,10 @@ func TestGenerateForwardPortsSkipsNonInt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate: %v", err)
 	}
-	if !strings.Contains(got, "\"forwardPorts\": [\n\t\t3000,\n\t\t15432\n\t]") {
-		t.Errorf("forwardPorts should be [3000, 15432], got:\n%s", got)
+	// The long-form entry contributes its container-side `target` (5432),
+	// not the published host port (15432).
+	if !strings.Contains(got, "\"forwardPorts\": [\n\t\t3000,\n\t\t5432\n\t]") {
+		t.Errorf("forwardPorts should be [3000, 5432], got:\n%s", got)
 	}
 	if !strings.Contains(warn.String(), "uses a port range") {
 		t.Errorf("expected range warning, got %q", warn.String())

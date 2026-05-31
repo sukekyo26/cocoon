@@ -6,6 +6,16 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+### 修正
+
+- host 側とコンテナ側でポート番号が異なる `[ports].forward` エントリ
+  （例: `"30002:3000"`、long form `{ target = 5432, published = 15432 }`）について、
+  `.devcontainer/devcontainer.json` の `forwardPorts` がコンテナ側ポートを
+  出力するよう修正。従来は host 側ポートを出力しており、VS Code が誰も listen
+  していないコンテナポートを転送しようとしていた。生成される
+  `docker-compose.yml` の `ports:` マッピングは不変。既存の `.devcontainer/` は
+  `cocoon gen` で再生成して追従させてください。
+
 ## [0.10.1] - 2026-05-31
 
 ### 修正
