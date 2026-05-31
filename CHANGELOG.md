@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- The generated `.devcontainer/docker-compose.yml` now double-quotes every
+  string value (e.g. `command: "sleep infinity"`, `ipc: "host"`, `dns` entries,
+  `environment` values). Previously only values containing a YAML-special
+  character were quoted, so the output mixed quoted and unquoted scalars. This
+  is a formatting change only — parsing and runtime behaviour are identical
+  (`${VAR}` interpolation still works). Run `cocoon gen` to regenerate.
+
 ### Fixed
 
 - `.devcontainer/devcontainer.json` `forwardPorts` now lists the container-side

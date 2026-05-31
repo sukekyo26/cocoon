@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/sukekyo26/cocoon/internal/config"
 	"github.com/sukekyo26/cocoon/internal/generate"
 	"github.com/sukekyo26/cocoon/internal/generate/compose"
@@ -20,6 +22,46 @@ import (
 //
 //nolint:gochecknoglobals // test-only flag scoped to compose_test.
 var updateGolden = flag.Bool("update-golden", false, "rewrite testdata/*.expected from current generator output")
+
+// TestGenerate_EnvValueWithDoubleQuote verifies that an [env] value containing
+// a double quote is escaped in the emitted YAML (every environment value is
+// double-quoted) and round-trips back to the original string when parsed.
+func TestGenerate_EnvValueWithDoubleQuote(t *testing.T) {
+	t.Parallel()
+	ws := &config.Workspace{
+		Container: config.ContainerSpec{
+			ServiceName: "dev", Username: "dev", Image: "ubuntu", ImageVersion: "24.04",
+		},
+		Plugins: config.PluginsSpec{Enable: []string{}},
+		Env:     map[string]string{"FOO": `a"b`},
+	}
+	var warns bytes.Buffer
+	ctx := &generate.WorkspaceContext{WS: ws, Plugins: map[string]*plugin.Plugin{}, Warnings: &warns}
+	got, err := compose.Generate(ctx, compose.Options{Plugins: map[string]*plugin.Plugin{}, Warnings: &warns})
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	if !strings.Contains(got, `"FOO=a\"b"`) {
+		t.Errorf("expected escaped env value `\"FOO=a\\\"b\"` in:\n%s", got)
+	}
+	var doc struct {
+		Services map[string]struct {
+			Environment []string `yaml:"environment"`
+		} `yaml:"services"`
+	}
+	if err := yaml.Unmarshal([]byte(got), &doc); err != nil {
+		t.Fatalf("Unmarshal generated compose: %v", err)
+	}
+	found := false
+	for _, e := range doc.Services["dev"].Environment {
+		if e == `FOO=a"b` {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("env did not round-trip to `FOO=a\"b`: %v", doc.Services["dev"].Environment)
+	}
+}
 
 func TestGenerate_Snapshot(t *testing.T) {
 	t.Parallel()

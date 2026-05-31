@@ -6,6 +6,15 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+### 変更
+
+- 生成される `.devcontainer/docker-compose.yml` が、すべての文字列値を
+  ダブルクォートで出力するようになった（例: `command: "sleep infinity"`、
+  `ipc: "host"`、`dns` の各エントリ、`environment` の値）。従来は YAML 特殊文字を
+  含む値だけがクォートされ、クォート有無が混在していた。整形のみの変更で、
+  パースもランタイム動作も同一（`${VAR}` 展開も従来どおり）。`cocoon gen` で
+  再生成して追従。
+
 ### 修正
 
 - host 側とコンテナ側でポート番号が異なる `[ports].forward` エントリ

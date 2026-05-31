@@ -45,24 +45,31 @@ func TestMarshalIndent(t *testing.T) {
 	}
 }
 
-func TestQuotedIfSpecial(t *testing.T) {
+func TestQuotedEscapesEmbeddedQuote(t *testing.T) {
 	t.Parallel()
-	cases := []struct {
-		in    string
-		style yaml.Style
-	}{
-		{"plain", 0},
-		{"${VAR}", yaml.DoubleQuotedStyle},
-		{"a:b", yaml.DoubleQuotedStyle},
-		{"3000:3000", yaml.DoubleQuotedStyle},
-		{"hello", 0},
-		{"a,b", yaml.DoubleQuotedStyle},
-	}
-	for _, tc := range cases {
-		n := yamlx.QuotedIfSpecial(tc.in)
-		if n.Style != tc.style {
-			t.Errorf("%q: style = %v, want %v", tc.in, n.Style, tc.style)
+	// Values containing a double quote or backslash (e.g. an [env] value)
+	// must round-trip: DoubleQuotedStyle escapes them so the emitted YAML
+	// re-parses to the original string.
+	for _, in := range []string{`x`, `a"b`, `a\b`, "tab\tend"} {
+		out, err := yamlx.Marshal(yamlx.Quoted(in))
+		if err != nil {
+			t.Fatalf("Marshal(%q): %v", in, err)
 		}
+		var got string
+		if err := yaml.Unmarshal(out, &got); err != nil {
+			t.Fatalf("Unmarshal(%q): %v", string(out), err)
+		}
+		if got != in {
+			t.Errorf("round-trip %q -> %q (yaml %q)", in, got, string(out))
+		}
+	}
+	// The embedded quote is escaped as \" in the emitted YAML.
+	out, err := yamlx.Marshal(yamlx.Quoted(`a"b`))
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if !strings.Contains(string(out), `\"`) {
+		t.Errorf(`expected escaped quote \" in %q`, string(out))
 	}
 }
 

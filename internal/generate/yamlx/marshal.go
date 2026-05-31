@@ -1,26 +1,20 @@
 // Package yamlx wraps gopkg.in/yaml.v3 with helpers that emit:
 //   - Block style with a 2-space indent.
 //   - Sequences indented relative to their parent key.
-//   - Strings as plain (unquoted) scalars by default, double-quoted only when
-//     the value contains a YAML-special character listed in [SpecialChars].
+//   - Scalars with an explicit caller-chosen style: [Plain] for mapping keys,
+//     [Quoted] for string values, [Int] / [Bool] for typed scalars.
 //
 // Generators construct documents from [Map], [Seq], [Plain], [Quoted],
-// [QuotedIfSpecial], [Int], and [Bool] so the resulting *yaml.Node carries
-// the desired scalar style.
+// [Int], and [Bool] so the resulting *yaml.Node carries the desired scalar
+// style.
 package yamlx
 
 import (
 	"bytes"
 	"fmt"
-	"strings"
 
 	"gopkg.in/yaml.v3"
 )
-
-// SpecialChars enumerates the runes that, when present in a scalar string,
-// force [QuotedIfSpecial] to emit a double-quoted form rather than a plain
-// scalar.
-const SpecialChars = ":{}#&*!|>%@`'\"[]?,\n"
 
 // Marshal serialises v as YAML using a 2-space indent and block style and
 // returns the trailing-newline-terminated byte slice.
@@ -55,15 +49,6 @@ func Plain(s string) *yaml.Node {
 		Tag:   "!!str",
 		Value: s,
 	}
-}
-
-// QuotedIfSpecial returns a double-quoted node when s contains any character
-// in [SpecialChars], otherwise a plain node.
-func QuotedIfSpecial(s string) *yaml.Node {
-	if strings.ContainsAny(s, SpecialChars) {
-		return Quoted(s)
-	}
-	return Plain(s)
 }
 
 func Int(i int) *yaml.Node {
