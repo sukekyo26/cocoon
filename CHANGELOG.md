@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Remove the mirror URL from the `cocoon` plugin's `binary` install-method
+  description shown by `cocoon plugin show`.
+
 ## [0.9.2] - 2026-05-31
 
 ### Changed
