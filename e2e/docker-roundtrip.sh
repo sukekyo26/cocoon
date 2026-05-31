@@ -90,6 +90,20 @@ while read -r line || [ -n "$line" ]; do
   arm64_exclude+=("$line")
 done <"$script_dir/arm64-exclude.txt"
 
+# Every apt category, kept in a shared data file that
+# internal/aptcategories/e2e_categories_test.go validates against
+# internal/aptcategories/aptcategories.go. Selecting all of them makes the
+# build actually `apt-get install` every catalog package, so a name that is
+# missing from the target apt repos breaks CI here instead of for a user.
+# Same trimming reader as arm64_exclude above (matches the Go guard).
+apt_categories=()
+while read -r line || [ -n "$line" ]; do
+  case "$line" in
+    '' | '#'*) continue ;;
+  esac
+  apt_categories+=("$line")
+done <"$script_dir/apt-categories.txt"
+
 # Manual version pins as "name=version" entries. Plugins absent here
 # install LATEST; pins for plugins not enabled in the active preset are
 # pruned automatically (see pins_for), so this single list serves both
@@ -252,7 +266,7 @@ extra=()
   --mount-root . \
   --no-devcontainer \
   --certificates \
-  --apt-categories=text-editors,vcs,utilities,compression,build \
+  --apt-categories="$(join_csv "${apt_categories[@]}")" \
   "${extra[@]}"
 "$COCOON" gen
 

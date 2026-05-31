@@ -105,7 +105,7 @@ docker compose -f .devcontainer/docker-compose.yml up -d # または VS Code で
 9. **VS Code Dev Containers** 対応 — `devcontainer.json` を出力するかどうか
 10. **社内 CA 自動取り込み** — `~/.cocoon/certs/` 配下の `.crt` / `.cer` をビルド時に取り込むか opt-in (デフォルト off。下記参照)
 11. **ポートフォワード** — カンマ区切りの docker-compose short form (例: `3000:3000,5432:5432`)。空 Enter で見送ると `[ports]` 雛形はコメント行のまま残る (後で有効化可能)
-12. **apt カテゴリ** — text-editors / vcs / utilities / build / network / … (複数選択)
+12. **apt カテゴリ** — agent / text-editors / vcs / utilities / build / network / … (複数選択)
 13. **プラグイン** — 同梱カタログから選択 (複数選択)
 
 各回答は自己説明的な 1 行として `workspace.toml` に書き込まれます。`--yes` と各値フラグ (`--service-name` / `--username` / `--image` / `--dir` / `--plugins` / `--certificates` / `--ports` …) を組み合わせれば TTY なしで CI から呼び出せます。

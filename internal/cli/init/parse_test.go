@@ -100,6 +100,11 @@ func TestParseAptCategories(t *testing.T) {
 	if err != nil || len(out) != 2 {
 		t.Errorf("got %v %v", out, err)
 	}
+	// agent is the new AI-agent bundle; search is retained unchanged.
+	out, err = parseAptCategories("agent,search")
+	if err != nil || len(out) != 2 {
+		t.Errorf("agent,search should be accepted, got %v %v", out, err)
+	}
 	out, err = parseAptCategories("")
 	if err != nil || len(out) != 0 {
 		t.Errorf("empty string → empty list, got %v %v", out, err)
@@ -110,6 +115,13 @@ func TestParseAptCategories(t *testing.T) {
 	}
 	if _, err := parseAptCategories("not-a-real-cat"); !errors.Is(err, clihelpers.ErrUsage) {
 		t.Errorf("unknown category should be ErrUsage, got %v", err)
+	}
+	// json-yaml and python3 were folded into agent and removed; selecting
+	// them now fails fast rather than silently installing nothing.
+	for _, removed := range []string{"json-yaml", "python3"} {
+		if _, err := parseAptCategories(removed); !errors.Is(err, clihelpers.ErrUsage) {
+			t.Errorf("removed category %q should be ErrUsage, got %v", removed, err)
+		}
 	}
 }
 

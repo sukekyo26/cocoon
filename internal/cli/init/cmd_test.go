@@ -48,6 +48,36 @@ func TestRunInit_YesWritesWorkspaceToml(t *testing.T) {
 }
 
 //nolint:paralleltest // t.Chdir
+func TestRunInit_AptCategoriesAgentExpands(t *testing.T) {
+	pinEnglish(t)
+	work := t.TempDir()
+	t.Chdir(work)
+
+	cmd := NewCommand(io.Discard, io.Discard)
+	cmd.SetArgs([]string{
+		"--yes", "--service-name", "myapp", "--username", "dev",
+		"--image", "ubuntu", "--image-version", "24.04",
+		"--mount-root", "..", "--no-devcontainer",
+		"--apt-categories", "agent",
+	})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("init --yes --apt-categories agent: %v", err)
+	}
+	body, err := os.ReadFile(filepath.Join(work, "workspace.toml"))
+	if err != nil {
+		t.Fatalf("read workspace.toml: %v", err)
+	}
+	for _, want := range []string{
+		`"jq"`, `"yq"`, `"ripgrep"`, `"fd-find"`, `"tree"`,
+		`"python3"`, `"python3-pip"`, `"python3-venv"`,
+	} {
+		if !strings.Contains(string(body), want) {
+			t.Errorf("workspace.toml missing agent package %q\n--- got ---\n%s", want, body)
+		}
+	}
+}
+
+//nolint:paralleltest // t.Chdir
 func TestRunInit_YesRejectsMissingServiceName(t *testing.T) {
 	pinEnglish(t)
 	work := t.TempDir()

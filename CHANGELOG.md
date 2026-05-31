@@ -6,6 +6,26 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-06-01
+
+### Added
+
+- New `agent` apt category (default OFF) selectable in `cocoon init`, bundling
+  `jq`, `yq`, `ripgrep`, `fd-find`, `tree`, and a system `python3` (+ `pip` /
+  `venv`) — the tools AI-agent workflows reach for, in one checkbox. It overlaps
+  `search` (ripgrep, fd-find) and `utilities` (tree); selecting it alongside
+  them is idempotent (each package is installed once).
+
+### Removed
+
+- **BREAKING**: The `json-yaml` and `python3` apt categories were folded into
+  the new `agent` category and removed. Migration: replace
+  `--apt-categories json-yaml` or `--apt-categories python3` with
+  `--apt-categories agent` — an unknown category id now fails fast with a usage
+  error. The `search` category (`fzf`, `ripgrep`, `bat`, `fd-find`) is
+  unchanged, so `ripgrep` / `fd-find` stay available à la carte without the full
+  `agent` bundle.
+
 ## [0.10.2] - 2026-05-31
 
 ### Changed
@@ -497,7 +517,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Add `COMPOSE_PROJECT_NAME` derivation from the project directory basename so docker compose namespacing matches the host directory.
 - Add i18n catalog (English / Japanese) covering every CLI prompt, error message, and inline `workspace.toml` comment, switched via `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG`.
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.10.2...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/sukekyo26/cocoon/compare/v0.10.2...v0.11.0
 [0.10.2]: https://github.com/sukekyo26/cocoon/compare/v0.10.1...v0.10.2
 [0.10.1]: https://github.com/sukekyo26/cocoon/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/sukekyo26/cocoon/compare/v0.9.2...v0.10.0

@@ -6,6 +6,25 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-06-01
+
+### 追加
+
+- `cocoon init` で選択できる apt カテゴリ `agent` (デフォルト OFF) を追加しました。
+  `jq` / `yq` / `ripgrep` / `fd-find` / `tree` とシステム `python3` (+ `pip` /
+  `venv`) を 1 つのチェックボックスにまとめた、AI エージェント運用向けのバンドルです。
+  `search` (ripgrep, fd-find) と `utilities` (tree) のパッケージと重複しますが、
+  併せて選択しても冪等です (各パッケージは 1 回だけインストールされます)。
+
+### 削除
+
+- **BREAKING**: apt カテゴリ `json-yaml` と `python3` を新カテゴリ `agent` に統合し、
+  削除しました。移行方法: `--apt-categories json-yaml` / `--apt-categories python3`
+  を `--apt-categories agent` に置き換えてください — 未知のカテゴリ id は usage error
+  で即座に失敗します。`search` カテゴリ (`fzf` / `ripgrep` / `bat` / `fd-find`) は
+  変更していないため、`ripgrep` / `fd-find` は `agent` バンドル全体を選ばずとも
+  à la carte で入手できます。
+
 ## [0.10.2] - 2026-05-31
 
 ### 変更
@@ -496,7 +515,8 @@ cocoon の主要な変更を記録します。フォーマットは
 - `COMPOSE_PROJECT_NAME` をプロジェクトディレクトリの basename から導出するように変更。docker compose の namespace がホストディレクトリと一致する。
 - 国際化 (英語 / 日本語) カタログを追加。CLI プロンプト・エラーメッセージ・`workspace.toml` インラインコメントすべてを `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` で切替可能。
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.10.2...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/sukekyo26/cocoon/compare/v0.10.2...v0.11.0
 [0.10.2]: https://github.com/sukekyo26/cocoon/compare/v0.10.1...v0.10.2
 [0.10.1]: https://github.com/sukekyo26/cocoon/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/sukekyo26/cocoon/compare/v0.9.2...v0.10.0
