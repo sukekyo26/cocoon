@@ -17,9 +17,10 @@
 #     base image so generator image-family branching (apt-mirror, OS
 #     family) is exercised on every PR.
 #   - amd64-full / arm64-full (scheduled-e2e.yml) — every catalog plugin
-#     enabled, pinned to the versions in pin_map below (un-pinned plugins
-#     float to LATEST). Catches plugin-vs-base-image and plugin-vs-plugin
-#     breakage; bumping a pin_map entry surfaces here as a deliberate diff.
+#     enabled, pinned to the versions in pin_entries below (un-pinned
+#     plugins float to LATEST). Catches plugin-vs-base-image and
+#     plugin-vs-plugin breakage; bumping a pin_entries entry surfaces here
+#     as a deliberate diff.
 #     The enabled set is derived from internal/plugin/catalog/ at runtime
 #     so a new plugin auto-enrolls. arm64-full subtracts the arm64-unsafe
 #     plugins in e2e/arm64-exclude.txt (install.sh hard-codes amd64 or
