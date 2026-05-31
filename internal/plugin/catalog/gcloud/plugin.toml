@@ -1,0 +1,23 @@
+[metadata]
+name = "Google Cloud CLI"
+description = "Google Cloud command-line interface (gcloud, gsutil, bq)"
+url = "https://cloud.google.com/sdk"
+default = false
+
+[install]
+requires_root = true
+# Persist gcloud's config/credentials so `gcloud auth login` survives
+# `docker compose down && up --build`. The default location is the nested
+# $HOME/.config/gcloud, but the volume validator only accepts a single
+# segment under $HOME, so CLOUDSDK_CONFIG (below) relocates it to ~/.gcloud.
+volumes = ["/home/${USERNAME}/.gcloud"]
+default_method = "apt"
+
+[install.methods.apt]
+description = "Official Google Cloud apt repository (packages.cloud.google.com)"
+
+[install.env]
+CLOUDSDK_CONFIG = "/home/${USERNAME}/.gcloud"
+
+[version]
+version_capable = false

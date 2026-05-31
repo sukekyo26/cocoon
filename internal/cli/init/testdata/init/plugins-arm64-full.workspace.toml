@@ -112,6 +112,7 @@ enable = [
     "aws-cli",
     "aws-sam-cli",
     "azure-cli",
+    "gcloud",
     "github-cli",
     "gitleaks",
     "claude-code",
