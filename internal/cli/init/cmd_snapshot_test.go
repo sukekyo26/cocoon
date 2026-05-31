@@ -55,7 +55,7 @@ func TestRunInit_Snapshot(t *testing.T) {
 				"--mount-root", ".", "--no-devcontainer",
 				"--apt-categories", "text-editors,vcs,utilities,compression,build",
 				"--plugins",
-				"docker-cli,docker-buildx,aws-cli,aws-sam-cli,github-cli,gitleaks,claude-code,copilot-cli,codex," +
+				"docker-cli,docker-buildx,aws-cli,aws-sam-cli,azure-cli,github-cli,gitleaks,claude-code,copilot-cli,codex," +
 					"proto,mise,uv,bun,node,deno,dart,flutter,zig,rust,go,golangci-lint,lazygit,starship," +
 					"nerd-fonts,google-chrome,terraform,opentofu," +
 					"kubectl,helm,shellcheck,shfmt,just,cocoon",
@@ -82,7 +82,7 @@ func TestRunInit_Snapshot(t *testing.T) {
 				"--mount-root", ".", "--no-devcontainer",
 				"--apt-categories", "text-editors,vcs,utilities,compression,build",
 				"--plugins",
-				"docker-cli,docker-buildx,aws-cli,aws-sam-cli,github-cli,gitleaks,claude-code,copilot-cli,codex," +
+				"docker-cli,docker-buildx,aws-cli,aws-sam-cli,azure-cli,github-cli,gitleaks,claude-code,copilot-cli,codex," +
 					"proto,mise,uv,bun,node,deno,dart,rust,go,golangci-lint,nerd-fonts,terraform,opentofu," +
 					"kubectl,helm,shellcheck,shfmt,just,cocoon",
 				"--plugin-versions",
