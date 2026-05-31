@@ -120,6 +120,16 @@ func TestPluginContracts(t *testing.T) {
 			},
 		},
 		{
+			id: "azure-cli", name: "Azure CLI",
+			requiresRoot: true, firstVolume: "azure",
+			mustContain: []string{
+				"azure-cli", "packages.microsoft.com", "signed-by", "microsoft.asc",
+				"VERSION_CODENAME", "retry 3", "tlsv1.2", "chmod 755 /etc/apt/keyrings",
+			},
+			// Keyless: the armored key is consumed directly, no gpg needed.
+			mustNotContain: []string{"gpg --dearmor"},
+		},
+		{
 			id: "claude-code", name: "Claude Code",
 			requiresRoot: false, firstVolume: "claude",
 			mustContain: []string{"Claude", "retry 3", "curl -fsSL"},
@@ -132,6 +142,19 @@ func TestPluginContracts(t *testing.T) {
 				"sha256sum -c -", "retry 3", "tlsv1.2", "PIN", "SHA256SUMS",
 			},
 			mustNotContain: append(append([]string{}, noPlaceholders...), "api.github.com", "| jq ", "raw.githubusercontent.com"),
+		},
+		{
+			id: "codex", name: "OpenAI Codex CLI",
+			requiresRoot: true, versionCapable: true, firstVolume: "codex",
+			mustContain: []string{
+				"codex", "github.com/openai/codex", "sha256sum -c -",
+				"tlsv1.2", "retry 3", "dpkg --print-architecture", "tar -xz",
+				// musl target triple + the rust-v<semver> release tag scheme.
+				"unknown-linux-musl", "rust-v",
+			},
+			// No upstream checksum manifest: warn-and-skip like shfmt/shellcheck,
+			// so the API-digest fallback (api.github.com + jq) must stay absent.
+			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
 		},
 		{
 			id: "copilot-cli", name: "GitHub Copilot CLI",
@@ -156,6 +179,17 @@ func TestPluginContracts(t *testing.T) {
 				// Keyrings dir mode normalized so apt's _apt user can traverse
 				// it under a restrictive umask (matches github-cli).
 				"chmod 755 /etc/apt/keyrings",
+			},
+			// Keyless: the armored key is consumed directly, no gpg needed.
+			mustNotContain: []string{"gpg --dearmor"},
+		},
+		{
+			id: "gcloud", name: "Google Cloud CLI",
+			requiresRoot: true, firstVolume: "gcloud",
+			mustContain: []string{
+				"google-cloud-cli", "packages.cloud.google.com", "signed-by",
+				"cloud.google.asc", "retry 3", "tlsv1.2", "chmod 755 /etc/apt/keyrings",
+				"CLOUDSDK_CONFIG",
 			},
 			// Keyless: the armored key is consumed directly, no gpg needed.
 			mustNotContain: []string{"gpg --dearmor"},
@@ -191,6 +225,15 @@ func TestPluginContracts(t *testing.T) {
 			id: "go", name: "Go",
 			requiresRoot: true, versionCapable: true, firstVolume: "go",
 			mustContain: []string{"go.dev", "dl.google.com/go", ".sha256", "retry 3", "GOPATH", "tlsv1.2"},
+		},
+		{
+			id: "golangci-lint", name: "golangci-lint",
+			requiresRoot: true, versionCapable: true,
+			mustContain: []string{
+				"golangci-lint", "github.com/golangci/golangci-lint", "sha256sum -c -", "checksums.txt",
+				"tlsv1.2", "retry 3", "dpkg --print-architecture", "tar -xz",
+			},
+			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
 		},
 		{
 			id: "google-chrome", name: "Google Chrome",

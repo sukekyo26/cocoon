@@ -116,32 +116,18 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" COCOON_INSTALL_METHOD="binary" PIN="" CHECKSUM_AMD64="" CHECKSUM_ARM64="" bash <<'COCOON_PLUGIN_EOF'
 #!/usr/bin/env bash
-# Install cocoon (https://github.com/sukekyo26/cocoon)
-#
-# Downloads the cocoon binary from the GitHub Pages mirror at
-# https://sukekyo26.github.io/cocoon/ rather than the GitHub Releases
-# CDN. Pages-only by design — no fallback to the releases/download
-# path — so the plugin works in environments that can reach
-# *.github.io but not GitHub's raw / API hosts.
+# Install the cocoon binary from its GitHub Pages mirror rather than the
+# GitHub Releases CDN. Pages-only by design — no fallback to the
+# releases/download path — so the plugin works in environments that can
+# reach *.github.io but not GitHub's raw / API hosts.
 #
 # Inputs (env):
 #   PIN              : cocoon version (without leading "v"); empty = latest
-#   CHECKSUM_AMD64   : sha256 of amd64 binary; empty to skip verification
-#   CHECKSUM_ARM64   : sha256 of arm64 binary; empty to skip verification
+#   CHECKSUM_AMD64   : sha256 of amd64 binary; empty = verify against the
+#                      SHA256SUMS published in the Pages mirror
+#   CHECKSUM_ARM64   : sha256 of arm64 binary; empty = verify against the
+#                      SHA256SUMS published in the Pages mirror
 set -euo pipefail
-
-# Yellow WARNING when stderr is a TTY (and NO_COLOR is unset) or
-# FORCE_COLOR is set. NO_COLOR wins per no-color.org.
-if [ -n "${NO_COLOR:-}" ]; then
-  C_YEL=''
-  C_RST=''
-elif [ -n "${FORCE_COLOR:-}" ] || [ -t 2 ]; then
-  C_YEL=$'\033[33m'
-  C_RST=$'\033[0m'
-else
-  C_YEL=''
-  C_RST=''
-fi
 
 ARCH="$(dpkg --print-architecture)"
 case "$ARCH" in
@@ -176,14 +162,28 @@ else
     https://sukekyo26.github.io/cocoon/VERSION | tr -d '[:space:]')
 fi
 
+base="https://sukekyo26.github.io/cocoon/v${VERSION}"
 curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
-  "https://sukekyo26.github.io/cocoon/v${VERSION}/cocoon-linux-${DOWNLOAD_ARCH}" \
-  -o /tmp/cocoon
+  "${base}/cocoon-linux-${DOWNLOAD_ARCH}" -o /tmp/cocoon
 
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/cocoon" | sha256sum -c -
 else
-  printf '%sWARNING: SHA256 verification skipped for cocoon (no checksum for cocoon in [plugins.versions])%s\n' "$C_YEL" "$C_RST" >&2
+  # No user checksum: verify against the SHA256SUMS the Pages mirror publishes
+  # alongside the binaries for this version.
+  curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+    "${base}/SHA256SUMS" -o /tmp/cocoon.sums
+  # Match the asset name literally (awk field compare, not a regex; strip the
+  # binary-mode '*' marker some manifests prepend) and fail loudly if it is
+  # absent so a mirror-layout change does not collapse into an opaque error.
+  asset="cocoon-linux-${DOWNLOAD_ARCH}"
+  expected="$(awk -v f="$asset" '{ n = $2; sub(/^\*/, "", n); if (n == f) { print $1; exit } }' /tmp/cocoon.sums)"
+  if [ -z "$expected" ]; then
+    echo "cocoon: ${asset} not found in SHA256SUMS" >&2
+    exit 1
+  fi
+  echo "${expected}  /tmp/cocoon" | sha256sum -c -
+  rm -f /tmp/cocoon.sums
 fi
 
 install -m 0755 /tmp/cocoon /usr/local/bin/cocoon
@@ -202,22 +202,11 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 #
 # Inputs (env):
 #   PIN              : Buildx version without leading "v" (e.g. "0.24.0"); empty = latest
-#   CHECKSUM_AMD64   : sha256 of the amd64 binary; empty to skip verification
-#   CHECKSUM_ARM64   : sha256 of the arm64 binary; empty to skip verification
+#   CHECKSUM_AMD64   : sha256 of the amd64 binary; empty = verify against the
+#                      release checksums.txt
+#   CHECKSUM_ARM64   : sha256 of the arm64 binary; empty = verify against the
+#                      release checksums.txt
 set -euo pipefail
-
-# Yellow WARNING when stderr is a TTY (and NO_COLOR is unset) or
-# FORCE_COLOR is set. NO_COLOR wins per no-color.org.
-if [ -n "${NO_COLOR:-}" ]; then
-  C_YEL=''
-  C_RST=''
-elif [ -n "${FORCE_COLOR:-}" ] || [ -t 2 ]; then
-  C_YEL=$'\033[33m'
-  C_RST=$'\033[0m'
-else
-  C_YEL=''
-  C_RST=''
-fi
 
 ARCH="$(dpkg --print-architecture)"
 case "$ARCH" in
@@ -234,14 +223,29 @@ else
     sed 's|.*/tag/v||')
 fi
 
+base="https://github.com/docker/buildx/releases/download/v${VERSION}"
+asset="buildx-v${VERSION}.linux-${ARCH}"
+
 curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
-  "https://github.com/docker/buildx/releases/download/v${VERSION}/buildx-v${VERSION}.linux-${ARCH}" \
-  -o /tmp/docker-buildx
+  "${base}/${asset}" -o /tmp/docker-buildx
 
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/docker-buildx" | sha256sum -c -
 else
-  printf '%sWARNING: SHA256 verification skipped for Docker Buildx (no checksum for docker-buildx in [plugins.versions])%s\n' "$C_YEL" "$C_RST" >&2
+  # No user checksum: verify against the release's own checksums.txt.
+  curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+    "${base}/checksums.txt" -o /tmp/docker-buildx.sums
+  # Match the asset name literally (awk field compare, not a regex; strip the
+  # binary-mode '*' marker docker-buildx's checksums.txt prepends) and fail
+  # loudly if it is absent so a manifest-shape change does not collapse into
+  # an opaque sha256sum error.
+  expected="$(awk -v f="$asset" '{ n = $2; sub(/^\*/, "", n); if (n == f) { print $1; exit } }' /tmp/docker-buildx.sums)"
+  if [ -z "$expected" ]; then
+    echo "docker-buildx: ${asset} not found in checksums.txt" >&2
+    exit 1
+  fi
+  echo "${expected}  /tmp/docker-buildx" | sha256sum -c -
+  rm -f /tmp/docker-buildx.sums
 fi
 
 # /usr/libexec/docker/cli-plugins/ is the Docker CLI plugin lookup path
@@ -266,6 +270,10 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 set -euo pipefail
 
 mkdir -p /etc/apt/keyrings
+# Normalize the dir mode so apt's sandboxed _apt user can traverse it under a
+# restrictive umask; otherwise apt-get update can fail to read the keyring even
+# though the key file is go+r. Matches github-cli's keyless flow.
+chmod 755 /etc/apt/keyrings
 
 # shellcheck disable=SC1091
 . /etc/os-release
@@ -274,10 +282,15 @@ mkdir -p /etc/apt/keyrings
 # Debian. Use the /etc/os-release ID directly so the same install.sh works
 # for either base image without a hard-coded distro path.
 docker_repo="https://download.docker.com/linux/${ID}"
-curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
-  "${docker_repo}/gpg" | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
 
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] ${docker_repo} ${VERSION_CODENAME} stable" \
+# Store the Docker signing key ASCII-armored and reference it directly via
+# signed-by, so apt verifies packages without needing the gpg binary (the
+# minimal base ships ca-certificates + curl but not gnupg).
+curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+  "${docker_repo}/gpg" -o /etc/apt/keyrings/docker.asc
+chmod go+r /etc/apt/keyrings/docker.asc
+
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] ${docker_repo} ${VERSION_CODENAME} stable" \
   >/etc/apt/sources.list.d/docker.list
 
 apt-get update
@@ -317,20 +330,11 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 #
 # Inputs (env):
 #   PIN              : gitleaks version (without leading "v"); empty = latest
-#   CHECKSUM_AMD64   : sha256 of amd64 tarball; empty to skip verification
-#   CHECKSUM_ARM64   : sha256 of arm64 tarball; empty to skip verification
+#   CHECKSUM_AMD64   : sha256 of amd64 tarball; empty = verify against the
+#                      release checksums file
+#   CHECKSUM_ARM64   : sha256 of arm64 tarball; empty = verify against the
+#                      release checksums file
 set -euo pipefail
-
-if [ -n "${NO_COLOR:-}" ]; then
-  C_YEL=''
-  C_RST=''
-elif [ -n "${FORCE_COLOR:-}" ] || [ -t 2 ]; then
-  C_YEL=$'\033[33m'
-  C_RST=$'\033[0m'
-else
-  C_YEL=''
-  C_RST=''
-fi
 
 # gitleaks asset names use x64 / arm64 (NOT x86_64 / aarch64).
 ARCH="$(dpkg --print-architecture)"
@@ -357,14 +361,28 @@ else
     sed 's|.*/tag/v||')
 fi
 
+base="https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}"
+asset="gitleaks_${VERSION}_linux_${DOWNLOAD_ARCH}.tar.gz"
+
 curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
-  "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_${DOWNLOAD_ARCH}.tar.gz" \
-  -o /tmp/gitleaks.tar.gz
+  "${base}/${asset}" -o /tmp/gitleaks.tar.gz
 
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/gitleaks.tar.gz" | sha256sum -c -
 else
-  printf '%sWARNING: SHA256 verification skipped for gitleaks (no checksum for gitleaks in [plugins.versions])%s\n' "$C_YEL" "$C_RST" >&2
+  # No user checksum: verify against the release's own checksums file.
+  curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+    "${base}/gitleaks_${VERSION}_checksums.txt" -o /tmp/gitleaks.sums
+  # Match the asset name literally (awk field compare, not a regex; strip the
+  # binary-mode '*' marker some manifests prepend) and fail loudly if it is
+  # absent so a manifest-shape change does not collapse into an opaque error.
+  expected="$(awk -v f="$asset" '{ n = $2; sub(/^\*/, "", n); if (n == f) { print $1; exit } }' /tmp/gitleaks.sums)"
+  if [ -z "$expected" ]; then
+    echo "gitleaks: ${asset} not found in checksums file" >&2
+    exit 1
+  fi
+  echo "${expected}  /tmp/gitleaks.tar.gz" | sha256sum -c -
+  rm -f /tmp/gitleaks.sums
 fi
 
 tar -xzf /tmp/gitleaks.tar.gz -C /usr/local/bin gitleaks
@@ -379,22 +397,11 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 #
 # Inputs (env):
 #   PIN              : just version (without leading "v"); empty = latest
-#   CHECKSUM_AMD64   : sha256 of amd64 tarball; empty to skip verification
-#   CHECKSUM_ARM64   : sha256 of arm64 tarball; empty to skip verification
+#   CHECKSUM_AMD64   : sha256 of amd64 tarball; empty = verify against the
+#                      release SHA256SUMS
+#   CHECKSUM_ARM64   : sha256 of arm64 tarball; empty = verify against the
+#                      release SHA256SUMS
 set -euo pipefail
-
-# Yellow WARNING when stderr is a TTY (and NO_COLOR is unset) or
-# FORCE_COLOR is set. NO_COLOR wins per no-color.org.
-if [ -n "${NO_COLOR:-}" ]; then
-  C_YEL=''
-  C_RST=''
-elif [ -n "${FORCE_COLOR:-}" ] || [ -t 2 ]; then
-  C_YEL=$'\033[33m'
-  C_RST=$'\033[0m'
-else
-  C_YEL=''
-  C_RST=''
-fi
 
 ARCH="$(dpkg --print-architecture)"
 case "$ARCH" in
@@ -422,14 +429,28 @@ else
     sed 's|.*/tag/||')
 fi
 
+base="https://github.com/casey/just/releases/download/${VERSION}"
+asset="just-${VERSION}-${DOWNLOAD_ARCH}-unknown-linux-musl.tar.gz"
+
 curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
-  "https://github.com/casey/just/releases/download/${VERSION}/just-${VERSION}-${DOWNLOAD_ARCH}-unknown-linux-musl.tar.gz" \
-  -o /tmp/just.tar.gz
+  "${base}/${asset}" -o /tmp/just.tar.gz
 
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/just.tar.gz" | sha256sum -c -
 else
-  printf '%sWARNING: SHA256 verification skipped for just (no checksum for just in [plugins.versions])%s\n' "$C_YEL" "$C_RST" >&2
+  # No user checksum: verify against the release's own SHA256SUMS.
+  curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+    "${base}/SHA256SUMS" -o /tmp/just.sums
+  # Match the asset name literally (awk field compare, not a regex; strip the
+  # binary-mode '*' marker some manifests prepend) and fail loudly if it is
+  # absent so a manifest-shape change does not collapse into an opaque error.
+  expected="$(awk -v f="$asset" '{ n = $2; sub(/^\*/, "", n); if (n == f) { print $1; exit } }' /tmp/just.sums)"
+  if [ -z "$expected" ]; then
+    echo "just: ${asset} not found in SHA256SUMS" >&2
+    exit 1
+  fi
+  echo "${expected}  /tmp/just.tar.gz" | sha256sum -c -
+  rm -f /tmp/just.sums
 fi
 
 tar -xzf /tmp/just.tar.gz -C /usr/local/bin just
@@ -444,22 +465,11 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 #
 # Inputs (env):
 #   PIN              : Node.js version without leading "v" (e.g. "24.15.0"); empty = latest LTS
-#   CHECKSUM_AMD64   : sha256 of linux-x64 tarball; empty to skip verification
-#   CHECKSUM_ARM64   : sha256 of linux-arm64 tarball; empty to skip verification
+#   CHECKSUM_AMD64   : sha256 of linux-x64 tarball; empty = verify against the
+#                      release SHASUMS256.txt
+#   CHECKSUM_ARM64   : sha256 of linux-arm64 tarball; empty = verify against the
+#                      release SHASUMS256.txt
 set -euo pipefail
-
-# Yellow WARNING when stderr is a TTY (and NO_COLOR is unset) or
-# FORCE_COLOR is set. NO_COLOR wins per no-color.org.
-if [ -n "${NO_COLOR:-}" ]; then
-  C_YEL=''
-  C_RST=''
-elif [ -n "${FORCE_COLOR:-}" ] || [ -t 2 ]; then
-  C_YEL=$'\033[33m'
-  C_RST=$'\033[0m'
-else
-  C_YEL=''
-  C_RST=''
-fi
 
 ARCH="$(dpkg --print-architecture)"
 case "$ARCH" in
@@ -482,23 +492,42 @@ if [ -n "$PIN" ]; then
 else
   # Resolve latest LTS from dist/index.tab. The 10th column is the LTS
   # codename ("-" for non-LTS releases); the first matching row is the
-  # newest LTS line because index.tab is sorted newest-first.
-  VERSION=$(curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
-    https://nodejs.org/dist/index.tab |
-    awk -F'\t' 'NR>1 && $10 != "-" { sub(/^v/, "", $1); print $1; exit }')
+  # newest LTS line because index.tab is sorted newest-first. Download to a
+  # file before parsing: piping curl straight into `awk ... exit` makes awk
+  # close the pipe on the first match while curl is still streaming the
+  # ~200 KB index, so curl aborts with a write error (exit 23) that
+  # `set -o pipefail` turns into a build failure.
+  curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+    https://nodejs.org/dist/index.tab -o /tmp/node-index.tab
+  VERSION=$(awk -F'\t' 'NR>1 && $10 != "-" { sub(/^v/, "", $1); print $1; exit }' /tmp/node-index.tab)
+  rm -f /tmp/node-index.tab
   if [ -z "$VERSION" ]; then
     echo "Failed to resolve latest Node.js LTS version" >&2
     exit 1
   fi
 fi
 
+dist="https://nodejs.org/dist/v${VERSION}"
+asset="node-v${VERSION}-linux-${NODE_ARCH}.tar.xz"
 curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
-  "https://nodejs.org/dist/v${VERSION}/node-v${VERSION}-linux-${NODE_ARCH}.tar.xz" -o /tmp/node.tar.xz
+  "${dist}/${asset}" -o /tmp/node.tar.xz
 
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/node.tar.xz" | sha256sum -c -
 else
-  printf '%sWARNING: SHA256 verification skipped for Node.js (no checksum for node in [plugins.versions])%s\n' "$C_YEL" "$C_RST" >&2
+  # No user checksum: verify against the release's own SHASUMS256.txt.
+  curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+    "${dist}/SHASUMS256.txt" -o /tmp/node.sums
+  # Match the asset name literally (awk field compare, not a regex; strip the
+  # binary-mode '*' marker some manifests prepend) and fail loudly if it is
+  # absent so a manifest-shape change does not collapse into an opaque error.
+  expected="$(awk -v f="$asset" '{ n = $2; sub(/^\*/, "", n); if (n == f) { print $1; exit } }' /tmp/node.sums)"
+  if [ -z "$expected" ]; then
+    echo "node: ${asset} not found in SHASUMS256.txt" >&2
+    exit 1
+  fi
+  echo "${expected}  /tmp/node.tar.xz" | sha256sum -c -
+  rm -f /tmp/node.sums
 fi
 
 mkdir -p /usr/local/node
@@ -615,9 +644,11 @@ else
     sed 's|.*/tag/v||')
 fi
 
+base="https://github.com/mvdan/sh/releases/download/v${VERSION}"
+asset="shfmt_v${VERSION}_linux_${ARCH}"
+
 curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
-  "https://github.com/mvdan/sh/releases/download/v${VERSION}/shfmt_v${VERSION}_linux_${ARCH}" \
-  -o /tmp/shfmt
+  "${base}/${asset}" -o /tmp/shfmt
 
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/shfmt" | sha256sum -c -
@@ -637,22 +668,11 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 #
 # Inputs (env):
 #   PIN              : Starship version (without leading "v"); empty = latest
-#   CHECKSUM_AMD64   : sha256 of amd64 tarball; empty to skip verification
-#   CHECKSUM_ARM64   : sha256 of arm64 tarball; empty to skip verification
+#   CHECKSUM_AMD64   : sha256 of amd64 tarball; empty = verify against the
+#                      per-asset .sha256 published with the release
+#   CHECKSUM_ARM64   : sha256 of arm64 tarball; empty = verify against the
+#                      per-asset .sha256 published with the release
 set -euo pipefail
-
-# Yellow WARNING when stderr is a TTY (and NO_COLOR is unset) or
-# FORCE_COLOR is set. NO_COLOR wins per no-color.org.
-if [ -n "${NO_COLOR:-}" ]; then
-  C_YEL=''
-  C_RST=''
-elif [ -n "${FORCE_COLOR:-}" ] || [ -t 2 ]; then
-  C_YEL=$'\033[33m'
-  C_RST=$'\033[0m'
-else
-  C_YEL=''
-  C_RST=''
-fi
 
 ARCH="$(dpkg --print-architecture)"
 case "$ARCH" in
@@ -678,14 +698,24 @@ else
     sed 's|.*/tag/v||')
 fi
 
+url="https://github.com/starship/starship/releases/download/v${VERSION}/starship-${DOWNLOAD_ARCH}-unknown-linux-musl.tar.gz"
 curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
-  "https://github.com/starship/starship/releases/download/v${VERSION}/starship-${DOWNLOAD_ARCH}-unknown-linux-musl.tar.gz" \
-  -o /tmp/starship.tar.gz
+  "$url" -o /tmp/starship.tar.gz
 
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/starship.tar.gz" | sha256sum -c -
 else
-  printf '%sWARNING: SHA256 verification skipped for Starship (no checksum for starship in [plugins.versions])%s\n' "$C_YEL" "$C_RST" >&2
+  # No user checksum: verify against the per-asset .sha256 (a bare hash) the
+  # release publishes next to the tarball.
+  curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+    "${url}.sha256" -o /tmp/starship.sum
+  expected="$(cut -d ' ' -f1 /tmp/starship.sum)"
+  if [ -z "$expected" ]; then
+    echo "starship: empty checksum from ${url}.sha256" >&2
+    exit 1
+  fi
+  echo "${expected}  /tmp/starship.tar.gz" | sha256sum -c -
+  rm -f /tmp/starship.sum
 fi
 
 tar -xzf /tmp/starship.tar.gz -C /usr/local/bin starship
@@ -711,13 +741,15 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 #!/usr/bin/env bash
 # Install GitHub Copilot CLI from the GitHub Releases binary tarball
 # (https://github.com/github/copilot-cli/releases). Picked when gh.io is
-# blocked (e.g. Zscaler) or corporate policy forbids the `curl | bash`
-# pattern that install.gh-cli.sh uses.
+# unreachable or policy forbids the `curl | bash` pattern that
+# install.installer.sh uses.
 #
 # Inputs (env):
 #   PIN                   : Copilot CLI version (without leading "v"); empty = latest
-#   CHECKSUM_AMD64        : sha256 of copilot-linux-x64.tar.gz; empty to skip verification
-#   CHECKSUM_ARM64        : sha256 of copilot-linux-arm64.tar.gz; empty to skip verification
+#   CHECKSUM_AMD64        : sha256 of copilot-linux-x64.tar.gz; empty = verify
+#                           against the release SHA256SUMS.txt
+#   CHECKSUM_ARM64        : sha256 of copilot-linux-arm64.tar.gz; empty = verify
+#                           against the release SHA256SUMS.txt
 #   COCOON_INSTALL_METHOD : selected install method; must equal "binary"
 set -euo pipefail
 
@@ -725,19 +757,6 @@ set -euo pipefail
 if [ "$COCOON_INSTALL_METHOD" != "binary" ]; then
   echo "install.binary.sh invoked with COCOON_INSTALL_METHOD=$COCOON_INSTALL_METHOD; expected binary" >&2
   exit 1
-fi
-
-# Yellow WARNING when stderr is a TTY (and NO_COLOR is unset) or
-# FORCE_COLOR is set. NO_COLOR wins per no-color.org.
-if [ -n "${NO_COLOR:-}" ]; then
-  C_YEL=''
-  C_RST=''
-elif [ -n "${FORCE_COLOR:-}" ] || [ -t 2 ]; then
-  C_YEL=$'\033[33m'
-  C_RST=$'\033[0m'
-else
-  C_YEL=''
-  C_RST=''
 fi
 
 ARCH="$(dpkg --print-architecture)"
@@ -764,15 +783,28 @@ else
     sed 's|.*/tag/v||')
 fi
 
+base="https://github.com/github/copilot-cli/releases/download/v${VERSION}"
 TARBALL="copilot-linux-${DOWNLOAD_ARCH}.tar.gz"
 curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
-  "https://github.com/github/copilot-cli/releases/download/v${VERSION}/${TARBALL}" \
+  "${base}/${TARBALL}" \
   -o "/tmp/${TARBALL}"
 
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/${TARBALL}" | sha256sum -c -
 else
-  printf '%sWARNING: SHA256 verification skipped for Copilot CLI (no checksum for copilot-cli in [plugins.versions])%s\n' "$C_YEL" "$C_RST" >&2
+  # No user checksum: verify against the release's own SHA256SUMS.txt.
+  curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+    "${base}/SHA256SUMS.txt" -o /tmp/copilot.sums
+  # Match the asset name literally (awk field compare, not a regex; strip the
+  # binary-mode '*' marker some manifests prepend) and fail loudly if it is
+  # absent so a manifest-shape change does not collapse into an opaque error.
+  expected="$(awk -v f="$TARBALL" '{ n = $2; sub(/^\*/, "", n); if (n == f) { print $1; exit } }' /tmp/copilot.sums)"
+  if [ -z "$expected" ]; then
+    echo "copilot-cli: ${TARBALL} not found in SHA256SUMS.txt" >&2
+    exit 1
+  fi
+  echo "${expected}  /tmp/${TARBALL}" | sha256sum -c -
+  rm -f /tmp/copilot.sums
 fi
 
 # The release tarball is a single self-contained ELF binary at the

@@ -9,7 +9,7 @@ requires_root = true
 default_method = "binary"
 
 [install.methods.binary]
-description = "Single cocoon binary downloaded from the GitHub Pages mirror at https://sukekyo26.github.io/cocoon/"
+description = "Single cocoon binary downloaded from its GitHub Pages mirror"
 
 [version]
 version_capable = true

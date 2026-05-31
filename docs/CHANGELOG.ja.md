@@ -6,6 +6,38 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-05-31
+
+### 追加
+
+- 新しい `azure-cli` プラグインを追加。[Azure CLI](https://learn.microsoft.com/cli/azure)
+  （`az`）を Microsoft 公式の apt リポジトリ（`packages.microsoft.com`）から、
+  Microsoft の署名鍵で検証してインストールする。Microsoft はリポジトリをリリース
+  コードネーム単位で公開しているため、未公開のコードネームのベース（例: Debian 13）
+  では、壊れたビルドにせず明確なメッセージで早期に失敗する。`~/.azure` を永続化し、
+  `az login` の状態がコンテナ再ビルド後も残る。
+- 新しい `gcloud` プラグインを追加。[Google Cloud CLI](https://cloud.google.com/sdk)
+  （`gcloud`, `gsutil`, `bq`）を Google 公式の apt リポジトリ
+  （`packages.cloud.google.com`）から、Google の署名鍵で検証してインストールする。
+  `CLOUDSDK_CONFIG=~/.gcloud` を設定して永続化し、`gcloud auth login` の状態が
+  コンテナ再ビルド後も残る。
+- 新しい `golangci-lint` プラグインを追加。[Go 用リンタランナー](https://github.com/golangci/golangci-lint)
+  を GitHub Release のバイナリからインストールする。`version_capable`
+  （`[plugins.versions].golangci-lint` でピン留め可）で、未ピンのビルドは
+  最新リリースを解決し、ダウンロードをリリースの `checksums.txt` で検証する。
+- 新しい `codex` プラグインを追加。[OpenAI Codex CLI](https://github.com/openai/codex)
+  （OpenAI のターミナル向けコーディングエージェント）を GitHub Release の musl
+  バイナリからインストールする。`version_capable`（`[plugins.versions].codex` で
+  ピン留め可）で、`~/.codex`（認証・設定）を再ビルド後も永続化する。OpenAI は
+  チェックサムマニフェストを公開していないため、未ピンのビルドは検証を警告付きで
+  スキップする（`shfmt` / `shellcheck` と同じ）。検証済みビルドには
+  `checksum_amd64` / `checksum_arm64` をピン留めする。
+
+### 変更
+
+- `cocoon` プラグインの `binary` インストール方式の説明文（`cocoon plugin show` で
+  表示）からミラー URL を削除。
+
 ## [0.9.2] - 2026-05-31
 
 ### 変更
@@ -433,7 +465,8 @@ cocoon の主要な変更を記録します。フォーマットは
 - `COMPOSE_PROJECT_NAME` をプロジェクトディレクトリの basename から導出するように変更。docker compose の namespace がホストディレクトリと一致する。
 - 国際化 (英語 / 日本語) カタログを追加。CLI プロンプト・エラーメッセージ・`workspace.toml` インラインコメントすべてを `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` で切替可能。
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.9.2...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/sukekyo26/cocoon/compare/v0.9.2...v0.10.0
 [0.9.2]: https://github.com/sukekyo26/cocoon/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/sukekyo26/cocoon/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/sukekyo26/cocoon/compare/v0.8.0...v0.9.0

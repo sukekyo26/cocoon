@@ -6,6 +6,37 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-05-31
+
+### Added
+
+- New `azure-cli` plugin installs the [Azure CLI](https://learn.microsoft.com/cli/azure)
+  (`az`) from Microsoft's official apt repository (`packages.microsoft.com`),
+  verified by Microsoft's signing key. Microsoft publishes the repo per release
+  codename, so on a base whose codename it has not shipped yet (e.g. Debian 13)
+  the install fails fast with guidance rather than a broken build. Persists
+  `~/.azure` so `az login` state survives container rebuilds.
+- New `gcloud` plugin installs the [Google Cloud CLI](https://cloud.google.com/sdk)
+  (`gcloud`, `gsutil`, `bq`) from Google's official apt repository
+  (`packages.cloud.google.com`), verified by Google's signing key. Sets
+  `CLOUDSDK_CONFIG=~/.gcloud` and persists it so `gcloud auth login` survives
+  container rebuilds.
+- New `golangci-lint` plugin installs the [Go linters runner](https://github.com/golangci/golangci-lint)
+  from its GitHub Release binary. It is `version_capable` (pin via
+  `[plugins.versions].golangci-lint`); unpinned builds resolve the latest
+  release and verify the download against the release `checksums.txt`.
+- New `codex` plugin installs the [OpenAI Codex CLI](https://github.com/openai/codex),
+  OpenAI's terminal coding agent, from its GitHub Release musl binary. It is
+  `version_capable` (pin via `[plugins.versions].codex`) and persists `~/.codex`
+  (auth/config) across rebuilds. OpenAI publishes no checksum manifest, so
+  unpinned builds warn-and-skip verification (like `shfmt` / `shellcheck`); pin
+  `checksum_amd64` / `checksum_arm64` for a verified build.
+
+### Changed
+
+- Remove the mirror URL from the `cocoon` plugin's `binary` install-method
+  description shown by `cocoon plugin show`.
+
 ## [0.9.2] - 2026-05-31
 
 ### Changed
@@ -435,7 +466,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Add `COMPOSE_PROJECT_NAME` derivation from the project directory basename so docker compose namespacing matches the host directory.
 - Add i18n catalog (English / Japanese) covering every CLI prompt, error message, and inline `workspace.toml` comment, switched via `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG`.
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.9.2...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/sukekyo26/cocoon/compare/v0.9.2...v0.10.0
 [0.9.2]: https://github.com/sukekyo26/cocoon/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/sukekyo26/cocoon/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/sukekyo26/cocoon/compare/v0.8.0...v0.9.0

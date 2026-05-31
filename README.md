@@ -112,9 +112,7 @@ Each answer becomes a self-documenting line in `workspace.toml`. Pass `--yes` to
 
 ## Plugins
 
-Plugins shipped inside the binary via `go:embed`:
-
-`android-sdk`, `aws-cli`, `aws-sam-cli`, `bun`, `claude-code`, `cocoon`, `copilot-cli`, `dart`, `deno`, `docker-buildx`, `docker-cli`, `flutter`, `github-cli`, `gitleaks`, `go`, `google-chrome`, `helm`, `just`, `kubectl`, `lazygit`, `mise`, `nerd-fonts`, `node`, `opentofu`, `proto`, `rust`, `shellcheck`, `shfmt`, `starship`, `terraform`, `uv`, `zig`
+cocoon ships a catalog of plugins embedded in the binary via `go:embed`. Run `cocoon plugin list` for the full catalog and `cocoon plugin show <id>` for a single plugin's details — the command is the authoritative source, so this README does not duplicate (and drift from) the list.
 
 Override or add your own under `~/.cocoon/plugins/<id>/` (user scope) or `<project>/.cocoon/plugins/<id>/` (project scope, checked into the repo) — both layers win over the embedded catalog. See [`docs/plugins.md`](docs/plugins.md) for the authoring guide.
 
