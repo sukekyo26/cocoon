@@ -243,6 +243,21 @@ func TestDevcontainerPortEntries(t *testing.T) {
 			want: []int{8000},
 		},
 		{
+			// A long-form entry that omits `target` cannot pass
+			// validateLongForm ("target is required"), but
+			// DevcontainerPortEntries is exported and exercised directly
+			// (here, and by any caller that hands it raw data), so it must
+			// still report a clear "missing target" reason rather than the
+			// confusing "non-integer target <nil>" the absent value would
+			// otherwise produce.
+			name: "long_form_missing_target",
+			in: []any{
+				map[string]any{"published": int64(8080)},
+			},
+			want:     []int{},
+			wantWarn: "missing target",
+		},
+		{
 			// `target` present but not a plain integer is reported as a
 			// non-integer target, not as "missing target".
 			name: "long_form_non_integer_target",
