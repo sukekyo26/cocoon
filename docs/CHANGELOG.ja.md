@@ -6,6 +6,27 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+## [0.10.2] - 2026-05-31
+
+### 変更
+
+- 生成される `.devcontainer/docker-compose.yml` が、すべての文字列値を
+  ダブルクォートで出力するようになった（例: `command: "sleep infinity"`、
+  `ipc: "host"`、`dns` の各エントリ、`environment` の値）。従来は YAML 特殊文字を
+  含む値だけがクォートされ、クォート有無が混在していた。整形のみの変更で、
+  パースもランタイム動作も同一（`${VAR}` 展開も従来どおり）。`cocoon gen` で
+  再生成して追従。
+
+### 修正
+
+- host 側とコンテナ側でポート番号が異なる `[ports].forward` エントリ
+  （例: `"30002:3000"`、long form `{ target = 5432, published = 15432 }`）について、
+  `.devcontainer/devcontainer.json` の `forwardPorts` がコンテナ側ポートを
+  出力するよう修正。従来は host 側ポートを出力しており、VS Code が誰も listen
+  していないコンテナポートを転送しようとしていた。生成される
+  `docker-compose.yml` の `ports:` マッピングは不変。既存の `.devcontainer/` は
+  `cocoon gen` で再生成して追従させてください。
+
 ## [0.10.1] - 2026-05-31
 
 ### 修正
@@ -475,7 +496,8 @@ cocoon の主要な変更を記録します。フォーマットは
 - `COMPOSE_PROJECT_NAME` をプロジェクトディレクトリの basename から導出するように変更。docker compose の namespace がホストディレクトリと一致する。
 - 国際化 (英語 / 日本語) カタログを追加。CLI プロンプト・エラーメッセージ・`workspace.toml` インラインコメントすべてを `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` で切替可能。
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.10.1...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.10.2...HEAD
+[0.10.2]: https://github.com/sukekyo26/cocoon/compare/v0.10.1...v0.10.2
 [0.10.1]: https://github.com/sukekyo26/cocoon/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/sukekyo26/cocoon/compare/v0.9.2...v0.10.0
 [0.9.2]: https://github.com/sukekyo26/cocoon/compare/v0.9.1...v0.9.2

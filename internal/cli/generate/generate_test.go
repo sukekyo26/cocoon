@@ -58,8 +58,8 @@ packages = []
 `,
 			assert: []expect{
 				{path: ".devcontainer/docker-compose.yml", mustContain: []string{
-					"svc-all", "init: true", "stop_grace_period: 30s",
-					"shm_size: 1gb", "pids_limit: 4096",
+					"svc-all", "init: true", `stop_grace_period: "30s"`,
+					`shm_size: "1gb"`, "pids_limit: 4096",
 				}, mustNotContain: []string{"{{", "${UID}", "${GID}", "group_add"}},
 				{path: ".devcontainer/Dockerfile", mustContain: []string{
 					"# syntax=docker/dockerfile:1.7",
@@ -190,8 +190,8 @@ timezone = "Asia/Tokyo"
 			assert: []expect{
 				{path: ".devcontainer/docker-compose.yml", mustContain: []string{
 					"FOO=bar", "TZ=Asia/Tokyo",
-					"shm_size: 2gb", "pids_limit: 8192", "stop_grace_period: 60s",
-					"cpus: 4.0", "mem_limit: 8gb", "soft: 131072",
+					`shm_size: "2gb"`, "pids_limit: 8192", `stop_grace_period: "60s"`,
+					"cpus: 4.0", `mem_limit: "8gb"`, "soft: 131072",
 					".gitconfig:/home/u/.gitconfig:ro",
 					"/etc/corp-ca:/usr/local/share/ca-certificates/corp",
 				}},

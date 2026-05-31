@@ -15,13 +15,13 @@ import (
 // service. It returns (sidecar service node, top-level volume entries).
 func buildSidecar(name string, spec config.SidecarService) (*yaml.Node, []yamlx.Pair) {
 	pairs := []yamlx.Pair{
-		{Key: "image", Value: yamlx.QuotedIfSpecial(spec.Image)},
+		{Key: "image", Value: yamlx.Quoted(spec.Image)},
 		{Key: "init", Value: yamlx.Bool(true)},
 	}
 	if len(spec.Ports) > 0 {
 		items := make([]*yaml.Node, 0, len(spec.Ports))
 		for _, p := range spec.Ports {
-			items = append(items, yamlx.QuotedIfSpecial(scalarString(p)))
+			items = append(items, yamlx.Quoted(scalarString(p)))
 		}
 		pairs = append(pairs, yamlx.Pair{Key: "ports", Value: yamlx.Seq(items...)})
 	}
@@ -29,7 +29,7 @@ func buildSidecar(name string, spec config.SidecarService) (*yaml.Node, []yamlx.
 		keys := slices.Sorted(maps.Keys(spec.Env))
 		items := make([]*yaml.Node, 0, len(keys))
 		for _, k := range keys {
-			items = append(items, yamlx.QuotedIfSpecial(k+"="+spec.Env[k]))
+			items = append(items, yamlx.Quoted(k+"="+spec.Env[k]))
 		}
 		pairs = append(pairs, yamlx.Pair{Key: "environment", Value: yamlx.Seq(items...)})
 	}
@@ -39,12 +39,12 @@ func buildSidecar(name string, spec config.SidecarService) (*yaml.Node, []yamlx.
 		pairs = append(pairs, yamlx.Pair{Key: "volumes", Value: yamlx.Seq(mounts...)})
 	}
 	if spec.Command != nil {
-		pairs = append(pairs, yamlx.Pair{Key: "command", Value: yamlx.QuotedIfSpecial(scalarString(spec.Command))})
+		pairs = append(pairs, yamlx.Pair{Key: "command", Value: yamlx.Quoted(scalarString(spec.Command))})
 	}
 	if len(spec.DependsOn) > 0 {
 		items := make([]*yaml.Node, 0, len(spec.DependsOn))
 		for _, d := range spec.DependsOn {
-			items = append(items, yamlx.QuotedIfSpecial(d))
+			items = append(items, yamlx.Quoted(d))
 		}
 		pairs = append(pairs, yamlx.Pair{Key: "depends_on", Value: yamlx.Seq(items...)})
 	}
@@ -52,7 +52,7 @@ func buildSidecar(name string, spec config.SidecarService) (*yaml.Node, []yamlx.
 		pairs = append(pairs, yamlx.Pair{Key: "healthcheck", Value: anyMap(spec.Healthcheck)})
 	}
 	if spec.Restart != nil {
-		pairs = append(pairs, yamlx.Pair{Key: "restart", Value: yamlx.QuotedIfSpecial(string(*spec.Restart))})
+		pairs = append(pairs, yamlx.Pair{Key: "restart", Value: yamlx.Quoted(string(*spec.Restart))})
 	}
 	return yamlx.Map(pairs...), vols
 }
@@ -64,7 +64,7 @@ func buildSidecarVolumes(name string, spec config.SidecarService) ([]*yaml.Node,
 	for _, k := range keys {
 		path := spec.Volumes[k]
 		ns := name + "_" + k
-		mounts = append(mounts, yamlx.QuotedIfSpecial(ns+":"+path))
+		mounts = append(mounts, yamlx.Quoted(ns+":"+path))
 		vols = append(vols, yamlx.Pair{
 			Key:   ns,
 			Value: namedVolume(fmt.Sprintf("${COMPOSE_PROJECT_NAME}_%s_%s", name, k)),
@@ -75,7 +75,7 @@ func buildSidecarVolumes(name string, spec config.SidecarService) ([]*yaml.Node,
 		if m.Readonly {
 			mount += ":ro"
 		}
-		mounts = append(mounts, yamlx.QuotedIfSpecial(mount))
+		mounts = append(mounts, yamlx.Quoted(mount))
 	}
 	return mounts, vols
 }
@@ -107,7 +107,7 @@ func anyMap(m map[string]any) *yaml.Node {
 func anyNode(v any) *yaml.Node {
 	switch x := v.(type) {
 	case string:
-		return yamlx.QuotedIfSpecial(x)
+		return yamlx.Quoted(x)
 	case bool:
 		return yamlx.Bool(x)
 	case int:
@@ -125,6 +125,6 @@ func anyNode(v any) *yaml.Node {
 	case map[string]any:
 		return anyMap(x)
 	default:
-		return yamlx.QuotedIfSpecial(fmt.Sprintf("%v", v))
+		return yamlx.Quoted(fmt.Sprintf("%v", v))
 	}
 }

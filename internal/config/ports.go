@@ -93,10 +93,13 @@ func ComposePortEntries(forward []any) []ComposePort {
 	return out
 }
 
-// DevcontainerPortEntries skips entries that cannot reduce to a single TCP
-// integer (port ranges, mode=host, protocol=udp). If warn is non-nil each
-// skip is announced so the user can reconcile docker-compose-only ports
-// with devcontainer output.
+// DevcontainerPortEntries returns the container-side port of each forward
+// entry. devcontainer.json's forwardPorts lists ports inside the container
+// (where the app listens), which VS Code forwards to the local machine — not
+// the published host port. Entries that cannot reduce to a single TCP integer
+// (container-side port ranges, mode=host, protocol=udp) are skipped; if warn
+// is non-nil each skip is announced so the user can reconcile
+// docker-compose-only ports with devcontainer output.
 func DevcontainerPortEntries(forward []any, warn io.Writer) []int {
 	if len(forward) == 0 {
 		return nil
@@ -117,20 +120,20 @@ func DevcontainerPortEntries(forward []any, warn io.Writer) []int {
 	return out
 }
 
-// devcontainerPort returns (port, true, "") on success or (0, false, reason)
-// when the entry cannot be expressed as a single integer.
+// devcontainerPort returns (container port, true, "") on success or
+// (0, false, reason) when the entry cannot be expressed as a single integer.
 func devcontainerPort(raw any) (int, bool, string) {
 	switch v := raw.(type) {
 	case string:
-		return shortFormHostPort(v)
+		return shortFormContainerPort(v)
 	case map[string]any:
-		return longFormHostPort(v)
+		return longFormContainerPort(v)
 	default:
 		return 0, false, fmt.Sprintf("has unsupported type %T", raw)
 	}
 }
 
-func shortFormHostPort(s string) (int, bool, string) {
+func shortFormContainerPort(s string) (int, bool, string) {
 	m := rxPortShortForm.FindStringSubmatch(s)
 	if m == nil {
 		return 0, false, fmt.Sprintf("= %q is not a valid short-form port", s)
@@ -141,23 +144,21 @@ func shortFormHostPort(s string) (int, bool, string) {
 	if proto := m[rxPortShortForm.SubexpIndex("proto")]; proto == "udp" {
 		return 0, false, fmt.Sprintf("= %q uses protocol = \"udp\"", s)
 	}
-	host := m[rxPortShortForm.SubexpIndex("host")]
+	// forwardPorts lists the port inside the container (where the app
+	// listens), not the published host port — for "30002:3000" VS Code
+	// forwards container port 3000, not 30002.
 	container := m[rxPortShortForm.SubexpIndex("container")]
-	pick := host
-	if pick == "" {
-		pick = container
-	}
-	if strings.Contains(pick, "-") {
+	if strings.Contains(container, "-") {
 		return 0, false, fmt.Sprintf("= %q uses a port range", s)
 	}
-	n, err := strconv.Atoi(pick)
+	n, err := strconv.Atoi(container)
 	if err != nil {
 		return 0, false, fmt.Sprintf("= %q has unparseable port", s)
 	}
 	return n, true, ""
 }
 
-func longFormHostPort(m map[string]any) (int, bool, string) {
+func longFormContainerPort(m map[string]any) (int, bool, string) {
 	if mode, ok := stringField(m, "mode"); ok && mode == "host" {
 		return 0, false, "uses mode = \"host\""
 	}
@@ -167,35 +168,18 @@ func longFormHostPort(m map[string]any) (int, bool, string) {
 	if proto, ok := stringField(m, "protocol"); ok && proto == "udp" {
 		return 0, false, "uses protocol = \"udp\""
 	}
-	if v, ok := m["published"]; ok {
-		if n, parsed := publishedHostPort(v); parsed {
-			return n, true, ""
-		}
-		if s, ok := v.(string); ok && strings.Contains(s, "-") {
-			return 0, false, fmt.Sprintf("uses a published range %q", s)
-		}
+	// `target` is the container-side port that VS Code forwards; `published`
+	// is the host port and is irrelevant to forwardPorts (see
+	// shortFormContainerPort).
+	v, ok := m["target"]
+	if !ok {
+		return 0, false, "is missing target"
 	}
-	if v, ok := m["target"]; ok {
-		if n, ok := intField(v); ok {
-			return n, true, ""
-		}
+	n, ok := intField(v)
+	if !ok {
+		return 0, false, fmt.Sprintf("has a non-integer target %v", v)
 	}
-	return 0, false, "is missing target/published"
-}
-
-// publishedHostPort returns (n, true) for int / int64 / integer-valued
-// float64 / numeric string ("8080"); (0, false) for string ranges
-// ("8000-8010") so the caller can skip the entry for devcontainer.json.
-func publishedHostPort(v any) (int, bool) {
-	if n, ok := intField(v); ok {
-		return n, true
-	}
-	if s, ok := v.(string); ok && !strings.Contains(s, "-") {
-		if n, err := strconv.Atoi(s); err == nil {
-			return n, true
-		}
-	}
-	return 0, false
+	return n, true, ""
 }
 
 // normalizeLongForm keeps only allowed keys. `target` is always int;

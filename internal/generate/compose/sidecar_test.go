@@ -57,7 +57,7 @@ func TestGenerate_WithSidecars(t *testing.T) {
 		"redis:7-alpine",
 		"depends_on:",
 		"healthcheck:",
-		"restart: unless-stopped",
+		`restart: "unless-stopped"`,
 		"pgdata:", // named volume from sidecar volumes
 	} {
 		if !strings.Contains(got, sub) {

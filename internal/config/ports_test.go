@@ -176,7 +176,14 @@ func TestDevcontainerPortEntries(t *testing.T) {
 		{
 			name: "host_container",
 			in:   []any{"8080:80"},
-			want: []int{8080},
+			want: []int{80},
+		},
+		{
+			// forwardPorts takes the container-side port (3000), not the
+			// published host port (30002).
+			name: "host_neq_container_uses_container",
+			in:   []any{"30002:3000"},
+			want: []int{3000},
 		},
 		{
 			name: "ip_bind_proto",
@@ -195,11 +202,13 @@ func TestDevcontainerPortEntries(t *testing.T) {
 			wantWarn: "uses a port range",
 		},
 		{
+			// Long form: forwardPorts takes `target` (container 5432), not
+			// the published host port (15432).
 			name: "long_form_published",
 			in: []any{
 				map[string]any{"target": int64(5432), "published": int64(15432)},
 			},
-			want: []int{15432},
+			want: []int{5432},
 		},
 		{
 			name: "long_form_target_only",
@@ -224,12 +233,24 @@ func TestDevcontainerPortEntries(t *testing.T) {
 			want: []int{8080},
 		},
 		{
+			// `published` may be a range while `target` is a single
+			// container port; forwardPorts takes target, so this is kept,
+			// not skipped.
 			name: "long_form_published_string_range",
 			in: []any{
 				map[string]any{"target": int64(8000), "published": "8000-8010"},
 			},
+			want: []int{8000},
+		},
+		{
+			// `target` present but not a plain integer is reported as a
+			// non-integer target, not as "missing target".
+			name: "long_form_non_integer_target",
+			in: []any{
+				map[string]any{"target": "5432-5433"},
+			},
 			want:     []int{},
-			wantWarn: "uses a published range",
+			wantWarn: "non-integer target",
 		},
 		{
 			// UDP entries are TCP-incompatible for the devcontainer

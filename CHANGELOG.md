@@ -6,6 +6,27 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.10.2] - 2026-05-31
+
+### Changed
+
+- The generated `.devcontainer/docker-compose.yml` now double-quotes every
+  string value (e.g. `command: "sleep infinity"`, `ipc: "host"`, `dns` entries,
+  `environment` values). Previously only values containing a YAML-special
+  character were quoted, so the output mixed quoted and unquoted scalars. This
+  is a formatting change only — parsing and runtime behaviour are identical
+  (`${VAR}` interpolation still works). Run `cocoon gen` to regenerate.
+
+### Fixed
+
+- `.devcontainer/devcontainer.json` `forwardPorts` now lists the container-side
+  port for `[ports].forward` entries whose host and container ports differ
+  (e.g. `"30002:3000"`, or long form `{ target = 5432, published = 15432 }`).
+  Previously the host port was emitted, which told VS Code to forward a
+  container port that nothing listens on. The generated `docker-compose.yml`
+  `ports:` mapping is unchanged; run `cocoon gen` to regenerate existing
+  `.devcontainer/` output.
+
 ## [0.10.1] - 2026-05-31
 
 ### Fixed
@@ -476,7 +497,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Add `COMPOSE_PROJECT_NAME` derivation from the project directory basename so docker compose namespacing matches the host directory.
 - Add i18n catalog (English / Japanese) covering every CLI prompt, error message, and inline `workspace.toml` comment, switched via `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG`.
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.10.1...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.10.2...HEAD
+[0.10.2]: https://github.com/sukekyo26/cocoon/compare/v0.10.1...v0.10.2
 [0.10.1]: https://github.com/sukekyo26/cocoon/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/sukekyo26/cocoon/compare/v0.9.2...v0.10.0
 [0.9.2]: https://github.com/sukekyo26/cocoon/compare/v0.9.1...v0.9.2
