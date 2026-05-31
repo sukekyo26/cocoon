@@ -171,12 +171,15 @@ func longFormContainerPort(m map[string]any) (int, bool, string) {
 	// `target` is the container-side port that VS Code forwards; `published`
 	// is the host port and is irrelevant to forwardPorts (see
 	// shortFormContainerPort).
-	if v, ok := m["target"]; ok {
-		if n, ok := intField(v); ok {
-			return n, true, ""
-		}
+	v, ok := m["target"]
+	if !ok {
+		return 0, false, "is missing target"
 	}
-	return 0, false, "is missing target"
+	n, ok := intField(v)
+	if !ok {
+		return 0, false, fmt.Sprintf("has a non-integer target %v", v)
+	}
+	return n, true, ""
 }
 
 // normalizeLongForm keeps only allowed keys. `target` is always int;

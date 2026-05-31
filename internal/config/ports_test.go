@@ -243,6 +243,16 @@ func TestDevcontainerPortEntries(t *testing.T) {
 			want: []int{8000},
 		},
 		{
+			// `target` present but not a plain integer is reported as a
+			// non-integer target, not as "missing target".
+			name: "long_form_non_integer_target",
+			in: []any{
+				map[string]any{"target": "5432-5433"},
+			},
+			want:     []int{},
+			wantWarn: "non-integer target",
+		},
+		{
 			// UDP entries are TCP-incompatible for the devcontainer
 			// port tunnel; they're skipped with a "protocol = \"udp\""
 			// warning. Sibling TCP / unspecified-proto entries flow
