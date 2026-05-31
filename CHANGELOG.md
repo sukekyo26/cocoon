@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- `cocoon self-update` no longer fails with `context deadline exceeded` while
+  downloading the binary on a slow connection. The asset download (the ~12MB
+  binary and `SHA256SUMS`) now has its own 3-minute timeout, separate from the
+  30-second GitHub Releases lookup, so a transfer that needs more than 30s to
+  complete can finish instead of tripping the API-sized deadline.
+
 ## [0.10.0] - 2026-05-31
 
 ### Added

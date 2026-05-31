@@ -31,7 +31,16 @@ import (
 var ErrInstallDirReadOnly = errors.New("install directory is not writable")
 
 const (
+	// apiTimeout caps the GitHub Releases lookup. The payload is a small
+	// JSON blob, so a short deadline keeps the read-only / --check-only
+	// path fast-failing when GitHub is unreachable.
 	apiTimeout = 30 * time.Second
+	// downloadTimeout caps each asset transfer (the ~12MB binary and the
+	// SHA256SUMS file). It is deliberately far more generous than
+	// apiTimeout: a slow-but-working connection (corporate proxy, throttled
+	// link) needs more than 30s to pull 12MB, and tripping the deadline
+	// mid-download surfaces as `context deadline exceeded`.
+	downloadTimeout = 3 * time.Minute
 	// ExitNewerAvailable is the exit code `--check-only` uses to signal a
 	// newer release is available without downloading it.
 	ExitNewerAvailable = 100
@@ -175,7 +184,7 @@ func runSelfUpdate(ctx context.Context, stdout, stderr io.Writer, checkOnly, for
 }
 
 func downloadFile(ctx context.Context, url, dst string) error {
-	tctx, cancel := context.WithTimeout(ctx, apiTimeout)
+	tctx, cancel := context.WithTimeout(ctx, downloadTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(tctx, http.MethodGet, url, nil)
 	if err != nil {
