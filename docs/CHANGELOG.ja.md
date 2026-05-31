@@ -6,6 +6,16 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+### 追加
+
+- 新しい `codex` プラグインを追加。[OpenAI Codex CLI](https://github.com/openai/codex)
+  （OpenAI のターミナル向けコーディングエージェント）を GitHub Release の musl
+  バイナリからインストールする。`version_capable`（`[plugins.versions].codex` で
+  ピン留め可）で、`~/.codex`（認証・設定）を再ビルド後も永続化する。OpenAI は
+  チェックサムマニフェストを公開していないため、未ピンのビルドは検証を警告付きで
+  スキップする（`shfmt` / `shellcheck` と同じ）。検証済みビルドには
+  `checksum_amd64` / `checksum_arm64` をピン留めする。
+
 ### 変更
 
 - `cocoon` プラグインの `binary` インストール方式の説明文（`cocoon plugin show` で

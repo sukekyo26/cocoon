@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- New `codex` plugin installs the [OpenAI Codex CLI](https://github.com/openai/codex),
+  OpenAI's terminal coding agent, from its GitHub Release musl binary. It is
+  `version_capable` (pin via `[plugins.versions].codex`) and persists `~/.codex`
+  (auth/config) across rebuilds. OpenAI publishes no checksum manifest, so
+  unpinned builds warn-and-skip verification (like `shfmt` / `shellcheck`); pin
+  `checksum_amd64` / `checksum_arm64` for a verified build.
+
 ### Changed
 
 - Remove the mirror URL from the `cocoon` plugin's `binary` install-method

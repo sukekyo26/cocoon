@@ -1,0 +1,16 @@
+[metadata]
+name = "OpenAI Codex CLI"
+description = "OpenAI's coding agent that runs in your terminal"
+url = "https://github.com/openai/codex"
+default = false
+
+[install]
+requires_root = true
+volumes = ["/home/${USERNAME}/.codex"]
+default_method = "binary"
+
+[install.methods.binary]
+description = "Single codex binary extracted from a GitHub Release tarball"
+
+[version]
+version_capable = true

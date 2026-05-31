@@ -100,6 +100,7 @@ pin_entries=(
   aws-sam-cli=1.160.1
   bun=1.3.3
   cocoon=0.7.4
+  codex=0.135.0
   copilot-cli=1.0.47
   dart=3.12.0
   deno=2.7.14

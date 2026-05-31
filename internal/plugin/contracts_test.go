@@ -134,6 +134,19 @@ func TestPluginContracts(t *testing.T) {
 			mustNotContain: append(append([]string{}, noPlaceholders...), "api.github.com", "| jq ", "raw.githubusercontent.com"),
 		},
 		{
+			id: "codex", name: "OpenAI Codex CLI",
+			requiresRoot: true, versionCapable: true, firstVolume: "codex",
+			mustContain: []string{
+				"codex", "github.com/openai/codex", "sha256sum -c -",
+				"tlsv1.2", "retry 3", "dpkg --print-architecture", "tar -xz",
+				// musl target triple + the rust-v<semver> release tag scheme.
+				"unknown-linux-musl", "rust-v",
+			},
+			// No upstream checksum manifest: warn-and-skip like shfmt/shellcheck,
+			// so the API-digest fallback (api.github.com + jq) must stay absent.
+			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
+		},
+		{
 			id: "copilot-cli", name: "GitHub Copilot CLI",
 			requiresRoot: false, versionCapable: true, firstVolume: "copilot",
 			mustContain: []string{
