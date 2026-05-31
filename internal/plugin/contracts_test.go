@@ -121,7 +121,7 @@ func TestPluginContracts(t *testing.T) {
 		},
 		{
 			id: "azure-cli", name: "Azure CLI",
-			requiresRoot: true,
+			requiresRoot: true, firstVolume: "azure",
 			mustContain: []string{
 				"azure-cli", "packages.microsoft.com", "signed-by", "microsoft.asc",
 				"VERSION_CODENAME", "retry 3", "tlsv1.2", "chmod 755 /etc/apt/keyrings",

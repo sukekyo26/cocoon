@@ -12,7 +12,8 @@ cocoon の主要な変更を記録します。フォーマットは
   （`az`）を Microsoft 公式の apt リポジトリ（`packages.microsoft.com`）から、
   Microsoft の署名鍵で検証してインストールする。Microsoft はリポジトリをリリース
   コードネーム単位で公開しているため、未公開のコードネームのベース（例: Debian 13）
-  では、壊れたビルドにせず明確なメッセージで早期に失敗する。
+  では、壊れたビルドにせず明確なメッセージで早期に失敗する。`~/.azure` を永続化し、
+  `az login` の状態がコンテナ再ビルド後も残る。
 - 新しい `golangci-lint` プラグインを追加。[Go 用リンタランナー](https://github.com/golangci/golangci-lint)
   を GitHub Release のバイナリからインストールする。`version_capable`
   （`[plugins.versions].golangci-lint` でピン留め可）で、未ピンのビルドは

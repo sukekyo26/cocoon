@@ -6,6 +6,11 @@ default = false
 
 [install]
 requires_root = true
+# Persist azure-cli's config/credentials dir (AZURE_CONFIG_DIR defaults to
+# $HOME/.azure) so `az login` token cache survives `docker compose down && up
+# --build`. The default is already a single $HOME segment, so unlike gcloud no
+# relocation is needed — declare it directly.
+volumes = ["/home/${USERNAME}/.azure"]
 default_method = "apt"
 
 [install.methods.apt]
