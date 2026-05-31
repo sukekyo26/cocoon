@@ -112,9 +112,7 @@ docker compose -f .devcontainer/docker-compose.yml up -d # または VS Code で
 
 ## プラグイン
 
-`go:embed` でバイナリに同梱されているプラグイン:
-
-`android-sdk`, `aws-cli`, `aws-sam-cli`, `bun`, `claude-code`, `cocoon`, `copilot-cli`, `dart`, `deno`, `docker-buildx`, `docker-cli`, `flutter`, `github-cli`, `gitleaks`, `go`, `google-chrome`, `helm`, `just`, `kubectl`, `lazygit`, `mise`, `nerd-fonts`, `node`, `opentofu`, `proto`, `rust`, `shellcheck`, `shfmt`, `starship`, `terraform`, `uv`, `zig`
+cocoon は `go:embed` でバイナリに同梱したプラグインカタログを提供します。全カタログは `cocoon plugin list`、個別プラグインの詳細は `cocoon plugin show <id>` で確認できます。コマンドが信頼できる一次情報なので、README ではリストを重複させません（ドリフト防止）。
 
 `~/.cocoon/plugins/<id>/` (ユーザースコープ) や `<project>/.cocoon/plugins/<id>/` (プロジェクトスコープ。リポジトリにコミット可) で上書き・追加できます。どちらの層も埋め込みカタログより優先されます。作成手順は [`docs/plugins.ja.md`](plugins.ja.md) を参照してください。
 
