@@ -206,6 +206,15 @@ func TestPluginContracts(t *testing.T) {
 			mustContain: []string{"go.dev", "dl.google.com/go", ".sha256", "retry 3", "GOPATH", "tlsv1.2"},
 		},
 		{
+			id: "golangci-lint", name: "golangci-lint",
+			requiresRoot: true, versionCapable: true,
+			mustContain: []string{
+				"golangci-lint", "github.com/golangci/golangci-lint", "sha256sum -c -", "checksums.txt",
+				"tlsv1.2", "retry 3", "dpkg --print-architecture", "tar -xz",
+			},
+			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
+		},
+		{
 			id: "google-chrome", name: "Google Chrome",
 			requiresRoot: true,
 			mustContain: []string{

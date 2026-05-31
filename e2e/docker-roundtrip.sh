@@ -108,6 +108,7 @@ pin_entries=(
   flutter=3.44.0
   gitleaks=8.30.1
   go=1.23.4
+  golangci-lint=2.12.2
   helm=3.16.0
   just=1.51.0
   kubectl=1.31.0

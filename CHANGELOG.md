@@ -8,6 +8,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- New `golangci-lint` plugin installs the [Go linters runner](https://github.com/golangci/golangci-lint)
+  from its GitHub Release binary. It is `version_capable` (pin via
+  `[plugins.versions].golangci-lint`); unpinned builds resolve the latest
+  release and verify the download against the release `checksums.txt`.
 - New `codex` plugin installs the [OpenAI Codex CLI](https://github.com/openai/codex),
   OpenAI's terminal coding agent, from its GitHub Release musl binary. It is
   `version_capable` (pin via `[plugins.versions].codex`) and persists `~/.codex`

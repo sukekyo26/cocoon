@@ -8,6 +8,10 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ### 追加
 
+- 新しい `golangci-lint` プラグインを追加。[Go 用リンタランナー](https://github.com/golangci/golangci-lint)
+  を GitHub Release のバイナリからインストールする。`version_capable`
+  （`[plugins.versions].golangci-lint` でピン留め可）で、未ピンのビルドは
+  最新リリースを解決し、ダウンロードをリリースの `checksums.txt` で検証する。
 - 新しい `codex` プラグインを追加。[OpenAI Codex CLI](https://github.com/openai/codex)
   （OpenAI のターミナル向けコーディングエージェント）を GitHub Release の musl
   バイナリからインストールする。`version_capable`（`[plugins.versions].codex` で

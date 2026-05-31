@@ -1,0 +1,15 @@
+[metadata]
+name = "golangci-lint"
+description = "Fast linters runner for Go"
+url = "https://github.com/golangci/golangci-lint"
+default = false
+
+[install]
+requires_root = true
+default_method = "binary"
+
+[install.methods.binary]
+description = "Single binary extracted from a GitHub Release tarball"
+
+[version]
+version_capable = true
