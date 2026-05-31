@@ -6,6 +6,28 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-05-31
+
+### Changed
+
+- The `shfmt` plugin no longer fetches the upstream `sha256sums.txt` manifest
+  to verify an unpinned (LATEST) download. shfmt removed that manifest upstream
+  as of v3.13.0 (GitHub now provides per-asset digests natively), which made an
+  unpinned `shfmt` build hard-fail. `shfmt` now follows the same model as
+  `shellcheck`: when `checksum_amd64` / `checksum_arm64` is pinned in
+  `[plugins.versions]` the download is verified against it; otherwise
+  verification is skipped with a warning and the build proceeds. Pin a version
+  with its checksum for a fully verified, reproducible install.
+
+### Fixed
+
+- The `node` plugin failed to install at its default (unpinned, latest-LTS)
+  version. The version-resolution step piped `curl` of nodejs.org's ~200 KB
+  `index.tab` straight into `awk ... exit`; awk closing the pipe on the first
+  match aborted curl with a write error (exit 23) that `set -o pipefail` turned
+  into a build failure. The index is now downloaded before parsing. Pinned
+  `node` versions were unaffected.
+
 ## [0.9.1] - 2026-05-30
 
 ### Changed
@@ -413,7 +435,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Add `COMPOSE_PROJECT_NAME` derivation from the project directory basename so docker compose namespacing matches the host directory.
 - Add i18n catalog (English / Japanese) covering every CLI prompt, error message, and inline `workspace.toml` comment, switched via `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG`.
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.9.2...HEAD
+[0.9.2]: https://github.com/sukekyo26/cocoon/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/sukekyo26/cocoon/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/sukekyo26/cocoon/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/sukekyo26/cocoon/compare/v0.7.6...v0.8.0

@@ -6,6 +6,28 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-05-31
+
+### 変更
+
+- `shfmt` プラグインが、pin 無し（LATEST）ダウンロードの検証のために上流の
+  `sha256sums.txt` マニフェストを取得しなくなりました。shfmt は v3.13.0 以降
+  このマニフェストを上流で廃止しており（GitHub がアセットごとのダイジェストを
+  ネイティブ提供）、pin 無しの `shfmt` ビルドがハードフェイルしていました。
+  `shfmt` は `shellcheck` と同じ方式になりました。`[plugins.versions]` に
+  `checksum_amd64` / `checksum_arm64` を pin した場合はそれと照合し、未指定の
+  場合は警告を出して検証をスキップしてビルドを続行します。完全に検証された
+  再現可能なインストールには、バージョンを checksum 付きで pin してください。
+
+### 修正
+
+- `node` プラグインがデフォルト（pin 無し・最新 LTS）バージョンでインストールに
+  失敗していました。バージョン解決で nodejs.org の約 200 KB の `index.tab` を
+  `curl` から直接 `awk ... exit` にパイプしており、awk が最初の一致でパイプを
+  閉じると curl が書き込みエラー（exit 23）で中断し、`set -o pipefail` により
+  ビルドが失敗していました。index を parse 前にダウンロードするよう変更。pin
+  済みの `node` バージョンは影響を受けていません。
+
 ## [0.9.1] - 2026-05-30
 
 ### 変更
@@ -411,7 +433,8 @@ cocoon の主要な変更を記録します。フォーマットは
 - `COMPOSE_PROJECT_NAME` をプロジェクトディレクトリの basename から導出するように変更。docker compose の namespace がホストディレクトリと一致する。
 - 国際化 (英語 / 日本語) カタログを追加。CLI プロンプト・エラーメッセージ・`workspace.toml` インラインコメントすべてを `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` で切替可能。
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.9.2...HEAD
+[0.9.2]: https://github.com/sukekyo26/cocoon/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/sukekyo26/cocoon/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/sukekyo26/cocoon/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/sukekyo26/cocoon/compare/v0.7.6...v0.8.0

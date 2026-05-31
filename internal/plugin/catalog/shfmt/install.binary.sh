@@ -3,11 +3,22 @@
 #
 # Inputs (env):
 #   PIN              : shfmt version without leading "v" (e.g. "3.10.0"); empty = latest
-#   CHECKSUM_AMD64   : sha256 of the amd64 binary; empty = verify against the
-#                      release sha256sums.txt
-#   CHECKSUM_ARM64   : sha256 of the arm64 binary; empty = verify against the
-#                      release sha256sums.txt
+#   CHECKSUM_AMD64   : sha256 of the amd64 binary; empty to skip verification
+#   CHECKSUM_ARM64   : sha256 of the arm64 binary; empty to skip verification
 set -euo pipefail
+
+# Yellow WARNING when stderr is a TTY (and NO_COLOR is unset) or
+# FORCE_COLOR is set. NO_COLOR wins per no-color.org.
+if [ -n "${NO_COLOR:-}" ]; then
+  C_YEL=''
+  C_RST=''
+elif [ -n "${FORCE_COLOR:-}" ] || [ -t 2 ]; then
+  C_YEL=$'\033[33m'
+  C_RST=$'\033[0m'
+else
+  C_YEL=''
+  C_RST=''
+fi
 
 ARCH="$(dpkg --print-architecture)"
 case "$ARCH" in
@@ -33,19 +44,7 @@ curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-erro
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/shfmt" | sha256sum -c -
 else
-  # No user checksum: verify against the release's own sha256sums.txt.
-  curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
-    "${base}/sha256sums.txt" -o /tmp/shfmt.sums
-  # Match the asset name literally (awk field compare, not a regex; strip the
-  # binary-mode '*' marker some manifests prepend) and fail loudly if it is
-  # absent so a manifest-shape change does not collapse into an opaque error.
-  expected="$(awk -v f="$asset" '{ n = $2; sub(/^\*/, "", n); if (n == f) { print $1; exit } }' /tmp/shfmt.sums)"
-  if [ -z "$expected" ]; then
-    echo "shfmt: ${asset} not found in sha256sums.txt" >&2
-    exit 1
-  fi
-  echo "${expected}  /tmp/shfmt" | sha256sum -c -
-  rm -f /tmp/shfmt.sums
+  printf '%sWARNING: SHA256 verification skipped for shfmt (no checksum for shfmt in [plugins.versions])%s\n' "$C_YEL" "$C_RST" >&2
 fi
 
 install -o root -g root -m 0755 /tmp/shfmt /usr/local/bin/shfmt

@@ -319,7 +319,7 @@ func TestPluginContracts(t *testing.T) {
 			id: "shfmt", name: "shfmt",
 			requiresRoot: true, versionCapable: true,
 			mustContain: []string{
-				"shfmt", "github.com/mvdan/sh", "sha256sum -c -", "sha256sums.txt",
+				"shfmt", "github.com/mvdan/sh", "sha256sum -c -",
 				"tlsv1.2", "retry 3", "dpkg --print-architecture",
 			},
 			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
