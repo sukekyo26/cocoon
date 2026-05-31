@@ -1,11 +1,8 @@
 #!/usr/bin/env bash
-# Install cocoon (https://github.com/sukekyo26/cocoon)
-#
-# Downloads the cocoon binary from the GitHub Pages mirror at
-# https://sukekyo26.github.io/cocoon/ rather than the GitHub Releases
-# CDN. Pages-only by design — no fallback to the releases/download
-# path — so the plugin works in environments that can reach
-# *.github.io but not GitHub's raw / API hosts.
+# Install the cocoon binary from its GitHub Pages mirror rather than the
+# GitHub Releases CDN. Pages-only by design — no fallback to the
+# releases/download path — so the plugin works in environments that can
+# reach *.github.io but not GitHub's raw / API hosts.
 #
 # Inputs (env):
 #   PIN              : cocoon version (without leading "v"); empty = latest
