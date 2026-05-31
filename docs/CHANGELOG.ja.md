@@ -17,7 +17,8 @@ cocoon の主要な変更を記録します。フォーマットは
 - 新しい `gcloud` プラグインを追加。[Google Cloud CLI](https://cloud.google.com/sdk)
   （`gcloud`, `gsutil`, `bq`）を Google 公式の apt リポジトリ
   （`packages.cloud.google.com`）から、Google の署名鍵で検証してインストールする。
-  `~/.config/gcloud` を永続化し、`gcloud auth login` の状態がコンテナ再ビルド後も残る。
+  `CLOUDSDK_CONFIG=~/.gcloud` を設定して永続化し、`gcloud auth login` の状態が
+  コンテナ再ビルド後も残る。
 - 新しい `golangci-lint` プラグインを追加。[Go 用リンタランナー](https://github.com/golangci/golangci-lint)
   を GitHub Release のバイナリからインストールする。`version_capable`
   （`[plugins.versions].golangci-lint` でピン留め可）で、未ピンのビルドは

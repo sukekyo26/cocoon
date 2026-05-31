@@ -16,8 +16,9 @@ adheres to [Semantic Versioning](https://semver.org/).
   `~/.azure` so `az login` state survives container rebuilds.
 - New `gcloud` plugin installs the [Google Cloud CLI](https://cloud.google.com/sdk)
   (`gcloud`, `gsutil`, `bq`) from Google's official apt repository
-  (`packages.cloud.google.com`), verified by Google's signing key. Persists
-  `~/.config/gcloud` so `gcloud auth login` survives container rebuilds.
+  (`packages.cloud.google.com`), verified by Google's signing key. Sets
+  `CLOUDSDK_CONFIG=~/.gcloud` and persists it so `gcloud auth login` survives
+  container rebuilds.
 - New `golangci-lint` plugin installs the [Go linters runner](https://github.com/golangci/golangci-lint)
   from its GitHub Release binary. It is `version_capable` (pin via
   `[plugins.versions].golangci-lint`); unpinned builds resolve the latest

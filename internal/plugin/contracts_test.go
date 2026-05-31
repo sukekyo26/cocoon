@@ -185,10 +185,11 @@ func TestPluginContracts(t *testing.T) {
 		},
 		{
 			id: "gcloud", name: "Google Cloud CLI",
-			requiresRoot: true,
+			requiresRoot: true, firstVolume: "gcloud",
 			mustContain: []string{
 				"google-cloud-cli", "packages.cloud.google.com", "signed-by",
 				"cloud.google.asc", "retry 3", "tlsv1.2", "chmod 755 /etc/apt/keyrings",
+				"CLOUDSDK_CONFIG",
 			},
 			// Keyless: the armored key is consumed directly, no gpg needed.
 			mustNotContain: []string{"gpg --dearmor"},
