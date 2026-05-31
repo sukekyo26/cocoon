@@ -6,6 +6,16 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-05-31
+
+### 修正
+
+- 低速回線でバイナリのダウンロード中に `cocoon self-update` が
+  `context deadline exceeded` で失敗する問題を修正。アセットのダウンロード
+  （約 12MB のバイナリと `SHA256SUMS`）に、GitHub Releases 参照の 30 秒とは別の
+  3 分のタイムアウトを設けたので、転送に 30 秒以上かかる場合でも API 用の短い
+  デッドラインで打ち切られず完了できる。
+
 ## [0.10.0] - 2026-05-31
 
 ### 追加
@@ -465,7 +475,8 @@ cocoon の主要な変更を記録します。フォーマットは
 - `COMPOSE_PROJECT_NAME` をプロジェクトディレクトリの basename から導出するように変更。docker compose の namespace がホストディレクトリと一致する。
 - 国際化 (英語 / 日本語) カタログを追加。CLI プロンプト・エラーメッセージ・`workspace.toml` インラインコメントすべてを `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` で切替可能。
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.10.1...HEAD
+[0.10.1]: https://github.com/sukekyo26/cocoon/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/sukekyo26/cocoon/compare/v0.9.2...v0.10.0
 [0.9.2]: https://github.com/sukekyo26/cocoon/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/sukekyo26/cocoon/compare/v0.9.0...v0.9.1

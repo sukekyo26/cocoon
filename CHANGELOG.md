@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-05-31
+
+### Fixed
+
+- `cocoon self-update` no longer fails with `context deadline exceeded` while
+  downloading the binary on a slow connection. The asset download (the ~12MB
+  binary and `SHA256SUMS`) now has its own 3-minute timeout, separate from the
+  30-second GitHub Releases lookup, so a transfer that needs more than 30s to
+  complete can finish instead of tripping the API-sized deadline.
+
 ## [0.10.0] - 2026-05-31
 
 ### Added
@@ -466,7 +476,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Add `COMPOSE_PROJECT_NAME` derivation from the project directory basename so docker compose namespacing matches the host directory.
 - Add i18n catalog (English / Japanese) covering every CLI prompt, error message, and inline `workspace.toml` comment, switched via `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG`.
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.10.1...HEAD
+[0.10.1]: https://github.com/sukekyo26/cocoon/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/sukekyo26/cocoon/compare/v0.9.2...v0.10.0
 [0.9.2]: https://github.com/sukekyo26/cocoon/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/sukekyo26/cocoon/compare/v0.9.0...v0.9.1
