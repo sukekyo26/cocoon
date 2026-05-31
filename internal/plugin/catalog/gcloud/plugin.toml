@@ -1,0 +1,15 @@
+[metadata]
+name = "Google Cloud CLI"
+description = "Google Cloud command-line interface (gcloud, gsutil, bq)"
+url = "https://cloud.google.com/sdk"
+default = false
+
+[install]
+requires_root = true
+default_method = "apt"
+
+[install.methods.apt]
+description = "Official Google Cloud apt repository (packages.cloud.google.com)"
+
+[version]
+version_capable = false
