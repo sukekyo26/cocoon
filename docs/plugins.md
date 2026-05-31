@@ -306,8 +306,10 @@ A versioned plugin agrees to:
     publishes with the release** — a `.sha256` / `.sha256sum` sidecar, a
     `checksums.txt` / `SHA256SUMS` manifest, or a `shasum` / `sha256`
     field in the upstream's release JSON — fetched from the same upstream
-    as the artifact. Only when the upstream publishes no fetchable
-    checksum does the script **warn loudly** (it never silently skips).
+    as the artifact. A few upstreams publish no per-release checksum at
+    all (e.g. `shfmt`, `shellcheck`): those scripts **warn loudly** and
+    proceed whenever no checksum is pinned (they never silently skip), so
+    pin `checksum_amd64` / `checksum_arm64` for a verified build.
     The fetched-checksum path defends against CDN/mirror corruption and
     accidental swaps; on its own it is not proof against a fully
     compromised upstream — pin a checksum, or prefer a `verify = "pgp"`
