@@ -1,0 +1,15 @@
+[metadata]
+name = "Azure CLI"
+description = "Microsoft Azure command-line interface (az)"
+url = "https://learn.microsoft.com/cli/azure"
+default = false
+
+[install]
+requires_root = true
+default_method = "apt"
+
+[install.methods.apt]
+description = "Official Microsoft apt repository (packages.microsoft.com)"
+
+[version]
+version_capable = false

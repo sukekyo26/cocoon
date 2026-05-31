@@ -120,6 +120,16 @@ func TestPluginContracts(t *testing.T) {
 			},
 		},
 		{
+			id: "azure-cli", name: "Azure CLI",
+			requiresRoot: true,
+			mustContain: []string{
+				"azure-cli", "packages.microsoft.com", "signed-by", "microsoft.asc",
+				"VERSION_CODENAME", "retry 3", "tlsv1.2", "chmod 755 /etc/apt/keyrings",
+			},
+			// Keyless: the armored key is consumed directly, no gpg needed.
+			mustNotContain: []string{"gpg --dearmor"},
+		},
+		{
 			id: "claude-code", name: "Claude Code",
 			requiresRoot: false, firstVolume: "claude",
 			mustContain: []string{"Claude", "retry 3", "curl -fsSL"},
