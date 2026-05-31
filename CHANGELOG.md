@@ -6,6 +6,26 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- The `shfmt` plugin no longer fetches the upstream `sha256sums.txt` manifest
+  to verify an unpinned (LATEST) download. shfmt removed that manifest upstream
+  as of v3.13.0 (GitHub now provides per-asset digests natively), which made an
+  unpinned `shfmt` build hard-fail. `shfmt` now follows the same model as
+  `shellcheck`: when `checksum_amd64` / `checksum_arm64` is pinned in
+  `[plugins.versions]` the download is verified against it; otherwise
+  verification is skipped with a warning and the build proceeds. Pin a version
+  with its checksum for a fully verified, reproducible install.
+
+### Fixed
+
+- The `node` plugin failed to install at its default (unpinned, latest-LTS)
+  version. The version-resolution step piped `curl` of nodejs.org's ~200 KB
+  `index.tab` straight into `awk ... exit`; awk closing the pipe on the first
+  match aborted curl with a write error (exit 23) that `set -o pipefail` turned
+  into a build failure. The index is now downloaded before parsing. Pinned
+  `node` versions were unaffected.
+
 ## [0.9.1] - 2026-05-30
 
 ### Changed

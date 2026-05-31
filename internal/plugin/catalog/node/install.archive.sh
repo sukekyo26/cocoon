@@ -30,10 +30,15 @@ if [ -n "$PIN" ]; then
 else
   # Resolve latest LTS from dist/index.tab. The 10th column is the LTS
   # codename ("-" for non-LTS releases); the first matching row is the
-  # newest LTS line because index.tab is sorted newest-first.
-  VERSION=$(curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
-    https://nodejs.org/dist/index.tab |
-    awk -F'\t' 'NR>1 && $10 != "-" { sub(/^v/, "", $1); print $1; exit }')
+  # newest LTS line because index.tab is sorted newest-first. Download to a
+  # file before parsing: piping curl straight into `awk ... exit` makes awk
+  # close the pipe on the first match while curl is still streaming the
+  # ~200 KB index, so curl aborts with a write error (exit 23) that
+  # `set -o pipefail` turns into a build failure.
+  curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+    https://nodejs.org/dist/index.tab -o /tmp/node-index.tab
+  VERSION=$(awk -F'\t' 'NR>1 && $10 != "-" { sub(/^v/, "", $1); print $1; exit }' /tmp/node-index.tab)
+  rm -f /tmp/node-index.tab
   if [ -z "$VERSION" ]; then
     echo "Failed to resolve latest Node.js LTS version" >&2
     exit 1

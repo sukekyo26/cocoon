@@ -4,7 +4,10 @@ name: Scheduled E2E
 # (.github/workflows/e2e.yml) runs the minimal preset across every
 # supported base image; this one runs the all-plugins-enabled presets
 # (amd64-full + arm64-full) on ubuntu 22.04 to catch plugin-vs-image
-# and plugin-vs-plugin breakage.
+# and plugin-vs-plugin breakage. Each preset runs twice: PIN_MODE=pinned
+# (reproducible baseline) and PIN_MODE=latest (every plugin floats to its
+# upstream LATEST — the drift canary that catches upstream packaging
+# changes, e.g. a removed checksum manifest, before users hit them).
 #
 # Split out from the PR critical path because the full presets cost
 # ~13 min each (real `docker buildx bake` per matrix
@@ -63,12 +66,14 @@ jobs:
           PRESET: ${{ inputs.preset }}
         run: |
           set -euo pipefail
-          amd64='{"label":"amd64 / full","runs-on":"ubuntu-latest","preset":"amd64-full","image":"ubuntu","image-version":"22.04"}'
-          arm64='{"label":"arm64 / full","runs-on":"ubuntu-24.04-arm","preset":"arm64-full","image":"ubuntu","image-version":"22.04"}'
+          amd64='{"label":"amd64 / full (pinned)","runs-on":"ubuntu-latest","preset":"amd64-full","pin-mode":"pinned","image":"ubuntu","image-version":"22.04"}'
+          arm64='{"label":"arm64 / full (pinned)","runs-on":"ubuntu-24.04-arm","preset":"arm64-full","pin-mode":"pinned","image":"ubuntu","image-version":"22.04"}'
+          amd64_latest='{"label":"amd64 / full (latest)","runs-on":"ubuntu-latest","preset":"amd64-full","pin-mode":"latest","image":"ubuntu","image-version":"22.04"}'
+          arm64_latest='{"label":"arm64 / full (latest)","runs-on":"ubuntu-24.04-arm","preset":"arm64-full","pin-mode":"latest","image":"ubuntu","image-version":"22.04"}'
           case "${PRESET:-both}" in
-            amd64-full) include="[$amd64]" ;;
-            arm64-full) include="[$arm64]" ;;
-            both | "") include="[$amd64,$arm64]" ;;
+            amd64-full) include="[$amd64,$amd64_latest]" ;;
+            arm64-full) include="[$arm64,$arm64_latest]" ;;
+            both | "") include="[$amd64,$arm64,$amd64_latest,$arm64_latest]" ;;
             *) echo "unknown preset: $PRESET" >&2; exit 1 ;;
           esac
           echo "include=$include" >>"$GITHUB_OUTPUT"
@@ -102,4 +107,5 @@ jobs:
           PRESET: ${{ matrix.preset }}
           IMAGE: ${{ matrix.image }}
           IMAGE_VERSION: ${{ matrix.image-version }}
+          PIN_MODE: ${{ matrix.pin-mode }}
         run: bash "$GITHUB_WORKSPACE/e2e/docker-roundtrip.sh"

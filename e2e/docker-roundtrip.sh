@@ -24,6 +24,11 @@
 #     so a new plugin auto-enrolls. arm64-full subtracts the arm64-unsafe
 #     plugins in e2e/arm64-exclude.txt (install.sh hard-codes amd64 or
 #     fails fast on arm64).
+#   - PIN_MODE=latest (scheduled-e2e.yml weekly) reruns the full presets with
+#     NO pins so every plugin floats to its upstream LATEST — the drift canary
+#     that catches upstream packaging changes (e.g. a removed checksum
+#     manifest) a release before users hit them. Default PIN_MODE=pinned keeps
+#     the reproducible baseline.
 #
 # Local WSL2 cannot run this (gcc missing for `-race`); GHA-hosted
 # ubuntu-latest / ubuntu-24.04-arm ship docker + buildx out of the box.
@@ -34,6 +39,18 @@ set -euxo pipefail
 : "${PRESET:?PRESET unset (minimal | amd64-full | arm64-full)}"
 : "${IMAGE:?IMAGE unset (base image id)}"
 : "${IMAGE_VERSION:?IMAGE_VERSION unset}"
+
+# PIN_MODE selects whether the full presets pin versions (reproducible
+# baseline) or float every plugin to LATEST (weekly drift canary). The
+# minimal preset ignores it (0 plugins). Default keeps the baseline.
+PIN_MODE="${PIN_MODE:-pinned}"
+case "$PIN_MODE" in
+  pinned | latest) ;;
+  *)
+    echo "unknown PIN_MODE: $PIN_MODE (pinned | latest)" >&2
+    exit 1
+    ;;
+esac
 
 # Resolve the script and catalog dirs to absolute paths up front, before
 # the `cd e2e/test-project` below, so they survive the cwd change. $0 may
@@ -198,6 +215,11 @@ case "$PRESET" in
     ;;
 esac
 
+# In latest mode the full presets float every plugin to its upstream LATEST
+# so the drift canary surfaces upstream packaging changes (e.g. a removed
+# checksum manifest) before users hit them. minimal has no plugins to float.
+[ "$PIN_MODE" = latest ] && pins=""
+
 extra=()
 [ -n "$plugins" ] && extra+=(--plugins "$plugins")
 [ -n "$pins" ] && extra+=(--plugin-versions "$pins")
@@ -303,7 +325,7 @@ esac
 # of rebuilding.
 case "$PRESET" in
   minimal) cache_scope="e2e-minimal-${arch}-${IMAGE//\//-}" ;;
-  *) cache_scope="e2e-${PRESET}" ;;
+  *) cache_scope="e2e-${PRESET}-${PIN_MODE}" ;;
 esac
 
 # The generated docker-compose.yml declares
