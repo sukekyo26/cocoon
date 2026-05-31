@@ -184,6 +184,21 @@ func TestRunInit_CertificatesConflict(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // t.Chdir
+func TestRunInit_SecureConflict(t *testing.T) {
+	pinEnglish(t)
+	work := t.TempDir()
+	t.Chdir(work)
+	cmd := NewCommand(io.Discard, io.Discard)
+	cmd.SetArgs([]string{
+		"--yes", "--service-name", "x", "--username", "y",
+		"--secure", "--no-secure",
+	})
+	if err := cmd.Execute(); !errors.Is(err, clihelpers.ErrUsage) {
+		t.Errorf("conflicting --secure flags should be ErrUsage, got %v", err)
+	}
+}
+
 // TestRunInit_ImagePathFixConflict pins the mutual-exclusion check on
 // --image-path-fix / --no-image-path-fix at the cobra wiring layer.
 //
@@ -268,6 +283,80 @@ func TestRunInit_CertificatesFlag(t *testing.T) {
 				"# enable = true",
 			},
 			mustNotContain: []string{"\n[certificates]\nenable = true\n"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			work := t.TempDir()
+			t.Chdir(work)
+			args := append([]string{
+				"--yes", "--service-name", "dev", "--username", "dev",
+				"--image", "ubuntu", "--image-version", "22.04",
+				"--mount-root", ".", "--no-devcontainer",
+			}, tc.extraArgs...)
+			cmd := NewCommand(io.Discard, io.Discard)
+			cmd.SetArgs(args)
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("init: %v", err)
+			}
+			body, err := os.ReadFile(filepath.Join(work, "workspace.toml"))
+			if err != nil {
+				t.Fatalf("read workspace.toml: %v", err)
+			}
+			out := string(body)
+			for _, want := range tc.mustContain {
+				if !strings.Contains(out, want) {
+					t.Errorf("workspace.toml missing %q\n--- got ---\n%s", want, out)
+				}
+			}
+			for _, mustNot := range tc.mustNotContain {
+				if strings.Contains(out, mustNot) {
+					t.Errorf("workspace.toml must not contain %q\n--- got ---\n%s", mustNot, out)
+				}
+			}
+		})
+	}
+}
+
+// TestRunInit_SecureFlag verifies that --secure emits the live
+// [container.security_opt] block with no_new_privileges = true and the
+// absence of the flag (or --no-secure) emits the commented template. Both
+// branches go through the same renderer, so this guards the toggle from
+// desyncing from the emit path.
+//
+//nolint:paralleltest // t.Chdir
+func TestRunInit_SecureFlag(t *testing.T) {
+	pinEnglish(t)
+
+	cases := []struct {
+		name           string
+		extraArgs      []string
+		mustContain    []string
+		mustNotContain []string
+	}{
+		{
+			name:      "enabled",
+			extraArgs: []string{"--secure"},
+			mustContain: []string{
+				"\n[container.security_opt]\nno_new_privileges = true\n",
+			},
+			mustNotContain: []string{
+				// Commented opt-in template example lines must not survive.
+				`# seccomp           = "unconfined"`,
+				"# no_new_privileges = true",
+			},
+		},
+		{
+			name:           "default-off",
+			extraArgs:      nil,
+			mustContain:    []string{"# no_new_privileges = true"},
+			mustNotContain: []string{"\n[container.security_opt]\nno_new_privileges = true\n"},
+		},
+		{
+			name:           "explicit-off",
+			extraArgs:      []string{"--no-secure"},
+			mustContain:    []string{"# no_new_privileges = true"},
+			mustNotContain: []string{"\n[container.security_opt]\nno_new_privileges = true\n"},
 		},
 	}
 	for _, tc := range cases {

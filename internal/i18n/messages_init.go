@@ -41,6 +41,8 @@ var messagesEN_init = map[string]string{
 	"init_desc_devcontainer":            "Says yes if you ever open this repo in VS Code Dev Containers; harmless otherwise.",
 	"init_prompt_certificates":          "Bake user TLS certificates from ~/.cocoon/certs/ into the container image?",
 	"init_desc_certificates":            "Enable when your build must trust a private CA inside the container (a TLS-intercepting proxy, a self-signed CA, etc.). When off, no cert wiring lands in the generated artifacts.",
+	"init_prompt_secure":                "Set no_new_privileges = true (block setuid escalation, disabling in-container sudo)?",
+	"init_desc_secure":                  "Yes hardens the container for running untrusted code or AI agents: a compromised process cannot escalate to root via sudo. UID/GID remapping is unaffected (the entrypoint runs as root); only post-startup manual sudo stops working — get root from the host with `docker exec -u root` when needed. Leave No for a normal dev box where you `sudo apt install` at runtime.",
 	"init_prompt_image_path_fix_title":  "Auto-configure user-local install prefix for %s?",
 	"init_desc_image_path_fix":          "Adds the following to workspace.toml so user-local installs land somewhere writable, are on PATH, and survive `docker compose down && up --build`:\n\n%s\n\nLets the container user run %s without hitting the default-image failure (permission denied on root-owned prefixes, or the installed binary not being on PATH) and keeps the installed binaries across container rebuilds via named volumes. Skip if you never install user-local tools with this runtime.",
 	"init_confirm_yes":                  "Yes",
@@ -112,6 +114,11 @@ var messagesEN_init = map[string]string{
 		"#   When enable = true the generators wire the host directory through to the build via\n" +
 		"#   docker-compose's additional_contexts and the Dockerfile's RUN --mount=type=bind, so any\n" +
 		"#   *.crt / *.cer files placed there land in the container's trust store at build time. Default off.",
+	"init_toml_section_container_security_opt": "# [container.security_opt] — no_new_privileges blocks setuid privilege escalation.\n" +
+		"#   Enabled by `cocoon init --secure`. Note: this also disables sudo inside the running\n" +
+		"#   container (the image grants passwordless sudo) — install everything at build time, and\n" +
+		"#   get root from the host with `docker exec -u root` if needed. UID/GID remapping is\n" +
+		"#   unaffected (the entrypoint runs as root before dropping privileges).",
 	"init_toml_section_ports": "# [ports] — host ports forwarded into the container.\n" +
 		"#   Short form: [HOST_IP:][HOST:]CONTAINER[/PROTOCOL]. Ranges (3000-3005:3000-3005), UDP, and IPv6 [::1] binds are accepted.",
 	"init_toml_section_volumes": "# [volumes] — extra named volumes mapped under the container's home.\n" +
@@ -183,6 +190,8 @@ var messagesJA_init = map[string]string{
 	"init_desc_devcontainer":            "VS Code Dev Containers で開く可能性があれば Yes。そうでなくても害はありません。",
 	"init_prompt_certificates":          "~/.cocoon/certs/ の TLS 証明書をコンテナイメージに取り込みますか？",
 	"init_desc_certificates":            "build 中にプライベート CA（TLS インターセプトプロキシや自己署名 CA 等）を信頼させる必要がある場合に Yes。off の場合は生成物に cert 関連の配線は一切乗りません。",
+	"init_prompt_secure":                "no_new_privileges = true を設定しますか？（setuid 昇格を遮断し、コンテナ内 sudo を無効化）",
+	"init_desc_secure":                  "Yes はコンテナを未信頼コードや AI エージェントの実行向けに硬化します。乗っ取られたプロセスが sudo で root へ昇格できなくなります。UID/GID の再マップは entrypoint が root で行うため無影響で、止まるのは起動後の手動 sudo のみ — root が要るときはホストから `docker exec -u root`。実行時に `sudo apt install` する通常の dev 環境では No。",
 	"init_prompt_image_path_fix_title":  "%s イメージの user-local インストール先を自動設定しますか？",
 	"init_desc_image_path_fix":          "workspace.toml に以下を追加し、user-local インストール先を書き込み可能なパスに向け、bin ディレクトリを PATH に通し、`docker compose down && up --build` を跨いでも内容が保持されるようにします:\n\n%s\n\n`%s` を実行したときに発生するデフォルトの失敗（root 所有プレフィックスへの書き込み拒否、またはインストール済みバイナリが PATH 上にない）を回避し、インストール済みバイナリを named volume でコンテナ再生成を跨いで保持します。このランタイムで user-local ツールを入れない場合はスキップ。",
 	"init_confirm_yes":                  "はい",
@@ -251,6 +260,10 @@ var messagesJA_init = map[string]string{
 		"#   enable = true のときジェネレータが docker-compose の additional_contexts と Dockerfile の\n" +
 		"#   RUN --mount=type=bind を配線し、ホスト側 *.crt / *.cer が build 時にトラストストアへマージされる。\n" +
 		"#   デフォルト off。",
+	"init_toml_section_container_security_opt": "# [container.security_opt] — no_new_privileges は setuid 権限昇格を遮断する。\n" +
+		"#   `cocoon init --secure` で有効化。注意: コンテナ内の sudo も無効化される\n" +
+		"#   (イメージは passwordless sudo を付与)。必要なものはビルド時に導入し、root が要るときは\n" +
+		"#   ホストから `docker exec -u root`。UID/GID の再マップは無影響 (entrypoint が降格前に root で実行)。",
 	"init_toml_section_apt": "# [apt] — cocoon の最小ベース + 選択カテゴリに追加する apt パッケージ。\n" +
 		"#   カテゴリのチェックを変えるなら `cocoon init --force` を再実行、または直接このリストを編集。",
 	"init_toml_section_ports": "# [ports] — コンテナへフォワードするホストポート。\n" +

@@ -147,6 +147,8 @@ to drive non-interactively from CI.`,
 	"flag_init_no_devcontainer_usage": "skip .devcontainer/devcontainer.json output",
 	"flag_init_certificates_usage":    "force-enable [certificates] auto-bake from ~/.cocoon/certs/",
 	"flag_init_no_certificates_usage": "skip the [certificates] section (default off)",
+	"flag_init_secure_usage":          "preset [container.security_opt] no_new_privileges = true (disables in-container sudo)",
+	"flag_init_no_secure_usage":       "leave no_new_privileges unset; in-container sudo stays available (default)",
 	"flag_init_image_path_fix_usage": "force the language-image PATH/install-prefix auto-injection " +
 		"(requires --image=node|python|golang|rust|denoland/deno; default on for those)",
 	"flag_init_no_image_path_fix_usage": "skip the language-image PATH/install-prefix auto-injection " +
@@ -393,6 +395,8 @@ CI など非対話実行では --yes に加えて --service-name / --username
 	"flag_init_no_devcontainer_usage": ".devcontainer/devcontainer.json の生成をスキップ",
 	"flag_init_certificates_usage":    "~/.cocoon/certs/ からの [certificates] 自動取り込みを強制有効化",
 	"flag_init_no_certificates_usage": "[certificates] セクションをスキップ（既定 off）",
+	"flag_init_secure_usage":          "[container.security_opt] no_new_privileges = true を事前設定（コンテナ内 sudo を無効化）",
+	"flag_init_no_secure_usage":       "no_new_privileges を設定しない。コンテナ内 sudo は引き続き利用可（既定）",
 	"flag_init_image_path_fix_usage": "言語イメージの PATH / インストール先自動設定を強制有効化" +
 		"（--image=node|python|golang|rust|denoland/deno が必須。それらは既定 on）",
 	"flag_init_no_image_path_fix_usage": "言語イメージの PATH / インストール先自動設定をスキップ" +

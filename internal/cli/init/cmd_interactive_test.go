@@ -101,7 +101,7 @@ var baseInteractiveArgs = []string{
 	"--service-name", "e2eapp", "--username", "dev",
 	"--image", "ubuntu", "--shell", "bash", "--mount-root", ".",
 	"--dir", "workspace",
-	"--no-devcontainer", "--no-certificates",
+	"--no-devcontainer", "--no-certificates", "--no-secure",
 	"--ports", "3000", "--apt-categories", "text-editors",
 	"--alias-bundles", "git", "--plugins", "go",
 }

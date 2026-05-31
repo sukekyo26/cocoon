@@ -37,10 +37,12 @@ CI など非対話実行では --yes に加えて --service-name / --username
       --no-certificates          [certificates] セクションをスキップ（既定 off）
       --no-devcontainer          .devcontainer/devcontainer.json の生成をスキップ
       --no-image-path-fix        言語イメージの PATH / インストール先自動設定をスキップ（--image=node|python|golang|rust|denoland/deno が必須）
+      --no-secure                no_new_privileges を設定しない。コンテナ内 sudo は引き続き利用可（既定）
       --plugin-methods string    複数の [install.methods] を持つプラグイン向けの <id>=<method> 選択をカンマ区切りで指定（各 <id> は --plugins にも含めること。<method> は宣言済みキーであること）
       --plugin-versions string   version_capable プラグイン向けの <id>=<ref> ピンをカンマ区切りで指定（各 <id> は --plugins にも含めること）
       --plugins string           有効化するプラグイン ID のカンマ区切り（プラグイン複数選択プロンプトをスキップ）
       --ports string             docker-compose の short-form ポートマッピングをカンマ区切りで指定 — [HOST_IP:][HOST:]CONTAINER[/PROTOCOL]。数値レンジ (N-M) と tcp|udp 可（例: 3000,3000-3005,8000:8000,127.0.0.1:5432:5432/tcp,6060:6060/udp）。ports プロンプトをスキップ
+      --secure                   [container.security_opt] no_new_privileges = true を事前設定（コンテナ内 sudo を無効化）
       --service-name string      Compose サービス名（--yes 指定時は必須）
       --shell string             コンテナのログインシェル: bash, zsh, fish（既定: bash）
       --username string          コンテナ内ユーザー名（--yes 指定時は必須）

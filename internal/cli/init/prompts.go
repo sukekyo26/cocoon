@@ -111,7 +111,7 @@ func promptImagePathFix(ans *initAnswers, cat *i18n.Catalog) error {
 }
 
 // promptWorkspaceOptions prompts for alias bundles, mount root, the
-// devcontainer / certificates toggles, ports, and apt categories.
+// devcontainer / certificates / secure toggles, ports, and apt categories.
 func promptWorkspaceOptions(ans *initAnswers, cat *i18n.Catalog) error {
 	if err := promptMountAndDir(ans, cat); err != nil {
 		return err
@@ -129,6 +129,13 @@ func promptWorkspaceOptions(ans *initAnswers, cat *i18n.Catalog) error {
 			return err
 		}
 		ans.CertificatesSet = true
+	}
+	if !ans.SecureSet {
+		ans.Secure = false
+		if err := runSingleFieldForm(secureConfirm(cat, &ans.Secure)); err != nil {
+			return err
+		}
+		ans.SecureSet = true
 	}
 	if !ans.PortsSet {
 		ports, err := promptForPorts(cat)
