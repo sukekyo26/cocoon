@@ -248,8 +248,8 @@ func TestDevcontainerPortEntries(t *testing.T) {
 			// DevcontainerPortEntries is exported and exercised directly
 			// (here, and by any caller that hands it raw data), so it must
 			// still report a clear "missing target" reason rather than the
-			// confusing "non-integer target <nil>" the absent value would
-			// otherwise produce.
+			// confusing "has a non-integer target <nil>" the absent value
+			// would otherwise produce.
 			name: "long_form_missing_target",
 			in: []any{
 				map[string]any{"published": int64(8080)},
