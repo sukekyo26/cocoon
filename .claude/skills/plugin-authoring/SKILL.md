@@ -102,7 +102,27 @@ cocoon plugin scaffold my-tool \
 (GitHub Release) の **2 method** を提供する catalog 唯一の例。Zscaler 等で
 vendor ドメインが落ちる環境向けの「代替経路」設計の参考になる。
 
-## ステップ 4: ローカル検証
+## ステップ 4: 契約テストと e2e に登録する
+
+新規プラグインは次を更新する。契約テスト spec は **必須** — 忘れると `just ci` が落ちる。
+
+- **契約テスト spec 行（必須）** — `internal/plugin/contracts_test.go` の
+  `TestPluginContracts` の `specs` スライスに 1 行追加する。無いと
+  `plugin "<id>" has no contract spec in TestPluginContracts` で `just ci` が失敗する。
+  `requiresRoot` / `versionCapable` / `verify` / `firstVolume` を `plugin.toml` と一致
+  させ、`mustContain` で install スクリプトの要点（上流ドメイン・`sha256sum -c -`・
+  `tlsv1.2`・`dpkg --print-architecture` 等）を pin、`mustNotContain` で
+  `noPlaceholders` / `noApiNoJq` を否定する。
+- **e2e** — プラグインは `e2e/docker-roundtrip.sh` が catalog から自動検出して全
+  プリセットで enable するため、`.github/workflows/e2e.yml` の編集は不要。未 pin なら
+  LATEST でテストされる（pin は必須ではない）。再現性のため version_capable は慣例的に
+  `pin_entries` に `<id>=<version>` を追加する（pin できるのは version_capable のみ。
+  非対応 id を入れると e2e が `not version_capable; it cannot be pinned` で fail-fast する）。
+- **arm64 非対応** — amd64 をハードコード／fail-fast するプラグインは
+  `e2e/arm64-exclude.txt` に `<id>` を追加する（`TestArm64ExcludeIDsExist` が実在 id を
+  ガード）。追加漏れは arm64 で壊れたまま素通りする。
+
+## ステップ 5: ローカル検証
 
 ```bash
 # 静的検査
@@ -114,11 +134,6 @@ just ci
 
 `internal/generate/dockerfile/plugins_test.go` 等の golden が差分になったら、
 内容を確認した上で `just regen-snapshots` で更新する。
-
-## ステップ 5: CI に組み込む
-
-`.github/workflows/e2e.yml` の `docker-roundtrip` ジョブのプラグインリストに
-`<id>` を追加する。追加しないと CI で実ビルド検証が走らない。
 
 ## ステップ 6: CHANGELOG を書く
 
