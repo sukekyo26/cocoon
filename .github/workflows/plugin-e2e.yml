@@ -1,0 +1,224 @@
+name: Plugin E2E
+
+# Per-plugin install-RUN verification. Every catalog plugin builds in its
+# own base+1-plugin image on debian 12, build-only: the plugin's install
+# RUN running to completion IS the check, so nothing is loaded into the
+# docker daemon or executed. That keeps each image tiny and sidesteps the
+# all-plugins-in-one-image disk exhaustion that sank the old amd64-full
+# job. Entrypoint / identity / --secure behaviour is plugin-independent and
+# already covered by the minimal preset in e2e.yml across every base image.
+#
+# One matrix, three triggers, gated by a change-detection step (detect):
+#   - pull_request: only the plugins whose internal/plugin/catalog/<id>/
+#     files changed, so editing one plugin builds one plugin, not 36.
+#   - schedule:     every plugin — the weekly upstream-drift canary.
+#   - workflow_dispatch: one plugin (inputs.plugin) or all (empty).
+#
+# Each selected plugin builds twice: PIN_MODE=pinned (reproducible
+# baseline) and PIN_MODE=latest (floats to upstream LATEST to catch
+# packaging drift — a moved URL, a removed checksum manifest — before
+# users do). arm64 entries are skipped for plugins in e2e/arm64-exclude.txt
+# (install.sh hard-codes amd64 or fails fast on arm64). A change that
+# touches the harness but no single plugin dir (e2e/ or this workflow)
+# smoke-builds one representative plugin; broad generator changes under
+# internal/generate/ are not path-matched here and rely on the schedule run.
+
+on:
+  pull_request:
+    paths:
+      - "internal/plugin/catalog/**"
+      - "e2e/docker-roundtrip.sh"
+      - "e2e/arm64-exclude.txt"
+      - "e2e/apt-categories.txt"
+      - ".github/workflows/plugin-e2e.yml"
+  schedule:
+    # Mon 06:00 UTC — aligned with install-sh-e2e.yml so the weekly
+    # "something cocoon publishes or builds broke" signal lands in one
+    # timezone window.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      plugin:
+        description: "Single catalog plugin id to build (empty = all)"
+        type: string
+        default: ""
+
+concurrency:
+  # PR runs cancel a superseded push (keyed by PR number); schedule and
+  # dispatch are keyed by run_id so they are unique and never cancel each
+  # other or an in-flight PR run.
+  group: plugin-e2e-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  # Resolve which plugins to build for this trigger and emit the
+  # {plugin, arch} matrix as JSON. job-level `if:` cannot read `matrix`, so
+  # gating happens here and `build` consumes the include via fromJSON.
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      include: ${{ steps.set.outputs.include }}
+      any: ${{ steps.set.outputs.any }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          # Full history so the PR diff has both endpoint commits locally.
+          fetch-depth: 0
+      - id: set
+        env:
+          EVENT: ${{ github.event_name }}
+          DISPATCH_PLUGIN: ${{ inputs.plugin }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          catalog=internal/plugin/catalog
+
+          all_plugins() {
+            local d
+            for d in "$catalog"/*/; do basename "$d"; done
+          }
+
+          # Resolve the plugin set for this trigger.
+          plugins=()
+          case "$EVENT" in
+            schedule)
+              mapfile -t plugins < <(all_plugins)
+              ;;
+            workflow_dispatch)
+              if [ -n "$DISPATCH_PLUGIN" ]; then
+                plugins=("$DISPATCH_PLUGIN")
+              else
+                mapfile -t plugins < <(all_plugins)
+              fi
+              ;;
+            pull_request)
+              # Plugins whose own files changed in this PR, still present
+              # on disk (a deleted plugin must not be built).
+              changed=()
+              mapfile -t changed < <(
+                git diff --name-only "${BASE_SHA}...${HEAD_SHA}" -- "$catalog" |
+                  sed -nE "s#^${catalog}/([^/]+)/.*#\1#p" | sort -u
+              )
+              for id in "${changed[@]}"; do
+                [ -d "$catalog/$id" ] && plugins+=("$id")
+              done
+              # Harness/workflow-only change (no plugin dir touched):
+              # smoke one representative plugin so the build-only path
+              # still gets exercised at PR time.
+              if [ "${#plugins[@]}" -eq 0 ]; then plugins=(go); fi
+              ;;
+            *)
+              echo "unsupported event: $EVENT" >&2
+              exit 1
+              ;;
+          esac
+
+          # arm64-unsafe plugins (install.sh amd64-only / fails fast on
+          # arm64), shared with e2e/docker-roundtrip.sh and validated
+          # against the catalog by internal/plugin/e2e_arm64_exclude_test.go.
+          exclude=()
+          while read -r line || [ -n "$line" ]; do
+            case "$line" in '' | '#'*) continue ;; esac
+            exclude+=("$line")
+          done <e2e/arm64-exclude.txt
+          is_excluded() {
+            local p
+            for p in "${exclude[@]}"; do [ "$p" = "$1" ] && return 0; done
+            return 1
+          }
+
+          # One matrix entry per (plugin, arch). amd64 always; arm64 unless
+          # the plugin is excluded.
+          entries=()
+          for id in "${plugins[@]}"; do
+            entries+=("{\"plugin\":\"$id\",\"arch\":\"amd64\",\"runs-on\":\"ubuntu-latest\"}")
+            if ! is_excluded "$id"; then
+              entries+=("{\"plugin\":\"$id\",\"arch\":\"arm64\",\"runs-on\":\"ubuntu-24.04-arm\"}")
+            fi
+          done
+
+          include="[$(
+            IFS=,
+            echo "${entries[*]}"
+          )]"
+          echo "include=$include" >>"$GITHUB_OUTPUT"
+          if [ "${#entries[@]}" -gt 0 ]; then
+            echo "any=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "any=false" >>"$GITHUB_OUTPUT"
+          fi
+          echo "detect: ${#plugins[@]} plugin(s) -> ${#entries[@]} job(s)" >&2
+
+  build:
+    needs: detect
+    if: needs.detect.outputs.any == 'true'
+    name: ${{ matrix.plugin }} / ${{ matrix.arch }}
+    runs-on: ${{ matrix.runs-on }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.detect.outputs.include) }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+      # Exposes ACTIONS_RUNTIME_TOKEN / ACTIONS_CACHE_URL / ACTIONS_RESULTS_URL
+      # as plain env vars so the raw `docker buildx bake` invocation in the
+      # script can talk to the GHA cache backend.
+      - uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
+      - uses: taiki-e/install-action@b1fb785e72add1aaabe1e13115c2292ca8925d3f # v2.75.27 (just)
+      - name: Build cocoon binary
+        run: just build
+      - name: Build ${{ matrix.plugin }} on debian 12 (pinned + latest)
+        env:
+          COCOON: ${{ github.workspace }}/bin/cocoon
+          PRESET: single
+          PLUGIN: ${{ matrix.plugin }}
+          IMAGE: debian
+          IMAGE_VERSION: "12"
+        run: |
+          set -euo pipefail
+          # Two builds in one job: the latest build reuses the pinned
+          # build's base+apt layers from the local buildkit cache, so the
+          # second pass only re-runs the plugin's own install RUN.
+          for mode in pinned latest; do
+            echo "::group::${PLUGIN} (${mode})"
+            PIN_MODE="$mode" bash "$GITHUB_WORKSPACE/e2e/docker-roundtrip.sh"
+            echo "::endgroup::"
+          done
+
+  # Stable required-check target: matrix job names vary per run, so branch
+  # protection points at this job instead of individual {plugin}/{arch}
+  # legs. Fails if detect or any build leg failed.
+  result:
+    needs: [detect, build]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Gate on detect + build results
+        env:
+          DETECT_RESULT: ${{ needs.detect.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
+        run: |
+          set -euo pipefail
+          if [ "$DETECT_RESULT" != success ]; then
+            echo "plugin-e2e failed: detect=$DETECT_RESULT" >&2
+            exit 1
+          fi
+          # build is 'skipped' only when detect selected nothing (never the
+          # case today — PR smokes 'go'); treat it as benign.
+          case "$BUILD_RESULT" in
+            success | skipped) echo "plugin-e2e OK (build=$BUILD_RESULT)" ;;
+            *)
+              echo "plugin-e2e failed: build=$BUILD_RESULT" >&2
+              exit 1
+              ;;
+          esac
