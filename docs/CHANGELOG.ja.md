@@ -6,6 +6,8 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-06-02
+
 ### 追加
 
 - `cocoon init --secure`（および対応する対話プロンプト）を追加しました。生成される
@@ -540,7 +542,8 @@ cocoon の主要な変更を記録します。フォーマットは
 - `COMPOSE_PROJECT_NAME` をプロジェクトディレクトリの basename から導出するように変更。docker compose の namespace がホストディレクトリと一致する。
 - 国際化 (英語 / 日本語) カタログを追加。CLI プロンプト・エラーメッセージ・`workspace.toml` インラインコメントすべてを `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` で切替可能。
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/sukekyo26/cocoon/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/sukekyo26/cocoon/compare/v0.10.2...v0.11.0
 [0.10.2]: https://github.com/sukekyo26/cocoon/compare/v0.10.1...v0.10.2
 [0.10.1]: https://github.com/sukekyo26/cocoon/compare/v0.10.0...v0.10.1
