@@ -372,8 +372,11 @@ func applyListDefaults(ans *initAnswers, plugins map[string]*plugin.Plugin) {
 	}
 }
 
-// defaultImageVersion returns SupportedImageVersions[image][0], which is
-// ordered newest-first.
+// defaultImageVersion returns SupportedImageVersions[image][0] — the first
+// entry, which is the default / recommended tag cocoon picks when
+// --image-version is omitted. Lists are usually newest-first, but the first
+// entry is whichever tag is the default (e.g. debian leads with 12, not the
+// newer 13).
 func defaultImageVersion(image string) string {
 	versions := config.SupportedImageVersions[image]
 	if len(versions) == 0 {
