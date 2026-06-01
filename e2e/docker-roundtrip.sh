@@ -12,6 +12,13 @@
 #   IMAGE           base image id (e.g. ubuntu, debian, denoland/deno)
 #   IMAGE_VERSION   image tag (e.g. 26.04, debian-2.7.14)
 #
+# Optional env:
+#   SECURE          set to 1 to pass `cocoon init --secure`, which presets
+#                   [container.security_opt] no_new_privileges=true. Unset
+#                   or 0 keeps the default sudo-capable posture. The
+#                   post-up checks below assert the generated compose, the
+#                   live kernel flag, and sudo behaviour match either way.
+#
 # The two presets minimal vs full have different cost / coverage:
 #   - minimal (push/PR e2e.yml)  — 0 plugins, runs across every supported
 #     base image so generator image-family branching (apt-mirror, OS
@@ -241,6 +248,11 @@ extra=()
 [ -n "$plugins" ] && extra+=(--plugins "$plugins")
 [ -n "$pins" ] && extra+=(--plugin-versions "$pins")
 [ -n "$methods" ] && extra+=(--plugin-methods "$methods")
+# SECURE=1 (e2e.yml ubuntu/secure matrix entry) presets
+# [container.security_opt] no_new_privileges=true via `cocoon init
+# --secure`; unset or 0 leaves the default sudo-capable posture. ubuntu
+# runs both so the hardened and default paths each get a Docker round-trip.
+[ "${SECURE:-}" = 1 ] && extra+=(--secure)
 
 # service-name and the in-container username are kept identical ("dev")
 # so the `docker compose exec dev` step below targets the right service.
@@ -294,6 +306,25 @@ test -f .devcontainer/docker-compose.yml
 test -f .devcontainer/docker-entrypoint.sh
 test -f .devcontainer/.env
 test ! -d config
+
+# The no-new-privileges posture must match the requested mode in the
+# generated compose: SECURE=1 (cocoon init --secure) emits
+# `security_opt: ["no-new-privileges:true"]`; the default must not set it
+# at all. The live-container counterpart (kernel flag + sudo) is asserted
+# after `up -d` below; this guards the artifact a regression would ship.
+if [ "${SECURE:-}" = 1 ]; then
+  grep -q 'no-new-privileges:true' .devcontainer/docker-compose.yml ||
+    {
+      echo "SECURE=1 but compose is missing no-new-privileges:true" >&2
+      exit 1
+    }
+else
+  ! grep -q no-new-privileges .devcontainer/docker-compose.yml ||
+    {
+      echo "default run unexpectedly emitted no-new-privileges in compose" >&2
+      exit 1
+    }
+fi
 
 # Build via `docker buildx bake` to opt into BuildKit's GHA cache
 # backend. `docker compose build` cannot pass cache-from/cache-to
@@ -424,4 +455,48 @@ test "$host_gid" = "$container_gid" ||
     echo "GID remap failed: host=$host_gid container=$container_gid" >&2
     exit 1
   }
+
+# Runtime proof of the no-new-privileges posture. The UID/GID poll above
+# already proves --secure does NOT break the root-phase entrypoint remap
+# (the whole worry behind keeping it opt-in); these two checks prove the
+# hardening itself took effect:
+#   1. /proc/self/status NoNewPrivs — the kernel flag docker sets from
+#      security_opt; 1 under --secure, 0 by default. Image-independent.
+#   2. sudo escalation — the user-visible effect. Under --secure the
+#      setuid sudo binary cannot raise privileges, so `sudo -n true`
+#      fails; by default the passwordless sudo grant succeeds. Run as
+#      `-u dev` because the image's final USER is root (sudo is moot for
+#      root); sudo is always installed and NOPASSWD-configured for dev.
+if [ "${SECURE:-}" = 1 ]; then
+  expected_nnp=1
+else
+  expected_nnp=0
+fi
+docker compose -f .devcontainer/docker-compose.yml exec -T dev \
+  grep -Eq "^NoNewPrivs:[[:space:]]+${expected_nnp}\$" /proc/self/status ||
+  {
+    echo "NoNewPrivs mismatch: expected ${expected_nnp} (SECURE=${SECURE:-})" >&2
+    docker compose -f .devcontainer/docker-compose.yml exec -T dev \
+      grep -i NoNewPrivs /proc/self/status >&2 || true
+    exit 1
+  }
+
+# Capture sudo's exit code explicitly so the expected-failure path under
+# --secure does not trip `set -e`.
+sudo_rc=0
+docker compose -f .devcontainer/docker-compose.yml exec -T -u dev dev \
+  sudo -n true || sudo_rc=$?
+if [ "${SECURE:-}" = 1 ]; then
+  test "$sudo_rc" -ne 0 ||
+    {
+      echo "SECURE=1 but sudo escalation succeeded (no-new-privileges not enforced)" >&2
+      exit 1
+    }
+else
+  test "$sudo_rc" -eq 0 ||
+    {
+      echo "default run but passwordless sudo failed (rc=$sudo_rc)" >&2
+      exit 1
+    }
+fi
 # trap EXIT (installed after `up -d` above) runs `down -v` on exit.
