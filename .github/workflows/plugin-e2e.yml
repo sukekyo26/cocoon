@@ -224,8 +224,9 @@ jobs:
             echo "plugin-e2e failed: detect=$DETECT_RESULT" >&2
             exit 1
           fi
-          # build is 'skipped' only when detect selected nothing (never the
-          # case today — PR smokes 'go'); treat it as benign.
+          # build is 'skipped' when detect selected nothing — an unrelated
+          # PR that touched no plugin dir and no harness file. That is
+          # expected and benign; only an actual build failure should gate.
           case "$BUILD_RESULT" in
             success | skipped) echo "plugin-e2e OK (build=$BUILD_RESULT)" ;;
             *)

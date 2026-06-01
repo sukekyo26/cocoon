@@ -243,9 +243,11 @@ case "$PRESET" in
     # (.github/workflows/plugin-e2e.yml) runs this per catalog plugin so a
     # failure names the culprit and the image stays small enough that the
     # build-only path below never has to --load a multi-GB all-plugins
-    # image (the old amd64-full disk-exhaustion failure mode). Each plugin
-    # is still built against the full apt category set so a plugin-vs-apt
-    # mismatch surfaces here, not for a user.
+    # image (the old amd64-full disk-exhaustion failure mode). A plugin's
+    # own build deps come from its [apt] packages (installed because the
+    # plugin is enabled, independent of --apt-categories), so single uses
+    # cocoon's default-on categories — not every category — without losing
+    # plugin coverage (see the apt_cats_arg block below).
     : "${PLUGIN:?PLUGIN unset (single preset)}"
     found=""
     for p in "${all_plugins[@]}"; do
