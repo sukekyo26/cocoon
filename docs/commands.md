@@ -42,6 +42,8 @@ Generate `workspace.toml` in the current directory.
 | `--no-devcontainer` | bool | Skip `.devcontainer/devcontainer.json`. |
 | `--certificates` | bool | Force-enable `[certificates] enable = true` (host TLS auto-bake from `~/.cocoon/certs/`). |
 | `--no-certificates` | bool | Force-disable; omit the `[certificates]` section (default). |
+| `--secure` | bool | Preset `[container.security_opt] no_new_privileges = true`. Blocks setuid escalation — disables in-container `sudo` (for running untrusted code / AI agents). |
+| `--no-secure` | bool | Leave `no_new_privileges` unset; in-container `sudo` stays available (default). |
 | `--apt-categories <ids>` | string | Comma-separated apt category IDs (skips the prompt). |
 | `--plugins <ids>` | string | Comma-separated plugin IDs to enable. |
 | `--plugin-versions <id>=<ref>,...` | string | Comma-separated `<id>=<ref>` pins for `version_capable` plugins. Each `<id>` must also appear in `--plugins`, must be `version_capable`, and may not repeat. Emits a `[plugins.versions]` block directly in the generated `workspace.toml`. |
@@ -62,9 +64,10 @@ When run without `--yes`, prompts are shown one screen at a time:
 7. mount range
 8. devcontainer y/n
 9. certificates y/n (opt in to host TLS auto-bake from `~/.cocoon/certs/`; default no)
-10. port forwards (comma-separated docker-compose short forms; blank to skip — the commented-out `[ports]` template stays for later opt-in)
-11. apt categories (multi-select)
-12. plugins (multi-select)
+10. secure y/n (preset `no_new_privileges = true`, disabling in-container `sudo`; default no)
+11. port forwards (comma-separated docker-compose short forms; blank to skip — the commented-out `[ports]` template stays for later opt-in)
+12. apt categories (multi-select)
+13. plugins (multi-select)
 
 ### Examples
 

@@ -42,6 +42,8 @@
 | `--no-devcontainer` | bool | `.devcontainer/devcontainer.json` をスキップ。 |
 | `--certificates` | bool | `[certificates] enable = true` を強制有効化（`~/.cocoon/certs/` の自動取り込み）。 |
 | `--no-certificates` | bool | `[certificates]` セクション省略を強制（デフォルト）。 |
+| `--secure` | bool | `[container.security_opt] no_new_privileges = true` を事前設定。setuid 昇格を遮断しコンテナ内 `sudo` を無効化（未信頼コード / AI エージェント実行向け）。 |
+| `--no-secure` | bool | `no_new_privileges` を設定しない。コンテナ内 `sudo` は利用可（デフォルト）。 |
 | `--apt-categories <ids>` | string | カンマ区切り apt カテゴリ ID (プロンプトをスキップ)。 |
 | `--plugins <ids>` | string | カンマ区切りで有効化するプラグイン ID。 |
 | `--plugin-versions <id>=<ref>,...` | string | カンマ区切りの `<id>=<ref>` でプラグインを pin する。各 `<id>` は `--plugins` にも含まれ、かつ `version_capable = true` である必要があり、重複は不可。`[plugins.versions]` セクションに inline-table 行 (`<id> = { pin = "..." }`) を直接書き込む。 |
@@ -62,9 +64,10 @@
 7. mount range
 8. devcontainer y/n
 9. certificates y/n (`~/.cocoon/certs/` からの TLS 自動取り込みを opt-in。デフォルト no)
-10. ポートフォワード (カンマ区切りの docker-compose short form。空 Enter で見送り — `[ports]` のコメント雛形は残り、後から有効化できる)
-11. apt categories (multi-select)
-12. plugins (multi-select)
+10. secure y/n (`no_new_privileges = true` を事前設定しコンテナ内 `sudo` を無効化。デフォルト no)
+11. ポートフォワード (カンマ区切りの docker-compose short form。空 Enter で見送り — `[ports]` のコメント雛形は残り、後から有効化できる)
+12. apt categories (multi-select)
+13. plugins (multi-select)
 
 ### 例
 

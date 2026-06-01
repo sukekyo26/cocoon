@@ -82,6 +82,8 @@ func fullyPopulatedAnswers() initAnswers {
 		DevcontainerSet:   true,
 		Certificates:      false,
 		CertificatesSet:   true,
+		Secure:            false,
+		SecureSet:         true,
 		AptCategories:     nil,
 		AptSet:            true,
 		Plugins:           nil,
@@ -265,6 +267,7 @@ func TestPromptWorkspaceOptions_PromptsForEachMissing(t *testing.T) {
 		{"dir_not_set", func(a *initAnswers) { a.DirSet = false }, 1},
 		{"devcontainer_not_set", func(a *initAnswers) { a.DevcontainerSet = false }, 1},
 		{"certificates_not_set", func(a *initAnswers) { a.CertificatesSet = false }, 1},
+		{"secure_not_set", func(a *initAnswers) { a.SecureSet = false }, 1},
 		{"ports_not_set", func(a *initAnswers) { a.PortsSet = false }, 1},
 		{"apt_not_set", func(a *initAnswers) { a.AptSet = false }, 1},
 	}
@@ -400,12 +403,12 @@ func TestPromptForMissing_RunsAllThreeOrchestrators(t *testing.T) {
 	if err != nil {
 		t.Fatalf("promptForMissing: %v", err)
 	}
-	// 5 identity/image + 7 workspace + 1 plugin multiselect = 13.
+	// 5 identity/image + 8 workspace + 1 plugin multiselect = 14.
 	// (Plugin method/version prompts are gated on version_capable plugins
 	// and methods present, both absent in our synthetic catalog, so the
 	// inner per-plugin loops skip with 0 calls.)
-	const want = 13
+	const want = 14
 	if *calls != want {
-		t.Errorf("calls = %d, want %d (identity 5 + workspace 7 + plugins 1)", *calls, want)
+		t.Errorf("calls = %d, want %d (identity 5 + workspace 8 + plugins 1)", *calls, want)
 	}
 }

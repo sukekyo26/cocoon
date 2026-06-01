@@ -21,6 +21,7 @@ type containerSpec struct {
 	Dir            string
 	Devcontainer   bool
 	Certificates   bool
+	Secure         bool
 	ImagePathFix   bool
 	Packages       []string
 	Plugins        []string
@@ -87,11 +88,27 @@ func writeContainerSection(sb *strings.Builder, cat *i18n.Catalog, s containerSp
 		"init_toml_template_container_dns",
 		"init_toml_template_container_sysctls",
 		"init_toml_template_container_capabilities",
-		"init_toml_template_container_security_opt",
-		"init_toml_template_container_skel",
 	} {
 		emitTemplate(sb, cat, key)
 	}
+	writeContainerSecurityOpt(sb, cat, s)
+	emitTemplate(sb, cat, "init_toml_template_container_skel")
+}
+
+// writeContainerSecurityOpt emits the [container.security_opt] block. With
+// --secure it writes an active block with no_new_privileges = true (the
+// header comment spells out the sudo trade-off); otherwise it falls back to
+// the commented-out template so the section stays discoverable. Mirrors the
+// active⇄commented swap writeCertificatesSection uses for [certificates].
+func writeContainerSecurityOpt(sb *strings.Builder, cat *i18n.Catalog, s containerSpec) {
+	if !s.Secure {
+		emitTemplate(sb, cat, "init_toml_template_container_security_opt")
+		return
+	}
+	sb.WriteString(cat.Msg("init_toml_section_container_security_opt"))
+	sb.WriteByte('\n')
+	sb.WriteString("[container.security_opt]\n")
+	sb.WriteString("no_new_privileges = true\n\n")
 }
 
 // writeShellSection emits the [container.shell] block followed by an

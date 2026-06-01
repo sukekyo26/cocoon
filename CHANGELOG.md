@@ -6,6 +6,17 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `cocoon init --secure` (and a matching interactive prompt) presets
+  `[container.security_opt] no_new_privileges = true` in the generated
+  `workspace.toml`. This hardens the container for running untrusted code or AI
+  agents by blocking setuid privilege escalation; the trade-off is that
+  in-container `sudo` becomes a no-op (get root from the host with
+  `docker exec -u root` when needed). UID/GID/DOCKER_GID remapping is
+  unaffected. Default behavior is unchanged — pass `--no-secure` or omit the
+  flag to keep passwordless `sudo`.
+
 ### Changed
 
 - `cocoon init` now defaults to `debian:12` (bookworm) instead of `ubuntu:26.04`

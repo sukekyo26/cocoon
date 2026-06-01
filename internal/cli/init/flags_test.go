@@ -195,6 +195,21 @@ func TestApplyFlags_DevcontainerExclusivity(t *testing.T) {
 	}
 }
 
+func TestApplyFlags_SecureExclusivity(t *testing.T) {
+	t.Parallel()
+	plugins := loadPluginsForTest(t)
+	// applyFlags itself does not detect the mutual exclusivity — runInit
+	// does. Confirm each flag in isolation produces the matching boolean.
+	ans, err := applyFlags(&initFlags{Secure: true}, plugins)
+	if err != nil || !ans.Secure || !ans.SecureSet {
+		t.Errorf("--secure should set true: %v %+v", err, ans)
+	}
+	ans, err = applyFlags(&initFlags{NoSecure: true}, plugins)
+	if err != nil || ans.Secure || !ans.SecureSet {
+		t.Errorf("--no-secure should set false: %v %+v", err, ans)
+	}
+}
+
 func TestApplyFlags_UnknownAptCategory(t *testing.T) {
 	t.Parallel()
 	plugins := loadPluginsForTest(t)
@@ -284,6 +299,9 @@ func TestApplyDefaults_FillsMissingDefaults(t *testing.T) {
 	}
 	if ans.Shell != "bash" || !ans.ShellSet {
 		t.Errorf("Shell default = %q ShellSet=%v", ans.Shell, ans.ShellSet)
+	}
+	if ans.Secure || !ans.SecureSet {
+		t.Errorf("Secure default = %v SecureSet=%v (want false/true)", ans.Secure, ans.SecureSet)
 	}
 }
 

@@ -6,6 +6,16 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+### 追加
+
+- `cocoon init --secure`（および対応する対話プロンプト）を追加しました。生成される
+  `workspace.toml` に `[container.security_opt] no_new_privileges = true` を事前
+  設定します。setuid 権限昇格を遮断して、未信頼コードや AI エージェントを実行する
+  コンテナを硬化します。トレードオフとしてコンテナ内の `sudo` は no-op になります
+  （root が要るときはホストから `docker exec -u root`）。UID/GID/DOCKER_GID の
+  再マップは無影響です。デフォルト挙動は不変で、`--no-secure` を渡すかフラグを省略
+  すれば passwordless `sudo` のままです。
+
 ### 変更
 
 - `cocoon init` のベースイメージ既定を、`--image` / `--image-version` 省略時に
