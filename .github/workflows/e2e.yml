@@ -19,12 +19,13 @@ name: E2E
 #     surface arm64-specific generator drift without exploding queue
 #     time on the PR critical path).
 #
-# The heavier counterpart (plugin-full presets on amd64 + arm64) lives
-# in .github/workflows/scheduled-e2e.yml and runs weekly + on demand
-# via workflow_dispatch. Plugin-vs-image and plugin-vs-plugin breakage
-# is therefore caught at most one week late; the trade-off is ~13 min
-# off the PR critical path. New plugins should be manually verified
-# via the scheduled workflow's workflow_dispatch before merging.
+# The heavier counterpart — per-plugin install-RUN builds — lives in
+# .github/workflows/plugin-e2e.yml: it builds each changed plugin (amd64 +
+# arm64, build-only) on a PR and the whole catalog on a weekly cron, with a
+# single-plugin workflow_dispatch input for verifying a new plugin before
+# merge. plugin-vs-image breakage is therefore caught at PR time for the
+# changed plugin and weekly for the rest; plugin-vs-plugin coverage is
+# dropped (init-time conflict validation catches most).
 #
 # Local WSL2 cannot run these (gcc missing for `-race`); GitHub-hosted
 # ubuntu-latest / ubuntu-24.04-arm both ship docker + buildx out of the

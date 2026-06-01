@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 # Real Docker round-trip for the cocoon generator. Run from a CI workflow
-# (.github/workflows/e2e.yml or scheduled-e2e.yml) after `just build` has
+# (.github/workflows/e2e.yml or plugin-e2e.yml) after `just build` has
 # produced bin/cocoon. Builds a fresh project, generates .devcontainer/,
-# `docker buildx bake`s the image with GHA cache, and execs into the
-# running container so generation / install-script drift breaks CI before
-# it breaks users.
+# `docker buildx bake`s the image with GHA cache, and (except in the
+# build-only single preset) execs into the running container so generation
+# / install-script drift breaks CI before it breaks users.
 #
 # Required env:
 #   COCOON          absolute path to the cocoon binary
-#   PRESET          one of: minimal | amd64-full | arm64-full
+#   PRESET          one of: minimal | single | amd64-full | arm64-full
+#   PLUGIN          (single preset only) the one catalog plugin id to build
 #   IMAGE           base image id (e.g. ubuntu, debian, denoland/deno)
 #   IMAGE_VERSION   image tag (e.g. 26.04, debian-2.7.14)
 #
@@ -19,24 +20,28 @@
 #                   post-up checks below assert the generated compose, the
 #                   live kernel flag, and sudo behaviour match either way.
 #
-# The two presets minimal vs full have different cost / coverage:
+# The presets differ in cost / coverage:
 #   - minimal (push/PR e2e.yml)  — 0 plugins, runs across every supported
 #     base image so generator image-family branching (apt-mirror, OS
 #     family) is exercised on every PR.
-#   - amd64-full / arm64-full (scheduled-e2e.yml) — every catalog plugin
-#     enabled, pinned to the versions in pin_entries below (un-pinned
-#     plugins float to LATEST). Catches plugin-vs-base-image and
-#     plugin-vs-plugin breakage; bumping a pin_entries entry surfaces here
-#     as a deliberate diff.
-#     The enabled set is derived from internal/plugin/catalog/ at runtime
-#     so a new plugin auto-enrolls. arm64-full subtracts the arm64-unsafe
-#     plugins in e2e/arm64-exclude.txt (install.sh hard-codes amd64 or
-#     fails fast on arm64).
-#   - PIN_MODE=latest (scheduled-e2e.yml weekly) reruns the full presets with
-#     NO pins so every plugin floats to its upstream LATEST — the drift canary
-#     that catches upstream packaging changes (e.g. a removed checksum
+#   - single (plugin-e2e.yml) — one plugin ($PLUGIN) in its own base+1-plugin
+#     image on debian 12, build-only (BUILD_ONLY): the install RUN succeeding
+#     IS the check, so no image is loaded and the round-trip is skipped. This
+#     is the CI plugin canary — one job per catalog plugin so a failure names
+#     the culprit and no all-plugins image ever has to be loaded. Run per
+#     changed plugin on PRs and across the whole catalog on the weekly cron.
+#   - amd64-full / arm64-full — every catalog plugin enabled in ONE image,
+#     pinned to pin_entries below (un-pinned plugins float to LATEST). These
+#     also catch plugin-vs-plugin breakage but are no longer wired to CI
+#     (superseded by single, which avoids the all-plugins disk pressure);
+#     kept for manual whole-image runs. The enabled set is derived from
+#     internal/plugin/catalog/ at runtime so a new plugin auto-enrolls;
+#     arm64-full subtracts the arm64-unsafe plugins in e2e/arm64-exclude.txt
+#     (install.sh hard-codes amd64 or fails fast on arm64).
+#   - PIN_MODE=latest floats every plugin to its upstream LATEST — the drift
+#     canary that catches upstream packaging changes (e.g. a removed checksum
 #     manifest) a release before users hit them. Default PIN_MODE=pinned keeps
-#     the reproducible baseline.
+#     the reproducible baseline. plugin-e2e.yml runs each plugin both ways.
 #
 # Local WSL2 cannot run this (gcc missing for `-race`); GHA-hosted
 # ubuntu-latest / ubuntu-24.04-arm ship docker + buildx out of the box.
@@ -44,7 +49,7 @@
 set -euxo pipefail
 
 : "${COCOON:?COCOON unset (path to cocoon binary)}"
-: "${PRESET:?PRESET unset (minimal | amd64-full | arm64-full)}"
+: "${PRESET:?PRESET unset (minimal | single | amd64-full | arm64-full)}"
 : "${IMAGE:?IMAGE unset (base image id)}"
 : "${IMAGE_VERSION:?IMAGE_VERSION unset}"
 
@@ -233,6 +238,39 @@ case "$PRESET" in
     # Both real-Docker installs run per release.
     methods=""
     ;;
+  single)
+    # One plugin in its own base+1-plugin image. The drift canary
+    # (.github/workflows/plugin-e2e.yml) runs this per catalog plugin so a
+    # failure names the culprit and the image stays small enough that the
+    # build-only path below never has to --load a multi-GB all-plugins
+    # image (the old amd64-full disk-exhaustion failure mode). A plugin's
+    # own build deps come from its [apt] packages (installed because the
+    # plugin is enabled, independent of --apt-categories), so single uses
+    # cocoon's default-on categories — not every category — without losing
+    # plugin coverage (see the apt_cats_arg block below).
+    : "${PLUGIN:?PLUGIN unset (single preset)}"
+    found=""
+    for p in "${all_plugins[@]}"; do
+      if [ "$p" = "$PLUGIN" ]; then
+        found=1
+        break
+      fi
+    done
+    [ -n "$found" ] || {
+      echo "single: '$PLUGIN' is not a catalog plugin (typo or renamed?)" >&2
+      exit 1
+    }
+    enabled=("$PLUGIN")
+    plugins="$PLUGIN"
+    pins="$(pins_for "$PLUGIN")"
+    methods=""
+    # Plugin verification == build success. The runtime round-trip
+    # (compose up + exec) only asserts plugin-independent entrypoint /
+    # UID-remap / no-new-privileges properties, which the minimal preset
+    # and the --secure matrix already cover, so single skips it: build the
+    # install RUN, prove it succeeds, discard the image.
+    BUILD_ONLY=1
+    ;;
   *)
     echo "unknown preset: $PRESET" >&2
     exit 1
@@ -254,15 +292,26 @@ extra=()
 # runs both so the hardened and default paths each get a Docker round-trip.
 [ "${SECURE:-}" = 1 ] && extra+=(--secure)
 
+# apt categories. minimal and the full presets install EVERY catalog
+# category (apt-categories.txt) so a package missing from the target apt
+# repos — the yq-not-on-jammy class of failure — breaks CI here, not for a
+# user; minimal carries that apt-availability canary across every base
+# image. single omits the flag and uses cocoon's default-on categories
+# (what a user gets by default): a plugin's own build deps come from its
+# [apt] packages, installed because the plugin is enabled and independent
+# of the category selection (e.g. android-sdk pulls default-jdk-headless
+# either way), so the extra categories would only add user-convenience
+# tools irrelevant to whether the install RUN succeeds.
+apt_cats_arg=()
+if [ "$PRESET" != single ]; then
+  apt_cats_arg=(--apt-categories="$(join_csv "${apt_categories[@]}")")
+fi
+
 # service-name and the in-container username are kept identical ("dev")
 # so the `docker compose exec dev` step below targets the right service.
 # Using a different service-name (e.g. "e2e") would silently break exec
 # because `exec <service>` resolves against the compose service id, which
 # mirrors workspace.toml's [container].service_name.
-# Match cocoon's full default-on apt category set so default-on plugins
-# (e.g. docker-cli, which calls gpg in install.sh via the vcs category)
-# build cleanly. Trimming this list in CI hides plugin-vs-category
-# mismatches that real users would hit.
 # --certificates opts the workspace into TLS auto-bake from
 # ~/.cocoon/certs/. Required here because the e2e matrix exercises the
 # cert wiring path end-to-end (docker buildx bake consuming
@@ -278,7 +327,7 @@ extra=()
   --mount-root . \
   --no-devcontainer \
   --certificates \
-  --apt-categories="$(join_csv "${apt_categories[@]}")" \
+  "${apt_cats_arg[@]}" \
   "${extra[@]}"
 "$COCOON" gen
 
@@ -369,10 +418,15 @@ esac
 #     of the same preset; the preset name already encodes the arch.
 # GHA cache backend further isolates by branch.
 # mode=max captures all layers (within the 10GB/repo limit).
-# The subsequent `compose up -d` reuses the just-loaded image instead
-# of rebuilding.
+# For non-build-only presets the subsequent `compose up -d` reuses the
+# just-loaded image instead of rebuilding.
+#   - single: per-plugin + per-arch + per-pin-mode
+#     (`e2e-single-<plugin>-<arch>-<mode>`) so the 67 weekly plugin builds
+#     do not thrash one shared scope; the two pin modes of the same plugin
+#     in one job share the base+apt prelude via the local buildkit cache.
 case "$PRESET" in
   minimal) cache_scope="e2e-minimal-${arch}-${IMAGE//\//-}" ;;
+  single) cache_scope="e2e-single-${PLUGIN}-${arch}-${PIN_MODE}" ;;
   *) cache_scope="e2e-${PRESET}-${PIN_MODE}" ;;
 esac
 
@@ -406,16 +460,37 @@ while IFS= read -r line || [ -n "$line" ]; do
   env_args+=("$line")
 done <.devcontainer/.env
 
+# BUILD_ONLY (single preset) verifies the install RUN without taking the
+# image into the docker daemon: type=cacheonly runs every stage but exports
+# nothing locally, so the all-plugins-image disk doubling that --load caused
+# never happens. Other presets --load so the compose round-trip below can
+# exec into the just-built image.
+if [ -n "${BUILD_ONLY:-}" ]; then
+  output_arg=(--set "*.output=type=cacheonly")
+else
+  output_arg=(--load)
+fi
+
 env "${env_args[@]}" docker buildx bake \
   -f .devcontainer/docker-compose.yml \
   --allow="fs.read=${HOME}/.cocoon/certs" \
-  --load \
+  "${output_arg[@]}" \
   --set "*.context=$PWD" \
   --set "*.dockerfile=$PWD/.devcontainer/Dockerfile" \
   --set "*.cache-from=type=gha,scope=${cache_scope}" \
   --set "*.cache-to=type=gha,scope=${cache_scope},mode=max" \
   --set "*.platform=linux/${arch}" \
   dev
+
+# BUILD_ONLY (single preset): the install RUN just succeeded, which is the
+# whole verification. The round-trip below exercises plugin-independent
+# entrypoint / UID-remap / no-new-privileges behaviour (covered by the
+# minimal and --secure presets) and needs a loaded image we deliberately
+# did not produce, so stop here.
+if [ -n "${BUILD_ONLY:-}" ]; then
+  echo "build-only: install RUN succeeded for plugin '${PLUGIN}' (${PIN_MODE}); skipping runtime round-trip"
+  exit 0
+fi
 
 docker compose -f .devcontainer/docker-compose.yml up -d
 # Always tear down (containers + volumes) on exit, including the

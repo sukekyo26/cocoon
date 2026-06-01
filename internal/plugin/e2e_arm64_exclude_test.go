@@ -54,8 +54,8 @@ func catalogIDs(t *testing.T) map[string]bool {
 
 // TestArm64ExcludeIDsExist guards that every id in e2e/arm64-exclude.txt
 // is a real embedded catalog plugin, so a renamed/removed plugin cannot
-// leave a stale exclude that silently drops a different plugin from the
-// arm64-full e2e preset.
+// leave a stale exclude that silently drops a different plugin from arm64
+// e2e (plugin-e2e.yml's arm64 matrix and docker-roundtrip.sh arm64-full).
 func TestArm64ExcludeIDsExist(t *testing.T) {
 	t.Parallel()
 	exclude := readArm64Exclude(t)
