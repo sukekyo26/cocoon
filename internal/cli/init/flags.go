@@ -25,6 +25,8 @@ type initFlags struct {
 	NoDevcontainer bool
 	Certificates   bool
 	NoCertificates bool
+	Secure         bool
+	NoSecure       bool
 	ImagePathFix   bool
 	NoImagePathFix bool
 	AptCategories  string
@@ -57,6 +59,8 @@ type initAnswers struct {
 	DevcontainerSet   bool
 	Certificates      bool
 	CertificatesSet   bool
+	Secure            bool
+	SecureSet         bool
 	ImagePathFix      bool
 	ImagePathFixSet   bool
 	AptCategories     []string
@@ -183,9 +187,9 @@ func applyImageFlags(flags *initFlags, ans *initAnswers) error {
 	return nil
 }
 
-// applyToggleFlags resolves the --x / --no-x pairs for --devcontainer
-// and --certificates. The mutual-exclusion check happens earlier in
-// runInit, so at most one of each pair is set.
+// applyToggleFlags resolves the --x / --no-x pairs for --devcontainer,
+// --certificates, and --secure. The mutual-exclusion check happens earlier
+// in runInit, so at most one of each pair is set.
 // (--image-path-fix / --no-image-path-fix is image-gated and lives in
 // applyImagePathFixFlags below.)
 func applyToggleFlags(flags *initFlags, ans *initAnswers) {
@@ -200,6 +204,12 @@ func applyToggleFlags(flags *initFlags, ans *initAnswers) {
 		ans.Certificates, ans.CertificatesSet = true, true
 	case flags.NoCertificates:
 		ans.Certificates, ans.CertificatesSet = false, true
+	}
+	switch {
+	case flags.Secure:
+		ans.Secure, ans.SecureSet = true, true
+	case flags.NoSecure:
+		ans.Secure, ans.SecureSet = false, true
 	}
 }
 
@@ -319,7 +329,7 @@ func applyDefaults(ans initAnswers, plugins map[string]*plugin.Plugin) (initAnsw
 // is false there.
 func applyIdentityDefaults(ans *initAnswers) {
 	if !ans.ImageSet {
-		ans.Image, ans.ImageSet = "ubuntu", true
+		ans.Image, ans.ImageSet = "debian", true
 	}
 	if !ans.ImageVersionSet {
 		ans.ImageVersion, ans.ImageVersionSet = defaultImageVersion(ans.Image), true
@@ -334,7 +344,7 @@ func applyIdentityDefaults(ans *initAnswers) {
 }
 
 // applyWorkspaceDefaults fills the [workspace]-related fields and the
-// devcontainer / certificates toggles.
+// devcontainer / certificates / secure toggles.
 func applyWorkspaceDefaults(ans *initAnswers) {
 	if !ans.MountRootSet {
 		ans.MountRoot, ans.MountRootSet = ".", true
@@ -347,6 +357,9 @@ func applyWorkspaceDefaults(ans *initAnswers) {
 	}
 	if !ans.CertificatesSet {
 		ans.Certificates, ans.CertificatesSet = false, true
+	}
+	if !ans.SecureSet {
+		ans.Secure, ans.SecureSet = false, true
 	}
 }
 
@@ -372,8 +385,11 @@ func applyListDefaults(ans *initAnswers, plugins map[string]*plugin.Plugin) {
 	}
 }
 
-// defaultImageVersion returns SupportedImageVersions[image][0], which is
-// ordered newest-first.
+// defaultImageVersion returns SupportedImageVersions[image][0] — the first
+// entry, which is the default / recommended tag cocoon picks when
+// --image-version is omitted. Lists are usually newest-first, but the first
+// entry is whichever tag is the default (e.g. debian leads with 12, not the
+// newer 13).
 func defaultImageVersion(image string) string {
 	versions := config.SupportedImageVersions[image]
 	if len(versions) == 0 {

@@ -6,6 +6,33 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-06-02
+
+### 追加
+
+- `cocoon init --secure`（および対応する対話プロンプト）を追加しました。生成される
+  `workspace.toml` に `[container.security_opt] no_new_privileges = true` を事前
+  設定します。setuid 権限昇格を遮断して、未信頼コードや AI エージェントを実行する
+  コンテナを硬化します。トレードオフとしてコンテナ内の `sudo` は no-op になります
+  （root が要るときはホストから `docker exec -u root`）。UID/GID/DOCKER_GID の
+  再マップは無影響です。デフォルト挙動は不変で、`--no-secure` を渡すかフラグを省略
+  すれば passwordless `sudo` のままです。
+
+### 変更
+
+- `cocoon init` のベースイメージ既定を、`--image` / `--image-version` 省略時に
+  `ubuntu:26.04` から `debian:12` (bookworm) へ変更しました。対話のイメージバージョン
+  選択では debian の `12` を先頭 (推奨) に表示します。`ubuntu` を含む他のサポート
+  イメージ・タグは引き続き選択できます。
+
+### 修正
+
+- `android-sdk` プラグインが、固定していた `openjdk-17-jdk-headless` ではなく
+  `default-jdk-headless` をインストールするようにしました。Debian 13 (trixie) と
+  Ubuntu 24.04+ は `openjdk-17-jdk-headless` をパッケージとして提供しておらず、
+  従来これらのイメージでビルドに失敗していました。メタパッケージは各イメージの
+  既定 JDK (bookworm は 17、trixie / Ubuntu 24.04+ は 21) に解決されます。
+
 ## [0.11.0] - 2026-06-01
 
 ### 追加
@@ -515,7 +542,8 @@ cocoon の主要な変更を記録します。フォーマットは
 - `COMPOSE_PROJECT_NAME` をプロジェクトディレクトリの basename から導出するように変更。docker compose の namespace がホストディレクトリと一致する。
 - 国際化 (英語 / 日本語) カタログを追加。CLI プロンプト・エラーメッセージ・`workspace.toml` インラインコメントすべてを `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` で切替可能。
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/sukekyo26/cocoon/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/sukekyo26/cocoon/compare/v0.10.2...v0.11.0
 [0.10.2]: https://github.com/sukekyo26/cocoon/compare/v0.10.1...v0.10.2
 [0.10.1]: https://github.com/sukekyo26/cocoon/compare/v0.10.0...v0.10.1

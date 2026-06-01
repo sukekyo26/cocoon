@@ -19,12 +19,13 @@ name: E2E
 #     surface arm64-specific generator drift without exploding queue
 #     time on the PR critical path).
 #
-# The heavier counterpart (plugin-full presets on amd64 + arm64) lives
-# in .github/workflows/scheduled-e2e.yml and runs weekly + on demand
-# via workflow_dispatch. Plugin-vs-image and plugin-vs-plugin breakage
-# is therefore caught at most one week late; the trade-off is ~13 min
-# off the PR critical path. New plugins should be manually verified
-# via the scheduled workflow's workflow_dispatch before merging.
+# The heavier counterpart — per-plugin install-RUN builds — lives in
+# .github/workflows/plugin-e2e.yml: it builds each changed plugin (amd64 +
+# arm64, build-only) on a PR and the whole catalog on a weekly cron, with a
+# single-plugin workflow_dispatch input for verifying a new plugin before
+# merge. plugin-vs-image breakage is therefore caught at PR time for the
+# changed plugin and weekly for the rest; plugin-vs-plugin coverage is
+# dropped (init-time conflict validation catches most).
 #
 # Local WSL2 cannot run these (gcc missing for `-race`); GitHub-hosted
 # ubuntu-latest / ubuntu-24.04-arm both ship docker + buildx out of the
@@ -63,7 +64,7 @@ jobs:
           - label: amd64 / debian
             runs-on: ubuntu-latest
             image: debian
-            image-version: "13"
+            image-version: "12"
           - label: amd64 / node
             runs-on: ubuntu-latest
             image: node
@@ -88,6 +89,16 @@ jobs:
             runs-on: ubuntu-24.04-arm
             image: ubuntu
             image-version: "26.04"
+          # Second ubuntu job opts into `cocoon init --secure` so the
+          # no-new-privileges posture (compose security_opt + the live
+          # kernel flag + sudo escalation being blocked) is exercised end
+          # to end. The other entries leave it unset, covering the default
+          # sudo-capable posture, so both paths get a real Docker round-trip.
+          - label: amd64 / ubuntu / secure
+            runs-on: ubuntu-latest
+            image: ubuntu
+            image-version: "26.04"
+            secure: "1"
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
@@ -111,4 +122,5 @@ jobs:
           PRESET: minimal
           IMAGE: ${{ matrix.image }}
           IMAGE_VERSION: ${{ matrix.image-version }}
+          SECURE: ${{ matrix.secure }}
         run: bash "$GITHUB_WORKSPACE/e2e/docker-roundtrip.sh"

@@ -608,6 +608,59 @@ func TestRenderWorkspaceToml_ImagePathFix_Volumes_OffEmitsCommentedTemplate(t *t
 	}
 }
 
+// TestRenderWorkspaceToml_Secure_ActiveBlock pins that Secure=true swaps the
+// commented [container.security_opt] template for an active block with
+// no_new_privileges = true, and that the block round-trips through
+// config.StrictUnmarshal into Container.SecurityOpt.NoNewPrivileges.
+func TestRenderWorkspaceToml_Secure_ActiveBlock(t *testing.T) {
+	t.Parallel()
+	cat := i18n.New(i18n.LangEN)
+	got := renderWorkspaceToml(containerSpec{
+		ServiceName: "svc", Username: "dev", Image: "ubuntu", ImageVersion: "26.04",
+		Shell: "bash", MountRoot: ".", Devcontainer: true, Secure: true,
+	}, cat)
+	if !strings.Contains(got, "[container.security_opt]\nno_new_privileges = true\n") {
+		t.Errorf("secure output missing active block\n--- got ---\n%s", got)
+	}
+	// The commented example line from the opt-in template must not survive.
+	if strings.Contains(got, `# seccomp           = "unconfined"`) {
+		t.Errorf("secure output still carries the commented template\n--- got ---\n%s", got)
+	}
+	var ws config.Workspace
+	if err := config.StrictUnmarshal("(test)", []byte(got), &ws); err != nil {
+		t.Fatalf("rendered TOML failed to parse: %v\n--- got ---\n%s", err, got)
+	}
+	if ws.Container.SecurityOpt == nil || ws.Container.SecurityOpt.NoNewPrivileges == nil ||
+		!*ws.Container.SecurityOpt.NoNewPrivileges {
+		t.Errorf("parsed NoNewPrivileges not true: %+v", ws.Container.SecurityOpt)
+	}
+}
+
+// TestRenderWorkspaceToml_Secure_OffEmitsCommentedTemplate pins that without
+// --secure the section stays a commented-out template (discoverable) and no
+// active [container.security_opt] block lands in the parsed workspace.
+func TestRenderWorkspaceToml_Secure_OffEmitsCommentedTemplate(t *testing.T) {
+	t.Parallel()
+	cat := i18n.New(i18n.LangEN)
+	got := renderWorkspaceToml(containerSpec{
+		ServiceName: "svc", Username: "dev", Image: "ubuntu", ImageVersion: "26.04",
+		Shell: "bash", MountRoot: ".", Devcontainer: true, Secure: false,
+	}, cat)
+	if !strings.Contains(got, "# no_new_privileges = true") {
+		t.Errorf("default output missing commented template\n--- got ---\n%s", got)
+	}
+	if strings.Contains(got, "[container.security_opt]\nno_new_privileges = true\n") {
+		t.Errorf("default output unexpectedly emitted an active block\n--- got ---\n%s", got)
+	}
+	var ws config.Workspace
+	if err := config.StrictUnmarshal("(test)", []byte(got), &ws); err != nil {
+		t.Fatalf("rendered TOML failed to parse: %v\n--- got ---\n%s", err, got)
+	}
+	if ws.Container.SecurityOpt != nil {
+		t.Errorf("expected no SecurityOpt when --secure off, got %+v", ws.Container.SecurityOpt)
+	}
+}
+
 // TestRenderWorkspaceToml_ImagePathFix_Volumes_RoundTripParse pins that the
 // rendered [volumes] block parses back through config.StrictUnmarshal
 // into Workspace.Volumes with the expected name→path mapping. Catches

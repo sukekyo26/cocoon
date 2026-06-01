@@ -195,6 +195,21 @@ func TestApplyFlags_DevcontainerExclusivity(t *testing.T) {
 	}
 }
 
+func TestApplyFlags_SecureExclusivity(t *testing.T) {
+	t.Parallel()
+	plugins := loadPluginsForTest(t)
+	// applyFlags itself does not detect the mutual exclusivity — runInit
+	// does. Confirm each flag in isolation produces the matching boolean.
+	ans, err := applyFlags(&initFlags{Secure: true}, plugins)
+	if err != nil || !ans.Secure || !ans.SecureSet {
+		t.Errorf("--secure should set true: %v %+v", err, ans)
+	}
+	ans, err = applyFlags(&initFlags{NoSecure: true}, plugins)
+	if err != nil || ans.Secure || !ans.SecureSet {
+		t.Errorf("--no-secure should set false: %v %+v", err, ans)
+	}
+}
+
 func TestApplyFlags_UnknownAptCategory(t *testing.T) {
 	t.Parallel()
 	plugins := loadPluginsForTest(t)
@@ -267,10 +282,10 @@ func TestApplyDefaults_FillsMissingDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ans.Image != "ubuntu" || !ans.ImageSet {
+	if ans.Image != "debian" || !ans.ImageSet {
 		t.Errorf("Image default = %q ImageSet=%v", ans.Image, ans.ImageSet)
 	}
-	if ans.ImageVersion != "26.04" || !ans.ImageVersionSet {
+	if ans.ImageVersion != "12" || !ans.ImageVersionSet {
 		t.Errorf("ImageVersion default = %q", ans.ImageVersion)
 	}
 	if ans.MountRoot != "." || !ans.MountRootSet {
@@ -284,6 +299,9 @@ func TestApplyDefaults_FillsMissingDefaults(t *testing.T) {
 	}
 	if ans.Shell != "bash" || !ans.ShellSet {
 		t.Errorf("Shell default = %q ShellSet=%v", ans.Shell, ans.ShellSet)
+	}
+	if ans.Secure || !ans.SecureSet {
+		t.Errorf("Secure default = %v SecureSet=%v (want false/true)", ans.Secure, ans.SecureSet)
 	}
 }
 
@@ -461,8 +479,8 @@ func TestDefaultImageVersion(t *testing.T) {
 	if got := defaultImageVersion("ubuntu"); got != "26.04" {
 		t.Errorf("ubuntu default = %q, want 26.04", got)
 	}
-	if got := defaultImageVersion("debian"); got != "13" {
-		t.Errorf("debian default = %q, want 13", got)
+	if got := defaultImageVersion("debian"); got != "12" {
+		t.Errorf("debian default = %q, want 12", got)
 	}
 	if got := defaultImageVersion("alpine"); got != "" {
 		t.Errorf("unknown OS default should be \"\", got %q", got)

@@ -104,6 +104,15 @@ func certificatesConfirm(cat *i18n.Catalog, target *bool) *huh.Confirm {
 		Value(target)
 }
 
+func secureConfirm(cat *i18n.Catalog, target *bool) *huh.Confirm {
+	return huh.NewConfirm().
+		Title(cat.Msg("init_prompt_secure")).
+		Description(cat.Msg("init_desc_secure")).
+		Affirmative(cat.Msg("init_confirm_yes")).
+		Negative(cat.Msg("init_confirm_no")).
+		Value(target)
+}
+
 // imagePathFixConfirm builds the prompt that asks whether to auto-inject
 // the user-local install prefix / PATH for a language base image. The
 // description spells out the exact entries (both [container.shell.env]

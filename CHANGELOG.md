@@ -6,6 +6,34 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-06-02
+
+### Added
+
+- `cocoon init --secure` (and a matching interactive prompt) presets
+  `[container.security_opt] no_new_privileges = true` in the generated
+  `workspace.toml`. This hardens the container for running untrusted code or AI
+  agents by blocking setuid privilege escalation; the trade-off is that
+  in-container `sudo` becomes a no-op (get root from the host with
+  `docker exec -u root` when needed). UID/GID/DOCKER_GID remapping is
+  unaffected. Default behavior is unchanged — pass `--no-secure` or omit the
+  flag to keep passwordless `sudo`.
+
+### Changed
+
+- `cocoon init` now defaults to `debian:12` (bookworm) instead of `ubuntu:26.04`
+  when `--image` / `--image-version` are omitted. The interactive image-version
+  picker lists debian `12` first (recommended); `ubuntu` and every other
+  supported image and tag stay selectable.
+
+### Fixed
+
+- `android-sdk` plugin now installs `default-jdk-headless` instead of the
+  pinned `openjdk-17-jdk-headless`, which Debian 13 (trixie) and Ubuntu
+  24.04+ no longer package — the plugin previously failed to build on those
+  images. The metapackage resolves to each image's default JDK (17 on
+  bookworm, 21 on trixie / Ubuntu 24.04+).
+
 ## [0.11.0] - 2026-06-01
 
 ### Added
@@ -517,7 +545,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Add `COMPOSE_PROJECT_NAME` derivation from the project directory basename so docker compose namespacing matches the host directory.
 - Add i18n catalog (English / Japanese) covering every CLI prompt, error message, and inline `workspace.toml` comment, switched via `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG`.
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/sukekyo26/cocoon/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/sukekyo26/cocoon/compare/v0.10.2...v0.11.0
 [0.10.2]: https://github.com/sukekyo26/cocoon/compare/v0.10.1...v0.10.2
 [0.10.1]: https://github.com/sukekyo26/cocoon/compare/v0.10.0...v0.10.1

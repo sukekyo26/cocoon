@@ -117,8 +117,8 @@ devcontainer = true
 [container]
 service_name = "myapp"
 username = "dev"
-image = "ubuntu"
-image_version = "26.04"
+image = "debian"
+image_version = "12"
 
 # 言語ランタイムイメージを選んでプラグインを省略する例:
 # image = "node"
@@ -234,6 +234,14 @@ drop = ["AUDIT_WRITE"]
 > 手順が `sudo -u` を使い、`cocoon exec` も依存）。そのため有効化すると実行中
 > コンテナ内の `sudo` が黙って no-op になります。実行時の権限昇格が一切不要な
 > ワークフロー以外では未設定のままにしてください。
+>
+> `cocoon init --secure` はこのブロックを `no_new_privileges = true` で事前設定
+> します。想定用途は **コンテナ内で未信頼コードや AI エージェントを実行する**
+> ケースで、乗っ取られたプロセスが `sudo` で root へ昇格できなくなります。
+> UID/GID/DOCKER_GID の再マップは無影響 — entrypoint が降格前に root で実行する
+> ため — 止まるのは起動後の手動 `sudo` のみです。硬化したコンテナで root が要る
+> ときはホストから `docker exec -u root <container>` で取得してください（docker
+> socket が無いコンテナ内プロセスにはこの経路がありません）。
 
 ### `[[container.skel]]`
 

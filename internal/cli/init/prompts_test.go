@@ -82,6 +82,8 @@ func fullyPopulatedAnswers() initAnswers {
 		DevcontainerSet:   true,
 		Certificates:      false,
 		CertificatesSet:   true,
+		Secure:            false,
+		SecureSet:         true,
 		AptCategories:     nil,
 		AptSet:            true,
 		Plugins:           nil,
@@ -182,13 +184,13 @@ func TestPromptIdentityAndImage_PromptsForEachMissing(t *testing.T) {
 	}
 }
 
-// TestPromptIdentityAndImage_ImageDefaultsToUbuntu pins the default-value
-// claim in the source comment: "if ans.Image == \"\", set to ubuntu before
-// the prompt fires". This guards against a refactor silently dropping the
-// default.
+// TestPromptIdentityAndImage_ImageDefaultsToDebian pins the behavior that
+// promptIdentityAndImage applies the "debian" default to ans.Image when it
+// is empty, before the image prompt fires. This guards against a refactor
+// silently dropping the default.
 //
 //nolint:paralleltest // mutates the package-level runSingleFieldForm seam
-func TestPromptIdentityAndImage_ImageDefaultsToUbuntu(t *testing.T) {
+func TestPromptIdentityAndImage_ImageDefaultsToDebian(t *testing.T) {
 	fake, _ := countingPrompt(t)
 	withFakePrompt(t, fake)
 
@@ -199,8 +201,8 @@ func TestPromptIdentityAndImage_ImageDefaultsToUbuntu(t *testing.T) {
 	if err := promptIdentityAndImage(&ans, i18n.New(i18n.LangEN)); err != nil {
 		t.Fatalf("promptIdentityAndImage: %v", err)
 	}
-	if ans.Image != "ubuntu" {
-		t.Errorf("Image = %q, want %q (default applied before prompt)", ans.Image, "ubuntu")
+	if ans.Image != "debian" {
+		t.Errorf("Image = %q, want %q (default applied before prompt)", ans.Image, "debian")
 	}
 	if !ans.ImageSet {
 		t.Error("ImageSet must be true after the orchestrator runs the image prompt")
@@ -265,6 +267,7 @@ func TestPromptWorkspaceOptions_PromptsForEachMissing(t *testing.T) {
 		{"dir_not_set", func(a *initAnswers) { a.DirSet = false }, 1},
 		{"devcontainer_not_set", func(a *initAnswers) { a.DevcontainerSet = false }, 1},
 		{"certificates_not_set", func(a *initAnswers) { a.CertificatesSet = false }, 1},
+		{"secure_not_set", func(a *initAnswers) { a.SecureSet = false }, 1},
 		{"ports_not_set", func(a *initAnswers) { a.PortsSet = false }, 1},
 		{"apt_not_set", func(a *initAnswers) { a.AptSet = false }, 1},
 	}
@@ -400,12 +403,12 @@ func TestPromptForMissing_RunsAllThreeOrchestrators(t *testing.T) {
 	if err != nil {
 		t.Fatalf("promptForMissing: %v", err)
 	}
-	// 5 identity/image + 7 workspace + 1 plugin multiselect = 13.
+	// 5 identity/image + 8 workspace + 1 plugin multiselect = 14.
 	// (Plugin method/version prompts are gated on version_capable plugins
 	// and methods present, both absent in our synthetic catalog, so the
 	// inner per-plugin loops skip with 0 calls.)
-	const want = 13
+	const want = 14
 	if *calls != want {
-		t.Errorf("calls = %d, want %d (identity 5 + workspace 7 + plugins 1)", *calls, want)
+		t.Errorf("calls = %d, want %d (identity 5 + workspace 8 + plugins 1)", *calls, want)
 	}
 }

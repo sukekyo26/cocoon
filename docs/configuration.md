@@ -117,8 +117,8 @@ Every supported image is apt-based, so the existing plugin catalog works the sam
 [container]
 service_name = "myapp"
 username = "dev"
-image = "ubuntu"
-image_version = "26.04"
+image = "debian"
+image_version = "12"
 
 # Or pick a language-runtime image and skip the plugin entirely:
 # image = "node"
@@ -234,6 +234,15 @@ drop = ["AUDIT_WRITE"]
 > `sudo -u` and `cocoon exec` relies on it — so enabling this makes `sudo`
 > inside the running container a silent no-op. Leave it unset unless your
 > workflow never needs runtime privilege escalation.
+>
+> `cocoon init --secure` presets this block to `no_new_privileges = true`. The
+> intended use is **running untrusted code or AI agents inside the container**:
+> a compromised process cannot escalate to root via `sudo`. UID/GID/DOCKER_GID
+> remapping is unaffected — the entrypoint performs it as root before dropping
+> privileges — so only post-startup manual `sudo` stops working. When you do
+> need root in a hardened container, get it from the host with
+> `docker exec -u root <container>` (an in-container process has no such path
+> without the docker socket).
 
 ### `[[container.skel]]`
 
