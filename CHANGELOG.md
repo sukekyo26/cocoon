@@ -13,6 +13,14 @@ adheres to [Semantic Versioning](https://semver.org/).
   picker lists debian `12` first (recommended); `ubuntu` and every other
   supported image and tag stay selectable.
 
+### Fixed
+
+- `android-sdk` plugin now installs `default-jdk-headless` instead of the
+  pinned `openjdk-17-jdk-headless`, which Debian 13 (trixie) and Ubuntu
+  24.04+ no longer package — the plugin previously failed to build on those
+  images. The metapackage resolves to each image's default JDK (17 on
+  bookworm, 21 on trixie / Ubuntu 24.04+).
+
 ## [0.11.0] - 2026-06-01
 
 ### Added

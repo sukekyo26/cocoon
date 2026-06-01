@@ -13,6 +13,14 @@ cocoon の主要な変更を記録します。フォーマットは
   選択では debian の `12` を先頭 (推奨) に表示します。`ubuntu` を含む他のサポート
   イメージ・タグは引き続き選択できます。
 
+### 修正
+
+- `android-sdk` プラグインが、固定していた `openjdk-17-jdk-headless` ではなく
+  `default-jdk-headless` をインストールするようにしました。Debian 13 (trixie) と
+  Ubuntu 24.04+ は `openjdk-17-jdk-headless` を packaging しておらず、従来これらの
+  イメージでビルドに失敗していました。メタパッケージは各イメージの既定 JDK
+  (bookworm は 17、trixie / Ubuntu 24.04+ は 21) に解決されます。
+
 ## [0.11.0] - 2026-06-01
 
 ### 追加
