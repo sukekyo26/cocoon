@@ -267,10 +267,10 @@ func TestApplyDefaults_FillsMissingDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ans.Image != "ubuntu" || !ans.ImageSet {
+	if ans.Image != "debian" || !ans.ImageSet {
 		t.Errorf("Image default = %q ImageSet=%v", ans.Image, ans.ImageSet)
 	}
-	if ans.ImageVersion != "26.04" || !ans.ImageVersionSet {
+	if ans.ImageVersion != "12" || !ans.ImageVersionSet {
 		t.Errorf("ImageVersion default = %q", ans.ImageVersion)
 	}
 	if ans.MountRoot != "." || !ans.MountRootSet {
@@ -461,8 +461,8 @@ func TestDefaultImageVersion(t *testing.T) {
 	if got := defaultImageVersion("ubuntu"); got != "26.04" {
 		t.Errorf("ubuntu default = %q, want 26.04", got)
 	}
-	if got := defaultImageVersion("debian"); got != "13" {
-		t.Errorf("debian default = %q, want 13", got)
+	if got := defaultImageVersion("debian"); got != "12" {
+		t.Errorf("debian default = %q, want 12", got)
 	}
 	if got := defaultImageVersion("alpine"); got != "" {
 		t.Errorf("unknown OS default should be \"\", got %q", got)

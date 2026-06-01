@@ -182,13 +182,13 @@ func TestPromptIdentityAndImage_PromptsForEachMissing(t *testing.T) {
 	}
 }
 
-// TestPromptIdentityAndImage_ImageDefaultsToUbuntu pins the default-value
-// claim in the source comment: "if ans.Image == \"\", set to ubuntu before
-// the prompt fires". This guards against a refactor silently dropping the
-// default.
+// TestPromptIdentityAndImage_ImageDefaultsToDebian pins the behavior that
+// promptIdentityAndImage applies the "debian" default to ans.Image when it
+// is empty, before the image prompt fires. This guards against a refactor
+// silently dropping the default.
 //
 //nolint:paralleltest // mutates the package-level runSingleFieldForm seam
-func TestPromptIdentityAndImage_ImageDefaultsToUbuntu(t *testing.T) {
+func TestPromptIdentityAndImage_ImageDefaultsToDebian(t *testing.T) {
 	fake, _ := countingPrompt(t)
 	withFakePrompt(t, fake)
 
@@ -199,8 +199,8 @@ func TestPromptIdentityAndImage_ImageDefaultsToUbuntu(t *testing.T) {
 	if err := promptIdentityAndImage(&ans, i18n.New(i18n.LangEN)); err != nil {
 		t.Fatalf("promptIdentityAndImage: %v", err)
 	}
-	if ans.Image != "ubuntu" {
-		t.Errorf("Image = %q, want %q (default applied before prompt)", ans.Image, "ubuntu")
+	if ans.Image != "debian" {
+		t.Errorf("Image = %q, want %q (default applied before prompt)", ans.Image, "debian")
 	}
 	if !ans.ImageSet {
 		t.Error("ImageSet must be true after the orchestrator runs the image prompt")
