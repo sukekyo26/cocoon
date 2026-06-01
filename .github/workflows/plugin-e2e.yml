@@ -12,10 +12,14 @@ name: Plugin E2E
 #   - pull_request: runs on EVERY PR (no paths filter) so the stable
 #     `result` job always reports and can be a required check. detect keeps
 #     the work small — it builds only the plugins whose
-#     internal/plugin/catalog/<id>/ files changed; if none changed it
-#     selects nothing, so the build job is skipped and the PR pays only this
-#     detect step. Harness (e2e/) and generator (internal/generate/) changes
-#     are covered by the weekly run, not per-PR.
+#     internal/plugin/catalog/<id>/ files changed. If none changed but the
+#     harness every build runs through did (e2e/docker-roundtrip.sh, the
+#     shared data files, or this workflow), it smoke-builds one
+#     representative plugin ('go') — a harness regression breaks ALL plugin
+#     builds, too costly to find only on the weekly run. If nothing relevant
+#     changed it selects nothing, so build is skipped and the PR pays only
+#     the detect step. (Generator changes under internal/generate/ are not
+#     detected here and rely on the weekly run.)
 #   - schedule:     every plugin — the weekly upstream-drift canary.
 #   - workflow_dispatch: one plugin (inputs.plugin) or all (empty).
 #
@@ -94,21 +98,29 @@ jobs:
               fi
               ;;
             pull_request)
-              # The workflow runs on every PR (no paths filter) so the
-              # required `result` job always reports. Build only the plugins
-              # whose own catalog/<id>/ files changed (still present on disk
-              # — a deleted plugin must not be built); if none changed,
-              # select nothing so the build job is skipped and the PR pays
-              # only this detect step. Harness / generator changes are
-              # covered by the weekly run, not per-PR.
+              # Runs on every PR (no paths filter) so the required `result`
+              # job always reports. Build the plugins whose own catalog/<id>/
+              # files changed (still on disk — a deleted plugin must not be
+              # built). If none changed but the harness every build runs
+              # through did (docker-roundtrip.sh, the shared data files, or
+              # this workflow), smoke one representative plugin ('go'): a
+              # harness regression breaks ALL plugin builds — or silently
+              # false-greens them — which is too costly to discover only on
+              # the weekly run. If nothing relevant changed, select nothing
+              # so build is skipped and the PR pays only this detect step.
+              diff="$(git diff --name-only "${BASE_SHA}...${HEAD_SHA}")"
               changed=()
               mapfile -t changed < <(
-                git diff --name-only "${BASE_SHA}...${HEAD_SHA}" -- "$catalog" |
+                printf '%s\n' "$diff" |
                   sed -nE "s#^${catalog}/([^/]+)/.*#\1#p" | sort -u
               )
               for id in "${changed[@]}"; do
                 [ -d "$catalog/$id" ] && plugins+=("$id")
               done
+              if [ "${#plugins[@]}" -eq 0 ] && printf '%s\n' "$diff" | grep -qE \
+                '^(e2e/docker-roundtrip\.sh|e2e/arm64-exclude\.txt|e2e/apt-categories\.txt|\.github/workflows/plugin-e2e\.yml)$'; then
+                plugins=(go)
+              fi
               ;;
             *)
               echo "unsupported event: $EVENT" >&2
