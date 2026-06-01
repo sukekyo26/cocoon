@@ -6,7 +6,12 @@ default = false
 
 [apt]
 packages = [
-  "openjdk-17-jdk-headless",
+  # Portable JDK metapackage: tracks each base image's default JDK
+  # (bookworm → 17, trixie / ubuntu 24.04+ → 21, jammy → 11). A pinned
+  # openjdk-NN is not portable — trixie dropped openjdk-17 and bookworm
+  # main lacks openjdk-21 — so the metapackage is the only id that
+  # resolves across every supported image.
+  "default-jdk-headless",
   "unzip",
   "git",
   "curl",
