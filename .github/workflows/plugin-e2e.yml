@@ -9,8 +9,13 @@ name: Plugin E2E
 # already covered by the minimal preset in e2e.yml across every base image.
 #
 # One matrix, three triggers, gated by a change-detection step (detect):
-#   - pull_request: only the plugins whose internal/plugin/catalog/<id>/
-#     files changed, so editing one plugin builds one plugin, not 36.
+#   - pull_request: runs on EVERY PR (no paths filter) so the stable
+#     `result` job always reports and can be a required check. detect keeps
+#     the work small — it builds only the plugins whose
+#     internal/plugin/catalog/<id>/ files changed; if none changed it
+#     selects nothing, so the build job is skipped and the PR pays only this
+#     detect step. Harness (e2e/) and generator (internal/generate/) changes
+#     are covered by the weekly run, not per-PR.
 #   - schedule:     every plugin — the weekly upstream-drift canary.
 #   - workflow_dispatch: one plugin (inputs.plugin) or all (empty).
 #
@@ -18,19 +23,12 @@ name: Plugin E2E
 # baseline) and PIN_MODE=latest (floats to upstream LATEST to catch
 # packaging drift — a moved URL, a removed checksum manifest — before
 # users do). arm64 entries are skipped for plugins in e2e/arm64-exclude.txt
-# (install.sh hard-codes amd64 or fails fast on arm64). A change that
-# touches the harness but no single plugin dir (e2e/ or this workflow)
-# smoke-builds one representative plugin; broad generator changes under
-# internal/generate/ are not path-matched here and rely on the schedule run.
+# (install.sh hard-codes amd64 or fails fast on arm64).
 
 on:
+  # No paths filter: a required check must report on every PR, so the
+  # workflow always runs and `detect` decides what (if anything) to build.
   pull_request:
-    paths:
-      - "internal/plugin/catalog/**"
-      - "e2e/docker-roundtrip.sh"
-      - "e2e/arm64-exclude.txt"
-      - "e2e/apt-categories.txt"
-      - ".github/workflows/plugin-e2e.yml"
   schedule:
     # Mon 06:00 UTC — aligned with install-sh-e2e.yml so the weekly
     # "something cocoon publishes or builds broke" signal lands in one
@@ -96,8 +94,13 @@ jobs:
               fi
               ;;
             pull_request)
-              # Plugins whose own files changed in this PR, still present
-              # on disk (a deleted plugin must not be built).
+              # The workflow runs on every PR (no paths filter) so the
+              # required `result` job always reports. Build only the plugins
+              # whose own catalog/<id>/ files changed (still present on disk
+              # — a deleted plugin must not be built); if none changed,
+              # select nothing so the build job is skipped and the PR pays
+              # only this detect step. Harness / generator changes are
+              # covered by the weekly run, not per-PR.
               changed=()
               mapfile -t changed < <(
                 git diff --name-only "${BASE_SHA}...${HEAD_SHA}" -- "$catalog" |
@@ -106,10 +109,6 @@ jobs:
               for id in "${changed[@]}"; do
                 [ -d "$catalog/$id" ] && plugins+=("$id")
               done
-              # Harness/workflow-only change (no plugin dir touched):
-              # smoke one representative plugin so the build-only path
-              # still gets exercised at PR time.
-              if [ "${#plugins[@]}" -eq 0 ]; then plugins=(go); fi
               ;;
             *)
               echo "unsupported event: $EVENT" >&2
