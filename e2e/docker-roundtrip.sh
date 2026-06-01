@@ -334,7 +334,7 @@ esac
 #     rate while paying the write contention. `${IMAGE//\//-}` slugifies
 #     "denoland/deno" -> "denoland-deno" so the scope is a flat string.
 #   - amd64-full / arm64-full: per-preset (`e2e-<preset>`). Both ride on
-#     ubuntu 22.04 and benefit from sharing the apt prelude across runs
+#     debian 12 and benefit from sharing the apt prelude across runs
 #     of the same preset; the preset name already encodes the arch.
 # GHA cache backend further isolates by branch.
 # mode=max captures all layers (within the 10GB/repo limit).
