@@ -290,15 +290,26 @@ extra=()
 # runs both so the hardened and default paths each get a Docker round-trip.
 [ "${SECURE:-}" = 1 ] && extra+=(--secure)
 
+# apt categories. minimal and the full presets install EVERY catalog
+# category (apt-categories.txt) so a package missing from the target apt
+# repos — the yq-not-on-jammy class of failure — breaks CI here, not for a
+# user; minimal carries that apt-availability canary across every base
+# image. single omits the flag and uses cocoon's default-on categories
+# (what a user gets by default): a plugin's own build deps come from its
+# [apt] packages, installed because the plugin is enabled and independent
+# of the category selection (e.g. android-sdk pulls default-jdk-headless
+# either way), so the extra categories would only add user-convenience
+# tools irrelevant to whether the install RUN succeeds.
+apt_cats_arg=()
+if [ "$PRESET" != single ]; then
+  apt_cats_arg=(--apt-categories="$(join_csv "${apt_categories[@]}")")
+fi
+
 # service-name and the in-container username are kept identical ("dev")
 # so the `docker compose exec dev` step below targets the right service.
 # Using a different service-name (e.g. "e2e") would silently break exec
 # because `exec <service>` resolves against the compose service id, which
 # mirrors workspace.toml's [container].service_name.
-# Match cocoon's full default-on apt category set so default-on plugins
-# (e.g. docker-cli, which calls gpg in install.sh via the vcs category)
-# build cleanly. Trimming this list in CI hides plugin-vs-category
-# mismatches that real users would hit.
 # --certificates opts the workspace into TLS auto-bake from
 # ~/.cocoon/certs/. Required here because the e2e matrix exercises the
 # cert wiring path end-to-end (docker buildx bake consuming
@@ -314,7 +325,7 @@ extra=()
   --mount-root . \
   --no-devcontainer \
   --certificates \
-  --apt-categories="$(join_csv "${apt_categories[@]}")" \
+  "${apt_cats_arg[@]}" \
   "${extra[@]}"
 "$COCOON" gen
 
