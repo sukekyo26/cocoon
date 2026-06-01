@@ -180,8 +180,8 @@ var SupportedShells = []string{"bash", "zsh", "fish"}
 //
 //nolint:gochecknoglobals // tabular configuration data, file-scoped by design.
 var SupportedImageVersions = map[string][]string{
+	"debian":        {"12", "13"}, // 12 (bookworm) is the cocoon default base image; 13 (trixie) selectable.
 	"ubuntu":        {"26.04", "24.04", "22.04"},
-	"debian":        {"13", "12"},
 	"node":          {"26-bookworm-slim", "24-bookworm-slim", "22-bookworm-slim"},
 	"python":        {"3.14-slim-bookworm", "3.13-slim-bookworm", "3.12-slim-bookworm"},
 	"golang":        {"1.26.3-bookworm", "1.26-bookworm", "1.25-bookworm", "1.24-bookworm"},

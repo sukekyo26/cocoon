@@ -319,7 +319,7 @@ func applyDefaults(ans initAnswers, plugins map[string]*plugin.Plugin) (initAnsw
 // is false there.
 func applyIdentityDefaults(ans *initAnswers) {
 	if !ans.ImageSet {
-		ans.Image, ans.ImageSet = "ubuntu", true
+		ans.Image, ans.ImageSet = "debian", true
 	}
 	if !ans.ImageVersionSet {
 		ans.ImageVersion, ans.ImageVersionSet = defaultImageVersion(ans.Image), true

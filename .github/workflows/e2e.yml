@@ -63,7 +63,7 @@ jobs:
           - label: amd64 / debian
             runs-on: ubuntu-latest
             image: debian
-            image-version: "13"
+            image-version: "12"
           - label: amd64 / node
             runs-on: ubuntu-latest
             image: node

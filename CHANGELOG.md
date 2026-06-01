@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- `cocoon init` now defaults to `debian:12` (bookworm) instead of `ubuntu:26.04`
+  when `--image` / `--image-version` are omitted. The interactive image-version
+  picker lists debian `12` first (recommended); `ubuntu` and every other
+  supported image and tag stay selectable.
+
 ## [0.11.0] - 2026-06-01
 
 ### Added

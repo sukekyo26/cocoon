@@ -117,8 +117,8 @@ devcontainer = true
 [container]
 service_name = "myapp"
 username = "dev"
-image = "ubuntu"
-image_version = "26.04"
+image = "debian"
+image_version = "12"
 
 # 言語ランタイムイメージを選んでプラグインを省略する例:
 # image = "node"

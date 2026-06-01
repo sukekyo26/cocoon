@@ -117,8 +117,8 @@ Every supported image is apt-based, so the existing plugin catalog works the sam
 [container]
 service_name = "myapp"
 username = "dev"
-image = "ubuntu"
-image_version = "26.04"
+image = "debian"
+image_version = "12"
 
 # Or pick a language-runtime image and skip the plugin entirely:
 # image = "node"

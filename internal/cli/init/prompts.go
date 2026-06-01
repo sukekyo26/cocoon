@@ -55,7 +55,7 @@ func promptIdentityAndImage(ans *initAnswers, cat *i18n.Catalog) error {
 	}
 	if !ans.ImageSet {
 		if ans.Image == "" {
-			ans.Image = "ubuntu"
+			ans.Image = "debian"
 		}
 		if err := runSingleFieldForm(imageSelect(cat, &ans.Image)); err != nil {
 			return err
