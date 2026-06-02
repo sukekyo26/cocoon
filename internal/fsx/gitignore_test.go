@@ -151,4 +151,64 @@ func TestEnsureGitignoreEntry_Perm(t *testing.T) {
 	})
 }
 
+// TestEnsureGitignoreEntry_EmptyComment pins the docstring claim that passing
+// comment == "" skips the comment line — no stray blank line or lone newline
+// before the pattern, on both create and append.
+func TestEnsureGitignoreEntry_EmptyComment(t *testing.T) {
+	t.Parallel()
+
+	t.Run("create", func(t *testing.T) {
+		t.Parallel()
+		path := filepath.Join(t.TempDir(), ".gitignore")
+		changed, err := fsx.EnsureGitignoreEntry(path, ".env.local", "")
+		if err != nil {
+			t.Fatalf("EnsureGitignoreEntry: %v", err)
+		}
+		if !changed {
+			t.Fatal("changed = false, want true")
+		}
+		got, err := os.ReadFile(path) //nolint:gosec // test path under t.TempDir
+		if err != nil {
+			t.Fatalf("read: %v", err)
+		}
+		if string(got) != ".env.local\n" {
+			t.Errorf("body = %q, want %q", got, ".env.local\n")
+		}
+	})
+
+	t.Run("append", func(t *testing.T) {
+		t.Parallel()
+		path := filepath.Join(t.TempDir(), ".gitignore")
+		if err := os.WriteFile(path, []byte("*.log\n"), 0o644); err != nil { //nolint:gosec // test fixture
+			t.Fatalf("seed: %v", err)
+		}
+		if _, err := fsx.EnsureGitignoreEntry(path, ".env.local", ""); err != nil {
+			t.Fatalf("EnsureGitignoreEntry: %v", err)
+		}
+		got, err := os.ReadFile(path) //nolint:gosec // test path under t.TempDir
+		if err != nil {
+			t.Fatalf("read: %v", err)
+		}
+		if string(got) != "*.log\n.env.local\n" {
+			t.Errorf("body = %q, want %q", got, "*.log\n.env.local\n")
+		}
+	})
+}
+
+// TestEnsureGitignoreEntry_ReadError pins that a read failure surfaces as a
+// non-nil error with changed=false — never a silent (false, nil) that would
+// leave the secret-ignore line unwritten. A directory path stats OK but fails
+// to read ("is a directory"), exercising that branch portably.
+func TestEnsureGitignoreEntry_ReadError(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir() // exists; os.ReadFile on a directory errors
+	changed, err := fsx.EnsureGitignoreEntry(dir, ".env.local", "# c")
+	if err == nil {
+		t.Fatal("expected an error when path is a directory, got nil")
+	}
+	if changed {
+		t.Error("changed = true on read error, want false")
+	}
+}
+
 func ptr(s string) *string { return &s }
