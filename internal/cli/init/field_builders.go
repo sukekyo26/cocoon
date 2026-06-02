@@ -129,13 +129,24 @@ func sudoPasswordInput(cat *i18n.Catalog, target *string) *huh.Input {
 		Title(cat.Msg("init_prompt_sudo_password")).
 		Description(cat.Msg("init_desc_sudo_password")).
 		EchoMode(huh.EchoModePassword).
-		Validate(func(s string) error {
-			if strings.TrimSpace(s) == "" {
-				return errors.New(cat.Msg("init_err_sudo_password_empty")) //nolint:err113 // user-facing prompt
-			}
-			return nil
-		}).
+		Validate(func(s string) error { return validateSudoPassword(cat, s) }).
 		Value(target)
+}
+
+// validateSudoPassword rejects a sudo password that is blank or spans more
+// than one line. .devcontainer/.env.local must carry exactly one
+// `SUDO_PASSWORD=<value>` line; a pasted value with an embedded newline or
+// carriage return would be silently truncated at build time (the Dockerfile
+// reads only the first SUDO_PASSWORD= line), so it is rejected at input rather
+// than surfacing as a surprising password mismatch in the container.
+func validateSudoPassword(cat *i18n.Catalog, s string) error {
+	if strings.TrimSpace(s) == "" {
+		return errors.New(cat.Msg("init_err_sudo_password_empty")) //nolint:err113 // user-facing prompt
+	}
+	if strings.ContainsAny(s, "\r\n") {
+		return errors.New(cat.Msg("init_err_sudo_password_multiline")) //nolint:err113 // user-facing prompt
+	}
+	return nil
 }
 
 // imagePathFixConfirm builds the prompt that asks whether to auto-inject
