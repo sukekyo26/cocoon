@@ -15,8 +15,10 @@ adheres to [Semantic Versioning](https://semver.org/).
   - `password`: sudo requires a password set in a new `[container.sudo] mode =
     "password"` field. The password is read at image **build time** from
     `.devcontainer/.env.local` (a single `SUDO_PASSWORD=...` line) via a Docker
-    build secret (`RUN --mount=type=secret`), so it never lands in an image
-    layer, the build cache, the container environment, or `docker inspect`.
+    build secret (`RUN --mount=type=secret`): the **plaintext** never lands in
+    an image layer, the build cache, the container environment, or
+    `docker inspect` — only the derived hash in `/etc/shadow` (as for any
+    password-bearing Unix account).
     `cocoon gen` adds the compose `secrets:` wiring and a `.devcontainer/.gitignore`
     that excludes `.env.local`, and warns when password mode is on but
     `.env.local` is absent. A missing or empty `SUDO_PASSWORD` fails the build —

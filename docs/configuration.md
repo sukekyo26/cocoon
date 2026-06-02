@@ -256,10 +256,13 @@ section) grants passwordless sudo. `"password"` makes `sudo` require a password.
 
 With `mode = "password"`, the password is read at image **build time** from
 `.devcontainer/.env.local` — a single line `SUDO_PASSWORD=<your-password>` — via
-a Docker build secret (`RUN --mount=type=secret`), so it never lands in an image
-layer, the build cache, the container environment, or `docker inspect`. `cocoon
-gen` emits the compose `secrets:` wiring and a `.devcontainer/.gitignore` that
-excludes `.env.local`, and warns if `.env.local` is missing. **A missing or empty
+a Docker build secret (`RUN --mount=type=secret`). The **plaintext** never lands
+in an image layer, the build cache, the container environment, or
+`docker inspect`; `chpasswd` writes only the derived hash to `/etc/shadow` (an
+image layer, as for any Unix account with a password — treat the image as you
+would any host that stores password hashes). `cocoon gen` emits the compose
+`secrets:` wiring and a `.devcontainer/.gitignore` that excludes `.env.local`,
+and warns if `.env.local` is missing. **A missing or empty
 `SUDO_PASSWORD` fails `docker compose build`** — password mode never silently
 falls back to passwordless. `.env.local` is host-local and gitignored, so each
 developer creates their own; `cocoon init --sudo password` writes it for you

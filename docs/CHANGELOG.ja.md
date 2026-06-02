@@ -15,9 +15,11 @@ cocoon の主要な変更を記録します。フォーマットは
   - `password`: sudo にパスワードを要求し、新フィールド `[container.sudo] mode =
     "password"` に記録します。パスワードはイメージの**ビルド時**に
     `.devcontainer/.env.local`（`SUDO_PASSWORD=...` の 1 行）から Docker build
-    secret（`RUN --mount=type=secret`）として読み込むため、イメージ層・ビルド
-    キャッシュ・コンテナ環境変数・`docker inspect` のいずれにも残りません。
-    `cocoon gen` は compose の `secrets:` 配線と `.env.local` を除外する
+    secret（`RUN --mount=type=secret`）として読み込みます。**平文**はイメージ層・
+    ビルドキャッシュ・コンテナ環境変数・`docker inspect` のいずれにも残らず、
+    `/etc/shadow` には派生ハッシュのみ書き込まれます（パスワードを持つ通常の
+    Unix アカウントと同様）。`cocoon gen` は compose の `secrets:` 配線と
+    `.env.local` を除外する
     `.devcontainer/.gitignore` を生成し、password モードなのに `.env.local` が
     無い場合は警告します。`SUDO_PASSWORD` が未設定/空ならビルドは失敗し、
     passwordless へ暗黙にフォールバックしません。対話で `password` を選ぶと

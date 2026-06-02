@@ -255,10 +255,13 @@ drop = ["AUDIT_WRITE"]
 
 `mode = "password"` のとき、パスワードはイメージの**ビルド時**に
 `.devcontainer/.env.local`（`SUDO_PASSWORD=<パスワード>` の 1 行）から Docker
-build secret（`RUN --mount=type=secret`）として読み込みます。そのため
+build secret（`RUN --mount=type=secret`）として読み込みます。**平文**は
 イメージ層・ビルドキャッシュ・コンテナ環境変数・`docker inspect` のいずれにも
-残りません。`cocoon gen` は compose の `secrets:` 配線と `.env.local` を除外する
-`.devcontainer/.gitignore` を生成し、`.env.local` が無ければ警告します。
+残りません。一方 `chpasswd` は派生ハッシュを `/etc/shadow` に書き込みます
+（パスワードを持つ通常の Unix アカウントと同様にイメージ層へ残るので、
+パスワードハッシュを保持するホストと同じ扱いにしてください）。`cocoon gen` は
+compose の `secrets:` 配線と `.env.local` を除外する `.devcontainer/.gitignore`
+を生成し、`.env.local` が無ければ警告します。
 **`SUDO_PASSWORD` が未設定/空なら `docker compose build` は失敗します** — password
 モードは passwordless へ暗黙にフォールバックしません。`.env.local` は host-local
 で gitignore 対象のため各開発者が自分で用意します。`cocoon init --sudo password`
