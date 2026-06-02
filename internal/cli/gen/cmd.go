@@ -25,6 +25,7 @@ import (
 	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
 	generatecli "github.com/sukekyo26/cocoon/internal/cli/generate"
 	"github.com/sukekyo26/cocoon/internal/config"
+	"github.com/sukekyo26/cocoon/internal/fsx"
 	"github.com/sukekyo26/cocoon/internal/generate"
 	"github.com/sukekyo26/cocoon/internal/i18n"
 	"github.com/sukekyo26/cocoon/internal/logx"
@@ -132,6 +133,9 @@ func runGen(stdout, stderr io.Writer, workspaceFlag, outputFlag string) error {
 		if err := ensureHomeFiles(ctx, log, cat); err != nil {
 			return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
 		}
+	}
+	if err := ensureSudoGitignore(ctx, outDir, log, cat); err != nil {
+		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
 	}
 
 	warnDockerCLIWithoutSocket(ctx, log, cat)
@@ -243,6 +247,29 @@ func warnDockerCLIWithoutSocket(ctx *generate.WorkspaceContext, log *logx.Logger
 		!ctx.WS.Container.DockerSocketEnabled() {
 		log.Warn(cat.Msg("gen_docker_cli_without_socket_warning"))
 	}
+}
+
+// ensureSudoGitignore upserts the .env.local ignore line into
+// .devcontainer/.gitignore when password sudo is enabled, preserving any
+// existing user rules (it appends rather than overwriting, so a user-managed
+// .gitignore is never clobbered). No-op when the line is already present or
+// password sudo is off.
+func ensureSudoGitignore(
+	ctx *generate.WorkspaceContext, outDir string, log *logx.Logger, cat *i18n.Catalog,
+) error {
+	if !ctx.PasswordSudoEnabled() {
+		return nil
+	}
+	path := filepath.Join(outDir, ".devcontainer", ".gitignore")
+	changed, err := fsx.EnsureGitignoreEntry(
+		path, generate.SudoPasswordSecretFile, generate.SudoPasswordGitignoreComment)
+	if err != nil {
+		return err //nolint:wrapcheck // runGen attaches ErrFailure once.
+	}
+	if changed {
+		log.Success(cat.Msg("gen_sudo_gitignore_ensured", path))
+	}
+	return nil
 }
 
 // warnPasswordSudoMissingSecret flags password sudo enabled without the

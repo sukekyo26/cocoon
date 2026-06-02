@@ -159,6 +159,7 @@ var messagesEN_init = map[string]string{
 	"gen_home_files_is_directory":           "%s exists as a directory (likely auto-created by a previous `docker compose up` when the file was missing); remove it with `rm -rf %s` and re-run `cocoon gen`",
 	"gen_docker_cli_without_socket_warning": "WARNING: the docker-cli plugin is enabled but [container].docker_socket is not enabled (unset or false); the in-container docker client has no daemon socket to reach, so `docker ...` will fail with \"cannot connect to the Docker daemon\". Add `docker_socket = true` under [container] in workspace.toml, or remove the docker-cli plugin. Ignore this if the container talks to a remote DOCKER_HOST.",
 	"gen_password_sudo_missing_secret":      "WARNING: password sudo is enabled but %s is missing; `docker compose build` will fail until you create it with a single line `SUDO_PASSWORD=<your-password>` (it is gitignored and read at build time via a Docker build secret).",
+	"gen_sudo_gitignore_ensured":            "ensured %s ignores the sudo password secret (.env.local)",
 	// init sudo password seed (.env.local)
 	"init_sudo_env_local_wrote":  "wrote %s (SUDO_PASSWORD, 0600, gitignored) — used as the container sudo password at build time",
 	"init_sudo_env_local_exists": "%s already exists; left untouched (it holds your sudo password). Edit it directly to change the password.",
@@ -321,6 +322,7 @@ var messagesJA_init = map[string]string{
 	"gen_home_files_is_directory":           "%s がディレクトリとして存在します (以前の `docker compose up` がファイル不在時に自動作成した可能性)。`rm -rf %s` で削除してから `cocoon gen` を再実行してください",
 	"gen_docker_cli_without_socket_warning": "警告: docker-cli プラグインは有効ですが [container].docker_socket が有効化されていません (未設定または false)。コンテナ内の docker クライアントが接続できる daemon ソケットが無いため、`docker ...` は \"cannot connect to the Docker daemon\" で失敗します。workspace.toml の [container] に `docker_socket = true` を追加するか、docker-cli プラグインを外してください。リモートの DOCKER_HOST に接続する構成ならこの警告は無視して構いません。",
 	"gen_password_sudo_missing_secret":      "警告: password sudo が有効ですが %s がありません。`SUDO_PASSWORD=<パスワード>` の 1 行を書いて作成するまで `docker compose build` は失敗します (このファイルは gitignore 対象で、ビルド時に Docker build secret として読まれます)。",
+	"gen_sudo_gitignore_ensured":            "%s が sudo パスワードの secret (.env.local) を無視するようにしました",
 	// init sudo password seed (.env.local)
 	"init_sudo_env_local_wrote":  "%s を作成しました (SUDO_PASSWORD・0600・gitignore 対象) — ビルド時にコンテナの sudo パスワードとして使用",
 	"init_sudo_env_local_exists": "%s は既に存在するため変更しません (sudo パスワードを保持)。変更するにはこのファイルを直接編集してください。",

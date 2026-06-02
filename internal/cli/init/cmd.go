@@ -14,6 +14,7 @@ import (
 	"github.com/sukekyo26/cocoon/internal/aptcategories"
 	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
 	"github.com/sukekyo26/cocoon/internal/config"
+	"github.com/sukekyo26/cocoon/internal/fsx"
 	"github.com/sukekyo26/cocoon/internal/generate"
 	"github.com/sukekyo26/cocoon/internal/i18n"
 	"github.com/sukekyo26/cocoon/internal/logx"
@@ -139,19 +140,21 @@ func seedSudoPasswordIfRequested(cwd string, ans initAnswers, log *logx.Logger, 
 }
 
 // seedSudoPasswordEnvLocal writes the interactively-entered sudo password into
-// .devcontainer/.env.local (mode 0600) and the matching .gitignore so the
-// secret is excluded from git from the moment it is created. .env.local is
-// NEVER overwritten (it is the user's secret); .gitignore is deterministic and
-// rewritten safely.
+// .devcontainer/.env.local (mode 0600) and upserts the .env.local line into the
+// matching .gitignore so the secret is excluded from git from the moment it is
+// created. .env.local is NEVER overwritten (it is the user's secret); the
+// .gitignore is upserted (existing rules preserved), not rewritten.
 func seedSudoPasswordEnvLocal(cwd, password string, log *logx.Logger, cat *i18n.Catalog) error {
 	devDir := filepath.Join(cwd, ".devcontainer")
 	if err := os.MkdirAll(devDir, 0o755); err != nil {
 		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
 	}
 	gitignore := filepath.Join(devDir, ".gitignore")
-	//nolint:gosec // .gitignore is a public, committable file (0644 is intended).
-	if err := os.WriteFile(gitignore, []byte(generate.SudoPasswordGitignore), 0o644); err != nil {
-		return fmt.Errorf("%w: write %s: %w", clihelpers.ErrFailure, gitignore, err)
+	// Upsert rather than overwrite so an existing user-managed .gitignore keeps
+	// its rules (cocoon gen does the same host-side).
+	if _, err := fsx.EnsureGitignoreEntry(
+		gitignore, generate.SudoPasswordSecretFile, generate.SudoPasswordGitignoreComment); err != nil {
+		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
 	}
 	envLocal := filepath.Join(devDir, generate.SudoPasswordSecretFile)
 	f, err := os.OpenFile(envLocal, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)

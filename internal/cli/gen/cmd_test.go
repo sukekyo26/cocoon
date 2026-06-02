@@ -659,6 +659,72 @@ func TestGen_PasswordSudoMissingSecret_Warns(t *testing.T) {
 	}
 }
 
+// genPasswordSudoDir runs `cocoon gen` over passwordSudoWorkspaceTOML in an
+// isolated tempdir and returns the work dir so callers can inspect generated
+// files. preGitignore, when non-empty, seeds .devcontainer/.gitignore first.
+func genPasswordSudoDir(t *testing.T, preGitignore string) string {
+	t.Helper()
+	work := t.TempDir()
+	home := filepath.Join(work, "home")
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		t.Fatalf("mkdir home: %v", err)
+	}
+	t.Setenv("HOME", home)
+	pinEnglish(t)
+	t.Chdir(work)
+	if err := os.WriteFile(filepath.Join(work, "workspace.toml"), []byte(passwordSudoWorkspaceTOML), 0o600); err != nil {
+		t.Fatalf("write workspace.toml: %v", err)
+	}
+	if preGitignore != "" {
+		if err := os.MkdirAll(filepath.Join(work, ".devcontainer"), 0o755); err != nil {
+			t.Fatalf("mkdir .devcontainer: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(work, ".devcontainer", ".gitignore"), []byte(preGitignore), 0o644); err != nil { //nolint:gosec // test fixture
+			t.Fatalf("seed .gitignore: %v", err)
+		}
+	}
+	var stdout, stderr bytes.Buffer
+	cmd := gencli.NewCommand(&stdout, &stderr)
+	cmd.SetArgs(nil)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("gen: %v\nstderr:\n%s", err, stderr.String())
+	}
+	return work
+}
+
+// TestGen_PasswordSudoWritesGitignore pins that `cocoon gen` in password mode
+// writes .devcontainer/.gitignore ignoring the .env.local secret.
+//
+//nolint:paralleltest // t.Setenv + t.Chdir
+func TestGen_PasswordSudoWritesGitignore(t *testing.T) {
+	work := genPasswordSudoDir(t, "")
+	body, err := os.ReadFile(filepath.Join(work, ".devcontainer", ".gitignore")) //nolint:gosec // test path
+	if err != nil {
+		t.Fatalf("read .gitignore: %v", err)
+	}
+	if !strings.Contains(string(body), ".env.local") {
+		t.Errorf(".gitignore does not ignore .env.local:\n%s", body)
+	}
+}
+
+// TestGen_PasswordSudoPreservesExistingGitignore pins that an existing
+// user-managed .devcontainer/.gitignore keeps its rules — gen upserts the
+// .env.local line rather than overwriting the file.
+//
+//nolint:paralleltest // t.Setenv + t.Chdir
+func TestGen_PasswordSudoPreservesExistingGitignore(t *testing.T) {
+	work := genPasswordSudoDir(t, "# user rules\n*.log\nscratch/\n")
+	body, err := os.ReadFile(filepath.Join(work, ".devcontainer", ".gitignore")) //nolint:gosec // test path
+	if err != nil {
+		t.Fatalf("read .gitignore: %v", err)
+	}
+	for _, want := range []string{"*.log", "scratch/", ".env.local"} {
+		if !strings.Contains(string(body), want) {
+			t.Errorf(".gitignore missing %q (user rules must be preserved):\n%s", want, body)
+		}
+	}
+}
+
 // TestGen_PasswordSudoWithSecret_NoWarn asserts the warning stays silent once
 // .devcontainer/.env.local exists. gen never touches that file (it is not an
 // artifact), so pre-creating it is safe.
