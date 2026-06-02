@@ -1,11 +1,14 @@
 name: Go CI
 
 on:
-  # Push fires for in-progress branches (pre-PR feedback). develop / main
-  # are deliberately excluded so a merge does not double up with the
-  # pull_request run that already gated it.
+  # Push fires for in-progress branches (pre-PR feedback) and for develop, so
+  # a merge re-validates the integrated state: feature PRs may have been gated
+  # against an older develop, and develop pushes would otherwise run no CI at
+  # all. main stays PR-only — the develop->main release PR reruns the full
+  # suite. e2e / plugin-e2e remain push-excluded (too heavy); only this
+  # lightweight go gate runs on develop pushes.
   push:
-    branches: ["feature/*", "fix/*", "refactor/*"]
+    branches: ["feature/*", "fix/*", "refactor/*", develop]
   pull_request:
     branches: [develop, main]
   workflow_dispatch:
