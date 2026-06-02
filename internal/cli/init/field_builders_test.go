@@ -123,6 +123,53 @@ func TestFormatPathFixPreview(t *testing.T) {
 	})
 }
 
+// TestValidateSudoPassword pins the prompt's accept/reject contract: a blank
+// or whitespace-only value is rejected as empty, a value containing a newline
+// or carriage return is rejected as multiline (the build reads only the first
+// .env.local line), and an ordinary single-line value — including the `:`/`=`
+// chars the build tolerates — is accepted. The returned message distinguishes
+// the two rejection reasons.
+func TestValidateSudoPassword(t *testing.T) {
+	t.Parallel()
+	cat := i18n.New(i18n.LangEN)
+	empty := cat.Msg("init_err_sudo_password_empty")
+	multiline := cat.Msg("init_err_sudo_password_multiline")
+	cases := []struct {
+		name    string
+		input   string
+		wantMsg string // "" = accept (nil error)
+	}{
+		{"valid simple", "s3cr3t", ""},
+		{"valid with colon and equals", "p@ss:w=rd/x", ""},
+		{"valid with internal spaces", "two words", ""},
+		{"empty", "", empty},
+		{"spaces only", "   ", empty},
+		{"newline only trims to empty", "\n", empty},
+		{"embedded LF", "line1\nline2", multiline},
+		{"trailing LF", "pw\n", multiline},
+		{"leading LF with content", "\npw", multiline},
+		{"internal CR", "pw\rmore", multiline},
+		{"CRLF with content", "pw\r\n", multiline},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			err := validateSudoPassword(cat, tc.input)
+			switch {
+			case tc.wantMsg == "":
+				if err != nil {
+					t.Errorf("validateSudoPassword(%q) = %v, want nil", tc.input, err)
+				}
+			case err == nil:
+				t.Errorf("validateSudoPassword(%q) = nil, want %q", tc.input, tc.wantMsg)
+			case err.Error() != tc.wantMsg:
+				t.Errorf("validateSudoPassword(%q) = %q, want %q", tc.input, err.Error(), tc.wantMsg)
+			}
+		})
+	}
+}
+
 // TestImagePathFixConfirm_BuildsForFixImages is a construction smoke test:
 // huh.Confirm exposes no stable getter for its title/description, so this
 // only confirms the builder returns a non-nil field for every fixable

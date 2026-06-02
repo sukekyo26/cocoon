@@ -25,6 +25,7 @@ import (
 	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
 	generatecli "github.com/sukekyo26/cocoon/internal/cli/generate"
 	"github.com/sukekyo26/cocoon/internal/config"
+	"github.com/sukekyo26/cocoon/internal/fsx"
 	"github.com/sukekyo26/cocoon/internal/generate"
 	"github.com/sukekyo26/cocoon/internal/i18n"
 	"github.com/sukekyo26/cocoon/internal/logx"
@@ -133,8 +134,12 @@ func runGen(stdout, stderr io.Writer, workspaceFlag, outputFlag string) error {
 			return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
 		}
 	}
+	if err := ensureSudoGitignore(ctx, outDir, log, cat); err != nil {
+		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+	}
 
 	warnDockerCLIWithoutSocket(ctx, log, cat)
+	warnPasswordSudoMissingSecret(ctx, outDir, log, cat)
 
 	cwd, _ := os.Getwd() //nolint:errcheck // cwd is best-effort for pretty-printing only.
 	for _, a := range arts {
@@ -241,6 +246,51 @@ func warnDockerCLIWithoutSocket(ctx *generate.WorkspaceContext, log *logx.Logger
 	if slices.Contains(ctx.EnabledPlugins(), dockerCLIPluginID) &&
 		!ctx.WS.Container.DockerSocketEnabled() {
 		log.Warn(cat.Msg("gen_docker_cli_without_socket_warning"))
+	}
+}
+
+// ensureSudoGitignore upserts the .env.local ignore line into
+// .devcontainer/.gitignore when password sudo is enabled, preserving any
+// existing user rules (it appends rather than overwriting, so a user-managed
+// .gitignore is never clobbered). No-op when the line is already present or
+// password sudo is off.
+func ensureSudoGitignore(
+	ctx *generate.WorkspaceContext, outDir string, log *logx.Logger, cat *i18n.Catalog,
+) error {
+	if !ctx.PasswordSudoEnabled() {
+		return nil
+	}
+	path := filepath.Join(outDir, ".devcontainer", ".gitignore")
+	changed, err := fsx.EnsureGitignoreEntry(
+		path, generate.SudoPasswordSecretFile, generate.SudoPasswordGitignoreComment)
+	if err != nil {
+		return err //nolint:wrapcheck // runGen attaches ErrFailure once.
+	}
+	if changed {
+		log.Success(cat.Msg("gen_sudo_gitignore_ensured", path))
+	}
+	return nil
+}
+
+// warnPasswordSudoMissingSecret flags password sudo enabled without a usable
+// .env.local secret file — absent or empty (size 0), matching the Dockerfile's
+// `[ ! -s "$secret" ]` guard, which fails the build in both cases. This
+// surfaces the cause early. Only a warning — cocoon does not create the file
+// (it is the user's secret) and does not read its contents; a non-empty file
+// with no usable SUDO_PASSWORD= line is left for the build to reject. Stat
+// errors other than ErrNotExist are ignored: a best-effort nudge, not a gate.
+func warnPasswordSudoMissingSecret(
+	ctx *generate.WorkspaceContext, outDir string, log *logx.Logger, cat *i18n.Catalog,
+) {
+	if !ctx.PasswordSudoEnabled() {
+		return
+	}
+	secret := filepath.Join(outDir, ".devcontainer", generate.SudoPasswordSecretFile)
+	info, err := os.Stat(secret)
+	missing := errors.Is(err, os.ErrNotExist)
+	empty := err == nil && info.Size() == 0
+	if missing || empty {
+		log.Warn(cat.Msg("gen_password_sudo_missing_secret", secret))
 	}
 }
 

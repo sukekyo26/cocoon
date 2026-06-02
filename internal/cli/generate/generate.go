@@ -112,6 +112,10 @@ func BuildArtifacts(ctx *generate.WorkspaceContext, stderr io.Writer) ([]Artifac
 		return nil, fmt.Errorf("%w: envfile: %w", clihelpers.ErrFailure, err)
 	}
 	arts = append(arts, Artifact{Rel: ".devcontainer/.env", Body: envBody, Mode: 0o600})
+	// NB: in password sudo mode .devcontainer/.gitignore is NOT a generated
+	// artifact — WriteArtifacts overwrites artifacts, which would clobber a
+	// user-managed .gitignore. `cocoon gen` upserts the .env.local ignore line
+	// host-side instead (ensureSudoGitignore), preserving existing rules.
 	return arts, nil
 }
 

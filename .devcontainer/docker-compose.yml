@@ -3,15 +3,17 @@ services:
   cocoon:
     container_name: "${CONTAINER_SERVICE_NAME}"
     build:
-      context: ..
-      dockerfile: .devcontainer/Dockerfile
+      context: ".."
+      dockerfile: ".devcontainer/Dockerfile"
+      secrets:
+        - "sudo_password"
       args:
         - "IMAGE=${IMAGE}"
         - "IMAGE_VERSION=${IMAGE_VERSION}"
         - "USERNAME=${USERNAME}"
     environment:
       - "CONTAINER_SERVICE_NAME=${CONTAINER_SERVICE_NAME}"
-      - TZ=Asia/Tokyo
+      - "TZ=Asia/Tokyo"
     volumes:
       - "../..:/home/${USERNAME}/work:cached"
       - "local:/home/${USERNAME}/.local"
@@ -26,9 +28,9 @@ services:
       - "${HOME:?HOME must be set on the host}/.claude.json:/home/${USERNAME}/.claude.json"
     tty: true
     init: true
-    command: sleep infinity
-    stop_grace_period: 30s
-    shm_size: 1gb
+    command: "sleep infinity"
+    stop_grace_period: "30s"
+    shm_size: "1gb"
     pids_limit: 4096
     ulimits:
       nofile:
@@ -51,3 +53,6 @@ volumes:
     name: "${COMPOSE_PROJECT_NAME}_${CONTAINER_SERVICE_NAME}_npm-global"
   go:
     name: "${COMPOSE_PROJECT_NAME}_${CONTAINER_SERVICE_NAME}_go"
+secrets:
+  sudo_password:
+    file: ".env.local"

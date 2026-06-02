@@ -927,6 +927,29 @@ USER root
 COPY .devcontainer/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
+# Set a password-required sudoers entry and the user's password from the .env.local
+# build secret. Emitted last (after every plugin install) so build-time sudo
+# stays passwordless for installers that call it. The build fails with a clear
+# cause when the secret is missing or empty, so password mode never silently
+# degrades to passwordless. chpasswd writes the derived hash to /etc/shadow (an
+# image layer, as for any Unix account); only the plaintext SUDO_PASSWORD — via the
+# secret mount, not an ARG/ENV — stays out of image layers, the build cache,
+# and docker inspect.
+RUN --mount=type=secret,id=sudo_password \
+    secret=/run/secrets/sudo_password; \
+    if [ ! -s "$secret" ]; then \
+        echo "cocoon: [container.sudo] mode=password but the sudo_password build secret is missing or empty" >&2; \
+        exit 1; \
+    fi; \
+    pass="$(sed -n '/^SUDO_PASSWORD=/{s/^SUDO_PASSWORD=//;s/\r$//;p;q}' "$secret")"; \
+    if [ -z "$pass" ]; then \
+        echo "cocoon: [container.sudo] mode=password requires a non-empty SUDO_PASSWORD line in .devcontainer/.env.local" >&2; \
+        exit 1; \
+    fi; \
+    echo "${USERNAME} ALL=(ALL) ALL" > /etc/sudoers.d/${USERNAME} && \
+    chmod 0440 /etc/sudoers.d/${USERNAME} && \
+    printf '%s:%s\n' "${USERNAME}" "$pass" | chpasswd
+
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["sleep", "infinity"]
 

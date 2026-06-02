@@ -14,11 +14,17 @@
 #   IMAGE_VERSION   image tag (e.g. 26.04, debian-2.7.14)
 #
 # Optional env:
-#   SECURE          set to 1 to pass `cocoon init --secure`, which presets
-#                   [container.security_opt] no_new_privileges=true. Unset
-#                   or 0 keeps the default sudo-capable posture. The
-#                   post-up checks below assert the generated compose, the
-#                   live kernel flag, and sudo behaviour match either way.
+#   SUDO_MODE       sudo posture to exercise, mirroring `cocoon init --sudo`:
+#                     none     -> --sudo none; presets [container.security_opt]
+#                                 no_new_privileges=true (sudo escalation blocked).
+#                     password -> --sudo password; sudo needs a password read at
+#                                 build time from .devcontainer/.env.local via a
+#                                 Docker build secret. This path also asserts the
+#                                 core invariant: with no .env.local the build
+#                                 FAILS — no silent fallback to passwordless.
+#                     unset    -> default passwordless sudo posture.
+#                   The post-build / post-up checks assert the generated compose,
+#                   the live kernel flag, and sudo behaviour match the mode.
 #
 # The presets differ in cost / coverage:
 #   - minimal (push/PR e2e.yml)  — 0 plugins, runs across every supported
@@ -267,7 +273,7 @@ case "$PRESET" in
     # Plugin verification == build success. The runtime round-trip
     # (compose up + exec) only asserts plugin-independent entrypoint /
     # UID-remap / no-new-privileges properties, which the minimal preset
-    # and the --secure matrix already cover, so single skips it: build the
+    # and the --sudo none matrix already cover, so single skips it: build the
     # install RUN, prove it succeeds, discard the image.
     BUILD_ONLY=1
     ;;
@@ -286,11 +292,18 @@ extra=()
 [ -n "$plugins" ] && extra+=(--plugins "$plugins")
 [ -n "$pins" ] && extra+=(--plugin-versions "$pins")
 [ -n "$methods" ] && extra+=(--plugin-methods "$methods")
-# SECURE=1 (e2e.yml ubuntu/secure matrix entry) presets
-# [container.security_opt] no_new_privileges=true via `cocoon init
-# --secure`; unset or 0 leaves the default sudo-capable posture. ubuntu
-# runs both so the hardened and default paths each get a Docker round-trip.
-[ "${SECURE:-}" = 1 ] && extra+=(--secure)
+# SUDO_MODE (e2e.yml matrix) selects the sudo posture via `cocoon init
+# --sudo <mode>`; unset leaves the default passwordless posture. ubuntu runs
+# the default, none, and password paths so each gets a Docker round-trip.
+SUDO_MODE="${SUDO_MODE:-}"
+case "$SUDO_MODE" in
+  '') ;;
+  none | password) extra+=(--sudo "$SUDO_MODE") ;;
+  *)
+    echo "unknown SUDO_MODE: $SUDO_MODE (none | password | empty)" >&2
+    exit 1
+    ;;
+esac
 
 # apt categories. minimal and the full presets install EVERY catalog
 # category (apt-categories.txt) so a package missing from the target apt
@@ -356,24 +369,45 @@ test -f .devcontainer/docker-entrypoint.sh
 test -f .devcontainer/.env
 test ! -d config
 
-# The no-new-privileges posture must match the requested mode in the
-# generated compose: SECURE=1 (cocoon init --secure) emits
-# `security_opt: ["no-new-privileges:true"]`; the default must not set it
-# at all. The live-container counterpart (kernel flag + sudo) is asserted
-# after `up -d` below; this guards the artifact a regression would ship.
-if [ "${SECURE:-}" = 1 ]; then
-  grep -q 'no-new-privileges:true' .devcontainer/docker-compose.yml ||
-    {
-      echo "SECURE=1 but compose is missing no-new-privileges:true" >&2
-      exit 1
-    }
-else
-  ! grep -q no-new-privileges .devcontainer/docker-compose.yml ||
-    {
-      echo "default run unexpectedly emitted no-new-privileges in compose" >&2
-      exit 1
-    }
-fi
+# The generated compose must match the requested sudo posture; this guards
+# the committed artifact a regression would ship. The live-container
+# counterpart (kernel flag + sudo) is asserted after `up -d` below.
+#   none     -> security_opt: ["no-new-privileges:true"]
+#   password -> a sudo_password secret sourced from .env.local; no no-new-privileges
+#   default  -> neither
+case "$SUDO_MODE" in
+  none)
+    grep -q 'no-new-privileges:true' .devcontainer/docker-compose.yml ||
+      {
+        echo "SUDO_MODE=none but compose is missing no-new-privileges:true" >&2
+        exit 1
+      }
+    ;;
+  password)
+    grep -q 'sudo_password' .devcontainer/docker-compose.yml ||
+      {
+        echo "SUDO_MODE=password but compose is missing the sudo_password secret" >&2
+        exit 1
+      }
+    ! grep -q no-new-privileges .devcontainer/docker-compose.yml ||
+      {
+        echo "SUDO_MODE=password unexpectedly emitted no-new-privileges" >&2
+        exit 1
+      }
+    ;;
+  *)
+    ! grep -q no-new-privileges .devcontainer/docker-compose.yml ||
+      {
+        echo "default run unexpectedly emitted no-new-privileges in compose" >&2
+        exit 1
+      }
+    ! grep -q sudo_password .devcontainer/docker-compose.yml ||
+      {
+        echo "default run unexpectedly emitted a sudo_password secret" >&2
+        exit 1
+      }
+    ;;
+esac
 
 # Build via `docker buildx bake` to opt into BuildKit's GHA cache
 # backend. `docker compose build` cannot pass cache-from/cache-to
@@ -471,21 +505,61 @@ else
   output_arg=(--load)
 fi
 
-env "${env_args[@]}" docker buildx bake \
-  -f .devcontainer/docker-compose.yml \
-  --allow="fs.read=${HOME}/.cocoon/certs" \
-  "${output_arg[@]}" \
-  --set "*.context=$PWD" \
-  --set "*.dockerfile=$PWD/.devcontainer/Dockerfile" \
-  --set "*.cache-from=type=gha,scope=${cache_scope}" \
-  --set "*.cache-to=type=gha,scope=${cache_scope},mode=max" \
-  --set "*.platform=linux/${arch}" \
-  dev
+# Factor the bake so the password-mode negative case (a missing-secret build
+# MUST fail) and the real build share identical context / cache / secret
+# wiring — a hand-rolled bake for the negative case could fail for the wrong
+# reason (e.g. an unresolved context path) and pass a false negative.
+run_bake() {
+  env "${env_args[@]}" docker buildx bake \
+    -f .devcontainer/docker-compose.yml \
+    --allow="fs.read=${HOME}/.cocoon/certs" \
+    "$@" \
+    --set "*.context=$PWD" \
+    --set "*.dockerfile=$PWD/.devcontainer/Dockerfile" \
+    --set "*.cache-from=type=gha,scope=${cache_scope}" \
+    --set "*.cache-to=type=gha,scope=${cache_scope},mode=max" \
+    --set "*.platform=linux/${arch}" \
+    dev
+}
+
+# A password with a space, ':' and '=' proves those survive the .env.local
+# round-trip: sed strips only the SUDO_PASSWORD= prefix, and chpasswd splits
+# user:pass on the FIRST colon, so a ':' in the value is preserved.
+e2e_sudo_password='e2e p@s:w=rd'
+
+# Password-mode core invariant: with no .env.local the build MUST fail —
+# password mode never silently degrades to passwordless. NOTE: bake resolves
+# the compose secret's `file: .env.local` at TWO different bases — its loader
+# VALIDATES the source relative to bake's cwd (project root), while BuildKit
+# MOUNTS it relative to the compose file's dir (.devcontainer/) — so the e2e
+# seeds BOTH copies. (A real `docker compose build` uses only the .devcontainer/
+# one; the project-root copy is purely to satisfy bake's loader, akin to the
+# `--set "*.context=$PWD"` override above.) With neither present the build fails.
+if [ "$SUDO_MODE" = password ]; then
+  test ! -f .env.local && test ! -f .devcontainer/.env.local
+  neg_rc=0
+  run_bake --set "*.output=type=cacheonly" >neg-build.log 2>&1 || neg_rc=$?
+  if [ "$neg_rc" -eq 0 ]; then
+    echo "password mode built WITHOUT .env.local — silent passwordless fallback!" >&2
+    exit 1
+  fi
+  grep -Eqi 'env\.local|sudo_password|missing or empty' neg-build.log ||
+    {
+      echo "missing-secret build failed for an unexpected reason:" >&2
+      cat neg-build.log >&2
+      exit 1
+    }
+  echo "password mode: build correctly failed without .env.local (rc=${neg_rc})"
+  printf 'SUDO_PASSWORD=%s\n' "$e2e_sudo_password" >.devcontainer/.env.local
+  cp .devcontainer/.env.local .env.local
+fi
+
+run_bake "${output_arg[@]}"
 
 # BUILD_ONLY (single preset): the install RUN just succeeded, which is the
 # whole verification. The round-trip below exercises plugin-independent
 # entrypoint / UID-remap / no-new-privileges behaviour (covered by the
-# minimal and --secure presets) and needs a loaded image we deliberately
+# minimal and --sudo none presets) and needs a loaded image we deliberately
 # did not produce, so stop here.
 if [ -n "${BUILD_ONLY:-}" ]; then
   echo "build-only: install RUN succeeded for plugin '${PLUGIN}' (${PIN_MODE}); skipping runtime round-trip"
@@ -531,18 +605,19 @@ test "$host_gid" = "$container_gid" ||
     exit 1
   }
 
-# Runtime proof of the no-new-privileges posture. The UID/GID poll above
-# already proves --secure does NOT break the root-phase entrypoint remap
-# (the whole worry behind keeping it opt-in); these two checks prove the
-# hardening itself took effect:
+# Runtime proof of the requested sudo posture. The UID/GID poll above already
+# proves the hardened modes do NOT break the root-phase entrypoint remap (the
+# whole worry behind keeping them opt-in); these checks prove the posture took
+# effect, run as `-u dev` because the image's final USER is root (sudo is moot
+# for root):
 #   1. /proc/self/status NoNewPrivs — the kernel flag docker sets from
-#      security_opt; 1 under --secure, 0 by default. Image-independent.
-#   2. sudo escalation — the user-visible effect. Under --secure the
-#      setuid sudo binary cannot raise privileges, so `sudo -n true`
-#      fails; by default the passwordless sudo grant succeeds. Run as
-#      `-u dev` because the image's final USER is root (sudo is moot for
-#      root); sudo is always installed and NOPASSWD-configured for dev.
-if [ "${SECURE:-}" = 1 ]; then
+#      security_opt; 1 under --sudo none, 0 otherwise. Image-independent.
+#   2. sudo escalation — the user-visible effect, asserted per mode:
+#        none     -> setuid sudo cannot raise privileges, so `sudo -n true` fails.
+#        password -> `sudo -n true` fails (a password is required), but `sudo -S`
+#                    with the seeded password succeeds.
+#        default  -> the passwordless NOPASSWD grant makes `sudo -n true` succeed.
+if [ "$SUDO_MODE" = none ]; then
   expected_nnp=1
 else
   expected_nnp=0
@@ -550,28 +625,49 @@ fi
 docker compose -f .devcontainer/docker-compose.yml exec -T dev \
   grep -Eq "^NoNewPrivs:[[:space:]]+${expected_nnp}\$" /proc/self/status ||
   {
-    echo "NoNewPrivs mismatch: expected ${expected_nnp} (SECURE=${SECURE:-})" >&2
+    echo "NoNewPrivs mismatch: expected ${expected_nnp} (SUDO_MODE=${SUDO_MODE:-default})" >&2
     docker compose -f .devcontainer/docker-compose.yml exec -T dev \
       grep -i NoNewPrivs /proc/self/status >&2 || true
     exit 1
   }
 
-# Capture sudo's exit code explicitly so the expected-failure path under
-# --secure does not trip `set -e`.
+# Capture sudo's exit code explicitly so the expected-failure paths (none /
+# password) do not trip `set -e`.
 sudo_rc=0
 docker compose -f .devcontainer/docker-compose.yml exec -T -u dev dev \
   sudo -n true || sudo_rc=$?
-if [ "${SECURE:-}" = 1 ]; then
-  test "$sudo_rc" -ne 0 ||
-    {
-      echo "SECURE=1 but sudo escalation succeeded (no-new-privileges not enforced)" >&2
-      exit 1
-    }
-else
-  test "$sudo_rc" -eq 0 ||
-    {
-      echo "default run but passwordless sudo failed (rc=$sudo_rc)" >&2
-      exit 1
-    }
-fi
+case "$SUDO_MODE" in
+  none)
+    test "$sudo_rc" -ne 0 ||
+      {
+        echo "SUDO_MODE=none but sudo escalation succeeded (no-new-privileges not enforced)" >&2
+        exit 1
+      }
+    ;;
+  password)
+    test "$sudo_rc" -ne 0 ||
+      {
+        echo "SUDO_MODE=password but passwordless 'sudo -n' succeeded (no password required)" >&2
+        exit 1
+      }
+    # The seeded password must authenticate. -k drops any cached timestamp so
+    # this exercises real PAM auth; -p '' silences the prompt; -S reads stdin.
+    pw_rc=0
+    printf '%s\n' "$e2e_sudo_password" |
+      docker compose -f .devcontainer/docker-compose.yml exec -T -u dev dev \
+        sudo -S -k -p '' true || pw_rc=$?
+    test "$pw_rc" -eq 0 ||
+      {
+        echo "SUDO_MODE=password but the seeded password failed to authenticate (rc=$pw_rc)" >&2
+        exit 1
+      }
+    ;;
+  *)
+    test "$sudo_rc" -eq 0 ||
+      {
+        echo "default run but passwordless sudo failed (rc=$sudo_rc)" >&2
+        exit 1
+      }
+    ;;
+esac
 # trap EXIT (installed after `up -d` above) runs `down -v` on exit.

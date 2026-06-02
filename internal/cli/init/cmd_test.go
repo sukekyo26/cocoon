@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
+	"github.com/sukekyo26/cocoon/internal/i18n"
+	"github.com/sukekyo26/cocoon/internal/logx"
 )
 
 // runInit tests cannot use t.Parallel() because t.Chdir mutates process
@@ -184,18 +186,67 @@ func TestRunInit_CertificatesConflict(t *testing.T) {
 	}
 }
 
+// TestSeedSudoPasswordEnvLocal pins the interactive seed: .env.local is
+// written with the password (verbatim, including a ':' which chpasswd handles)
+// at mode 0600, .gitignore ignores it, and a second call never overwrites the
+// existing secret.
+func TestSeedSudoPasswordEnvLocal(t *testing.T) {
+	t.Parallel()
+	cat := i18n.New(i18n.LangEN)
+	log := logx.New(io.Discard, io.Discard)
+	work := t.TempDir()
+
+	if err := seedSudoPasswordEnvLocal(work, "s3cr3t:pw", log, cat); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	envLocal := filepath.Join(work, ".devcontainer", ".env.local")
+	body, err := os.ReadFile(envLocal)
+	if err != nil {
+		t.Fatalf("read .env.local: %v", err)
+	}
+	if string(body) != "SUDO_PASSWORD=s3cr3t:pw\n" {
+		t.Errorf(".env.local body = %q, want SUDO_PASSWORD=s3cr3t:pw", body)
+	}
+	info, err := os.Stat(envLocal)
+	if err != nil {
+		t.Fatalf("stat .env.local: %v", err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Errorf(".env.local mode = %o, want 0600", info.Mode().Perm())
+	}
+	gi, err := os.ReadFile(filepath.Join(work, ".devcontainer", ".gitignore"))
+	if err != nil {
+		t.Fatalf("read .gitignore: %v", err)
+	}
+	if !strings.Contains(string(gi), ".env.local") {
+		t.Errorf(".gitignore does not ignore .env.local:\n%s", gi)
+	}
+
+	// Second call must NOT overwrite the existing secret.
+	if reErr := seedSudoPasswordEnvLocal(work, "different", log, cat); reErr != nil {
+		t.Fatalf("second seed: %v", reErr)
+	}
+	body2, err := os.ReadFile(envLocal)
+	if err != nil {
+		t.Fatalf("re-read .env.local: %v", err)
+	}
+	if string(body2) != "SUDO_PASSWORD=s3cr3t:pw\n" {
+		t.Errorf(".env.local was overwritten on second seed: %q", body2)
+	}
+}
+
 //nolint:paralleltest // t.Chdir
-func TestRunInit_SecureConflict(t *testing.T) {
+func TestRunInit_SudoInvalid(t *testing.T) {
 	pinEnglish(t)
 	work := t.TempDir()
 	t.Chdir(work)
 	cmd := NewCommand(io.Discard, io.Discard)
 	cmd.SetArgs([]string{
 		"--yes", "--service-name", "x", "--username", "y",
-		"--secure", "--no-secure",
+		"--sudo", "bogus",
 	})
 	if err := cmd.Execute(); !errors.Is(err, clihelpers.ErrUsage) {
-		t.Errorf("conflicting --secure flags should be ErrUsage, got %v", err)
+		t.Errorf("invalid --sudo value should be ErrUsage, got %v", err)
 	}
 }
 
@@ -318,14 +369,15 @@ func TestRunInit_CertificatesFlag(t *testing.T) {
 	}
 }
 
-// TestRunInit_SecureFlag verifies that --secure emits the live
-// [container.security_opt] block with no_new_privileges = true and the
-// absence of the flag (or --no-secure) emits the commented template. Both
-// branches go through the same renderer, so this guards the toggle from
+// TestRunInit_SudoFlag verifies that --sudo emits the matching live block —
+// none → [container.security_opt] no_new_privileges = true; password →
+// [container.sudo] mode = "password" — while the unchosen section stays a
+// commented template, and the default (nopasswd) leaves both commented. All
+// branches go through the same renderer, so this guards the selection from
 // desyncing from the emit path.
 //
 //nolint:paralleltest // t.Chdir
-func TestRunInit_SecureFlag(t *testing.T) {
+func TestRunInit_SudoFlag(t *testing.T) {
 	pinEnglish(t)
 
 	cases := []struct {
@@ -335,28 +387,50 @@ func TestRunInit_SecureFlag(t *testing.T) {
 		mustNotContain []string
 	}{
 		{
-			name:      "enabled",
-			extraArgs: []string{"--secure"},
+			name:      "none",
+			extraArgs: []string{"--sudo", "none"},
 			mustContain: []string{
 				"\n[container.security_opt]\nno_new_privileges = true\n",
 			},
 			mustNotContain: []string{
-				// Commented opt-in template example lines must not survive.
 				`# seccomp           = "unconfined"`,
 				"# no_new_privileges = true",
+				"\n[container.sudo]\nmode = \"password\"\n",
 			},
 		},
 		{
-			name:           "default-off",
-			extraArgs:      nil,
-			mustContain:    []string{"# no_new_privileges = true"},
-			mustNotContain: []string{"\n[container.security_opt]\nno_new_privileges = true\n"},
+			name:      "password",
+			extraArgs: []string{"--sudo", "password"},
+			mustContain: []string{
+				"\n[container.sudo]\nmode = \"password\"\n",
+			},
+			mustNotContain: []string{
+				"\n[container.security_opt]\nno_new_privileges = true\n",
+				`# mode = "password"`,
+			},
 		},
 		{
-			name:           "explicit-off",
-			extraArgs:      []string{"--no-secure"},
-			mustContain:    []string{"# no_new_privileges = true"},
-			mustNotContain: []string{"\n[container.security_opt]\nno_new_privileges = true\n"},
+			name:      "default-nopasswd",
+			extraArgs: nil,
+			mustContain: []string{
+				"# no_new_privileges = true",
+				`# mode = "password"`,
+			},
+			mustNotContain: []string{
+				"\n[container.security_opt]\nno_new_privileges = true\n",
+				"\n[container.sudo]\nmode = \"password\"\n",
+			},
+		},
+		{
+			name:      "explicit-nopasswd",
+			extraArgs: []string{"--sudo", "nopasswd"},
+			mustContain: []string{
+				"# no_new_privileges = true",
+				`# mode = "password"`,
+			},
+			mustNotContain: []string{
+				"\n[container.sudo]\nmode = \"password\"\n",
+			},
 		},
 	}
 	for _, tc := range cases {

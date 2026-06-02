@@ -104,6 +104,7 @@ type ContainerSpec struct {
 	Sysctls      map[string]any      `toml:"sysctls,omitempty"`
 	Capabilities *CapabilitiesSpec   `toml:"capabilities,omitempty"`
 	SecurityOpt  *SecurityOptSpec    `toml:"security_opt,omitempty"`
+	Sudo         *SudoSpec           `toml:"sudo,omitempty"`
 	Skel         []SkelEntry         `toml:"skel,omitempty"`
 
 	// GroupAdd lists supplementary groups (name or numeric GID) the container
@@ -265,6 +266,35 @@ type SecurityOptSpec struct {
 	Seccomp         *string `toml:"seccomp,omitempty"`
 	AppArmor        *string `toml:"apparmor,omitempty"`
 	NoNewPrivileges *bool   `toml:"no_new_privileges,omitempty"`
+}
+
+// Sudo mode values for [container.sudo].mode. The set is intentionally just
+// two: "nopasswd" (the default, passwordless sudo) and "password" (sudo
+// requires a password set from the .env.local build secret). There is NO
+// "none"/"disabled" value — disabling sudo is expressed by
+// [container.security_opt] no_new_privileges = true, so encoding "no sudo"
+// here too would be two sources of truth for one fact (DRY).
+const (
+	SudoModeNoPasswd = "nopasswd"
+	SudoModePassword = "password"
+)
+
+// SudoSpec models [container.sudo]. mode selects the sudoers policy baked into
+// the image. When mode = "password" the build reads the user's password from
+// the .env.local build secret (key SUDO_PASSWORD) and sets it via chpasswd; a
+// missing/empty password fails the build rather than degrading to passwordless.
+type SudoSpec struct {
+	// Pointer distinguishes "field omitted" (default "nopasswd") from an
+	// explicit value.
+	Mode *string `toml:"mode,omitempty"`
+}
+
+// SudoModeOrDefault is safe on a nil receiver and defaults to "nopasswd".
+func (s *SudoSpec) SudoModeOrDefault() string {
+	if s == nil || s.Mode == nil || *s.Mode == "" {
+		return SudoModeNoPasswd
+	}
+	return *s.Mode
 }
 
 // CapabilitiesSpec mirrors [container.capabilities]. Values are bare names

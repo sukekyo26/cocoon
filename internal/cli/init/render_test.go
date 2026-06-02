@@ -608,23 +608,24 @@ func TestRenderWorkspaceToml_ImagePathFix_Volumes_OffEmitsCommentedTemplate(t *t
 	}
 }
 
-// TestRenderWorkspaceToml_Secure_ActiveBlock pins that Secure=true swaps the
-// commented [container.security_opt] template for an active block with
-// no_new_privileges = true, and that the block round-trips through
-// config.StrictUnmarshal into Container.SecurityOpt.NoNewPrivileges.
-func TestRenderWorkspaceToml_Secure_ActiveBlock(t *testing.T) {
+// TestRenderWorkspaceToml_Sudo_None_ActiveSecurityOpt pins that sudo "none"
+// swaps the commented [container.security_opt] template for an active block
+// with no_new_privileges = true that round-trips through StrictUnmarshal.
+func TestRenderWorkspaceToml_Sudo_None_ActiveSecurityOpt(t *testing.T) {
 	t.Parallel()
 	cat := i18n.New(i18n.LangEN)
 	got := renderWorkspaceToml(containerSpec{
 		ServiceName: "svc", Username: "dev", Image: "ubuntu", ImageVersion: "26.04",
-		Shell: "bash", MountRoot: ".", Devcontainer: true, Secure: true,
+		Shell: "bash", MountRoot: ".", Devcontainer: true, Sudo: sudoChoiceNone,
 	}, cat)
 	if !strings.Contains(got, "[container.security_opt]\nno_new_privileges = true\n") {
-		t.Errorf("secure output missing active block\n--- got ---\n%s", got)
+		t.Errorf("sudo=none output missing active block\n--- got ---\n%s", got)
 	}
-	// The commented example line from the opt-in template must not survive.
 	if strings.Contains(got, `# seccomp           = "unconfined"`) {
-		t.Errorf("secure output still carries the commented template\n--- got ---\n%s", got)
+		t.Errorf("sudo=none output still carries the commented security_opt template\n--- got ---\n%s", got)
+	}
+	if strings.Contains(got, "[container.sudo]\nmode") {
+		t.Errorf("sudo=none must not emit an active [container.sudo] block\n--- got ---\n%s", got)
 	}
 	var ws config.Workspace
 	if err := config.StrictUnmarshal("(test)", []byte(got), &ws); err != nil {
@@ -636,28 +637,56 @@ func TestRenderWorkspaceToml_Secure_ActiveBlock(t *testing.T) {
 	}
 }
 
-// TestRenderWorkspaceToml_Secure_OffEmitsCommentedTemplate pins that without
-// --secure the section stays a commented-out template (discoverable) and no
-// active [container.security_opt] block lands in the parsed workspace.
-func TestRenderWorkspaceToml_Secure_OffEmitsCommentedTemplate(t *testing.T) {
+// TestRenderWorkspaceToml_Sudo_Password_ActiveBlock pins that sudo "password"
+// emits an active [container.sudo] mode = "password" block that round-trips
+// into Container.Sudo.Mode, while the security_opt section stays commented.
+func TestRenderWorkspaceToml_Sudo_Password_ActiveBlock(t *testing.T) {
 	t.Parallel()
 	cat := i18n.New(i18n.LangEN)
 	got := renderWorkspaceToml(containerSpec{
 		ServiceName: "svc", Username: "dev", Image: "ubuntu", ImageVersion: "26.04",
-		Shell: "bash", MountRoot: ".", Devcontainer: true, Secure: false,
+		Shell: "bash", MountRoot: ".", Devcontainer: true, Sudo: config.SudoModePassword,
+	}, cat)
+	if !strings.Contains(got, "[container.sudo]\nmode = \"password\"\n") {
+		t.Errorf("sudo=password output missing active block\n--- got ---\n%s", got)
+	}
+	if strings.Contains(got, "no_new_privileges = true\n") && !strings.Contains(got, "# no_new_privileges = true") {
+		t.Errorf("sudo=password must not emit an active no_new_privileges block\n--- got ---\n%s", got)
+	}
+	var ws config.Workspace
+	if err := config.StrictUnmarshal("(test)", []byte(got), &ws); err != nil {
+		t.Fatalf("rendered TOML failed to parse: %v\n--- got ---\n%s", err, got)
+	}
+	if ws.Container.Sudo == nil || ws.Container.Sudo.SudoModeOrDefault() != config.SudoModePassword {
+		t.Errorf("parsed sudo mode not password: %+v", ws.Container.Sudo)
+	}
+}
+
+// TestRenderWorkspaceToml_Sudo_NoPasswd_CommentedTemplates pins that the
+// default (nopasswd) leaves both the security_opt and sudo sections as
+// commented templates with no active block in the parsed workspace.
+func TestRenderWorkspaceToml_Sudo_NoPasswd_CommentedTemplates(t *testing.T) {
+	t.Parallel()
+	cat := i18n.New(i18n.LangEN)
+	got := renderWorkspaceToml(containerSpec{
+		ServiceName: "svc", Username: "dev", Image: "ubuntu", ImageVersion: "26.04",
+		Shell: "bash", MountRoot: ".", Devcontainer: true, Sudo: config.SudoModeNoPasswd,
 	}, cat)
 	if !strings.Contains(got, "# no_new_privileges = true") {
-		t.Errorf("default output missing commented template\n--- got ---\n%s", got)
+		t.Errorf("nopasswd output missing commented security_opt template\n--- got ---\n%s", got)
 	}
-	if strings.Contains(got, "[container.security_opt]\nno_new_privileges = true\n") {
-		t.Errorf("default output unexpectedly emitted an active block\n--- got ---\n%s", got)
+	if !strings.Contains(got, "# mode = \"password\"") {
+		t.Errorf("nopasswd output missing commented [container.sudo] template\n--- got ---\n%s", got)
 	}
 	var ws config.Workspace
 	if err := config.StrictUnmarshal("(test)", []byte(got), &ws); err != nil {
 		t.Fatalf("rendered TOML failed to parse: %v\n--- got ---\n%s", err, got)
 	}
 	if ws.Container.SecurityOpt != nil {
-		t.Errorf("expected no SecurityOpt when --secure off, got %+v", ws.Container.SecurityOpt)
+		t.Errorf("expected no SecurityOpt when sudo=nopasswd, got %+v", ws.Container.SecurityOpt)
+	}
+	if ws.Container.Sudo != nil {
+		t.Errorf("expected no [container.sudo] when sudo=nopasswd, got %+v", ws.Container.Sudo)
 	}
 }
 

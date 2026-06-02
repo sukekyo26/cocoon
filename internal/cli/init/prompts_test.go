@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/huh"
 
 	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
+	"github.com/sukekyo26/cocoon/internal/config"
 	"github.com/sukekyo26/cocoon/internal/i18n"
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
@@ -82,8 +83,8 @@ func fullyPopulatedAnswers() initAnswers {
 		DevcontainerSet:   true,
 		Certificates:      false,
 		CertificatesSet:   true,
-		Secure:            false,
-		SecureSet:         true,
+		Sudo:              config.SudoModeNoPasswd,
+		SudoSet:           true,
 		AptCategories:     nil,
 		AptSet:            true,
 		Plugins:           nil,
@@ -267,7 +268,10 @@ func TestPromptWorkspaceOptions_PromptsForEachMissing(t *testing.T) {
 		{"dir_not_set", func(a *initAnswers) { a.DirSet = false }, 1},
 		{"devcontainer_not_set", func(a *initAnswers) { a.DevcontainerSet = false }, 1},
 		{"certificates_not_set", func(a *initAnswers) { a.CertificatesSet = false }, 1},
-		{"secure_not_set", func(a *initAnswers) { a.SecureSet = false }, 1},
+		{"sudo_not_set", func(a *initAnswers) { a.SudoSet = false }, 1},
+		// password mode with SudoSet=true skips the Select but still prompts
+		// for the password (SudoPassword empty) — exercises that second prompt.
+		{"sudo_password_needs_pw", func(a *initAnswers) { a.Sudo = config.SudoModePassword }, 1},
 		{"ports_not_set", func(a *initAnswers) { a.PortsSet = false }, 1},
 		{"apt_not_set", func(a *initAnswers) { a.AptSet = false }, 1},
 	}

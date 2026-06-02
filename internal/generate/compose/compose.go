@@ -88,10 +88,24 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 		volDefs = append(volDefs, sidecarVols...)
 	}
 
-	doc := yamlx.Map(
-		yamlx.Pair{Key: "services", Value: yamlx.Map(servicesContent...)},
-		yamlx.Pair{Key: "volumes", Value: yamlx.Map(volDefs...)},
-	)
+	docPairs := []yamlx.Pair{
+		{Key: "services", Value: yamlx.Map(servicesContent...)},
+		{Key: "volumes", Value: yamlx.Map(volDefs...)},
+	}
+	if ctx.PasswordSudoEnabled() {
+		// File-based source: Docker reads .devcontainer/.env.local directly at
+		// build time, so it works the same via manage.sh and VS Code without
+		// loading it into the container env. A missing file fails the build —
+		// that is the intended early-fail for password mode.
+		docPairs = append(docPairs, yamlx.Pair{
+			Key: "secrets",
+			Value: yamlx.Map(yamlx.Pair{
+				Key:   generate.SudoPasswordSecretName,
+				Value: yamlx.Map(yamlx.Pair{Key: "file", Value: yamlx.Quoted(generate.SudoPasswordSecretFile)}),
+			}),
+		})
+	}
+	doc := yamlx.Map(docPairs...)
 	body, err := yamlx.Marshal(doc)
 	if err != nil {
 		return "", fmt.Errorf("compose: %w", err)
@@ -299,6 +313,14 @@ func buildService(ctx *generate.WorkspaceContext, mounts []*yaml.Node) *yaml.Nod
 				Key:   generate.CertsBuildContextName,
 				Value: yamlx.Quoted(generate.CertsHostPath),
 			}),
+		})
+	}
+	if ctx.PasswordSudoEnabled() {
+		// Short syntax: the build gets the secret mounted at
+		// /run/secrets/<name>; the source is the top-level `secrets:` block.
+		buildPairs = append(buildPairs, yamlx.Pair{
+			Key:   "secrets",
+			Value: yamlx.Seq(yamlx.Quoted(generate.SudoPasswordSecretName)),
 		})
 	}
 	buildPairs = append(buildPairs, yamlx.Pair{Key: "args", Value: yamlx.Seq(

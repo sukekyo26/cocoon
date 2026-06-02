@@ -68,9 +68,18 @@ docker_socket = true
 
 # [container.security_opt] — Compose security_opt: seccomp / apparmor / no_new_privileges.
 #   "unconfined" relaxes sandboxing; no_new_privileges blocks setuid escalation.
+#   Note: no_new_privileges = true also disables sudo (the image grants the user passwordless sudo).
 # [container.security_opt]
 # seccomp           = "unconfined"
 # no_new_privileges = true
+
+# [container.sudo] — sudo password policy.
+#   Selected by `cocoon init --sudo password`. The password is read at build time from
+#   .devcontainer/.env.local (SUDO_PASSWORD=...) via a Docker build secret; that file is
+#   gitignored and never committed. A missing/empty SUDO_PASSWORD fails the build (no
+#   silent fallback to passwordless). Mutually exclusive with no_new_privileges above.
+[container.sudo]
+mode = "password"
 
 # [[container.skel]] — seed dotfiles into the new user's home (via /etc/skel).
 #   source: relative to the workspace root (build context); target: relative to /etc/skel.
@@ -133,8 +142,8 @@ enable = [
 [plugins.methods]
 copilot-cli = "binary"
 
-# [plugins.versions] — pinned versions for the enabled plugins above.
-#   checksum_amd64 / checksum_arm64 (64 lowercase hex chars) verify downloads — verify = "checksum" plugins only.
+# [plugins.versions] — pin specific versions for version_capable plugins.
+#   For verify = "checksum" plugins, checksum_amd64 / checksum_arm64 (64 lowercase hex chars) verify downloads.
 [plugins.versions]
 node = { pin = "24.16.0" }
 
@@ -196,8 +205,8 @@ packages = [
 # url        = "https://download.opensuse.org/repositories/shells:fish:release:3/xUbuntu_24.04/"
 # key_url    = "https://download.opensuse.org/repositories/shells:fish:release:3/xUbuntu_24.04/Release.key"
 
-# [ports] — host ports to forward into the container.
-#   Short form ("3000:3000") or long-form table; ranges and protocol/mode supported.
+# [ports] — host ports forwarded into the container.
+#   Short form: [HOST_IP:][HOST:]CONTAINER[/PROTOCOL]. Ranges (3000-3005:3000-3005), UDP, and IPv6 [::1] binds are accepted.
 # [ports]
 # forward = ["3000:3000", "5432:5432"]
 
@@ -244,7 +253,7 @@ RUN uv tool install pre-commit
 # [certificates] — opt in to TLS certificate auto-bake from ~/.cocoon/certs/.
 #   When enable = true, `cocoon gen` wires the host directory into the build via
 #   docker-compose's additional_contexts and the Dockerfile's RUN --mount=type=bind,
-#   so any *.crt files placed there land in the container's trust store at build time.
+#   so any *.crt / *.cer files placed there land in the container's trust store at build time.
 #   Useful when the build must trust a private or self-signed CA. Default off → no cert wiring
 #   in any generated artifact.
 # [certificates]
@@ -303,12 +312,12 @@ extensions = [
 #   directory; overridable with `cocoon gen workspace --output <dir>`), so "~/.claude"
 #   resolves to a relative path that VS Code can traverse upward.
 # [code_workspace]
-# name = "my-stack"                                       # 出力ファイル名 (デフォルト: プロジェクトディレクトリ basename)
+# name = "my-stack"                                       # output file basename (default: project dir basename)
 # folders = [
-#     { path = "." },                                     # プロジェクト自身
-#     { path = "~/.claude" },                             # ホーム配下; name は basename から自動導出
-#     { path = "../sibling-repo" },                       # 兄弟プロジェクト
-#     { path = "~/.config/nvim", name = "Neovim" },     # 表示名を明示
+#     { path = "." },                                     # project itself
+#     { path = "~/.claude" },                             # home subdirectory; name auto-derived
+#     { path = "../sibling-repo" },                       # sibling project
+#     { path = "~/.config/nvim", name = "Neovim" },     # explicit display name override
 # ]
 # [code_workspace.settings]
 # "editor.tabSize" = 2
