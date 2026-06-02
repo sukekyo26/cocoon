@@ -272,12 +272,13 @@ func ensureSudoGitignore(
 	return nil
 }
 
-// warnPasswordSudoMissingSecret flags password sudo enabled without the
-// .env.local secret file present. The build fails (compose needs the secret
-// file) until the user creates it with SUDO_PASSWORD=...; this surfaces the
-// cause early. Only a warning — cocoon does not create the file (it is the
-// user's secret). Non-ErrNotExist stat errors are ignored: this is a
-// best-effort nudge, not a gate.
+// warnPasswordSudoMissingSecret flags password sudo enabled without a usable
+// .env.local secret file — absent or empty (size 0), matching the Dockerfile's
+// `[ ! -s "$secret" ]` guard, which fails the build in both cases. This
+// surfaces the cause early. Only a warning — cocoon does not create the file
+// (it is the user's secret) and does not read its contents; a non-empty file
+// with no usable SUDO_PASSWORD= line is left for the build to reject. Stat
+// errors other than ErrNotExist are ignored: a best-effort nudge, not a gate.
 func warnPasswordSudoMissingSecret(
 	ctx *generate.WorkspaceContext, outDir string, log *logx.Logger, cat *i18n.Catalog,
 ) {
@@ -285,7 +286,10 @@ func warnPasswordSudoMissingSecret(
 		return
 	}
 	secret := filepath.Join(outDir, ".devcontainer", generate.SudoPasswordSecretFile)
-	if _, err := os.Stat(secret); errors.Is(err, os.ErrNotExist) {
+	info, err := os.Stat(secret)
+	missing := errors.Is(err, os.ErrNotExist)
+	empty := err == nil && info.Size() == 0
+	if missing || empty {
 		log.Warn(cat.Msg("gen_password_sudo_missing_secret", secret))
 	}
 }

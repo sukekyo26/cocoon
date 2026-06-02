@@ -262,7 +262,7 @@ in an image layer, the build cache, the container environment, or
 image layer, as for any Unix account with a password — treat the image as you
 would any host that stores password hashes). `cocoon gen` emits the compose
 `secrets:` wiring and a `.devcontainer/.gitignore` that excludes `.env.local`,
-and warns if `.env.local` is missing. **A missing or empty
+and warns if `.env.local` is missing or empty. **A missing or empty
 `SUDO_PASSWORD` fails `docker compose build`** — password mode never silently
 falls back to passwordless. `.env.local` is host-local and gitignored, so each
 developer creates their own; `cocoon init --sudo password` writes it for you
