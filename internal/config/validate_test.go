@@ -1445,6 +1445,7 @@ func TestValidate_SudoMode(t *testing.T) {
 	}{
 		{"nopasswd", "nopasswd", false},
 		{"password", "password", false},
+		{"empty_string_rejected", "", true},
 		{"none_is_not_a_sudo_mode", "none", true},
 		{"bogus", "bogus", true},
 		{"wrong_case", "Password", true},

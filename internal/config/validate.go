@@ -640,13 +640,18 @@ func (s *SudoSpec) validate(a *Accumulator) {
 	if s.Mode == nil {
 		return
 	}
+	// An explicit `mode = ""` is rejected, not silently defaulted: it is almost
+	// always a typo, and the omitted-vs-explicit distinction the pointer buys is
+	// only meaningful if explicit values are validated. Mirrors SecurityOptSpec's
+	// "must not be empty (omit the key …)" handling.
 	switch *s.Mode {
-	case "", SudoModeNoPasswd, SudoModePassword:
+	case SudoModeNoPasswd, SudoModePassword:
 	default:
 		a.Add(
 			`mode must be "`+SudoModeNoPasswd+`" or "`+SudoModePassword+
-				`" (to disable sudo entirely set [container.security_opt] `+
-				`no_new_privileges = true instead)`,
+				`" — omit the [container.sudo] section for the default passwordless `+
+				`sudo, or set [container.security_opt] no_new_privileges = true to `+
+				`disable sudo entirely`,
 			"mode",
 		)
 	}
