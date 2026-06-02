@@ -18,6 +18,13 @@ import (
 // still fails fast rather than wedging the suite.
 const teatestTimeout = 3 * time.Second
 
+// teatestUnset is seeded into *target AFTER construction so only a real commit
+// overwrites it. newSelectOrInputField reads *target for off-whitelist prefill,
+// so the constructor must see "" to keep the cursor on row 0 — hence poisoning
+// post-construction. Without it a want=="" case (the empty input row) would
+// pass even if key routing broke and no commit ran, since *target is already "".
+const teatestUnset = "\x00unset"
+
 // keyMsg builds a special-key message (arrows, Home/End, Enter, Tab). Printable
 // runes go through tm.Type instead; note tm.Type of "g"/"G"/"j"/"k" would be
 // stolen by the Select nav keymap, so typed test values avoid those.
@@ -129,8 +136,9 @@ func TestSelectOrInputField_Teatest(t *testing.T) {
 	for _, tc := range cases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			var target string
+			target := ""
 			f := newTeatestField(suggestions, &target)
+			target = teatestUnset // only a real commit clears the sentinel
 			tm := teatest.NewTestModel(t, f, teatest.WithInitialTermSize(80, 24))
 			waitForText(t, tm, "alpha") // program is up and has drawn the list
 			tc.drive(tm)
@@ -149,8 +157,9 @@ func TestSelectOrInputField_Teatest(t *testing.T) {
 //
 //nolint:paralleltest // teatest runs a tea.Program goroutine with timers.
 func TestSelectOrInputField_Teatest_ValidationRecovery(t *testing.T) {
-	var target string
+	target := ""
 	f := newTeatestField([]string{"alpha", "beta"}, &target)
+	target = teatestUnset // only a real commit clears the sentinel
 	f.Validate(func(s string) error {
 		if strings.Contains(s, "/") {
 			return errTestReject
@@ -184,8 +193,9 @@ func TestSelectOrInputField_Teatest_ValidationRecovery(t *testing.T) {
 //
 //nolint:paralleltest // teatest runs a tea.Program goroutine with timers.
 func TestSelectOrInputField_Teatest_InForm(t *testing.T) {
-	var target string
+	target := ""
 	f := newSelectOrInputField("test_key", &target, []string{"alpha", "beta"}, "OTHER-LABEL")
+	target = teatestUnset // only a real commit clears the sentinel
 	form := huh.NewForm(huh.NewGroup(f))
 	form.SubmitCmd = tea.Quit
 	form.CancelCmd = tea.Interrupt
