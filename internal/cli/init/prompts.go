@@ -111,7 +111,8 @@ func promptImagePathFix(ans *initAnswers, cat *i18n.Catalog) error {
 }
 
 // promptWorkspaceOptions prompts for alias bundles, mount root, the
-// devcontainer / certificates / secure toggles, ports, and apt categories.
+// devcontainer / certificates toggles, the sudo selection (and password when
+// password mode is chosen), ports, and apt categories.
 func promptWorkspaceOptions(ans *initAnswers, cat *i18n.Catalog) error {
 	if err := promptMountAndDir(ans, cat); err != nil {
 		return err
@@ -130,12 +131,20 @@ func promptWorkspaceOptions(ans *initAnswers, cat *i18n.Catalog) error {
 		}
 		ans.CertificatesSet = true
 	}
-	if !ans.SecureSet {
-		ans.Secure = false
-		if err := runSingleFieldForm(secureConfirm(cat, &ans.Secure)); err != nil {
+	if !ans.SudoSet {
+		ans.Sudo = config.SudoModeNoPasswd
+		if err := runSingleFieldForm(sudoSelect(cat, &ans.Sudo)); err != nil {
 			return err
 		}
-		ans.SecureSet = true
+		ans.SudoSet = true
+	}
+	// Collect the password whenever password mode is in effect (chosen here or
+	// via --sudo password) and not yet supplied. Only the interactive path
+	// reaches here, so `--yes` never seeds .env.local.
+	if ans.Sudo == config.SudoModePassword && ans.SudoPassword == "" {
+		if err := runSingleFieldForm(sudoPasswordInput(cat, &ans.SudoPassword)); err != nil {
+			return err
+		}
 	}
 	if !ans.PortsSet {
 		ports, err := promptForPorts(cat)

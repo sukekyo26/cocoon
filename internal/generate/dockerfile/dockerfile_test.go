@@ -959,3 +959,86 @@ func assertBashSyntax(t *testing.T, script string) {
 		t.Fatalf("bash -n rejected the embedded script: %v\n%s", runErr, stderr.String())
 	}
 }
+
+// TestGenerate_PasswordSudo pins the password-sudo RUN block: it mounts the
+// sudo_password build secret, fails the build with distinct causes for a
+// missing/empty secret vs an absent SUDO_PASSWORD line, and rewrites the
+// sudoers entry to require a password. It is emitted AFTER the plugin installs
+// (the snapshot fixture enables aws-cli, which runs `sudo ./aws/install` at
+// build time) so build-time sudo stays passwordless until the final lock-down.
+// The base passwordless user-creation line is untouched; nopasswd output
+// carries neither the secret mount nor chpasswd.
+//
+//nolint:paralleltest // loads the shared snapshot fixture twice; cheap, no shared state
+func TestGenerate_PasswordSudo(t *testing.T) {
+	root := repoRoot(t)
+	wsPath := filepath.Join(root, "tests", "fixtures", "snapshot.workspace.toml")
+	pluginsDir := filepath.Join(root, "internal", "plugin", "catalog")
+	gen := func(mode string) string {
+		ws, err := config.LoadWorkspace(wsPath)
+		if err != nil {
+			t.Fatalf("load workspace: %v", err)
+		}
+		if mode != "" {
+			m := mode
+			ws.Container.Sudo = &config.SudoSpec{Mode: &m}
+		}
+		var warns bytes.Buffer
+		plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, &warns, pluginsDir)
+		if err != nil {
+			t.Fatalf("load plugins: %v", err)
+		}
+		ctx := &generate.WorkspaceContext{WS: ws, PluginsFS: os.DirFS(pluginsDir), Plugins: plugins, Warnings: &warns}
+		got, gerr := dockerfile.Generate(ctx, dockerfile.Options{
+			WorkspaceRoot: root, RepoDir: "cocoon", Plugins: plugins, Warnings: &warns,
+		})
+		if gerr != nil {
+			t.Fatalf("generate: %v", gerr)
+		}
+		return got
+	}
+
+	pw := gen(config.SudoModePassword)
+	for _, want := range []string{
+		"RUN --mount=type=secret,id=sudo_password",
+		"SUDO_PASSWORD",
+		`echo "${USERNAME} ALL=(ALL) ALL" > /etc/sudoers.d/${USERNAME}`,
+		"| chpasswd",
+		// Distinct fail-fast causes (commit 7f400db): the pre-parse guard and
+		// the two separate messages must all survive — collapsing them would
+		// re-introduce the ambiguity, and dropping the [ -s ] check would let
+		// an empty secret fall through to an empty password.
+		`if [ ! -s "$secret" ]`,
+		"the sudo_password build secret is missing or empty",
+		"requires a non-empty SUDO_PASSWORD line",
+	} {
+		if !strings.Contains(pw, want) {
+			t.Errorf("password Dockerfile missing %q\n--- got ---\n%s", want, pw)
+		}
+	}
+	// The base user-creation RUN still writes the passwordless line first
+	// (the password RUN overwrites it).
+	if !strings.Contains(pw, `echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL"`) {
+		t.Error("password Dockerfile dropped the base user-creation NOPASSWD line")
+	}
+	// The password RUN must come AFTER plugin installs so build-time sudo is
+	// still passwordless when an installer calls it (aws-cli runs
+	// `sudo ./aws/install`); tightening sudoers before that breaks the build.
+	awsIdx := strings.Index(pw, "sudo ./aws/install")
+	pwIdx := strings.Index(pw, "id=sudo_password")
+	if awsIdx < 0 {
+		t.Fatal("snapshot fixture expected to enable aws-cli (sudo ./aws/install not found)")
+	}
+	if pwIdx < 0 || awsIdx > pwIdx {
+		t.Errorf("password setup must come after plugin installs that use sudo (awsIdx=%d pwIdx=%d)", awsIdx, pwIdx)
+	}
+	// And after the USER switch (it is the final root-context step).
+	if pwIdx < strings.Index(pw, "\nUSER ${USERNAME}") {
+		t.Error("password setup RUN must come after the USER ${USERNAME} switch")
+	}
+
+	nopw := gen("")
+	if strings.Contains(nopw, "sudo_password") || strings.Contains(nopw, "chpasswd") {
+		t.Errorf("nopasswd Dockerfile must not emit the secret mount or chpasswd\n--- got ---\n%s", nopw)
+	}
+}

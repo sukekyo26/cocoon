@@ -10,7 +10,7 @@ func init() {
 // and `cocoon gen`. Keys are deliberately scoped with `init_` / `gen_`
 // prefixes so they do not collide with the legacy `setup_*` table.
 //
-//nolint:gochecknoglobals,revive // catalog tables are file-scoped by design.
+//nolint:gochecknoglobals,revive,gosec // catalog tables are file-scoped by design; G101 false positive on sudo-password message values.
 var messagesEN_init = map[string]string{
 	// init prompts
 	"init_prompt_service_name":          "Service name",
@@ -41,8 +41,15 @@ var messagesEN_init = map[string]string{
 	"init_desc_devcontainer":            "Says yes if you ever open this repo in VS Code Dev Containers; harmless otherwise.",
 	"init_prompt_certificates":          "Bake user TLS certificates from ~/.cocoon/certs/ into the container image?",
 	"init_desc_certificates":            "Enable when your build must trust a private CA inside the container (a TLS-intercepting proxy, a self-signed CA, etc.). When off, no cert wiring lands in the generated artifacts.",
-	"init_prompt_secure":                "Set no_new_privileges = true (block setuid escalation, disabling in-container sudo)?",
-	"init_desc_secure":                  "Yes hardens the container for running untrusted code or AI agents: a compromised process cannot escalate to root via sudo. UID/GID remapping is unaffected (the entrypoint runs as root); only post-startup manual sudo stops working — get root from the host with `docker exec -u root` when needed. Leave No for a normal dev box where you `sudo apt install` at runtime.",
+	"init_prompt_sudo":                  "How should sudo work inside the container?",
+	"init_desc_sudo":                    "nopasswd: passwordless sudo (convenient; default). password: sudo requires a password you set in .devcontainer/.env.local, applied at build time via a Docker build secret (never committed; a missing/empty password fails the build). none: hardened — sets no_new_privileges = true so a compromised process cannot escalate via sudo (get root from the host with `docker exec -u root`). Pick password or none when running untrusted code or AI agents.",
+	"init_option_sudo_nopasswd":         "Passwordless sudo (default)",
+	"init_option_sudo_password":         "Password sudo (set SUDO_PASSWORD in .devcontainer/.env.local)",
+	"init_option_sudo_none":             "No sudo (no_new_privileges = true)",
+	"init_prompt_sudo_password":         "Enter the sudo password for the container user",
+	"init_desc_sudo_password":           "Saved to .devcontainer/.env.local as SUDO_PASSWORD=... (mode 0600, gitignored) and applied at image build time via a Docker build secret. Change it later by editing that file and rebuilding.",
+	"init_err_sudo_password_empty":      "password must not be empty (password sudo requires one)",
+	"init_err_sudo_password_multiline":  "password must be a single line (no newline or carriage return)",
 	"init_prompt_image_path_fix_title":  "Auto-configure user-local install prefix for %s?",
 	"init_desc_image_path_fix":          "Adds the following to workspace.toml so user-local installs land somewhere writable, are on PATH, and survive `docker compose down && up --build`:\n\n%s\n\nLets the container user run %s without hitting the default-image failure (permission denied on root-owned prefixes, or the installed binary not being on PATH) and keeps the installed binaries across container rebuilds via named volumes. Skip if you never install user-local tools with this runtime.",
 	"init_confirm_yes":                  "Yes",
@@ -115,10 +122,15 @@ var messagesEN_init = map[string]string{
 		"#   docker-compose's additional_contexts and the Dockerfile's RUN --mount=type=bind, so any\n" +
 		"#   *.crt / *.cer files placed there land in the container's trust store at build time. Default off.",
 	"init_toml_section_container_security_opt": "# [container.security_opt] — no_new_privileges blocks setuid privilege escalation.\n" +
-		"#   Enabled by `cocoon init --secure`. Note: this also disables sudo inside the running\n" +
+		"#   Selected by `cocoon init --sudo none`. Note: this also disables sudo inside the running\n" +
 		"#   container (the image grants passwordless sudo) — install everything at build time, and\n" +
 		"#   get root from the host with `docker exec -u root` if needed. UID/GID remapping is\n" +
 		"#   unaffected (the entrypoint runs as root before dropping privileges).",
+	"init_toml_section_container_sudo": "# [container.sudo] — sudo password policy.\n" +
+		"#   Selected by `cocoon init --sudo password`. The password is read at build time from\n" +
+		"#   .devcontainer/.env.local (SUDO_PASSWORD=...) via a Docker build secret; that file is\n" +
+		"#   gitignored and never committed. A missing/empty SUDO_PASSWORD fails the build (no\n" +
+		"#   silent fallback to passwordless). Mutually exclusive with no_new_privileges above.",
 	"init_toml_section_ports": "# [ports] — host ports forwarded into the container.\n" +
 		"#   Short form: [HOST_IP:][HOST:]CONTAINER[/PROTOCOL]. Ranges (3000-3005:3000-3005), UDP, and IPv6 [::1] binds are accepted.",
 	"init_toml_section_volumes": "# [volumes] — extra named volumes mapped under the container's home.\n" +
@@ -147,6 +159,11 @@ var messagesEN_init = map[string]string{
 	"gen_home_files_in_container_warning":   "WARNING: cocoon gen is running inside a container (/.dockerenv detected); [home_files] entries will be touched in this container's HOME, not the Docker host's. Run `cocoon gen` on the host before `docker compose up`.",
 	"gen_home_files_is_directory":           "%s exists as a directory (likely auto-created by a previous `docker compose up` when the file was missing); remove it with `rm -rf %s` and re-run `cocoon gen`",
 	"gen_docker_cli_without_socket_warning": "WARNING: the docker-cli plugin is enabled but [container].docker_socket is not enabled (unset or false); the in-container docker client has no daemon socket to reach, so `docker ...` will fail with \"cannot connect to the Docker daemon\". Add `docker_socket = true` under [container] in workspace.toml, or remove the docker-cli plugin. Ignore this if the container talks to a remote DOCKER_HOST.",
+	"gen_password_sudo_missing_secret":      "WARNING: password sudo is enabled but %s is missing or empty; `docker compose build` will fail until it contains a single line `SUDO_PASSWORD=<your-password>` (it is gitignored and read at build time via a Docker build secret).",
+	"gen_sudo_gitignore_ensured":            "ensured %s ignores the sudo password secret (.env.local)",
+	// init sudo password seed (.env.local)
+	"init_sudo_env_local_wrote":  "wrote %s (SUDO_PASSWORD, 0600, gitignored) — used as the container sudo password at build time",
+	"init_sudo_env_local_exists": "%s already exists; left untouched (it holds your sudo password). Edit it directly to change the password.",
 	// gen workspace (.code-workspace generator)
 	"gen_workspace_wrote":        "wrote %s",
 	"gen_workspace_no_folders":   "no folders configured: add entries to [code_workspace].folders in workspace.toml, or pass one or more --folder flags",
@@ -159,7 +176,7 @@ var messagesEN_init = map[string]string{
 // (typically command-name examples like `cocoon gen`) intentionally keep
 // the English form because the command name itself is not localized.
 //
-//nolint:gochecknoglobals,revive // catalog tables are file-scoped by design.
+//nolint:gochecknoglobals,revive,gosec // catalog tables are file-scoped by design; G101 false positive on sudo-password message values.
 var messagesJA_init = map[string]string{
 	// init prompts
 	"init_prompt_service_name":          "サービス名",
@@ -190,8 +207,15 @@ var messagesJA_init = map[string]string{
 	"init_desc_devcontainer":            "VS Code Dev Containers で開く可能性があれば Yes。そうでなくても害はありません。",
 	"init_prompt_certificates":          "~/.cocoon/certs/ の TLS 証明書をコンテナイメージに取り込みますか？",
 	"init_desc_certificates":            "build 中にプライベート CA（TLS インターセプトプロキシや自己署名 CA 等）を信頼させる必要がある場合に Yes。off の場合は生成物に cert 関連の配線は一切乗りません。",
-	"init_prompt_secure":                "no_new_privileges = true を設定しますか？（setuid 昇格を遮断し、コンテナ内 sudo を無効化）",
-	"init_desc_secure":                  "Yes はコンテナを未信頼コードや AI エージェントの実行向けに硬化します。乗っ取られたプロセスが sudo で root へ昇格できなくなります。UID/GID の再マップは entrypoint が root で行うため無影響で、止まるのは起動後の手動 sudo のみ — root が要るときはホストから `docker exec -u root`。実行時に `sudo apt install` する通常の dev 環境では No。",
+	"init_prompt_sudo":                  "コンテナ内の sudo をどうしますか？",
+	"init_desc_sudo":                    "nopasswd: パスワード不要の sudo（手軽・既定）。password: .devcontainer/.env.local に設定したパスワードを sudo で要求し、ビルド時に Docker build secret として適用（コミットされない／未設定・空ならビルド失敗）。none: 硬化 — no_new_privileges = true を設定し、乗っ取られたプロセスが sudo で root へ昇格できないようにする（root はホストから `docker exec -u root`）。未信頼コードや AI エージェントを動かすなら password か none を選ぶ。",
+	"init_option_sudo_nopasswd":         "パスワード不要 sudo（既定）",
+	"init_option_sudo_password":         "パスワード必須 sudo（.devcontainer/.env.local に SUDO_PASSWORD を設定）",
+	"init_option_sudo_none":             "sudo 無効（no_new_privileges = true）",
+	"init_prompt_sudo_password":         "コンテナユーザの sudo パスワードを入力",
+	"init_desc_sudo_password":           ".devcontainer/.env.local に SUDO_PASSWORD=... として保存（mode 0600・gitignore 対象）し、イメージビルド時に Docker build secret として適用します。後で変更するにはそのファイルを編集して再ビルドしてください。",
+	"init_err_sudo_password_empty":      "パスワードは空にできません（password モードには必須）",
+	"init_err_sudo_password_multiline":  "パスワードは 1 行にしてください（改行・復帰文字は不可）",
 	"init_prompt_image_path_fix_title":  "%s イメージの user-local インストール先を自動設定しますか？",
 	"init_desc_image_path_fix":          "workspace.toml に以下を追加し、user-local インストール先を書き込み可能なパスに向け、bin ディレクトリを PATH に通し、`docker compose down && up --build` を跨いでも内容が保持されるようにします:\n\n%s\n\n`%s` を実行したときに発生するデフォルトの失敗（root 所有プレフィックスへの書き込み拒否、またはインストール済みバイナリが PATH 上にない）を回避し、インストール済みバイナリを named volume でコンテナ再生成を跨いで保持します。このランタイムで user-local ツールを入れない場合はスキップ。",
 	"init_confirm_yes":                  "はい",
@@ -261,9 +285,14 @@ var messagesJA_init = map[string]string{
 		"#   RUN --mount=type=bind を配線し、ホスト側 *.crt / *.cer が build 時にトラストストアへマージされる。\n" +
 		"#   デフォルト off。",
 	"init_toml_section_container_security_opt": "# [container.security_opt] — no_new_privileges は setuid 権限昇格を遮断する。\n" +
-		"#   `cocoon init --secure` で有効化。注意: コンテナ内の sudo も無効化される\n" +
+		"#   `cocoon init --sudo none` で選択。注意: コンテナ内の sudo も無効化される\n" +
 		"#   (イメージは passwordless sudo を付与)。必要なものはビルド時に導入し、root が要るときは\n" +
 		"#   ホストから `docker exec -u root`。UID/GID の再マップは無影響 (entrypoint が降格前に root で実行)。",
+	"init_toml_section_container_sudo": "# [container.sudo] — sudo のパスワード方針。\n" +
+		"#   `cocoon init --sudo password` で選択。パスワードはビルド時に .devcontainer/.env.local の\n" +
+		"#   SUDO_PASSWORD=... から Docker build secret として読み込む。そのファイルは gitignore 対象で\n" +
+		"#   コミットされない。SUDO_PASSWORD が未設定/空ならビルドは失敗する (passwordless へ暗黙に\n" +
+		"#   フォールバックしない)。上の no_new_privileges とは排他。",
 	"init_toml_section_apt": "# [apt] — cocoon の最小ベース + 選択カテゴリに追加する apt パッケージ。\n" +
 		"#   カテゴリのチェックを変えるなら `cocoon init --force` を再実行、または直接このリストを編集。",
 	"init_toml_section_ports": "# [ports] — コンテナへフォワードするホストポート。\n" +
@@ -294,6 +323,11 @@ var messagesJA_init = map[string]string{
 	"gen_home_files_in_container_warning":   "警告: cocoon gen がコンテナ内 (/.dockerenv を検出) で実行されています。[home_files] エントリは Docker ホストではなくこのコンテナの HOME に対して touch されます。`docker compose up` の前にホスト側で `cocoon gen` を実行してください。",
 	"gen_home_files_is_directory":           "%s がディレクトリとして存在します (以前の `docker compose up` がファイル不在時に自動作成した可能性)。`rm -rf %s` で削除してから `cocoon gen` を再実行してください",
 	"gen_docker_cli_without_socket_warning": "警告: docker-cli プラグインは有効ですが [container].docker_socket が有効化されていません (未設定または false)。コンテナ内の docker クライアントが接続できる daemon ソケットが無いため、`docker ...` は \"cannot connect to the Docker daemon\" で失敗します。workspace.toml の [container] に `docker_socket = true` を追加するか、docker-cli プラグインを外してください。リモートの DOCKER_HOST に接続する構成ならこの警告は無視して構いません。",
+	"gen_password_sudo_missing_secret":      "警告: password sudo が有効ですが %s が存在しないか空です。`SUDO_PASSWORD=<パスワード>` の 1 行を記述するまで `docker compose build` は失敗します (このファイルは gitignore 対象で、ビルド時に Docker build secret として読まれます)。",
+	"gen_sudo_gitignore_ensured":            "%s が sudo パスワードの secret (.env.local) を無視するようにしました",
+	// init sudo password seed (.env.local)
+	"init_sudo_env_local_wrote":  "%s を作成しました (SUDO_PASSWORD・0600・gitignore 対象) — ビルド時にコンテナの sudo パスワードとして使用",
+	"init_sudo_env_local_exists": "%s は既に存在するため変更しません (sudo パスワードを保持)。変更するにはこのファイルを直接編集してください。",
 	// gen workspace (.code-workspace ジェネレータ)
 	"gen_workspace_wrote":        "%s を書き出しました",
 	"gen_workspace_no_folders":   "folders が空です: workspace.toml の [code_workspace].folders にエントリを追加するか、--folder フラグを 1 つ以上指定してください",

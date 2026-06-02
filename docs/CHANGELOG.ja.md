@@ -6,6 +6,38 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+### 追加
+
+- `cocoon init --sudo nopasswd|password|none`（および対応する対話プロンプト）が
+  `--secure` / `--no-secure` フラグを置き換え、コンテナ内 sudo の方針を 1 つの
+  3 値選択で指定できるようになりました。
+  - `nopasswd`（既定）: パスワード不要の sudo。従来どおり。
+  - `password`: sudo にパスワードを要求し、新フィールド `[container.sudo] mode =
+    "password"` に記録します。パスワードはイメージの**ビルド時**に
+    `.devcontainer/.env.local`（`SUDO_PASSWORD=...` の 1 行）から Docker build
+    secret（`RUN --mount=type=secret`）として読み込みます。**平文**はイメージ層・
+    ビルドキャッシュ・コンテナ環境変数・`docker inspect` のいずれにも残らず、
+    `/etc/shadow` には派生ハッシュのみ書き込まれます（パスワードを持つ通常の
+    Unix アカウントと同様）。`cocoon gen` は compose の `secrets:` 配線と
+    `.env.local` を除外する
+    `.devcontainer/.gitignore` を生成し、password モードなのに `.env.local` が
+    無いか空なら警告します。`SUDO_PASSWORD` が未設定/空ならビルドは失敗し、
+    passwordless へ暗黙にフォールバックしません。対話で `password` を選ぶと
+    パスワードを尋ねて `.devcontainer/.env.local`（mode 0600・既存は上書きしない）
+    を生成します。`--yes --sudo password` はモードのみ設定し、ファイル作成は
+    ユーザーに委ねます。BuildKit が必要です（生成される Dockerfile が有効化済み）。
+  - `none`: `[container.security_opt] no_new_privileges = true` を事前設定します
+    （旧 `--secure` の挙動）。password モードとは排他です。
+
+### 削除
+
+- **BREAKING**: `cocoon init --secure` / `--no-secure` を削除し、統一された
+  `cocoon init --sudo` フラグに置き換えました。スクリプトや CI では `--secure`
+  を `--sudo none` に、`--no-secure` を `--sudo nopasswd` に置き換えてください
+  （旧名のエイリアスは受け付けません）。`[container.security_opt]
+  no_new_privileges` フィールド自体は不変なので、既存の `workspace.toml` は
+  編集なしで読み込めます。
+
 ## [0.12.0] - 2026-06-02
 
 ### 追加

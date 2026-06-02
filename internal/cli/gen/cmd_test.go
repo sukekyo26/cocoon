@@ -556,7 +556,10 @@ packages = []
 
 // runGenForWarn runs `cocoon gen` over body in an isolated tempdir and
 // returns captured stderr. It fails the test if gen itself errors.
-func runGenForWarn(t *testing.T, body string) string {
+// runGenForWarn runs `cocoon gen` in an isolated tempdir and returns stderr.
+// Pass an optional envLocal to seed .devcontainer/.env.local before gen (""
+// seeds an empty file); omit it to leave the secret absent.
+func runGenForWarn(t *testing.T, body string, envLocal ...string) string {
 	t.Helper()
 	work := t.TempDir()
 	home := filepath.Join(work, "home")
@@ -569,6 +572,15 @@ func runGenForWarn(t *testing.T, body string) string {
 
 	if err := os.WriteFile(filepath.Join(work, "workspace.toml"), []byte(body), 0o600); err != nil {
 		t.Fatalf("write workspace.toml: %v", err)
+	}
+	if len(envLocal) > 0 {
+		devDir := filepath.Join(work, ".devcontainer")
+		if err := os.MkdirAll(devDir, 0o755); err != nil {
+			t.Fatalf("mkdir .devcontainer: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(devDir, ".env.local"), []byte(envLocal[0]), 0o600); err != nil {
+			t.Fatalf("seed .env.local: %v", err)
+		}
 	}
 	var stdout, stderr bytes.Buffer
 	cmd := gencli.NewCommand(&stdout, &stderr)
@@ -618,6 +630,137 @@ func TestGen_NoDockerCLI_NoWarn(t *testing.T) {
 	stderr := runGenForWarn(t, minimalWorkspaceTOML)
 	if strings.Contains(stderr, dockerCLIWarnSubstr) {
 		t.Errorf("docker_socket warning should not fire without docker-cli\n--- got ---\n%s", stderr)
+	}
+}
+
+// passwordSudoWorkspaceTOML selects password sudo so gen wires the build
+// secret and (when .env.local is absent) warns.
+//
+//nolint:gosec // G101 false positive: a workspace.toml fixture, not a credential.
+const passwordSudoWorkspaceTOML = `[workspace]
+mount_root = "."
+devcontainer = false
+
+[container]
+service_name = "demo"
+username = "alice"
+image = "ubuntu"
+image_version = "24.04"
+
+[container.sudo]
+mode = "password"
+
+[plugins]
+enable = []
+
+[apt]
+packages = []
+`
+
+const passwordSudoWarnSubstr = "password sudo is enabled"
+
+// TestGen_PasswordSudoMissingSecret_Warns asserts gen flags password mode when
+// .devcontainer/.env.local is absent (the build would fail without it).
+//
+//nolint:paralleltest // runGenForWarn uses t.Setenv + t.Chdir
+func TestGen_PasswordSudoMissingSecret_Warns(t *testing.T) {
+	// No t.Parallel(): t.Setenv blocks parallel execution.
+	stderr := runGenForWarn(t, passwordSudoWorkspaceTOML)
+	if !strings.Contains(stderr, passwordSudoWarnSubstr) {
+		t.Errorf("expected password-sudo missing-secret warning on stderr\n--- got ---\n%s", stderr)
+	}
+}
+
+// genPasswordSudoDir runs `cocoon gen` over passwordSudoWorkspaceTOML in an
+// isolated tempdir and returns the work dir so callers can inspect generated
+// files. preGitignore, when non-empty, seeds .devcontainer/.gitignore first.
+func genPasswordSudoDir(t *testing.T, preGitignore string) string {
+	t.Helper()
+	work := t.TempDir()
+	home := filepath.Join(work, "home")
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		t.Fatalf("mkdir home: %v", err)
+	}
+	t.Setenv("HOME", home)
+	pinEnglish(t)
+	t.Chdir(work)
+	if err := os.WriteFile(filepath.Join(work, "workspace.toml"), []byte(passwordSudoWorkspaceTOML), 0o600); err != nil {
+		t.Fatalf("write workspace.toml: %v", err)
+	}
+	if preGitignore != "" {
+		if err := os.MkdirAll(filepath.Join(work, ".devcontainer"), 0o755); err != nil {
+			t.Fatalf("mkdir .devcontainer: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(work, ".devcontainer", ".gitignore"), []byte(preGitignore), 0o644); err != nil { //nolint:gosec // test fixture
+			t.Fatalf("seed .gitignore: %v", err)
+		}
+	}
+	var stdout, stderr bytes.Buffer
+	cmd := gencli.NewCommand(&stdout, &stderr)
+	cmd.SetArgs(nil)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("gen: %v\nstderr:\n%s", err, stderr.String())
+	}
+	return work
+}
+
+// TestGen_PasswordSudoWritesGitignore pins that `cocoon gen` in password mode
+// writes .devcontainer/.gitignore ignoring the .env.local secret.
+//
+//nolint:paralleltest // t.Setenv + t.Chdir
+func TestGen_PasswordSudoWritesGitignore(t *testing.T) {
+	work := genPasswordSudoDir(t, "")
+	body, err := os.ReadFile(filepath.Join(work, ".devcontainer", ".gitignore")) //nolint:gosec // test path
+	if err != nil {
+		t.Fatalf("read .gitignore: %v", err)
+	}
+	if !strings.Contains(string(body), ".env.local") {
+		t.Errorf(".gitignore does not ignore .env.local:\n%s", body)
+	}
+}
+
+// TestGen_PasswordSudoPreservesExistingGitignore pins that an existing
+// user-managed .devcontainer/.gitignore keeps its rules — gen upserts the
+// .env.local line rather than overwriting the file.
+//
+//nolint:paralleltest // t.Setenv + t.Chdir
+func TestGen_PasswordSudoPreservesExistingGitignore(t *testing.T) {
+	work := genPasswordSudoDir(t, "# user rules\n*.log\nscratch/\n")
+	body, err := os.ReadFile(filepath.Join(work, ".devcontainer", ".gitignore")) //nolint:gosec // test path
+	if err != nil {
+		t.Fatalf("read .gitignore: %v", err)
+	}
+	for _, want := range []string{"*.log", "scratch/", ".env.local"} {
+		if !strings.Contains(string(body), want) {
+			t.Errorf(".gitignore missing %q (user rules must be preserved):\n%s", want, body)
+		}
+	}
+}
+
+// TestGen_PasswordSudoEmptySecret_Warns asserts the warning also fires when
+// .devcontainer/.env.local exists but is empty (size 0). The Dockerfile's
+// `[ ! -s "$secret" ]` guard fails the build in that case too, so gen surfaces
+// it early — matching the "missing or empty" wording.
+//
+//nolint:paralleltest // runGenForWarn uses t.Setenv + t.Chdir
+func TestGen_PasswordSudoEmptySecret_Warns(t *testing.T) {
+	// No t.Parallel(): t.Setenv blocks parallel execution.
+	stderr := runGenForWarn(t, passwordSudoWorkspaceTOML, "")
+	if !strings.Contains(stderr, passwordSudoWarnSubstr) {
+		t.Errorf("expected password-sudo warning for empty .env.local\n--- got ---\n%s", stderr)
+	}
+}
+
+// TestGen_PasswordSudoWithSecret_NoWarn asserts the warning stays silent once
+// .devcontainer/.env.local has content (size > 0). gen never reads that file's
+// contents, so a non-empty file is trusted (the build rejects an unusable one).
+//
+//nolint:paralleltest // runGenForWarn uses t.Setenv + t.Chdir
+func TestGen_PasswordSudoWithSecret_NoWarn(t *testing.T) {
+	// No t.Parallel(): t.Setenv blocks parallel execution.
+	stderr := runGenForWarn(t, passwordSudoWorkspaceTOML, "SUDO_PASSWORD=x\n")
+	if strings.Contains(stderr, passwordSudoWarnSubstr) {
+		t.Errorf("warning should be silent when .env.local has content\n--- got ---\n%s", stderr)
 	}
 }
 

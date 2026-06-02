@@ -42,8 +42,7 @@ Generate `workspace.toml` in the current directory.
 | `--no-devcontainer` | bool | Skip `.devcontainer/devcontainer.json`. |
 | `--certificates` | bool | Force-enable `[certificates] enable = true` (host TLS auto-bake from `~/.cocoon/certs/`). |
 | `--no-certificates` | bool | Force-disable; omit the `[certificates]` section (default). |
-| `--secure` | bool | Preset `[container.security_opt] no_new_privileges = true`. Blocks setuid escalation — disables in-container `sudo` (for running untrusted code / AI agents). |
-| `--no-secure` | bool | Leave `no_new_privileges` unset; in-container `sudo` stays available (default). |
+| `--sudo <mode>` | string | In-container sudo policy: `nopasswd` (default, passwordless), `password` (requires `SUDO_PASSWORD` from `.devcontainer/.env.local`, applied via a build secret), or `none` (`no_new_privileges = true`, disables sudo). Interactive `password` prompts for the password and writes `.env.local` (0600). |
 | `--apt-categories <ids>` | string | Comma-separated apt category IDs (skips the prompt). |
 | `--plugins <ids>` | string | Comma-separated plugin IDs to enable. |
 | `--plugin-versions <id>=<ref>,...` | string | Comma-separated `<id>=<ref>` pins for `version_capable` plugins. Each `<id>` must also appear in `--plugins`, must be `version_capable`, and may not repeat. Emits a `[plugins.versions]` block directly in the generated `workspace.toml`. |

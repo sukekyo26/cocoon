@@ -202,6 +202,7 @@ func (w *Workspace) runValidate(a *Accumulator) {
 	w.Container.validate(a.At("container"))
 	w.Plugins.validate(a.At("plugins"))
 	w.validateImagePluginConflict(a.At("container"))
+	w.validatePasswordSudoVsNoNewPrivileges(a.At("container", "sudo"))
 	if w.Container.IPC != nil {
 		w.validateContainerIPC(a.At("container", "ipc"))
 	}
@@ -334,6 +335,9 @@ func (c *ContainerSpec) validate(a *Accumulator) {
 	}
 	if c.SecurityOpt != nil {
 		c.SecurityOpt.validate(a.At("security_opt"))
+	}
+	if c.Sudo != nil {
+		c.Sudo.validate(a.At("sudo"))
 	}
 	validateSkel(a.At("skel"), c.Skel)
 	validateGroupAdd(a.At("group_add"), c.GroupAdd)
@@ -518,6 +522,25 @@ func (w *Workspace) validateImagePluginConflict(a *Accumulator) {
 	)
 }
 
+// validatePasswordSudoVsNoNewPrivileges rejects combining password sudo with
+// no_new_privileges: the latter blocks setuid escalation kernel-side, so the
+// sudo password could never be used. They are mutually exclusive.
+func (w *Workspace) validatePasswordSudoVsNoNewPrivileges(a *Accumulator) {
+	if w.Container.Sudo.SudoModeOrDefault() != SudoModePassword {
+		return
+	}
+	so := w.Container.SecurityOpt
+	if so != nil && so.NoNewPrivileges != nil && *so.NoNewPrivileges {
+		a.Add(
+			`[container.sudo] mode = "password" cannot be combined with `+
+				`[container.security_opt] no_new_privileges = true: no_new_privileges `+
+				`blocks setuid escalation, so the sudo password would never be usable. `+
+				`Drop no_new_privileges, or set sudo mode = "nopasswd".`,
+			"mode",
+		)
+	}
+}
+
 func checkSkelPath(a *Accumulator, p, label string) {
 	switch {
 	case p == "":
@@ -610,6 +633,27 @@ func (s *SecurityOptSpec) validate(a *Accumulator) {
 	}
 	if s.AppArmor != nil && *s.AppArmor == "" {
 		a.Add("apparmor must not be empty (omit the key to use Docker's default)", "apparmor")
+	}
+}
+
+func (s *SudoSpec) validate(a *Accumulator) {
+	if s.Mode == nil {
+		return
+	}
+	// An explicit `mode = ""` is rejected, not silently defaulted: it is almost
+	// always a typo, and the omitted-vs-explicit distinction the pointer buys is
+	// only meaningful if explicit values are validated. Mirrors SecurityOptSpec's
+	// "must not be empty (omit the key …)" handling.
+	switch *s.Mode {
+	case SudoModeNoPasswd, SudoModePassword:
+	default:
+		a.Add(
+			`mode must be "`+SudoModeNoPasswd+`" or "`+SudoModePassword+
+				`" — omit the [container.sudo] section for the default passwordless `+
+				`sudo, or set [container.security_opt] no_new_privileges = true to `+
+				`disable sudo entirely`,
+			"mode",
+		)
 	}
 }
 

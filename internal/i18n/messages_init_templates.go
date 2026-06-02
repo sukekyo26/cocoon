@@ -44,6 +44,13 @@ var messagesEN_initTemplates = map[string]string{
 		"# [container.security_opt]\n" +
 		"# seccomp           = \"unconfined\"\n" +
 		"# no_new_privileges = true",
+	"init_toml_template_container_sudo": "# [container.sudo] — sudo password policy (alternative to passwordless sudo / no_new_privileges).\n" +
+		"#   mode = \"password\" requires a password for sudo, read at build time from\n" +
+		"#   .devcontainer/.env.local (SUDO_PASSWORD=...) via a Docker build secret (gitignored, never\n" +
+		"#   committed). A missing/empty SUDO_PASSWORD fails the build. Mutually exclusive with\n" +
+		"#   no_new_privileges above. Omit for passwordless sudo (the default).\n" +
+		"# [container.sudo]\n" +
+		"# mode = \"password\"",
 	"init_toml_template_container_skel": "# [[container.skel]] — seed dotfiles into the new user's home (via /etc/skel).\n" +
 		"#   source: relative to the workspace root (build context); target: relative to /etc/skel.\n" +
 		"# [[container.skel]]\n" +
@@ -214,6 +221,13 @@ var messagesJA_initTemplates = map[string]string{
 		"# [container.security_opt]\n" +
 		"# seccomp           = \"unconfined\"\n" +
 		"# no_new_privileges = true",
+	"init_toml_template_container_sudo": "# [container.sudo] — sudo のパスワード方針 (passwordless sudo / no_new_privileges の代替)。\n" +
+		"#   mode = \"password\" で sudo にパスワードを要求。値はビルド時に .devcontainer/.env.local の\n" +
+		"#   SUDO_PASSWORD=... から Docker build secret として読む (gitignore 対象・非コミット)。\n" +
+		"#   SUDO_PASSWORD が未設定/空ならビルド失敗。上の no_new_privileges とは排他。\n" +
+		"#   省略で passwordless sudo (既定)。\n" +
+		"# [container.sudo]\n" +
+		"# mode = \"password\"",
 	"init_toml_template_container_skel": "# [[container.skel]] — 新規ユーザーのホームに dotfiles を配置 (/etc/skel 経由)。\n" +
 		"#   source はワークスペースルート相対 (build context)、target は /etc/skel 相対。\n" +
 		"# [[container.skel]]\n" +

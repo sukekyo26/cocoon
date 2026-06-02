@@ -6,6 +6,39 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `cocoon init --sudo nopasswd|password|none` (and a matching interactive
+  prompt) replaces the `--secure` / `--no-secure` flags with a single tri-state
+  selection for the in-container sudo policy:
+  - `nopasswd` (default): passwordless sudo, unchanged.
+  - `password`: sudo requires a password set in a new `[container.sudo] mode =
+    "password"` field. The password is read at image **build time** from
+    `.devcontainer/.env.local` (a single `SUDO_PASSWORD=...` line) via a Docker
+    build secret (`RUN --mount=type=secret`): the **plaintext** never lands in
+    an image layer, the build cache, the container environment, or
+    `docker inspect` — only the derived hash in `/etc/shadow` (as for any
+    password-bearing Unix account).
+    `cocoon gen` adds the compose `secrets:` wiring and a `.devcontainer/.gitignore`
+    that excludes `.env.local`, and warns when password mode is on but
+    `.env.local` is missing or empty. A missing or empty `SUDO_PASSWORD` fails the build —
+    there is no silent fallback to passwordless. Choosing `password`
+    interactively prompts for the password and writes `.devcontainer/.env.local`
+    (mode 0600, never overwriting an existing one); `--yes --sudo password` sets
+    the mode and leaves you to create the file. Requires BuildKit (the generated
+    Dockerfile already enables it).
+  - `none`: presets `[container.security_opt] no_new_privileges = true` (the
+    former `--secure` behavior). Mutually exclusive with password mode.
+
+### Removed
+
+- **BREAKING**: `cocoon init --secure` / `--no-secure` are removed in favor of
+  the unified `cocoon init --sudo` flag. Replace `--secure` with `--sudo none`
+  and `--no-secure` with `--sudo nopasswd` in scripts and CI; cocoon does not
+  accept the old names as aliases. The `[container.security_opt]
+  no_new_privileges` field is unchanged, so existing `workspace.toml` files keep
+  loading without edits.
+
 ## [0.12.0] - 2026-06-02
 
 ### Added

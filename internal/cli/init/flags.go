@@ -12,6 +12,16 @@ import (
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
 
+// sudoChoiceNone is the init-level selection that disables in-container sudo.
+// Unlike nopasswd/password it does not map to [container.sudo]; it sets
+// [container.security_opt] no_new_privileges = true.
+const sudoChoiceNone = "none"
+
+// sudoChoices lists the three init-level sudo selections in prompt order.
+//
+//nolint:gochecknoglobals // small fixed choice list, file-scoped by design.
+var sudoChoices = []string{config.SudoModeNoPasswd, config.SudoModePassword, sudoChoiceNone}
+
 type initFlags struct {
 	AutoYes        bool
 	ServiceName    string
@@ -25,8 +35,7 @@ type initFlags struct {
 	NoDevcontainer bool
 	Certificates   bool
 	NoCertificates bool
-	Secure         bool
-	NoSecure       bool
+	Sudo           string
 	ImagePathFix   bool
 	NoImagePathFix bool
 	AptCategories  string
@@ -43,24 +52,28 @@ type initFlags struct {
 // (e.g. devcontainer = false), so the prompt builder doesn't skip groups
 // whose value happens to look empty.
 type initAnswers struct {
-	ServiceName       string
-	Username          string
-	Image             string
-	ImageSet          bool
-	ImageVersion      string
-	ImageVersionSet   bool
-	Shell             string
-	ShellSet          bool
-	MountRoot         string
-	MountRootSet      bool
-	Dir               string
-	DirSet            bool
-	Devcontainer      bool
-	DevcontainerSet   bool
-	Certificates      bool
-	CertificatesSet   bool
-	Secure            bool
-	SecureSet         bool
+	ServiceName     string
+	Username        string
+	Image           string
+	ImageSet        bool
+	ImageVersion    string
+	ImageVersionSet bool
+	Shell           string
+	ShellSet        bool
+	MountRoot       string
+	MountRootSet    bool
+	Dir             string
+	DirSet          bool
+	Devcontainer    bool
+	DevcontainerSet bool
+	Certificates    bool
+	CertificatesSet bool
+	Sudo            string
+	SudoSet         bool
+	// SudoPassword is collected only in the interactive flow when Sudo ==
+	// "password"; it seeds .devcontainer/.env.local. Never sourced from a flag
+	// (a password on the command line leaks into shell history / ps / CI logs).
+	SudoPassword      string
 	ImagePathFix      bool
 	ImagePathFixSet   bool
 	AptCategories     []string
@@ -106,7 +119,9 @@ func applyFlags(flags *initFlags, plugins map[string]*plugin.Plugin) (initAnswer
 	if err := applyImageFlags(flags, &ans); err != nil {
 		return ans, err
 	}
-	applyToggleFlags(flags, &ans)
+	if err := applyToggleFlags(flags, &ans); err != nil {
+		return ans, err
+	}
 	if err := applyImagePathFixFlags(flags, &ans); err != nil {
 		return ans, err
 	}
@@ -187,12 +202,12 @@ func applyImageFlags(flags *initFlags, ans *initAnswers) error {
 	return nil
 }
 
-// applyToggleFlags resolves the --x / --no-x pairs for --devcontainer,
-// --certificates, and --secure. The mutual-exclusion check happens earlier
-// in runInit, so at most one of each pair is set.
+// applyToggleFlags resolves the --x / --no-x pairs for --devcontainer and
+// --certificates, plus the tri-state --sudo. The mutual-exclusion check
+// happens earlier in runInit, so at most one of each pair is set.
 // (--image-path-fix / --no-image-path-fix is image-gated and lives in
 // applyImagePathFixFlags below.)
-func applyToggleFlags(flags *initFlags, ans *initAnswers) {
+func applyToggleFlags(flags *initFlags, ans *initAnswers) error {
 	switch {
 	case flags.Devcontainer:
 		ans.Devcontainer, ans.DevcontainerSet = true, true
@@ -205,12 +220,14 @@ func applyToggleFlags(flags *initFlags, ans *initAnswers) {
 	case flags.NoCertificates:
 		ans.Certificates, ans.CertificatesSet = false, true
 	}
-	switch {
-	case flags.Secure:
-		ans.Secure, ans.SecureSet = true, true
-	case flags.NoSecure:
-		ans.Secure, ans.SecureSet = false, true
+	if flags.Sudo != "" {
+		if !slices.Contains(sudoChoices, flags.Sudo) {
+			return fmt.Errorf("%w: --sudo %q must be one of %s",
+				clihelpers.ErrUsage, flags.Sudo, strings.Join(sudoChoices, ", "))
+		}
+		ans.Sudo, ans.SudoSet = flags.Sudo, true
 	}
+	return nil
 }
 
 // applyImagePathFixFlags resolves --image-path-fix / --no-image-path-fix.
@@ -344,7 +361,7 @@ func applyIdentityDefaults(ans *initAnswers) {
 }
 
 // applyWorkspaceDefaults fills the [workspace]-related fields and the
-// devcontainer / certificates / secure toggles.
+// devcontainer / certificates / sudo selections.
 func applyWorkspaceDefaults(ans *initAnswers) {
 	if !ans.MountRootSet {
 		ans.MountRoot, ans.MountRootSet = ".", true
@@ -358,8 +375,8 @@ func applyWorkspaceDefaults(ans *initAnswers) {
 	if !ans.CertificatesSet {
 		ans.Certificates, ans.CertificatesSet = false, true
 	}
-	if !ans.SecureSet {
-		ans.Secure, ans.SecureSet = false, true
+	if !ans.SudoSet {
+		ans.Sudo, ans.SudoSet = config.SudoModeNoPasswd, true
 	}
 }
 

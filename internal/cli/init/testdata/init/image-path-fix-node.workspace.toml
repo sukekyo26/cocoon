@@ -73,6 +73,14 @@ image_version = "22-bookworm-slim"
 # seccomp           = "unconfined"
 # no_new_privileges = true
 
+# [container.sudo] — sudo password policy (alternative to passwordless sudo / no_new_privileges).
+#   mode = "password" requires a password for sudo, read at build time from
+#   .devcontainer/.env.local (SUDO_PASSWORD=...) via a Docker build secret (gitignored, never
+#   committed). A missing/empty SUDO_PASSWORD fails the build. Mutually exclusive with
+#   no_new_privileges above. Omit for passwordless sudo (the default).
+# [container.sudo]
+# mode = "password"
+
 # [[container.skel]] — seed dotfiles into the new user's home (via /etc/skel).
 #   source: relative to the workspace root (build context); target: relative to /etc/skel.
 # [[container.skel]]
