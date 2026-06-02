@@ -89,16 +89,24 @@ jobs:
             runs-on: ubuntu-24.04-arm
             image: ubuntu
             image-version: "26.04"
-          # Second ubuntu job opts into `cocoon init --sudo none` so the
-          # no-new-privileges posture (compose security_opt + the live
-          # kernel flag + sudo escalation being blocked) is exercised end
-          # to end. The other entries leave it unset, covering the default
-          # sudo-capable posture, so both paths get a real Docker round-trip.
-          - label: amd64 / ubuntu / secure
+          # Extra ubuntu jobs exercise the non-default sudo postures end to
+          # end (compose artifact + live kernel flag + sudo behaviour):
+          #   none     -> no-new-privileges blocks escalation.
+          #   password -> sudo needs the .env.local build secret; a missing
+          #               one fails the build (no silent passwordless fallback),
+          #               and the seeded password authenticates at runtime.
+          # The other entries leave SUDO_MODE unset for the default posture, so
+          # all three paths get a real Docker round-trip.
+          - label: amd64 / ubuntu / sudo=none
             runs-on: ubuntu-latest
             image: ubuntu
             image-version: "26.04"
-            secure: "1"
+            sudo-mode: none
+          - label: amd64 / ubuntu / sudo=password
+            runs-on: ubuntu-latest
+            image: ubuntu
+            image-version: "26.04"
+            sudo-mode: password
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
@@ -122,5 +130,5 @@ jobs:
           PRESET: minimal
           IMAGE: ${{ matrix.image }}
           IMAGE_VERSION: ${{ matrix.image-version }}
-          SECURE: ${{ matrix.secure }}
+          SUDO_MODE: ${{ matrix.sudo-mode }}
         run: bash "$GITHUB_WORKSPACE/e2e/docker-roundtrip.sh"
