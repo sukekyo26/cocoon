@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-06-03
+
 ### Added
 
 - `cocoon init --sudo nopasswd|password|none` (and a matching interactive
@@ -578,7 +580,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Add `COMPOSE_PROJECT_NAME` derivation from the project directory basename so docker compose namespacing matches the host directory.
 - Add i18n catalog (English / Japanese) covering every CLI prompt, error message, and inline `workspace.toml` comment, switched via `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG`.
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/sukekyo26/cocoon/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/sukekyo26/cocoon/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/sukekyo26/cocoon/compare/v0.10.2...v0.11.0
 [0.10.2]: https://github.com/sukekyo26/cocoon/compare/v0.10.1...v0.10.2
