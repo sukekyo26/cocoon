@@ -106,8 +106,9 @@ func writeContainerSection(sb *strings.Builder, cat *i18n.Catalog, s containerSp
 //   - "nopasswd" (default): both stay commented-out templates so the sections
 //     remain discoverable.
 //
-// Exactly one section is ever active; the other is emitted as its commented
-// template. Mirrors the active⇄commented swap writeCertificatesSection uses.
+// At most one section is ever active (none in the default nopasswd case); any
+// inactive section is emitted as its commented template. Mirrors the
+// active⇄commented swap writeCertificatesSection uses.
 func writeContainerSecurityOpt(sb *strings.Builder, cat *i18n.Catalog, s containerSpec) {
 	switch s.Sudo {
 	case sudoChoiceNone:
