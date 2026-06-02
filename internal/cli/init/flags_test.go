@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
+	"github.com/sukekyo26/cocoon/internal/config"
 )
 
 func TestApplyFlags_AllValid(t *testing.T) {
@@ -195,18 +196,19 @@ func TestApplyFlags_DevcontainerExclusivity(t *testing.T) {
 	}
 }
 
-func TestApplyFlags_SecureExclusivity(t *testing.T) {
+func TestApplyFlags_Sudo(t *testing.T) {
 	t.Parallel()
 	plugins := loadPluginsForTest(t)
-	// applyFlags itself does not detect the mutual exclusivity — runInit
-	// does. Confirm each flag in isolation produces the matching boolean.
-	ans, err := applyFlags(&initFlags{Secure: true}, plugins)
-	if err != nil || !ans.Secure || !ans.SecureSet {
-		t.Errorf("--secure should set true: %v %+v", err, ans)
+	// Each valid --sudo value flows into Sudo/SudoSet; an unknown value is a
+	// usage error (runInit surfaces it before any workspace.toml is written).
+	for _, mode := range []string{"nopasswd", "password", "none"} {
+		ans, err := applyFlags(&initFlags{Sudo: mode}, plugins)
+		if err != nil || ans.Sudo != mode || !ans.SudoSet {
+			t.Errorf("--sudo %q should set Sudo=%q SudoSet=true: %v %+v", mode, mode, err, ans)
+		}
 	}
-	ans, err = applyFlags(&initFlags{NoSecure: true}, plugins)
-	if err != nil || ans.Secure || !ans.SecureSet {
-		t.Errorf("--no-secure should set false: %v %+v", err, ans)
+	if _, err := applyFlags(&initFlags{Sudo: "bogus"}, plugins); !errors.Is(err, clihelpers.ErrUsage) {
+		t.Errorf("--sudo bogus should be ErrUsage, got %v", err)
 	}
 }
 
@@ -300,8 +302,8 @@ func TestApplyDefaults_FillsMissingDefaults(t *testing.T) {
 	if ans.Shell != "bash" || !ans.ShellSet {
 		t.Errorf("Shell default = %q ShellSet=%v", ans.Shell, ans.ShellSet)
 	}
-	if ans.Secure || !ans.SecureSet {
-		t.Errorf("Secure default = %v SecureSet=%v (want false/true)", ans.Secure, ans.SecureSet)
+	if ans.Sudo != config.SudoModeNoPasswd || !ans.SudoSet {
+		t.Errorf("Sudo default = %q SudoSet=%v (want nopasswd/true)", ans.Sudo, ans.SudoSet)
 	}
 }
 

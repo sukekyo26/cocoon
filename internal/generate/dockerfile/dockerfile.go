@@ -82,6 +82,7 @@ type templateData struct {
 	CocoonWorkspace        string
 	CocoonBindPaths        string
 	WorkspaceDir           string
+	SudoPasswordSetup      string
 }
 
 //nolint:lll // Dockerfile RUN/echo lines cannot be wrapped without changing semantics.
@@ -162,6 +163,10 @@ RUN existing_user="$(getent passwd 1000 | cut -d: -f1)" && \
     echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${USERNAME} && \
     chmod 0440 /etc/sudoers.d/${USERNAME}
 
+{{ with .SudoPasswordSetup -}}
+{{ . }}
+
+{{ end -}}
 USER ${USERNAME}
 WORKDIR /home/${USERNAME}
 
@@ -324,6 +329,7 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 		CocoonWorkspace:        cocoonWorkspace,
 		CocoonBindPaths:        cocoonBindPaths,
 		WorkspaceDir:           ctx.WS.Workspace.DirOrDefault(),
+		SudoPasswordSetup:      buildSudoPasswordSetup(ctx),
 	}
 
 	out, err := tmplx.Render(tmpl, data)
@@ -331,6 +337,38 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 		return "", fmt.Errorf("dockerfile: %w", err)
 	}
 	return out, nil
+}
+
+// buildSudoPasswordSetup returns the RUN block that rewrites the sudoers entry
+// to require a password and sets that password from the .env.local build
+// secret, or "" when password sudo is off. The base user-creation RUN already
+// wrote the passwordless entry; this overwrites it. The build FAILS when
+// SUDO_PASSWORD is unset/empty so password mode never silently degrades to
+// passwordless (the whole point of the mode). The password arrives via a
+// secret mount (not an ARG/ENV) so it never lands in an image layer, the build
+// cache, or `docker inspect`.
+//
+//nolint:lll // shell RUN lines cannot be wrapped without changing semantics.
+func buildSudoPasswordSetup(ctx *generate.WorkspaceContext) string {
+	if !ctx.PasswordSudoEnabled() {
+		return ""
+	}
+	return fmt.Sprintf(`# Require a password for sudo and set it from the %[1]s build secret. The
+# build fails when %[2]s is unset so password mode never silently
+# degrades to passwordless (or sudo-less) — the whole point of the mode.
+RUN --mount=type=secret,id=%[3]s \
+    pass="$(sed -n 's/^%[2]s=//p' /run/secrets/%[3]s 2>/dev/null | head -n 1 | tr -d '\r\n')"; \
+    if [ -z "$pass" ]; then \
+        echo "cocoon: [container.sudo] mode=password requires %[2]s in .devcontainer/%[1]s" >&2; \
+        exit 1; \
+    fi; \
+    echo "${USERNAME} ALL=(ALL) ALL" > /etc/sudoers.d/${USERNAME}; \
+    chmod 0440 /etc/sudoers.d/${USERNAME}; \
+    printf '%%s:%%s\n' "${USERNAME}" "$pass" | chpasswd`,
+		generate.SudoPasswordSecretFile, // %[1]s = .env.local
+		generate.SudoPasswordEnvKey,     // %[2]s = SUDO_PASSWORD
+		generate.SudoPasswordSecretName, // %[3]s = sudo_password
+	)
 }
 
 // warnDuplicateAptExtras flags packages listed in workspace.toml [apt]

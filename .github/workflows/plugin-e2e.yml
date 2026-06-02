@@ -5,7 +5,7 @@ name: Plugin E2E
 # RUN running to completion IS the check, so nothing is loaded into the
 # docker daemon or executed. That keeps each image tiny and sidesteps the
 # all-plugins-in-one-image disk exhaustion that sank the old amd64-full
-# job. Entrypoint / identity / --secure behaviour is plugin-independent and
+# job. Entrypoint / identity / --sudo behaviour is plugin-independent and
 # already covered by the minimal preset in e2e.yml across every base image.
 #
 # One matrix, three triggers, gated by a change-detection step (detect):

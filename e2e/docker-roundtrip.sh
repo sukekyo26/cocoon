@@ -14,7 +14,7 @@
 #   IMAGE_VERSION   image tag (e.g. 26.04, debian-2.7.14)
 #
 # Optional env:
-#   SECURE          set to 1 to pass `cocoon init --secure`, which presets
+#   SECURE          set to 1 to pass `cocoon init --sudo none`, which presets
 #                   [container.security_opt] no_new_privileges=true. Unset
 #                   or 0 keeps the default sudo-capable posture. The
 #                   post-up checks below assert the generated compose, the
@@ -267,7 +267,7 @@ case "$PRESET" in
     # Plugin verification == build success. The runtime round-trip
     # (compose up + exec) only asserts plugin-independent entrypoint /
     # UID-remap / no-new-privileges properties, which the minimal preset
-    # and the --secure matrix already cover, so single skips it: build the
+    # and the --sudo none matrix already cover, so single skips it: build the
     # install RUN, prove it succeeds, discard the image.
     BUILD_ONLY=1
     ;;
@@ -288,9 +288,9 @@ extra=()
 [ -n "$methods" ] && extra+=(--plugin-methods "$methods")
 # SECURE=1 (e2e.yml ubuntu/secure matrix entry) presets
 # [container.security_opt] no_new_privileges=true via `cocoon init
-# --secure`; unset or 0 leaves the default sudo-capable posture. ubuntu
+# --sudo none`; unset or 0 leaves the default sudo-capable posture. ubuntu
 # runs both so the hardened and default paths each get a Docker round-trip.
-[ "${SECURE:-}" = 1 ] && extra+=(--secure)
+[ "${SECURE:-}" = 1 ] && extra+=(--sudo none)
 
 # apt categories. minimal and the full presets install EVERY catalog
 # category (apt-categories.txt) so a package missing from the target apt
@@ -357,7 +357,7 @@ test -f .devcontainer/.env
 test ! -d config
 
 # The no-new-privileges posture must match the requested mode in the
-# generated compose: SECURE=1 (cocoon init --secure) emits
+# generated compose: SECURE=1 (cocoon init --sudo none) emits
 # `security_opt: ["no-new-privileges:true"]`; the default must not set it
 # at all. The live-container counterpart (kernel flag + sudo) is asserted
 # after `up -d` below; this guards the artifact a regression would ship.
@@ -485,7 +485,7 @@ env "${env_args[@]}" docker buildx bake \
 # BUILD_ONLY (single preset): the install RUN just succeeded, which is the
 # whole verification. The round-trip below exercises plugin-independent
 # entrypoint / UID-remap / no-new-privileges behaviour (covered by the
-# minimal and --secure presets) and needs a loaded image we deliberately
+# minimal and --sudo none presets) and needs a loaded image we deliberately
 # did not produce, so stop here.
 if [ -n "${BUILD_ONLY:-}" ]; then
   echo "build-only: install RUN succeeded for plugin '${PLUGIN}' (${PIN_MODE}); skipping runtime round-trip"
@@ -532,12 +532,12 @@ test "$host_gid" = "$container_gid" ||
   }
 
 # Runtime proof of the no-new-privileges posture. The UID/GID poll above
-# already proves --secure does NOT break the root-phase entrypoint remap
+# already proves --sudo none does NOT break the root-phase entrypoint remap
 # (the whole worry behind keeping it opt-in); these two checks prove the
 # hardening itself took effect:
 #   1. /proc/self/status NoNewPrivs — the kernel flag docker sets from
-#      security_opt; 1 under --secure, 0 by default. Image-independent.
-#   2. sudo escalation — the user-visible effect. Under --secure the
+#      security_opt; 1 under --sudo none, 0 by default. Image-independent.
+#   2. sudo escalation — the user-visible effect. Under --sudo none the
 #      setuid sudo binary cannot raise privileges, so `sudo -n true`
 #      fails; by default the passwordless sudo grant succeeds. Run as
 #      `-u dev` because the image's final USER is root (sudo is moot for
@@ -557,7 +557,7 @@ docker compose -f .devcontainer/docker-compose.yml exec -T dev \
   }
 
 # Capture sudo's exit code explicitly so the expected-failure path under
-# --secure does not trip `set -e`.
+# --sudo none does not trip `set -e`.
 sudo_rc=0
 docker compose -f .devcontainer/docker-compose.yml exec -T -u dev dev \
   sudo -n true || sudo_rc=$?

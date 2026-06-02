@@ -38,13 +38,12 @@ Flags:
       --no-certificates          skip the [certificates] section (default off)
       --no-devcontainer          skip .devcontainer/devcontainer.json output
       --no-image-path-fix        skip the language-image PATH/install-prefix auto-injection (requires --image=node|python|golang|rust|denoland/deno)
-      --no-secure                leave no_new_privileges unset; in-container sudo stays available (default)
       --plugin-methods string    comma-separated <id>=<method> picks for plugins that declare multiple [install.methods] (each <id> must also appear in --plugins; <method> must be a declared key)
       --plugin-versions string   comma-separated <id>=<ref> pins for version_capable plugins (each <id> must also appear in --plugins)
       --plugins string           comma-separated plugin IDs to enable (skips the plugin multi-select prompt)
       --ports string             comma-separated docker-compose short-form port mappings — [HOST_IP:][HOST:]CONTAINER[/PROTOCOL]; numeric ranges (N-M) and tcp|udp are accepted (e.g. 3000,3000-3005,8000:8000,127.0.0.1:5432:5432/tcp,6060:6060/udp); skips the ports prompt
-      --secure                   preset [container.security_opt] no_new_privileges = true (disables in-container sudo)
       --service-name string      compose service name (required with --yes)
       --shell string             container login shell: bash, zsh, fish (default: bash)
+      --sudo string              in-container sudo policy — one of: nopasswd, password, none. nopasswd: passwordless sudo (default); password: sudo requires SUDO_PASSWORD from .devcontainer/.env.local (build secret); none: no_new_privileges = true (disables sudo)
       --username string          in-container user (required with --yes)
       --yes                      skip optional prompts; --service-name and --username then required

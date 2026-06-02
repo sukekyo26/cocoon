@@ -135,6 +135,7 @@ func runGen(stdout, stderr io.Writer, workspaceFlag, outputFlag string) error {
 	}
 
 	warnDockerCLIWithoutSocket(ctx, log, cat)
+	warnPasswordSudoMissingSecret(ctx, outDir, log, cat)
 
 	cwd, _ := os.Getwd() //nolint:errcheck // cwd is best-effort for pretty-printing only.
 	for _, a := range arts {
@@ -241,6 +242,24 @@ func warnDockerCLIWithoutSocket(ctx *generate.WorkspaceContext, log *logx.Logger
 	if slices.Contains(ctx.EnabledPlugins(), dockerCLIPluginID) &&
 		!ctx.WS.Container.DockerSocketEnabled() {
 		log.Warn(cat.Msg("gen_docker_cli_without_socket_warning"))
+	}
+}
+
+// warnPasswordSudoMissingSecret flags password sudo enabled without the
+// .env.local secret file present. The build fails (compose needs the secret
+// file) until the user creates it with SUDO_PASSWORD=...; this surfaces the
+// cause early. Only a warning — cocoon does not create the file (it is the
+// user's secret). Non-ErrNotExist stat errors are ignored: this is a
+// best-effort nudge, not a gate.
+func warnPasswordSudoMissingSecret(
+	ctx *generate.WorkspaceContext, outDir string, log *logx.Logger, cat *i18n.Catalog,
+) {
+	if !ctx.PasswordSudoEnabled() {
+		return
+	}
+	secret := filepath.Join(outDir, ".devcontainer", generate.SudoPasswordSecretFile)
+	if _, err := os.Stat(secret); errors.Is(err, os.ErrNotExist) {
+		log.Warn(cat.Msg("gen_password_sudo_missing_secret", secret))
 	}
 }
 

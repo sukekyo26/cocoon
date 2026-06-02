@@ -1,6 +1,7 @@
 package initcli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"github.com/sukekyo26/cocoon/internal/aptcategories"
 	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
 	"github.com/sukekyo26/cocoon/internal/config"
+	"github.com/sukekyo26/cocoon/internal/generate"
 	"github.com/sukekyo26/cocoon/internal/i18n"
 	"github.com/sukekyo26/cocoon/internal/logx"
 	"github.com/sukekyo26/cocoon/internal/plugin"
@@ -46,8 +48,8 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 	cmd.Flags().BoolVar(&flags.NoDevcontainer, "no-devcontainer", false, cat.Msg("flag_init_no_devcontainer_usage"))
 	cmd.Flags().BoolVar(&flags.Certificates, "certificates", false, cat.Msg("flag_init_certificates_usage"))
 	cmd.Flags().BoolVar(&flags.NoCertificates, "no-certificates", false, cat.Msg("flag_init_no_certificates_usage"))
-	cmd.Flags().BoolVar(&flags.Secure, "secure", false, cat.Msg("flag_init_secure_usage"))
-	cmd.Flags().BoolVar(&flags.NoSecure, "no-secure", false, cat.Msg("flag_init_no_secure_usage"))
+	cmd.Flags().StringVar(&flags.Sudo, "sudo", "",
+		cat.Msg("flag_init_sudo_usage", strings.Join(sudoChoices, ", ")))
 	cmd.Flags().BoolVar(&flags.ImagePathFix, "image-path-fix", false, cat.Msg("flag_init_image_path_fix_usage"))
 	cmd.Flags().BoolVar(&flags.NoImagePathFix, "no-image-path-fix", false, cat.Msg("flag_init_no_image_path_fix_usage"))
 	cmd.Flags().StringVar(&flags.AptCategories, "apt-categories", "", cat.Msg("flag_init_apt_categories_usage"))
@@ -66,9 +68,6 @@ func runInit(cmd *cobra.Command, stdout, stderr io.Writer, flags *initFlags) err
 	}
 	if flags.Certificates && flags.NoCertificates {
 		return fmt.Errorf("%w: --certificates and --no-certificates are mutually exclusive", clihelpers.ErrUsage)
-	}
-	if flags.Secure && flags.NoSecure {
-		return fmt.Errorf("%w: --secure and --no-secure are mutually exclusive", clihelpers.ErrUsage)
 	}
 	if flags.ImagePathFix && flags.NoImagePathFix {
 		return fmt.Errorf("%w: --image-path-fix and --no-image-path-fix are mutually exclusive", clihelpers.ErrUsage)
@@ -107,7 +106,7 @@ func runInit(cmd *cobra.Command, stdout, stderr io.Writer, flags *initFlags) err
 		Dir:            ans.Dir,
 		Devcontainer:   ans.Devcontainer,
 		Certificates:   ans.Certificates,
-		Secure:         ans.Secure,
+		Sudo:           ans.Sudo,
 		ImagePathFix:   ans.ImagePathFix,
 		Packages:       pkgs,
 		Plugins:        ans.Plugins,
@@ -121,8 +120,57 @@ func runInit(cmd *cobra.Command, stdout, stderr io.Writer, flags *initFlags) err
 
 	log := logx.New(stdout, stderr)
 	log.Success(cat.Msg("init_wrote", target))
+	if err := seedSudoPasswordIfRequested(cwd, ans, log, cat); err != nil {
+		return err
+	}
 	printNextSteps(log, cat, ans.Devcontainer)
 	_ = cmd // reserved for future ctx-aware flows
+	return nil
+}
+
+// seedSudoPasswordIfRequested seeds .env.local only when password sudo was
+// chosen interactively (a password was collected). `--yes --sudo password`
+// sets the mode but collects no password, so it leaves the file to the user.
+func seedSudoPasswordIfRequested(cwd string, ans initAnswers, log *logx.Logger, cat *i18n.Catalog) error {
+	if ans.Sudo != config.SudoModePassword || ans.SudoPassword == "" {
+		return nil
+	}
+	return seedSudoPasswordEnvLocal(cwd, ans.SudoPassword, log, cat)
+}
+
+// seedSudoPasswordEnvLocal writes the interactively-entered sudo password into
+// .devcontainer/.env.local (mode 0600) and the matching .gitignore so the
+// secret is excluded from git from the moment it is created. .env.local is
+// NEVER overwritten (it is the user's secret); .gitignore is deterministic and
+// rewritten safely.
+func seedSudoPasswordEnvLocal(cwd, password string, log *logx.Logger, cat *i18n.Catalog) error {
+	devDir := filepath.Join(cwd, ".devcontainer")
+	if err := os.MkdirAll(devDir, 0o755); err != nil {
+		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+	}
+	gitignore := filepath.Join(devDir, ".gitignore")
+	//nolint:gosec // .gitignore is a public, committable file (0644 is intended).
+	if err := os.WriteFile(gitignore, []byte(generate.SudoPasswordGitignore), 0o644); err != nil {
+		return fmt.Errorf("%w: write %s: %w", clihelpers.ErrFailure, gitignore, err)
+	}
+	envLocal := filepath.Join(devDir, generate.SudoPasswordSecretFile)
+	f, err := os.OpenFile(envLocal, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if errors.Is(err, os.ErrExist) {
+		log.Warn(cat.Msg("init_sudo_env_local_exists", envLocal))
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("%w: create %s: %w", clihelpers.ErrFailure, envLocal, err)
+	}
+	_, writeErr := f.WriteString(generate.SudoPasswordEnvKey + "=" + password + "\n")
+	closeErr := f.Close()
+	if writeErr != nil {
+		return fmt.Errorf("%w: write %s: %w", clihelpers.ErrFailure, envLocal, writeErr)
+	}
+	if closeErr != nil {
+		return fmt.Errorf("%w: close %s: %w", clihelpers.ErrFailure, envLocal, closeErr)
+	}
+	log.Success(cat.Msg("init_sudo_env_local_wrote", envLocal))
 	return nil
 }
 

@@ -89,7 +89,7 @@ jobs:
             runs-on: ubuntu-24.04-arm
             image: ubuntu
             image-version: "26.04"
-          # Second ubuntu job opts into `cocoon init --secure` so the
+          # Second ubuntu job opts into `cocoon init --sudo none` so the
           # no-new-privileges posture (compose security_opt + the live
           # kernel flag + sudo escalation being blocked) is exercised end
           # to end. The other entries leave it unset, covering the default

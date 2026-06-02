@@ -67,7 +67,7 @@ func LoadContext(
 // docker-entrypoint.sh, manage.sh, .env) for the given loaded
 // WorkspaceContext.
 func BuildArtifacts(ctx *generate.WorkspaceContext, stderr io.Writer) ([]Artifact, error) {
-	arts := make([]Artifact, 0, 6)
+	arts := make([]Artifact, 0, 7)
 	warnW := logx.YellowWriter(stderr)
 
 	body, err := compose.Generate(ctx, compose.Options{Plugins: ctx.Plugins, Warnings: warnW})
@@ -112,6 +112,16 @@ func BuildArtifacts(ctx *generate.WorkspaceContext, stderr io.Writer) ([]Artifac
 		return nil, fmt.Errorf("%w: envfile: %w", clihelpers.ErrFailure, err)
 	}
 	arts = append(arts, Artifact{Rel: ".devcontainer/.env", Body: envBody, Mode: 0o600})
+
+	// In password sudo mode, ignore the local secret so it cannot be committed.
+	// .env (above) stays committable and is intentionally not ignored.
+	if ctx.PasswordSudoEnabled() {
+		arts = append(arts, Artifact{
+			Rel:  ".devcontainer/.gitignore",
+			Body: generate.SudoPasswordGitignore,
+			Mode: 0o644,
+		})
+	}
 	return arts, nil
 }
 

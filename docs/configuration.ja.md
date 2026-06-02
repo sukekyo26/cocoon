@@ -31,6 +31,7 @@
 | `[container.sysctls]` | optional | カーネルパラメータ |
 | `[container.capabilities]` | optional | Linux capabilities 追加 / 剥奪 |
 | `[container.security_opt]` | optional | Compose の `security_opt` |
+| `[container.sudo]` | optional | sudo のパスワード方針（`mode`） |
 | `[[container.skel]]` | optional | `/etc/skel` 経由で配置する dotfiles |
 | `[plugins]` | **required** | 有効化するプラグイン |
 | `[plugins.versions]` | optional | プラグインのバージョン固定 + チェックサム |
@@ -235,13 +236,41 @@ drop = ["AUDIT_WRITE"]
 > コンテナ内の `sudo` が黙って no-op になります。実行時の権限昇格が一切不要な
 > ワークフロー以外では未設定のままにしてください。
 >
-> `cocoon init --secure` はこのブロックを `no_new_privileges = true` で事前設定
+> `cocoon init --sudo none` はこのブロックを `no_new_privileges = true` で事前設定
 > します。想定用途は **コンテナ内で未信頼コードや AI エージェントを実行する**
 > ケースで、乗っ取られたプロセスが `sudo` で root へ昇格できなくなります。
 > UID/GID/DOCKER_GID の再マップは無影響 — entrypoint が降格前に root で実行する
 > ため — 止まるのは起動後の手動 `sudo` のみです。硬化したコンテナで root が要る
 > ときはホストから `docker exec -u root <container>` で取得してください（docker
 > socket が無いコンテナ内プロセスにはこの経路がありません）。
+
+### `[container.sudo]`
+
+| フィールド | 型 | 説明 |
+|---|---|---|
+| `mode` | string | `"nopasswd"`（既定）または `"password"`。 |
+
+イメージに焼き込む sudoers の方針を選びます。`"nopasswd"`（またはセクション省略）
+は passwordless sudo を付与します。`"password"` は `sudo` にパスワードを要求します。
+
+`mode = "password"` のとき、パスワードはイメージの**ビルド時**に
+`.devcontainer/.env.local`（`SUDO_PASSWORD=<パスワード>` の 1 行）から Docker
+build secret（`RUN --mount=type=secret`）として読み込みます。そのため
+イメージ層・ビルドキャッシュ・コンテナ環境変数・`docker inspect` のいずれにも
+残りません。`cocoon gen` は compose の `secrets:` 配線と `.env.local` を除外する
+`.devcontainer/.gitignore` を生成し、`.env.local` が無ければ警告します。
+**`SUDO_PASSWORD` が未設定/空なら `docker compose build` は失敗します** — password
+モードは passwordless へ暗黙にフォールバックしません。`.env.local` は host-local
+で gitignore 対象のため各開発者が自分で用意します。`cocoon init --sudo password`
+は対話的にこれを生成します（mode 0600）。BuildKit が必要です（生成される
+Dockerfile が `# syntax=` 行で有効化済み）。
+
+`mode = "password"` は `[container.security_opt] no_new_privileges = true` とは
+排他です（後者は setuid 昇格を遮断するためパスワードが使えなくなる）。`cocoon gen`
+はこの組合せを拒否します。sudo を完全に無効化したいときは `mode = "none"` ではなく
+`no_new_privileges` を使ってください（`mode` に `"none"` はありません）。password
+モードをやめた場合、不要になった `.devcontainer/.gitignore` は手動で削除してください
+（cocoon は再生成を止めますが削除はしません）。
 
 ### `[[container.skel]]`
 

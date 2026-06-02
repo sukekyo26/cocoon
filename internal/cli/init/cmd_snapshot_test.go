@@ -47,6 +47,31 @@ func TestRunInit_Snapshot(t *testing.T) {
 			},
 		},
 		{
+			// --sudo password emits the live [container.sudo] mode = "password"
+			// block; the [container.security_opt] section stays commented.
+			name:   "sudo-password",
+			golden: "sudo-password.workspace.toml",
+			args: []string{
+				"--yes", "--service-name", "dev", "--username", "dev",
+				"--image", "ubuntu", "--image-version", "22.04",
+				"--mount-root", ".", "--no-devcontainer", "--sudo", "password",
+				"--apt-categories", "text-editors,vcs,utilities,compression,build",
+			},
+		},
+		{
+			// --sudo none emits the live [container.security_opt]
+			// no_new_privileges = true block; the [container.sudo] section
+			// stays commented.
+			name:   "sudo-none",
+			golden: "sudo-none.workspace.toml",
+			args: []string{
+				"--yes", "--service-name", "dev", "--username", "dev",
+				"--image", "ubuntu", "--image-version", "22.04",
+				"--mount-root", ".", "--no-devcontainer", "--sudo", "none",
+				"--apt-categories", "text-editors,vcs,utilities,compression,build",
+			},
+		},
+		{
 			name:   "plugins-amd64-full",
 			golden: "plugins-amd64-full.workspace.toml",
 			args: []string{

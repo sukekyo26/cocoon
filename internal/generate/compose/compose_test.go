@@ -221,3 +221,42 @@ func TestGenerate_DockerSocketNoUserNoGroupAdd(t *testing.T) {
 		}
 	}
 }
+
+// TestGenerate_PasswordSudo pins the build-secret wiring for password sudo:
+// the service build references the secret (short syntax) and a top-level
+// secrets: block sources it from the gitignored .env.local. The default
+// (no [container.sudo]) emits neither.
+func TestGenerate_PasswordSudo(t *testing.T) {
+	t.Parallel()
+
+	mode := config.SudoModePassword
+	ws := &config.Workspace{
+		Container: config.ContainerSpec{
+			ServiceName: "dev", Username: "dev", Image: "ubuntu", ImageVersion: "24.04",
+			Sudo: &config.SudoSpec{Mode: &mode},
+		},
+	}
+	got, err := compose.Generate(&generate.WorkspaceContext{WS: ws}, compose.Options{})
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	if !strings.Contains(got, `- "sudo_password"`) {
+		t.Errorf("password compose missing build.secrets reference:\n%s", got)
+	}
+	if !strings.Contains(got, "\nsecrets:\n  sudo_password:\n    file: \".env.local\"\n") {
+		t.Errorf("password compose missing top-level secrets block:\n%s", got)
+	}
+
+	wsDefault := &config.Workspace{
+		Container: config.ContainerSpec{
+			ServiceName: "dev", Username: "dev", Image: "ubuntu", ImageVersion: "24.04",
+		},
+	}
+	gotDefault, err := compose.Generate(&generate.WorkspaceContext{WS: wsDefault}, compose.Options{})
+	if err != nil {
+		t.Fatalf("generate default: %v", err)
+	}
+	if strings.Contains(gotDefault, "sudo_password") {
+		t.Errorf("default compose must not mention sudo_password:\n%s", gotDefault)
+	}
+}

@@ -85,8 +85,11 @@ sequenceDiagram
 ├── docker-compose.yml       # dev コンテナ + サイドカー用の compose ファイル
 ├── docker-entrypoint.sh     # ユーザーをホスト UID/GID へ再マッピングし、イメージ焼き込み済 ~/.local を named volume へ同期
 ├── .env                     # COMPOSE_PROJECT_NAME, CONTAINER_SERVICE_NAME, USERNAME, IMAGE, IMAGE_VERSION (ホスト非依存)
+├── .gitignore               # [container.sudo] password モードのときのみ。.env.local を無視
 └── devcontainer.json        # [workspace] devcontainer = true のときのみ
 ```
+
+`.env.local` は「init は `workspace.toml` のみ生成する」唯一の例外です。`[container.sudo]` の password モードで gitignore 対象の `SUDO_PASSWORD` シークレットを保持し、`cocoon init --sudo password`（対話）が seed し、ビルド時に Docker build secret として消費されます。コミットされず、`cocoon gen` でも再生成されません。
 
 `docker-entrypoint.sh` はコンテナ起動毎に root で動きます。まずコンテナユーザーの UID/GID をバインドマウントされたワークスペースのホスト側所有者に合わせて再マッピングし (これが生成された `.devcontainer/` をホスト非依存にしている)、次に `setpriv` でそのユーザーへ権限を落として自身を再実行します。非特権ユーザーとして再入したパスで `~/.image-local/` → `~/.local/` をコピーし (`~/.local/` の named volume がイメージ焼き込みバイナリを rebuild 後に隠すのを防ぐ)、コマンドを `exec` します。
 

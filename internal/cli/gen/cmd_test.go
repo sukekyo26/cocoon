@@ -621,6 +621,79 @@ func TestGen_NoDockerCLI_NoWarn(t *testing.T) {
 	}
 }
 
+// passwordSudoWorkspaceTOML selects password sudo so gen wires the build
+// secret and (when .env.local is absent) warns.
+//
+//nolint:gosec // G101 false positive: a workspace.toml fixture, not a credential.
+const passwordSudoWorkspaceTOML = `[workspace]
+mount_root = "."
+devcontainer = false
+
+[container]
+service_name = "demo"
+username = "alice"
+image = "ubuntu"
+image_version = "24.04"
+
+[container.sudo]
+mode = "password"
+
+[plugins]
+enable = []
+
+[apt]
+packages = []
+`
+
+const passwordSudoWarnSubstr = "password sudo is enabled"
+
+// TestGen_PasswordSudoMissingSecret_Warns asserts gen flags password mode when
+// .devcontainer/.env.local is absent (the build would fail without it).
+//
+//nolint:paralleltest // runGenForWarn uses t.Setenv + t.Chdir
+func TestGen_PasswordSudoMissingSecret_Warns(t *testing.T) {
+	// No t.Parallel(): t.Setenv blocks parallel execution.
+	stderr := runGenForWarn(t, passwordSudoWorkspaceTOML)
+	if !strings.Contains(stderr, passwordSudoWarnSubstr) {
+		t.Errorf("expected password-sudo missing-secret warning on stderr\n--- got ---\n%s", stderr)
+	}
+}
+
+// TestGen_PasswordSudoWithSecret_NoWarn asserts the warning stays silent once
+// .devcontainer/.env.local exists. gen never touches that file (it is not an
+// artifact), so pre-creating it is safe.
+//
+//nolint:paralleltest // t.Setenv + t.Chdir
+func TestGen_PasswordSudoWithSecret_NoWarn(t *testing.T) {
+	work := t.TempDir()
+	home := filepath.Join(work, "home")
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		t.Fatalf("mkdir home: %v", err)
+	}
+	t.Setenv("HOME", home)
+	pinEnglish(t)
+	t.Chdir(work)
+	if err := os.WriteFile(filepath.Join(work, "workspace.toml"), []byte(passwordSudoWorkspaceTOML), 0o600); err != nil {
+		t.Fatalf("write workspace.toml: %v", err)
+	}
+	devDir := filepath.Join(work, ".devcontainer")
+	if err := os.MkdirAll(devDir, 0o755); err != nil {
+		t.Fatalf("mkdir .devcontainer: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(devDir, ".env.local"), []byte("SUDO_PASSWORD=x\n"), 0o600); err != nil {
+		t.Fatalf("seed .env.local: %v", err)
+	}
+	var stdout, stderr bytes.Buffer
+	cmd := gencli.NewCommand(&stdout, &stderr)
+	cmd.SetArgs(nil)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("gen: %v\nstderr:\n%s", err, stderr.String())
+	}
+	if strings.Contains(stderr.String(), passwordSudoWarnSubstr) {
+		t.Errorf("warning should be silent when .env.local exists\n--- got ---\n%s", stderr.String())
+	}
+}
+
 // TestGen_MissingWorkspaceReturnsUsage covers the discovery-miss path
 // when workspace.toml is absent and no --workspace flag is given.
 func TestGen_MissingWorkspaceReturnsUsage(t *testing.T) {

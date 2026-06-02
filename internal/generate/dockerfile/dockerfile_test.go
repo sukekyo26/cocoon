@@ -959,3 +959,66 @@ func assertBashSyntax(t *testing.T, script string) {
 		t.Fatalf("bash -n rejected the embedded script: %v\n%s", runErr, stderr.String())
 	}
 }
+
+// TestGenerate_PasswordSudo pins the password-sudo RUN block: it mounts the
+// sudo_password build secret, fails the build on an empty SUDO_PASSWORD,
+// rewrites the sudoers entry to require a password, and sits before the USER
+// switch (it must run as root). The base passwordless user-creation line is
+// untouched; nopasswd output carries neither the secret mount nor chpasswd.
+//
+//nolint:paralleltest // loads the shared snapshot fixture twice; cheap, no shared state
+func TestGenerate_PasswordSudo(t *testing.T) {
+	root := repoRoot(t)
+	wsPath := filepath.Join(root, "tests", "fixtures", "snapshot.workspace.toml")
+	pluginsDir := filepath.Join(root, "internal", "plugin", "catalog")
+	gen := func(mode string) string {
+		ws, err := config.LoadWorkspace(wsPath)
+		if err != nil {
+			t.Fatalf("load workspace: %v", err)
+		}
+		if mode != "" {
+			m := mode
+			ws.Container.Sudo = &config.SudoSpec{Mode: &m}
+		}
+		var warns bytes.Buffer
+		plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, &warns, pluginsDir)
+		if err != nil {
+			t.Fatalf("load plugins: %v", err)
+		}
+		ctx := &generate.WorkspaceContext{WS: ws, PluginsFS: os.DirFS(pluginsDir), Plugins: plugins, Warnings: &warns}
+		got, gerr := dockerfile.Generate(ctx, dockerfile.Options{
+			WorkspaceRoot: root, RepoDir: "cocoon", Plugins: plugins, Warnings: &warns,
+		})
+		if gerr != nil {
+			t.Fatalf("generate: %v", gerr)
+		}
+		return got
+	}
+
+	pw := gen(config.SudoModePassword)
+	for _, want := range []string{
+		"RUN --mount=type=secret,id=sudo_password",
+		"SUDO_PASSWORD",
+		"exit 1",
+		`echo "${USERNAME} ALL=(ALL) ALL" > /etc/sudoers.d/${USERNAME}`,
+		"| chpasswd",
+	} {
+		if !strings.Contains(pw, want) {
+			t.Errorf("password Dockerfile missing %q\n--- got ---\n%s", want, pw)
+		}
+	}
+	// The base user-creation RUN still writes the passwordless line first
+	// (the password RUN overwrites it).
+	if !strings.Contains(pw, `echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL"`) {
+		t.Error("password Dockerfile dropped the base user-creation NOPASSWD line")
+	}
+	// The secret RUN must precede the USER switch (it runs as root).
+	if strings.Index(pw, "id=sudo_password") > strings.Index(pw, "\nUSER ${USERNAME}") {
+		t.Error("password setup RUN must come before USER ${USERNAME}")
+	}
+
+	nopw := gen("")
+	if strings.Contains(nopw, "sudo_password") || strings.Contains(nopw, "chpasswd") {
+		t.Errorf("nopasswd Dockerfile must not emit the secret mount or chpasswd\n--- got ---\n%s", nopw)
+	}
+}

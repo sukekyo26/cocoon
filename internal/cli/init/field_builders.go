@@ -104,12 +104,37 @@ func certificatesConfirm(cat *i18n.Catalog, target *bool) *huh.Confirm {
 		Value(target)
 }
 
-func secureConfirm(cat *i18n.Catalog, target *bool) *huh.Confirm {
-	return huh.NewConfirm().
-		Title(cat.Msg("init_prompt_secure")).
-		Description(cat.Msg("init_desc_secure")).
-		Affirmative(cat.Msg("init_confirm_yes")).
-		Negative(cat.Msg("init_confirm_no")).
+// sudoSelect picks the in-container sudo policy. "nopasswd" and "password" map
+// to [container.sudo] mode; "none" maps to [container.security_opt]
+// no_new_privileges = true. When "password" is chosen the password value is
+// collected separately by sudoPasswordInput.
+func sudoSelect(cat *i18n.Catalog, target *string) *huh.Select[string] {
+	return huh.NewSelect[string]().
+		Title(cat.Msg("init_prompt_sudo")).
+		Description(cat.Msg("init_desc_sudo")).
+		Options(
+			huh.NewOption(cat.Msg("init_option_sudo_nopasswd"), config.SudoModeNoPasswd),
+			huh.NewOption(cat.Msg("init_option_sudo_password"), config.SudoModePassword),
+			huh.NewOption(cat.Msg("init_option_sudo_none"), sudoChoiceNone),
+		).
+		Value(target)
+}
+
+// sudoPasswordInput collects the sudo password when password mode is chosen
+// interactively. EchoMode hides the typed characters; the value seeds
+// .devcontainer/.env.local. A blank password is rejected — password mode
+// requires one (an empty SUDO_PASSWORD would fail the build).
+func sudoPasswordInput(cat *i18n.Catalog, target *string) *huh.Input {
+	return huh.NewInput().
+		Title(cat.Msg("init_prompt_sudo_password")).
+		Description(cat.Msg("init_desc_sudo_password")).
+		EchoMode(huh.EchoModePassword).
+		Validate(func(s string) error {
+			if strings.TrimSpace(s) == "" {
+				return errors.New(cat.Msg("init_err_sudo_password_empty")) //nolint:err113 // user-facing prompt
+			}
+			return nil
+		}).
 		Value(target)
 }
 

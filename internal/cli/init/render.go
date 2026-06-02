@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/sukekyo26/cocoon/internal/config"
 	"github.com/sukekyo26/cocoon/internal/i18n"
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
@@ -21,7 +22,7 @@ type containerSpec struct {
 	Dir            string
 	Devcontainer   bool
 	Certificates   bool
-	Secure         bool
+	Sudo           string
 	ImagePathFix   bool
 	Packages       []string
 	Plugins        []string
@@ -95,20 +96,36 @@ func writeContainerSection(sb *strings.Builder, cat *i18n.Catalog, s containerSp
 	emitTemplate(sb, cat, "init_toml_template_container_skel")
 }
 
-// writeContainerSecurityOpt emits the [container.security_opt] block. With
-// --secure it writes an active block with no_new_privileges = true (the
-// header comment spells out the sudo trade-off); otherwise it falls back to
-// the commented-out template so the section stays discoverable. Mirrors the
-// active⇄commented swap writeCertificatesSection uses for [certificates].
+// writeContainerSecurityOpt emits the [container.security_opt] and
+// [container.sudo] blocks, driven by the chosen sudo selection:
+//   - "none": active [container.security_opt] no_new_privileges = true (the
+//     header comment spells out the sudo trade-off), sudo template commented;
+//   - "password": active [container.sudo] mode = "password" (the build reads
+//     the password from .devcontainer/.env.local), security_opt template
+//     commented;
+//   - "nopasswd" (default): both stay commented-out templates so the sections
+//     remain discoverable.
+//
+// Exactly one section is ever active; the other is emitted as its commented
+// template. Mirrors the active⇄commented swap writeCertificatesSection uses.
 func writeContainerSecurityOpt(sb *strings.Builder, cat *i18n.Catalog, s containerSpec) {
-	if !s.Secure {
+	switch s.Sudo {
+	case sudoChoiceNone:
+		sb.WriteString(cat.Msg("init_toml_section_container_security_opt"))
+		sb.WriteByte('\n')
+		sb.WriteString("[container.security_opt]\n")
+		sb.WriteString("no_new_privileges = true\n\n")
+		emitTemplate(sb, cat, "init_toml_template_container_sudo")
+	case config.SudoModePassword:
 		emitTemplate(sb, cat, "init_toml_template_container_security_opt")
-		return
+		sb.WriteString(cat.Msg("init_toml_section_container_sudo"))
+		sb.WriteByte('\n')
+		sb.WriteString("[container.sudo]\n")
+		fmt.Fprintf(sb, "mode = %q\n\n", config.SudoModePassword)
+	default: // nopasswd
+		emitTemplate(sb, cat, "init_toml_template_container_security_opt")
+		emitTemplate(sb, cat, "init_toml_template_container_sudo")
 	}
-	sb.WriteString(cat.Msg("init_toml_section_container_security_opt"))
-	sb.WriteByte('\n')
-	sb.WriteString("[container.security_opt]\n")
-	sb.WriteString("no_new_privileges = true\n\n")
 }
 
 // writeShellSection emits the [container.shell] block followed by an

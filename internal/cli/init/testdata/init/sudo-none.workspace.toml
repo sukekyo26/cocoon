@@ -66,12 +66,13 @@ image_version = "22.04"
 # add  = ["SYS_PTRACE"]
 # drop = ["AUDIT_WRITE"]
 
-# [container.security_opt] — Compose security_opt: seccomp / apparmor / no_new_privileges.
-#   "unconfined" relaxes sandboxing; no_new_privileges blocks setuid escalation.
-#   Note: no_new_privileges = true also disables sudo (the image grants the user passwordless sudo).
-# [container.security_opt]
-# seccomp           = "unconfined"
-# no_new_privileges = true
+# [container.security_opt] — no_new_privileges blocks setuid privilege escalation.
+#   Selected by `cocoon init --sudo none`. Note: this also disables sudo inside the running
+#   container (the image grants passwordless sudo) — install everything at build time, and
+#   get root from the host with `docker exec -u root` if needed. UID/GID remapping is
+#   unaffected (the entrypoint runs as root before dropping privileges).
+[container.security_opt]
+no_new_privileges = true
 
 # [container.sudo] — sudo password policy (alternative to passwordless sudo / no_new_privileges).
 #   mode = "password" requires a password for sudo, read at build time from
@@ -177,13 +178,6 @@ packages = [
 # url        = "https://download.opensuse.org/repositories/shells:fish:release:3/xUbuntu_24.04/"
 # key_url    = "https://download.opensuse.org/repositories/shells:fish:release:3/xUbuntu_24.04/Release.key"
 
-# [certificates] — TLS certificate auto-bake from ~/.cocoon/certs/ on the host.
-#   When enable = true the generators wire the host directory through to the build via
-#   docker-compose's additional_contexts and the Dockerfile's RUN --mount=type=bind, so any
-#   *.crt / *.cer files placed there land in the container's trust store at build time. Default off.
-[certificates]
-enable = true
-
 # [ports] — host ports to forward into the container.
 #   Short form ("3000:3000") or long-form table; ranges and protocol/mode supported.
 # [ports]
@@ -223,6 +217,15 @@ enable = true
 # [dockerfile]
 # pre_user_setup = """RUN apt-get install -y my-extra-pkg"""
 # post_plugins   = """RUN echo done"""
+
+# [certificates] — opt in to TLS certificate auto-bake from ~/.cocoon/certs/.
+#   When enable = true, `cocoon gen` wires the host directory into the build via
+#   docker-compose's additional_contexts and the Dockerfile's RUN --mount=type=bind,
+#   so any *.crt / *.cer files placed there land in the container's trust store at build time.
+#   Useful when the build must trust a private or self-signed CA. Default off → no cert wiring
+#   in any generated artifact.
+# [certificates]
+# enable = true
 
 # [services.<name>] — sidecar services on the same Compose network (e.g. postgres, redis).
 #   Reachable from the dev container by service name. Multiple sidecars allowed.

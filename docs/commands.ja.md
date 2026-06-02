@@ -42,8 +42,7 @@
 | `--no-devcontainer` | bool | `.devcontainer/devcontainer.json` をスキップ。 |
 | `--certificates` | bool | `[certificates] enable = true` を強制有効化（`~/.cocoon/certs/` の自動取り込み）。 |
 | `--no-certificates` | bool | `[certificates]` セクション省略を強制（デフォルト）。 |
-| `--secure` | bool | `[container.security_opt] no_new_privileges = true` を事前設定。setuid 昇格を遮断しコンテナ内 `sudo` を無効化（未信頼コード / AI エージェント実行向け）。 |
-| `--no-secure` | bool | `no_new_privileges` を設定しない。コンテナ内 `sudo` は利用可（デフォルト）。 |
+| `--sudo <mode>` | string | コンテナ内 sudo の方針: `nopasswd`（既定・パスワード不要）/ `password`（`.devcontainer/.env.local` の `SUDO_PASSWORD` を build secret 経由で要求）/ `none`（`no_new_privileges = true`・sudo 無効化）。対話で `password` を選ぶとパスワードを尋ねて `.env.local`（0600）を生成。 |
 | `--apt-categories <ids>` | string | カンマ区切り apt カテゴリ ID (プロンプトをスキップ)。 |
 | `--plugins <ids>` | string | カンマ区切りで有効化するプラグイン ID。 |
 | `--plugin-versions <id>=<ref>,...` | string | カンマ区切りの `<id>=<ref>` でプラグインを pin する。各 `<id>` は `--plugins` にも含まれ、かつ `version_capable = true` である必要があり、重複は不可。`[plugins.versions]` セクションに inline-table 行 (`<id> = { pin = "..." }`) を直接書き込む。 |

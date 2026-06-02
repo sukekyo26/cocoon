@@ -31,6 +31,7 @@ The first match wins. Pass `--workspace <path>` to `cocoon gen` to override disc
 | `[container.sysctls]` | optional | Kernel parameters |
 | `[container.capabilities]` | optional | Linux capabilities to add / drop |
 | `[container.security_opt]` | optional | Compose `security_opt` |
+| `[container.sudo]` | optional | sudo password policy (`mode`) |
 | `[[container.skel]]` | optional | Dotfiles seeded into `/etc/skel` |
 | `[plugins]` | **required** | Enabled plugins |
 | `[plugins.versions]` | optional | Plugin version pins + checksums |
@@ -235,7 +236,7 @@ drop = ["AUDIT_WRITE"]
 > inside the running container a silent no-op. Leave it unset unless your
 > workflow never needs runtime privilege escalation.
 >
-> `cocoon init --secure` presets this block to `no_new_privileges = true`. The
+> `cocoon init --sudo none` presets this block to `no_new_privileges = true`. The
 > intended use is **running untrusted code or AI agents inside the container**:
 > a compromised process cannot escalate to root via `sudo`. UID/GID/DOCKER_GID
 > remapping is unaffected — the entrypoint performs it as root before dropping
@@ -243,6 +244,35 @@ drop = ["AUDIT_WRITE"]
 > need root in a hardened container, get it from the host with
 > `docker exec -u root <container>` (an in-container process has no such path
 > without the docker socket).
+
+### `[container.sudo]`
+
+| Field | Type | Notes |
+|---|---|---|
+| `mode` | string | `"nopasswd"` (default) or `"password"`. |
+
+Selects the sudoers policy baked into the image. `"nopasswd"` (or omitting the
+section) grants passwordless sudo. `"password"` makes `sudo` require a password.
+
+With `mode = "password"`, the password is read at image **build time** from
+`.devcontainer/.env.local` — a single line `SUDO_PASSWORD=<your-password>` — via
+a Docker build secret (`RUN --mount=type=secret`), so it never lands in an image
+layer, the build cache, the container environment, or `docker inspect`. `cocoon
+gen` emits the compose `secrets:` wiring and a `.devcontainer/.gitignore` that
+excludes `.env.local`, and warns if `.env.local` is missing. **A missing or empty
+`SUDO_PASSWORD` fails `docker compose build`** — password mode never silently
+falls back to passwordless. `.env.local` is host-local and gitignored, so each
+developer creates their own; `cocoon init --sudo password` writes it for you
+interactively (mode 0600). Requires BuildKit (the generated Dockerfile enables
+it via its `# syntax=` line).
+
+`mode = "password"` is mutually exclusive with `[container.security_opt]
+no_new_privileges = true` (the latter blocks setuid escalation, so the password
+could never be used); `cocoon gen` rejects the combination. To disable sudo
+entirely, use `no_new_privileges` instead — there is no `mode = "none"`. If you
+later switch away from password mode, delete the now-unused
+`.devcontainer/.gitignore` by hand (cocoon stops regenerating it but does not
+remove it).
 
 ### `[[container.skel]]`
 

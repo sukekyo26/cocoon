@@ -508,6 +508,20 @@ func (c *WorkspaceContext) CertificatesEnabled() bool {
 	return c.WS.Certificates.EnableOrDefault()
 }
 
+// SudoMode returns the [container.sudo] mode, defaulting to "nopasswd".
+func (c *WorkspaceContext) SudoMode() string {
+	if c == nil || c.WS == nil {
+		return config.SudoModeNoPasswd
+	}
+	return c.WS.Container.Sudo.SudoModeOrDefault()
+}
+
+// PasswordSudoEnabled gates all password-sudo generator output (the build
+// secret, the sudoers-tightening RUN, the .gitignore artifact, the gen warning).
+func (c *WorkspaceContext) PasswordSudoEnabled() bool {
+	return c.SudoMode() == config.SudoModePassword
+}
+
 // DockerfilePreUserSetup returns "" when unset.
 func (c *WorkspaceContext) DockerfilePreUserSetup() string {
 	if c.WS == nil || c.WS.Dockerfile == nil || c.WS.Dockerfile.PreUserSetup == nil {

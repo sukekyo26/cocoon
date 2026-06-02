@@ -1432,3 +1432,59 @@ func TestAccumulator_ZeroValueUsable(t *testing.T) {
 	require.Equal(t, "bad", errs[0].Message)
 	require.Equal(t, []string{"container", "service_name"}, errs[0].Loc)
 }
+
+// TestValidate_SudoMode pins the [container.sudo].mode enum: only the two
+// sudoers policies are accepted; "none" is NOT a sudo mode (disabling sudo is
+// no_new_privileges), and the check is case-sensitive.
+func TestValidate_SudoMode(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		mode    string
+		wantErr bool
+	}{
+		{"nopasswd", "nopasswd", false},
+		{"password", "password", false},
+		{"none_is_not_a_sudo_mode", "none", true},
+		{"bogus", "bogus", true},
+		{"wrong_case", "Password", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			body := minimalWorkspace() + "\n[container.sudo]\nmode = " + tomlQuote(tc.mode) + "\n"
+			err := loadWS(t, body)
+			if !tc.wantErr {
+				require.NoError(t, err)
+				return
+			}
+			require.Error(t, err)
+			var v *config.ValidationError
+			require.ErrorAs(t, err, &v)
+			require.Contains(t, v.Errors[0].Message, "mode must be")
+		})
+	}
+}
+
+// TestValidate_PasswordSudoVsNoNewPrivileges pins the cross-field rejection:
+// password sudo and no_new_privileges are mutually exclusive (the latter would
+// make the password unusable). The error is reported on container.sudo.mode.
+func TestValidate_PasswordSudoVsNoNewPrivileges(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[container.sudo]\nmode = \"password\"\n" +
+		"\n[container.security_opt]\nno_new_privileges = true\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	var v *config.ValidationError
+	require.ErrorAs(t, err, &v)
+	var found bool
+	for i := range v.Errors {
+		loc := v.Errors[i].Loc
+		if len(loc) > 0 && loc[len(loc)-1] == "mode" &&
+			strings.Contains(v.Errors[i].Message, "cannot be combined") {
+			found = true
+		}
+	}
+	require.Truef(t, found, "expected a container.sudo.mode mutual-exclusion error, got: %v", v.Errors)
+}
