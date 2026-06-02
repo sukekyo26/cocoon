@@ -164,10 +164,16 @@ func seedSudoPasswordEnvLocal(cwd, password string, log *logx.Logger, cat *i18n.
 	}
 	_, writeErr := f.WriteString(generate.SudoPasswordEnvKey + "=" + password + "\n")
 	closeErr := f.Close()
-	if writeErr != nil {
-		return fmt.Errorf("%w: write %s: %w", clihelpers.ErrFailure, envLocal, writeErr)
-	}
-	if closeErr != nil {
+	if writeErr != nil || closeErr != nil {
+		// Roll back the file we just created so a failed seed leaves "secret
+		// missing", not a partial/empty .env.local — the latter would look
+		// present to `cocoon gen` (and to this function's overwrite guard on a
+		// retry), masking the real cause. Best-effort: the write/close error is
+		// the one worth surfacing.
+		_ = os.Remove(envLocal)
+		if writeErr != nil {
+			return fmt.Errorf("%w: write %s: %w", clihelpers.ErrFailure, envLocal, writeErr)
+		}
 		return fmt.Errorf("%w: close %s: %w", clihelpers.ErrFailure, envLocal, closeErr)
 	}
 	log.Success(cat.Msg("init_sudo_env_local_wrote", envLocal))
