@@ -342,24 +342,39 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 // buildSudoPasswordSetup returns the RUN block that rewrites the sudoers entry
 // to require a password and sets that password from the .env.local build
 // secret, or "" when password sudo is off. The base user-creation RUN already
-// wrote the passwordless entry; this overwrites it. The build FAILS when
-// SUDO_PASSWORD is unset/empty so password mode never silently degrades to
-// passwordless (the whole point of the mode). The password arrives via a
-// secret mount (not an ARG/ENV) so it never lands in an image layer, the build
-// cache, or `docker inspect`.
+// wrote the passwordless entry; this overwrites it. The build FAILS with a
+// distinct cause when the secret file is missing/empty vs when the SUDO_PASSWORD
+// key is absent, so password mode never silently degrades to passwordless (the
+// whole point of the mode). The plaintext password arrives via a secret mount
+// (not an ARG/ENV), so it never lands in an image layer, the build cache, or
+// `docker inspect`; chpasswd writes only the derived hash to /etc/shadow (an
+// image layer, as for any Unix account with a password).
 //
 //nolint:lll // shell RUN lines cannot be wrapped without changing semantics.
 func buildSudoPasswordSetup(ctx *generate.WorkspaceContext) string {
 	if !ctx.PasswordSudoEnabled() {
 		return ""
 	}
-	return fmt.Sprintf(`# Require a password for sudo and set it from the %[1]s build secret. The
-# build fails when %[2]s is unset so password mode never silently
-# degrades to passwordless (or sudo-less) — the whole point of the mode.
+	// The secret file is checked before parsing so "secret missing/empty" and
+	// "SUDO_PASSWORD key absent" fail with distinct messages; no `2>/dev/null`
+	// masks read errors. A single sed (no head/tr pipeline) takes the first
+	// matching line, strips the SUDO_PASSWORD= prefix and any trailing CR, then
+	// quits — $(…) drops the trailing newline.
+	return fmt.Sprintf(`# Set a password-required sudoers entry and the user's password from the %[1]s
+# build secret. The build fails with a clear cause when the secret is missing or
+# empty, so password mode never silently degrades to passwordless. chpasswd
+# writes the derived hash to /etc/shadow (an image layer, as for any Unix
+# account); only the plaintext %[2]s — via the secret mount, not an ARG/ENV —
+# stays out of image layers, the build cache, and docker inspect.
 RUN --mount=type=secret,id=%[3]s \
-    pass="$(sed -n 's/^%[2]s=//p' /run/secrets/%[3]s 2>/dev/null | head -n 1 | tr -d '\r\n')"; \
+    secret=/run/secrets/%[3]s; \
+    if [ ! -s "$secret" ]; then \
+        echo "cocoon: [container.sudo] mode=password but the %[3]s build secret is missing or empty" >&2; \
+        exit 1; \
+    fi; \
+    pass="$(sed -n '/^%[2]s=/{s/^%[2]s=//;s/\r$//;p;q}' "$secret")"; \
     if [ -z "$pass" ]; then \
-        echo "cocoon: [container.sudo] mode=password requires %[2]s in .devcontainer/%[1]s" >&2; \
+        echo "cocoon: [container.sudo] mode=password requires a non-empty %[2]s line in .devcontainer/%[1]s" >&2; \
         exit 1; \
     fi; \
     echo "${USERNAME} ALL=(ALL) ALL" > /etc/sudoers.d/${USERNAME}; \
