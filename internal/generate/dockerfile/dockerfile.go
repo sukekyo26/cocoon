@@ -163,10 +163,6 @@ RUN existing_user="$(getent passwd 1000 | cut -d: -f1)" && \
     echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${USERNAME} && \
     chmod 0440 /etc/sudoers.d/${USERNAME}
 
-{{ with .SudoPasswordSetup -}}
-{{ . }}
-
-{{ end -}}
 USER ${USERNAME}
 WORKDIR /home/${USERNAME}
 
@@ -234,6 +230,10 @@ USER root
 COPY .devcontainer/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
+{{ with .SudoPasswordSetup -}}
+{{ . }}
+
+{{ end -}}
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["sleep", "infinity"]
 
@@ -341,14 +341,19 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 
 // buildSudoPasswordSetup returns the RUN block that rewrites the sudoers entry
 // to require a password and sets that password from the .env.local build
-// secret, or "" when password sudo is off. The base user-creation RUN already
-// wrote the passwordless entry; this overwrites it. The build FAILS with a
-// distinct cause when the secret file is missing/empty vs when the SUDO_PASSWORD
-// key is absent, so password mode never silently degrades to passwordless (the
-// whole point of the mode). The plaintext password arrives via a secret mount
-// (not an ARG/ENV), so it never lands in an image layer, the build cache, or
-// `docker inspect`; chpasswd writes only the derived hash to /etc/shadow (an
-// image layer, as for any Unix account with a password).
+// secret, or "" when password sudo is off. The base user-creation RUN wrote the
+// passwordless entry; this overwrites it. It is emitted as the FINAL root step
+// (after every plugin install), NOT next to the user-creation RUN: build-time
+// plugin installs run as the unprivileged user and some (e.g. aws-cli,
+// aws-sam-cli) call `sudo` for a privileged step, which relies on the
+// passwordless entry still being active — tightening it earlier would break
+// those builds with an opaque "a terminal is required" error. The build FAILS
+// with a distinct cause when the secret file is missing/empty vs when the
+// SUDO_PASSWORD key is absent, so password mode never silently degrades to
+// passwordless (the whole point of the mode). The plaintext password arrives
+// via a secret mount (not an ARG/ENV), so it never lands in an image layer, the
+// build cache, or `docker inspect`; chpasswd writes only the derived hash to
+// /etc/shadow (an image layer, as for any Unix account with a password).
 //
 //nolint:lll // shell RUN lines cannot be wrapped without changing semantics.
 func buildSudoPasswordSetup(ctx *generate.WorkspaceContext) string {
@@ -361,11 +366,13 @@ func buildSudoPasswordSetup(ctx *generate.WorkspaceContext) string {
 	// matching line, strips the SUDO_PASSWORD= prefix and any trailing CR, then
 	// quits — $(…) drops the trailing newline.
 	return fmt.Sprintf(`# Set a password-required sudoers entry and the user's password from the %[1]s
-# build secret. The build fails with a clear cause when the secret is missing or
-# empty, so password mode never silently degrades to passwordless. chpasswd
-# writes the derived hash to /etc/shadow (an image layer, as for any Unix
-# account); only the plaintext %[2]s — via the secret mount, not an ARG/ENV —
-# stays out of image layers, the build cache, and docker inspect.
+# build secret. Emitted last (after every plugin install) so build-time sudo
+# stays passwordless for installers that call it. The build fails with a clear
+# cause when the secret is missing or empty, so password mode never silently
+# degrades to passwordless. chpasswd writes the derived hash to /etc/shadow (an
+# image layer, as for any Unix account); only the plaintext %[2]s — via the
+# secret mount, not an ARG/ENV — stays out of image layers, the build cache,
+# and docker inspect.
 RUN --mount=type=secret,id=%[3]s \
     secret=/run/secrets/%[3]s; \
     if [ ! -s "$secret" ]; then \
@@ -377,8 +384,8 @@ RUN --mount=type=secret,id=%[3]s \
         echo "cocoon: [container.sudo] mode=password requires a non-empty %[2]s line in .devcontainer/%[1]s" >&2; \
         exit 1; \
     fi; \
-    echo "${USERNAME} ALL=(ALL) ALL" > /etc/sudoers.d/${USERNAME}; \
-    chmod 0440 /etc/sudoers.d/${USERNAME}; \
+    echo "${USERNAME} ALL=(ALL) ALL" > /etc/sudoers.d/${USERNAME} && \
+    chmod 0440 /etc/sudoers.d/${USERNAME} && \
     printf '%%s:%%s\n' "${USERNAME}" "$pass" | chpasswd`,
 		generate.SudoPasswordSecretFile, // %[1]s = .env.local
 		generate.SudoPasswordEnvKey,     // %[2]s = SUDO_PASSWORD
