@@ -106,4 +106,49 @@ func TestEnsureGitignoreEntry_Idempotent(t *testing.T) {
 	}
 }
 
+// TestEnsureGitignoreEntry_Perm pins the permission contract: an upsert into an
+// existing file preserves that file's mode (does not force 0644), while a
+// freshly created file is 0644.
+func TestEnsureGitignoreEntry_Perm(t *testing.T) {
+	t.Parallel()
+
+	t.Run("preserves_existing_mode", func(t *testing.T) {
+		t.Parallel()
+		path := filepath.Join(t.TempDir(), ".gitignore")
+		// 0600 differs from the create default and is umask-robust.
+		if err := os.WriteFile(path, []byte("*.log\n"), 0o600); err != nil { //nolint:gosec // test fixture
+			t.Fatalf("seed: %v", err)
+		}
+		changed, err := fsx.EnsureGitignoreEntry(path, ".env.local", "# c")
+		if err != nil {
+			t.Fatalf("EnsureGitignoreEntry: %v", err)
+		}
+		if !changed {
+			t.Fatal("changed = false, want true")
+		}
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatalf("stat: %v", err)
+		}
+		if got := info.Mode().Perm(); got != 0o600 {
+			t.Errorf("mode = %o, want 600 (existing perm not preserved)", got)
+		}
+	})
+
+	t.Run("new_file_is_0644", func(t *testing.T) {
+		t.Parallel()
+		path := filepath.Join(t.TempDir(), ".gitignore")
+		if _, err := fsx.EnsureGitignoreEntry(path, ".env.local", "# c"); err != nil {
+			t.Fatalf("EnsureGitignoreEntry: %v", err)
+		}
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatalf("stat: %v", err)
+		}
+		if got := info.Mode().Perm(); got != 0o644 {
+			t.Errorf("mode = %o, want 644", got)
+		}
+	})
+}
+
 func ptr(s string) *string { return &s }
