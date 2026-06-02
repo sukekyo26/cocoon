@@ -21,7 +21,7 @@ cocoon の主要な変更を記録します。フォーマットは
     Unix アカウントと同様）。`cocoon gen` は compose の `secrets:` 配線と
     `.env.local` を除外する
     `.devcontainer/.gitignore` を生成し、password モードなのに `.env.local` が
-    無い場合は警告します。`SUDO_PASSWORD` が未設定/空ならビルドは失敗し、
+    無いか空なら警告します。`SUDO_PASSWORD` が未設定/空ならビルドは失敗し、
     passwordless へ暗黙にフォールバックしません。対話で `password` を選ぶと
     パスワードを尋ねて `.devcontainer/.env.local`（mode 0600・既存は上書きしない）
     を生成します。`--yes --sudo password` はモードのみ設定し、ファイル作成は

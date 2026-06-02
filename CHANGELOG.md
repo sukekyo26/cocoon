@@ -21,7 +21,7 @@ adheres to [Semantic Versioning](https://semver.org/).
     password-bearing Unix account).
     `cocoon gen` adds the compose `secrets:` wiring and a `.devcontainer/.gitignore`
     that excludes `.env.local`, and warns when password mode is on but
-    `.env.local` is absent. A missing or empty `SUDO_PASSWORD` fails the build —
+    `.env.local` is missing or empty. A missing or empty `SUDO_PASSWORD` fails the build —
     there is no silent fallback to passwordless. Choosing `password`
     interactively prompts for the password and writes `.devcontainer/.env.local`
     (mode 0600, never overwriting an existing one); `--yes --sudo password` sets
