@@ -18,7 +18,7 @@ devcontainer = true
 service_name = "cocoon"
 username = "coco"
 image = "golang"
-image_version = "1.26.3-bookworm"
+image_version = "1.26.4-bookworm"
 
 # docker_socket — bind-mount /var/run/docker.sock so an in-container docker
 #   client (e.g. the docker-cli plugin) can reach the host daemon.
