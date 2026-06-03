@@ -594,11 +594,6 @@ func validateVersionOverrides(
 				" (drop the \"=<version>\" suffix from its [plugins].enable entry)",
 				ErrInvalidVersionOverride, id)
 		}
-		if !p.Version.VerifiesByChecksum() && (override.ChecksumAmd64 != nil || override.ChecksumArm64 != nil) {
-			return fmt.Errorf("%w: a checksum is recorded for '%s', but it declares verify = %q and"+
-				" verifies downloads in-script (not against a per-arch checksum); re-run `cocoon lock`",
-				ErrInvalidVersionOverride, id, p.Version.Verify)
-		}
 		if err := checkExtraOverrideKeys(id, override, p.Install.ExtraVersions); err != nil {
 			return err
 		}
@@ -609,6 +604,44 @@ func validateVersionOverrides(
 		}
 	}
 	return nil
+}
+
+// validateManualChecksums gates the [plugins.options] manual checksum escape
+// hatch. It runs on the BASE (workspace-sourced) overrides — before the lock
+// overlay — so a present checksum is necessarily one the user typed by hand. A
+// manual checksum is only meaningful for a plugin whose upstream publishes
+// none (so `cocoon lock` cannot record one): for a pgp plugin the checksum
+// vocabulary does not apply, and for an auto-resolvable plugin `cocoon lock`
+// would silently override the hand-typed value, so both are rejected.
+func validateManualChecksums(plugins map[string]*plugin.Plugin, base map[string]config.PluginVersionOverride) error {
+	for _, id := range slices.Sorted(maps.Keys(base)) {
+		ov := base[id]
+		if ov.ChecksumAmd64 == nil && ov.ChecksumArm64 == nil {
+			continue
+		}
+		p, ok := plugins[id]
+		if !ok {
+			continue // not-enabled is reported by validateVersionOverrides
+		}
+		if !p.Version.VerifiesByChecksum() {
+			return fmt.Errorf("%w: [plugins.options.%s] sets a checksum, but '%s' declares verify = %q and"+
+				" verifies downloads in-script (not against a per-arch checksum); remove the checksum",
+				ErrInvalidVersionOverride, id, id, p.Version.Verify)
+		}
+		if autoResolvesChecksum(p.Version.Source) {
+			return fmt.Errorf("%w: [plugins.options.%s] sets a manual checksum, but `cocoon lock` resolves"+
+				" '%s's checksum automatically; remove it from [plugins.options] and run `cocoon lock`",
+				ErrInvalidVersionOverride, id, id)
+		}
+	}
+	return nil
+}
+
+// autoResolvesChecksum reports whether cocoon lock can fetch a per-arch
+// checksum for the plugin (a sidecar / shasums-file source). A nil source or a
+// "none" checksum kind means it cannot, so a manual checksum is permitted.
+func autoResolvesChecksum(src *plugin.VersionSource) bool {
+	return src != nil && src.Checksum.Type != "" && src.Checksum.Type != plugin.ChecksumNone
 }
 
 // checkExtraOverrideKeys rejects [plugins.options].<id>.<key> entries that

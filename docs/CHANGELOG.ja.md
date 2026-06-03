@@ -21,6 +21,12 @@ cocoon の主要な変更を記録します。フォーマットは
   ます。`cocoon gen --locked` は、有効なプラグインが lock エントリ無しで
   `"latest"` を使っていれば失敗します（再現性 CI 用）。付けない場合、該当
   プラグインは警告のうえ build 時に最新を解決するフォールバックになります。
+- `[plugins.options].<id>` が手動の `checksum_amd64` / `checksum_arm64`（64 桁の
+  小文字 16 進数）を受け付けるようになりました。上流が機械可読な checksum を
+  公開していない一部プラグイン（`codex` / `shellcheck` / `shfmt` / `aws-sam-cli`）
+  でも SHA256 検証付きで build できます。`cocoon gen` は、`cocoon lock` が
+  checksum を自動解決できるプラグイン（lock 値が優先されるため）や
+  `verify = "pgp"` プラグインへの手動 checksum を拒否します。
 
 ### 変更
 

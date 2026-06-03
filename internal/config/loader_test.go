@@ -157,8 +157,8 @@ android-sdk = { api_level = "36", build_tools = "36.0.0" }`)
 }
 
 // TestLoadWorkspace_OptionsReservedKeys pins that the keys carrying the main
-// version (version / pin) and the per-arch checksums (recorded in cocoon.lock)
-// are rejected under [plugins.options] with a migration hint.
+// version (version / pin) are rejected under [plugins.options] with a hint
+// pointing at the enable array.
 func TestLoadWorkspace_OptionsReservedKeys(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -166,8 +166,6 @@ func TestLoadWorkspace_OptionsReservedKeys(t *testing.T) {
 	}{
 		{"version", `android-sdk = { version = "=14742923" }`, "version belongs in the enable array"},
 		{"pin", `go = { pin = "1.23.4" }`, `"pin" key was removed`},
-		{"checksum_amd64", `codex = { checksum_amd64 = "abc" }`, "recorded in cocoon.lock"},
-		{"checksum_arm64", `codex = { checksum_arm64 = "abc" }`, "recorded in cocoon.lock"},
 	}
 	for _, tc := range cases {
 		tc := tc
@@ -181,6 +179,41 @@ func TestLoadWorkspace_OptionsReservedKeys(t *testing.T) {
 			require.Contains(t, err.Error(), tc.want)
 		})
 	}
+}
+
+// TestLoadWorkspace_OptionsManualChecksum pins that a [plugins.options] manual
+// checksum parses into the override's checksum fields (validated as 64
+// lowercase hex chars). Whether the plugin may carry one is gated later by the
+// generator, so the loader accepts it regardless of plugin type.
+func TestLoadWorkspace_OptionsManualChecksum(t *testing.T) {
+	t.Parallel()
+	const hex64 = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+	t.Run("valid", func(t *testing.T) {
+		t.Parallel()
+		body := pluginsTestWorkspace(`[plugins]
+enable = ["codex=0.5.0"]
+
+[plugins.options]
+codex = { checksum_amd64 = "` + hex64 + `", checksum_arm64 = "` + hex64 + `" }`)
+		tmp := t.TempDir() + "/ws.toml"
+		require.NoError(t, os.WriteFile(tmp, []byte(body), 0o600))
+		ws, err := config.LoadWorkspace(tmp)
+		require.NoError(t, err)
+		ov := ws.Plugins.Versions["codex"]
+		require.NotNil(t, ov.ChecksumAmd64)
+		require.Equal(t, hex64, *ov.ChecksumAmd64)
+		require.NotNil(t, ov.ChecksumArm64)
+		require.Equal(t, hex64, *ov.ChecksumArm64)
+	})
+	t.Run("rejects_non_hex", func(t *testing.T) {
+		t.Parallel()
+		body := pluginsTestWorkspace("[plugins]\nenable = [\"codex=0.5.0\"]\n\n[plugins.options]\ncodex = { checksum_amd64 = \"abc\" }")
+		tmp := t.TempDir() + "/ws.toml"
+		require.NoError(t, os.WriteFile(tmp, []byte(body), 0o600))
+		_, err := config.LoadWorkspace(tmp)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "64 lowercase hex")
+	})
 }
 
 // TestLoadWorkspace_OptionsExtraNonString pins that a non-string value under

@@ -73,6 +73,10 @@ var (
 	// that contract so tags like `_internal` or `2.7.14` are accepted and
 	// `.hidden` / `-foo` / `library/node` / `node:24` are rejected.
 	rxImageVersion = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._-]*$`)
+	// rxSha256 bounds a manual [plugins.options] checksum to exactly 64
+	// lowercase hex characters (a raw sha256 digest), matching the form
+	// cocoon.lock records and sha256sum -c expects.
+	rxSha256 = regexp.MustCompile(`^[a-f0-9]{64}$`)
 	// rxWorkspaceDir validates [workspace].dir: one or more portable filename
 	// segments joined by `/`. Each segment uses the same POSIX portable
 	// charset rxHomeFilesSegment uses so the value can flow into Dockerfile

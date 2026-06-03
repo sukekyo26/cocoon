@@ -58,8 +58,8 @@ else
   # openai/codex publishes no SHA256SUMS manifest or .sha256 sidecar (only
   # per-asset digests in the GitHub API + Sigstore bundles), so an unpinned
   # build can fetch no upstream checksum. Warn loudly and proceed, matching
-  # shfmt / shellcheck. Pin checksum_amd64 / checksum_arm64 for a verified build.
-  printf '%sWARNING: SHA256 verification skipped for OpenAI Codex CLI (no checksum for codex in [plugins.versions])%s\n' "$C_YEL" "$C_RST" >&2
+  # shfmt / shellcheck. Set checksum_amd64 / checksum_arm64 in [plugins.options].codex for a verified build.
+  printf '%sWARNING: SHA256 verification skipped for OpenAI Codex CLI (no upstream checksum; set checksum_amd64/arm64 in [plugins.options].codex)%s\n' "$C_YEL" "$C_RST" >&2
 fi
 
 # The tarball holds one entry named with the full target triple

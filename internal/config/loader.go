@@ -121,10 +121,12 @@ func enableSpecMessage(err error) string {
 // matching Versions[id] override. It carries a plugin's
 // [install.extra_versions] knobs into Extra (applying the shell-safety guard
 // that each value must pass before reaching the Dockerfile RUN-prefix
-// `<ENV>="..."` pair). The main version belongs in the enable array, so a
-// "version" key here is a migration error; "pin" and the per-arch checksum
-// keys are likewise rejected (checksums are recorded in cocoon.lock). Ids
-// and keys are iterated in sorted order for deterministic error sequencing.
+// `<ENV>="..."` pair) and an optional manual checksum_amd64 / checksum_arm64
+// into the override's checksum fields (validated as 64 lowercase hex chars;
+// the generator gates whether the plugin may carry a manual checksum). The
+// main version belongs in the enable array, so a "version" key here is a
+// migration error and "pin" is rejected. Ids and keys are iterated in sorted
+// order for deterministic error sequencing.
 func materializeOptions(a *Accumulator, raw map[string]any, versions map[string]PluginVersionOverride) {
 	for _, id := range slices.Sorted(maps.Keys(raw)) {
 		tbl, ok := raw[id].(map[string]any)
@@ -139,16 +141,20 @@ func materializeOptions(a *Accumulator, raw map[string]any, versions map[string]
 	}
 }
 
-// materializeOptionEntry routes one [plugins.options].<id> table's keys.
-// Reserved keys (version / pin / checksum_*) produce migration errors; every
-// other key is an extra-version knob.
+// materializeOptionEntry routes one [plugins.options].<id> table's keys: the
+// version / pin keys are migration errors, checksum_amd64 / checksum_arm64 feed
+// the override's checksum fields, and every other key is an extra-version knob.
 func materializeOptionEntry(a *Accumulator, id string, tbl map[string]any, ov *PluginVersionOverride) {
 	for _, k := range slices.Sorted(maps.Keys(tbl)) {
 		switch k {
 		case "version":
 			a.Add(optionsVersionKeyMessage(id, tbl[k]), "plugins", "options", id, k)
-		case "pin", "checksum_amd64", "checksum_arm64":
-			a.Add(optionsReservedKeyMessage(id, k), "plugins", "options", id, k)
+		case "pin":
+			a.Add(optionsPinKeyMessage(id), "plugins", "options", id, k)
+		case "checksum_amd64":
+			setOptionChecksum(a, id, k, tbl[k], &ov.ChecksumAmd64)
+		case "checksum_arm64":
+			setOptionChecksum(a, id, k, tbl[k], &ov.ChecksumArm64)
 		default:
 			s, ok := tbl[k].(string)
 			if !ok {
@@ -180,16 +186,30 @@ func optionsVersionKeyMessage(id string, raw any) string {
 			`enable = [ %q ]`, id, id+"="+ver)
 }
 
-// optionsReservedKeyMessage explains why a removed/checksum key is rejected
-// under [plugins.options].
-func optionsReservedKeyMessage(id, key string) string {
-	if key == "pin" {
-		return fmt.Sprintf(
-			`the "pin" key was removed — put the version in the enable array: enable = [ "%s=<version>" ]`, id)
-	}
+// optionsPinKeyMessage points the author at the enable array for the removed
+// "pin" key.
+func optionsPinKeyMessage(id string) string {
 	return fmt.Sprintf(
-		"per-arch checksums are recorded in cocoon.lock; %q is not configurable under [plugins.options].%s",
-		key, id)
+		`the "pin" key was removed — put the version in the enable array: enable = [ "%s=<version>" ]`, id)
+}
+
+// setOptionChecksum validates a manual [plugins.options] checksum value (64
+// lowercase hex chars) and stores it on the override. Whether the plugin may
+// carry a manual checksum at all is gated later by the generator (only plugins
+// whose upstream publishes none qualify; everything else is auto-resolved by
+// `cocoon lock`).
+func setOptionChecksum(a *Accumulator, id, key string, raw any, dst **string) {
+	s, ok := raw.(string)
+	if !ok {
+		a.Add(fmt.Sprintf("value for %q must be a string, got %T", key, raw), "plugins", "options", id, key)
+		return
+	}
+	if !rxSha256.MatchString(s) {
+		a.Add(fmt.Sprintf("%q must be 64 lowercase hex characters", key), "plugins", "options", id, key)
+		return
+	}
+	v := s
+	*dst = &v
 }
 
 // StrictUnmarshal decodes data into v with DisallowUnknownFields enabled. The

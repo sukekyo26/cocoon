@@ -22,6 +22,12 @@ adheres to [Semantic Versioning](https://semver.org/).
   offline and reproducibly. `cocoon gen --locked` fails if any enabled plugin
   uses `"latest"` without a lock entry (for reproducible CI); without it, such
   plugins warn and fall back to resolving the latest version at build time.
+- `[plugins.options].<id>` accepts manual `checksum_amd64` / `checksum_arm64`
+  values (64 lowercase hex chars) for the few plugins whose upstream publishes
+  no machine-readable checksum (`codex`, `shellcheck`, `shfmt`, `aws-sam-cli`),
+  so those can still be built with SHA256 verification. `cocoon gen` rejects a
+  manual checksum for any plugin whose checksum `cocoon lock` resolves
+  automatically (the lock value would win) or for a `verify = "pgp"` plugin.
 
 ### Changed
 

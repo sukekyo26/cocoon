@@ -736,40 +736,49 @@ func TestBuildInstallEnvPairs_VerifyGatesChecksum(t *testing.T) {
 	}
 }
 
-// TestValidateVersionOverrides_ChecksumRejectedForPGP pins that a recorded
-// per-arch checksum for a pgp-verified plugin is a hard
-// ErrInvalidVersionOverride: the checksum vocabulary does not apply.
-func TestValidateVersionOverrides_ChecksumRejectedForPGP(t *testing.T) {
+// TestValidateManualChecksums pins the [plugins.options] manual-checksum gate:
+// a hand-typed checksum is rejected for a pgp plugin (the checksum vocabulary
+// does not apply) and for an auto-resolvable plugin (cocoon lock owns the
+// checksum), but allowed for a plugin whose upstream publishes none (or that
+// declares no source at all).
+func TestValidateManualChecksums(t *testing.T) {
 	t.Parallel()
 	csum := "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+	mkPlugin := func(verify string, src *plugin.VersionSource) *plugin.Plugin {
+		return &plugin.Plugin{
+			Metadata: plugin.Metadata{Name: "x", URL: "https://example.com/x"},
+			Install:  plugin.Install{},
+			Version:  plugin.Version{VersionCapable: true, Verify: verify, Source: src},
+		}
+	}
+	sidecar := &plugin.VersionSource{Checksum: plugin.ChecksumSpec{Type: plugin.ChecksumSidecar}}
+	noneSrc := &plugin.VersionSource{Checksum: plugin.ChecksumSpec{Type: plugin.ChecksumNone}}
 	cases := []struct {
-		name     string
-		override config.PluginVersionOverride
+		name    string
+		plug    *plugin.Plugin
+		wantErr bool
 	}{
-		{"amd64_only", config.PluginVersionOverride{Pin: "2.0.0", ChecksumAmd64: &csum}},
-		{"arm64_only", config.PluginVersionOverride{Pin: "2.0.0", ChecksumArm64: &csum}},
+		{"pgp_rejected", mkPlugin(plugin.VerifyPGP, nil), true},
+		{"auto_resolvable_rejected", mkPlugin(plugin.VerifyChecksum, sidecar), true},
+		{"none_type_allowed", mkPlugin(plugin.VerifyChecksum, noneSrc), false},
+		{"no_source_allowed", mkPlugin(plugin.VerifyChecksum, nil), false},
 	}
 	for _, tc := range cases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			plugins := map[string]*plugin.Plugin{
-				"awscli": {
-					Metadata: plugin.Metadata{Name: "aws-cli", URL: "https://example.com/x"},
-					Install:  plugin.Install{},
-					Version:  plugin.Version{VersionCapable: true, Verify: plugin.VerifyPGP},
-				},
-			}
-			err := validateVersionOverrides(
-				plugins,
-				map[string]config.PluginVersionOverride{"awscli": tc.override},
-				&bytes.Buffer{},
+			err := validateManualChecksums(
+				map[string]*plugin.Plugin{"x": tc.plug},
+				map[string]config.PluginVersionOverride{"x": {Pin: "2.0.0", ChecksumAmd64: &csum}},
 			)
-			if !errors.Is(err, ErrInvalidVersionOverride) {
-				t.Fatalf("err = %v, want errors.Is(.., ErrInvalidVersionOverride)", err)
+			if tc.wantErr {
+				if !errors.Is(err, ErrInvalidVersionOverride) {
+					t.Fatalf("err = %v, want errors.Is(.., ErrInvalidVersionOverride)", err)
+				}
+				return
 			}
-			if !strings.Contains(err.Error(), "cocoon lock") {
-				t.Errorf("error must tell the user what to do: %v", err)
+			if err != nil {
+				t.Errorf("manual checksum must be allowed here, got: %v", err)
 			}
 		})
 	}

@@ -481,6 +481,31 @@ func TestEffectivePluginVersions_OverlaysLock(t *testing.T) {
 	}
 }
 
+// TestEffectivePluginVersions_LockEmptyChecksumKeepsManual pins the none-type
+// escape hatch: a manual [plugins.options] checksum on the base override
+// survives a lock entry whose own checksums are empty (the lock resolved the
+// version but the upstream publishes no checksum). The overlay replaces a
+// checksum only when the lock actually carries one.
+func TestEffectivePluginVersions_LockEmptyChecksumKeepsManual(t *testing.T) {
+	t.Parallel()
+	manual := "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+	c := &generate.WorkspaceContext{ //nolint:exhaustruct // partial fixture
+		WS: &config.Workspace{Plugins: config.PluginsSpec{ //nolint:exhaustruct // partial fixture
+			Enable: []string{"codex"},
+			Versions: map[string]config.PluginVersionOverride{ //nolint:exhaustruct // no arm/extra
+				"codex": {Spec: "=0.5.0", Pin: "0.5.0", ChecksumAmd64: &manual},
+			},
+		}},
+		Lock: &lockfile.Lock{Plugins: []lockfile.LockPlugin{ //nolint:exhaustruct // partial fixture
+			{ID: "codex", Requested: "=0.5.0", Version: "0.5.0"}, // empty checksums
+		}},
+	}
+	eff := c.EffectivePluginVersions()
+	if eff["codex"].ChecksumAmd64 == nil || *eff["codex"].ChecksumAmd64 != manual {
+		t.Errorf("manual checksum was wiped by an empty lock checksum: %v", eff["codex"].ChecksumAmd64)
+	}
+}
+
 // TestEffectivePluginVersions_NoLockEqualsBase pins that without a lock the
 // effective overrides equal the workspace overrides unchanged.
 func TestEffectivePluginVersions_NoLockEqualsBase(t *testing.T) {

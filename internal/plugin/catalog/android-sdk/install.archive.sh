@@ -15,13 +15,13 @@
 set -euo pipefail
 
 # The two extra_versions inputs are always emitted by the generator (with
-# the plugin.toml default when [plugins.versions] omits them). Guard at the
+# the plugin.toml default when [plugins.options] omits them). Guard at the
 # entry rather than at the sdkmanager call: ${VAR:?msg} identifies the
 # offending plugin input by name, instead of bash's generic "unbound" or
 # sdkmanager's confusing "platforms;android-" / "build-tools;" error on
 # an empty workspace override.
-: "${ANDROID_SDK_API_LEVEL:?empty/unset — set api_level on android-sdk in [plugins.versions], or restore the plugin.toml default}"
-: "${ANDROID_SDK_BUILD_TOOLS:?empty/unset — set build_tools on android-sdk in [plugins.versions], or restore the plugin.toml default}"
+: "${ANDROID_SDK_API_LEVEL:?empty/unset — set api_level on android-sdk in [plugins.options], or restore the plugin.toml default}"
+: "${ANDROID_SDK_BUILD_TOOLS:?empty/unset — set build_tools on android-sdk in [plugins.options], or restore the plugin.toml default}"
 
 # Yellow WARNING when stderr is a TTY (and NO_COLOR is unset) or
 # FORCE_COLOR is set. NO_COLOR wins per no-color.org.
@@ -64,7 +64,7 @@ else
     sed -n 's/commandlinetools-linux-\([0-9]*\)_latest\.zip/\1/p') || true
   if [ -z "$BUILD_NUMBER" ]; then
     echo "ERROR: failed to resolve latest commandline-tools BUILD_NUMBER from https://developer.android.com/studio." >&2
-    echo "       Pin explicitly via [plugins.versions].android-sdk.pin = \"<BUILD_NUMBER>\"" >&2
+    echo "       Pin explicitly in the enable array: \"android-sdk=<BUILD_NUMBER>\"" >&2
     echo "       (find the current BUILD_NUMBER under \"Command line tools only\" at the URL above)." >&2
     exit 1
   fi
@@ -82,7 +82,7 @@ curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-erro
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/android-cmdline-tools.zip" | sha256sum -c -
 else
-  printf '%sWARNING: SHA256 verification skipped for Android SDK (no checksum for android-sdk in [plugins.versions])%s\n' "$C_YEL" "$C_RST" >&2
+  printf '%sWARNING: SHA256 verification skipped for Android SDK (no upstream checksum; set checksum_amd64/arm64 in [plugins.options].android-sdk)%s\n' "$C_YEL" "$C_RST" >&2
 fi
 
 # The zip ships a top-level "cmdline-tools/" dir, but sdkmanager expects the

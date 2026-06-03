@@ -374,9 +374,23 @@ android-sdk = { api_level = "36", build_tools = "36.0.0" }
 
 各値はインラインテーブル。プラグインが `[install.extra_versions]` で宣言した
 キーのみ受理されます — 未知のキー（typo や上流で削除された宣言）は default に
-黙ってフォールバックせず `cocoon gen` が拒否します。予約キー `version` はここでは
-**拒否** されます（主バージョンは `enable` 配列に属する）。`pin` / `checksum_*`
-キーも同様（per-arch checksum は `workspace.toml` ではなく `cocoon.lock` に存在）。
+黙ってフォールバックせず `cocoon gen` が拒否します。予約キー `version` と `pin`
+はここでは **拒否** されます（主バージョンは `enable` 配列に属する）。
+
+**手動 checksum（エスケープハッチ）。** per-arch checksum は通常 `cocoon.lock` に
+あり、`cocoon lock` が自動記録します。ただし一部のプラグインは上流が機械可読な
+checksum を公開していないため（`codex` / `shellcheck` / `shfmt` / `aws-sam-cli`）、
+`cocoon lock` では埋められません。これら **だけ** は verified build 用の checksum を
+ここに手書きできます:
+
+```toml
+[plugins.options]
+codex = { checksum_amd64 = "<64-hex>", checksum_arm64 = "<64-hex>" }
+```
+
+`checksum_*` の値は 64 桁の小文字 16 進数。`cocoon lock` が checksum を解決
+**できる** プラグインに設定すると拒否されます（lock 値が黙って優先されるため）。
+`verify = "pgp"` プラグイン（スクリプト内で署名検証）への設定も拒否されます。
 override 値はインラインバージョンと同じ文字制約に従います: `"`, `\`, `\n`,
 `\r`, `$`, backtick は不可（いずれも Dockerfile の RUN プレフィックス
 `KEY="..."` env ペアに展開されるため）。宣言方法は[プラグイン作成ガイド](plugins.ja.md)を参照。

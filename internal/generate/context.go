@@ -569,21 +569,21 @@ func (c *WorkspaceContext) EffectivePluginVersions() map[string]config.PluginVer
 	for _, lp := range c.Lock.Plugins {
 		ov := out[lp.ID]
 		ov.Pin = lp.Version
-		ov.ChecksumAmd64 = nonEmptyPtr(lp.ChecksumAMD64)
-		ov.ChecksumArm64 = nonEmptyPtr(lp.ChecksumARM64)
+		// Lock checksums are authoritative when present, but a none-type
+		// plugin's lock entry has empty checksums — those must NOT clobber a
+		// manual [plugins.options] checksum already on the base override.
+		if v := lp.ChecksumAMD64; v != "" {
+			ov.ChecksumAmd64 = &v
+		}
+		if v := lp.ChecksumARM64; v != "" {
+			ov.ChecksumArm64 = &v
+		}
 		if len(lp.Extra) > 0 {
 			ov.Extra = lp.Extra
 		}
 		out[lp.ID] = ov
 	}
 	return out
-}
-
-func nonEmptyPtr(s string) *string {
-	if s == "" {
-		return nil
-	}
-	return &s
 }
 
 // UnlockedLatestPlugins returns the enabled version_capable plugins whose

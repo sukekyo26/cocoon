@@ -254,6 +254,12 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 	overrides := ctx.EffectivePluginVersions()
 	enabled := ctx.EnabledPlugins()
 
+	// Gate the [plugins.options] manual checksum hatch on the pre-lock base
+	// overrides, where a present checksum is necessarily user-typed.
+	if err := validateManualChecksums(opts.Plugins, ctx.PluginVersionOverrides()); err != nil {
+		return "", err
+	}
+
 	pluginInstalls, err := generatePluginInstalls(
 		opts.Plugins, enabled, ctx.PluginsFS, customVolPaths, overrides, ctx.PluginMethods(), opts.Warnings,
 		shellEnv{

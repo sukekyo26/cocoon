@@ -380,12 +380,26 @@ android-sdk = { api_level = "36", build_tools = "36.0.0" }
 Each value is an inline table. Only keys the plugin declares under
 `[install.extra_versions]` are accepted — an unknown key (a typo, or a
 declaration removed upstream) is rejected by `cocoon gen` instead of silently
-falling back to the default. The reserved `version` key is **rejected** here
-(the main version belongs in the `enable` array); so are `pin` and
-`checksum_*` keys (per-arch checksums live in `cocoon.lock`, not
-`workspace.toml`). Override values follow the same character rules as the
-inline version: no `"`, `\`, `\n`, `\r`, `$`, or backtick, since each flows
-into the Dockerfile RUN-prefix `KEY="..."` env pair. See the
+falling back to the default. The reserved `version` and `pin` keys are
+**rejected** here (the main version belongs in the `enable` array).
+
+**Manual checksums (escape hatch).** Per-arch checksums normally live in
+`cocoon.lock`, recorded automatically by `cocoon lock`. A few plugins' upstreams
+publish no machine-readable checksum (`codex`, `shellcheck`, `shfmt`,
+`aws-sam-cli`), so `cocoon lock` cannot fill one — for those, and only those, you
+may record a verified-build checksum here by hand:
+
+```toml
+[plugins.options]
+codex = { checksum_amd64 = "<64-hex>", checksum_arm64 = "<64-hex>" }
+```
+
+A `checksum_*` value must be 64 lowercase hex characters. Setting one for a
+plugin whose checksum `cocoon lock` *can* resolve is rejected (the lock value
+would silently win), as is setting one for a `verify = "pgp"` plugin (which
+verifies a signature in-script). Override values follow the same character
+rules as the inline version: no `"`, `\`, `\n`, `\r`, `$`, or backtick, since
+each flows into the Dockerfile RUN-prefix `KEY="..."` env pair. See the
 [plugin authoring guide](plugins.md) for how a plugin declares these.
 
 ---
