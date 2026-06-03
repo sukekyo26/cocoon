@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"net"
@@ -15,7 +16,6 @@ var (
 	rxUsername     = regexp.MustCompile(`^[a-z_][a-z0-9_-]*$`)
 	rxPluginID     = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
 	rxPluginMethod = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
-	rxSha256       = regexp.MustCompile(`^[a-f0-9]{64}$`)
 	rxEnvKey       = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 	rxShellEnvKey  = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`)
 	rxAliasKey     = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_-]*$`)
@@ -775,6 +775,67 @@ func (s *ContainerShellSpec) validate(a *Accumulator) {
 	CheckMapValues(a.At("env"), s.Env, "\n\r", shellValueHazard)
 }
 
+// VersionSpecLatest is the canonical floating [plugins.versions] constraint.
+// "*" is accepted as a synonym on input and normalised to this value.
+const VersionSpecLatest = "latest"
+
+// Version-spec sentinels. ParseVersionSpec wraps these with the offending
+// input so callers (cocoon plugin pin, the workspace loader) can classify a
+// bad [plugins.versions] constraint via errors.Is.
+var (
+	// ErrVersionSpecEmpty is returned for an empty constraint string.
+	ErrVersionSpecEmpty = errors.New("version constraint must not be empty")
+	// ErrVersionSpecRange is returned for a range operator (>=, <=, >, <, ^,
+	// ~, !=); cocoon supports only exact "=<version>" pins and "latest".
+	ErrVersionSpecRange = errors.New("version constraint ranges are not supported")
+	// ErrVersionSpecBare is returned for a bare version with no leading "=".
+	ErrVersionSpecBare = errors.New(`exact version must be prefixed with "="`)
+	// ErrVersionSpecCharset is returned when the version after "=" falls
+	// outside the accepted tag charset (rxImageVersion).
+	ErrVersionSpecCharset = errors.New("version contains unsupported characters")
+)
+
+// ParseVersionSpec parses one [plugins.versions] constraint into a
+// PluginVersionOverride (Spec plus the derived Pin; Extra and checksums are
+// left zero for the caller to fill). Accepted forms: "=<version>" (an exact
+// pin) and "latest"/"*" (floating, frozen by `cocoon lock`). Range
+// operators and bare versions are rejected with a wrapped sentinel so
+// callers can teach the two supported forms. On success Pin holds the exact
+// version for an "=<version>" spec and "" for "latest".
+func ParseVersionSpec(s string) (PluginVersionOverride, error) {
+	t := strings.TrimSpace(s)
+	switch {
+	case t == "":
+		return PluginVersionOverride{}, ErrVersionSpecEmpty //nolint:exhaustruct // error path
+	case t == VersionSpecLatest || t == "*":
+		return PluginVersionOverride{Spec: VersionSpecLatest}, nil //nolint:exhaustruct // latest leaves Pin/Extra zero
+	case hasRangeOperator(t):
+		return PluginVersionOverride{}, fmt.Errorf("%q: %w", s, ErrVersionSpecRange) //nolint:exhaustruct // error path
+	case t[0] == '=':
+		v := t[1:]
+		if !rxImageVersion.MatchString(v) {
+			return PluginVersionOverride{}, fmt.Errorf("%q: %w", s, ErrVersionSpecCharset) //nolint:exhaustruct // error path
+		}
+		return PluginVersionOverride{Spec: "=" + v, Pin: v}, nil //nolint:exhaustruct // checksums/extra filled by caller
+	default:
+		return PluginVersionOverride{}, fmt.Errorf("%q: %w", s, ErrVersionSpecBare) //nolint:exhaustruct // error path
+	}
+}
+
+// hasRangeOperator reports whether t begins with a version-range operator
+// cocoon deliberately does not support (only "=<version>" / "latest" are).
+func hasRangeOperator(t string) bool {
+	if strings.HasPrefix(t, "!=") {
+		return true
+	}
+	switch t[0] {
+	case '>', '<', '^', '~':
+		return true
+	default:
+		return false
+	}
+}
+
 func (p *PluginsSpec) validate(a *Accumulator) {
 	for i, id := range p.Enable {
 		if !rxPluginID.MatchString(id) {
@@ -784,17 +845,10 @@ func (p *PluginsSpec) validate(a *Accumulator) {
 	if HasDuplicates(p.Enable) {
 		a.Add("plugins.enable contains duplicate entries", "enable")
 	}
-	for name, ov := range p.Versions {
-		if ov.Pin == "" {
-			a.Add("pin must not be empty", "versions", name, "pin")
-		}
-		if ov.ChecksumAmd64 != nil && !rxSha256.MatchString(*ov.ChecksumAmd64) {
-			a.Add("checksum_amd64 must be 64 lowercase hex chars", "versions", name, "checksum_amd64")
-		}
-		if ov.ChecksumArm64 != nil && !rxSha256.MatchString(*ov.ChecksumArm64) {
-			a.Add("checksum_arm64 must be 64 lowercase hex chars", "versions", name, "checksum_arm64")
-		}
-	}
+	// [plugins.versions] constraints are parsed and validated in
+	// materializePluginVersions (string|table form via ParseVersionSpec); by
+	// the time validate runs they are already well-formed, and checksums no
+	// longer live in workspace.toml (they are recorded in cocoon.lock).
 	// Sort plugin ids so ValidationError.Error()'s "first error"
 	// summary stays stable across runs (map iteration is randomised).
 	methodIDs := slices.Sorted(maps.Keys(p.Methods))

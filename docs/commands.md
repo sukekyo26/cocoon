@@ -14,7 +14,7 @@ Reference for every command exposed by the `cocoon` binary.
 | `cocoon gen workspace` | Generate `<name>.code-workspace` at the project root |
 | `cocoon plugin list` | List every available plugin (embedded + overlays) |
 | `cocoon plugin show <id>` | Print the resolved manifest for one plugin |
-| `cocoon plugin pin <id> <ref>` | Emit an inline-table line for `[plugins.versions]` (stdout, or in-place with `--write`) |
+| `cocoon plugin pin <id> <ref>` | Emit a `[plugins.versions]` constraint line (stdout, or in-place with `--write`) |
 | `cocoon plugin scaffold <id>` | Create a new `<id>/` directory from a template |
 | `cocoon self-update` | Replace this binary with the latest GitHub release |
 | `cocoon version` | Print binary version |
@@ -45,7 +45,7 @@ Generate `workspace.toml` in the current directory.
 | `--sudo <mode>` | string | In-container sudo policy: `nopasswd` (default, passwordless), `password` (requires `SUDO_PASSWORD` from `.devcontainer/.env.local`, applied via a build secret), or `none` (`no_new_privileges = true`, disables sudo). Interactive `password` prompts for the password and writes `.env.local` (0600). |
 | `--apt-categories <ids>` | string | Comma-separated apt category IDs (skips the prompt). |
 | `--plugins <ids>` | string | Comma-separated plugin IDs to enable. |
-| `--plugin-versions <id>=<ref>,...` | string | Comma-separated `<id>=<ref>` pins for `version_capable` plugins. Each `<id>` must also appear in `--plugins`, must be `version_capable`, and may not repeat. Emits a `[plugins.versions]` block directly in the generated `workspace.toml`. |
+| `--plugin-versions <id>=<ref>,...` | string | Comma-separated `<id>=<ref>` constraints for `version_capable` plugins. Each `<id>` must also appear in `--plugins`, must be `version_capable`, and may not repeat. Emits `[plugins.versions]` entries directly in the generated `workspace.toml` as string constraints (`<id> = "=<ref>"`, no checksums). |
 | `--alias-bundles <ids>` | string | Comma-separated shell-alias bundle IDs (e.g. `git,ls`). |
 | `--ports <values>` | string | Comma-separated docker-compose short-form port mappings (e.g. `3000:3000,5432:5432`). Accepts every form documented for `[ports].forward`: container-only `3000`, ranges `3000-3005:3000-3005`, IPv4/IPv6 binds `127.0.0.1:8001:8001` / `[::1]:80:80`, and protocols `6060:6060/udp`. Skips the prompt. Empty / omitted = no active `[ports]` block (the commented-out template stays so the section is discoverable). |
 | `--force` | bool | Overwrite an existing `workspace.toml`. |
@@ -209,15 +209,15 @@ volumes: [/home/${USERNAME}/go]
 
 ### `cocoon plugin pin <id> <ref>`
 
-**Purpose:** record an upstream version (and optional per-arch checksums) for a `version_capable` plugin in `workspace.toml` under `[plugins.versions]`. The entry is emitted as a single inline-table line — `<id> = { pin = "<ref>", checksum_amd64 = "...", checksum_arm64 = "..." }` — that the plugin's install script reads via `$PIN` and `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64`.
+**Purpose:** record a version constraint for a `version_capable` plugin in `workspace.toml` under `[plugins.versions]`. The entry is emitted as a string constraint line — `<id> = "=<ref>"` — that the plugin's install script reads via `$PIN`. A bare `<ref>` (e.g. `1.23.4`) is written as an exact pin (`=1.23.4`); passing `latest` writes `latest`; a range (`>=`, `^`, …) is rejected with a usage error.
 
 **Example (default — stdout, manual paste):**
 
 ```console
-$ cocoon plugin pin go 1.23.4 --amd64-checksum abc123 --arm64-checksum def456
+$ cocoon plugin pin go 1.23.4
 # Add the following line under [plugins.versions] in workspace.toml:
 
-go = { pin = "1.23.4", checksum_amd64 = "abc123", checksum_arm64 = "def456" }
+go = "=1.23.4"
 ```
 
 **Example (`--write` — in-place mutation):**
@@ -227,22 +227,21 @@ $ cocoon plugin pin go 1.23.4 --write
 Updated /home/alice/proj/workspace.toml: [plugins.versions] go
 ```
 
-`--write` parses `workspace.toml` line-by-line, replaces the existing `<id> = { ... }` line under `[plugins.versions]` (if any) or appends a new one to that section. Comments and blank lines outside the target line are preserved.
+`--write` parses `workspace.toml` line-by-line, upserts the `<id>` constraint line under `[plugins.versions]` (replacing an existing one, including an old `{ pin = ... }` line it migrates to the scalar form, or appending a new one to that section). Comments and blank lines outside the target line are preserved.
 
 **Flags:**
 
 | Flag | Description |
 |---|---|
-| `--amd64-checksum <sha256>` | SHA256 of the amd64 artifact. |
-| `--arm64-checksum <sha256>` | SHA256 of the arm64 artifact. |
-| `--write` | Insert (or replace) the inline-table line in `workspace.toml` (auto-discovered from cwd). |
+| `--method <name>` | Install method to validate the ref against (when the plugin declares more than one). |
+| `--write` | Upsert the constraint line in `workspace.toml` (auto-discovered from cwd). |
 
 **Gotchas:**
 
-- `pin` only makes sense for plugins whose `[version].version_capable = true`. The pin entry is ignored at `gen` time for non-version-capable plugins.
-- Checksum flags only matter when the plugin's install script actually reads `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` — typically the `binary` and `archive` methods that verify a downloaded artifact. They are silently inert for `installer` and `apt` methods that delegate integrity to the vendor.
+- A constraint only makes sense for plugins whose `[version].version_capable = true`. The entry is ignored at `gen` time for non-version-capable plugins.
+- Checksums are not pinned here. They are recorded in `cocoon.lock` by `cocoon lock`; until then the install script's fallback verifies each download against the checksum the upstream publishes with the release.
 - `--write` requires a discoverable `workspace.toml` from cwd; without `--write`, the command works from anywhere because it only resolves the layered FS for id validation.
-- `--write` only edits the inline-table form (`<id> = { pin = "..." }` lines under a single `[plugins.versions]` section). If `workspace.toml` still contains legacy `[plugins.versions.<id>]` subsection blocks, `--write` refuses with a usage error rather than appending a duplicate entry. Convert each legacy block to an inline-table line under `[plugins.versions]` first, or edit `workspace.toml` manually.
+- `--write` only edits the string-constraint form (`<id> = "=..."` lines under a single `[plugins.versions]` section); it migrates an old `<id> = { pin = ... }` line it finds to the scalar form. If `workspace.toml` still contains legacy `[plugins.versions.<id>]` subsection blocks, `--write` refuses with a usage error rather than appending a duplicate entry. Convert each to a string constraint line `<id> = "=<version>"` under `[plugins.versions]` first, or edit `workspace.toml` manually.
 
 ### `cocoon plugin scaffold <id>`
 

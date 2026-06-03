@@ -116,9 +116,9 @@ var baseInteractiveArgs = []string{
 func TestRunInit_InteractiveSelectOrInput(t *testing.T) {
 	// When `go` is unpinned (the user kept LATEST, or stdin EOF'd),
 	// writePluginVersions emits the commented [plugins.versions] template —
-	// which itself carries an example "# go = { pin = ... }" line. So the
+	// which itself carries an example `# go = "=1.22.5"` line. So the
 	// live-pin check looks for a pin line with no leading "#", i.e.
-	// "\ngo = { pin =", not the bare substring.
+	// `\ngo = "=`, not the bare substring.
 	cases := []struct {
 		name            string
 		script          string
@@ -134,9 +134,9 @@ func TestRunInit_InteractiveSelectOrInput(t *testing.T) {
 			wantContains: []string{
 				`image_version = "24.04"`,
 				"[plugins]\nenable = [\n    \"go\",\n]",
-				"pin specific versions for version_capable plugins",
+				"version constraints for version_capable plugins",
 			},
-			wantNotContains: []string{"\ngo = { pin ="},
+			wantNotContains: []string{"\ngo = \"="},
 			wantStdout: []string{
 				"Image version",
 				"go version",
@@ -152,9 +152,9 @@ func TestRunInit_InteractiveSelectOrInput(t *testing.T) {
 			script: "24.04-patched\n1.23.4\n",
 			wantContains: []string{
 				`image_version = "24.04-patched"`,
-				"[plugins.versions]\ngo = { pin = \"1.23.4\" }\n",
+				"[plugins.versions]\ngo = \"=1.23.4\"\n",
 			},
-			wantNotContains: []string{"pin specific versions for version_capable plugins"},
+			wantNotContains: []string{"version constraints for version_capable plugins"},
 			wantStdout:      nil,
 		},
 		{
@@ -165,9 +165,9 @@ func TestRunInit_InteractiveSelectOrInput(t *testing.T) {
 			script: "bad/tag\n24.04\n1\n",
 			wantContains: []string{
 				`image_version = "24.04"`,
-				"pin specific versions for version_capable plugins",
+				"version constraints for version_capable plugins",
 			},
-			wantNotContains: []string{`image_version = "bad/tag"`, "\ngo = { pin ="},
+			wantNotContains: []string{`image_version = "bad/tag"`, "\ngo = \"="},
 			wantStdout:      []string{"must be a plain Docker tag"},
 		},
 		{
@@ -177,9 +177,9 @@ func TestRunInit_InteractiveSelectOrInput(t *testing.T) {
 			script: "\n26.04\n1\n",
 			wantContains: []string{
 				`image_version = "26.04"`,
-				"pin specific versions for version_capable plugins",
+				"version constraints for version_capable plugins",
 			},
-			wantNotContains: []string{"\ngo = { pin ="},
+			wantNotContains: []string{"\ngo = \"="},
 			wantStdout:      []string{"empty input not accepted"},
 		},
 		{
@@ -194,9 +194,9 @@ func TestRunInit_InteractiveSelectOrInput(t *testing.T) {
 			script: "24.04\n",
 			wantContains: []string{
 				`image_version = "24.04"`,
-				"pin specific versions for version_capable plugins",
+				"version constraints for version_capable plugins",
 			},
-			wantNotContains: []string{"\ngo = { pin ="},
+			wantNotContains: []string{"\ngo = \"="},
 			wantStdout:      nil,
 		},
 	}

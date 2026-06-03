@@ -113,8 +113,8 @@ var messagesEN_init = map[string]string{
 		"#   Pin versions in [plugins.versions] when you need reproducible builds.",
 	"init_toml_section_plugins_methods": "# [plugins.methods] — install method picked for plugins that declare multiple methods.\n" +
 		"#   Plugins with a single declared method ignore this section.",
-	"init_toml_section_plugins_versions": "# [plugins.versions] — pinned versions for the enabled plugins above.\n" +
-		"#   checksum_amd64 / checksum_arm64 (64 lowercase hex chars) verify downloads — verify = \"checksum\" plugins only.",
+	"init_toml_section_plugins_versions": "# [plugins.versions] — version constraints for the enabled plugins above.\n" +
+		"#   Value is \"=<exact>\" (e.g. \"=1.23.4\") or \"latest\"; run `cocoon lock` to freeze latest and record checksums in cocoon.lock.",
 	"init_toml_section_apt": "# [apt] — extra apt packages installed on top of cocoon's minimal base + selected categories.\n" +
 		"#   Re-run `cocoon init --force` to change category checkboxes, or edit this list directly.",
 	"init_toml_section_certificates": "# [certificates] — TLS certificate auto-bake from ~/.cocoon/certs/ on the host.\n" +
@@ -278,8 +278,8 @@ var messagesJA_init = map[string]string{
 		"#   再現性が必要なら [plugins.versions] でバージョン固定。",
 	"init_toml_section_plugins_methods": "# [plugins.methods] — 複数のインストール方式を提供するプラグインに対する選択。\n" +
 		"#   方式を 1 つしか持たないプラグインはこのセクションを無視。",
-	"init_toml_section_plugins_versions": "# [plugins.versions] — 上で有効化したプラグインに対するバージョン固定。\n" +
-		"#   verify = \"checksum\" のプラグインは checksum_amd64 / checksum_arm64（64 文字小文字 hex）でダウンロードを検証できる。",
+	"init_toml_section_plugins_versions": "# [plugins.versions] — 上で有効化したプラグインに対するバージョン制約。\n" +
+		"#   値は \"=<exact>\"（例 \"=1.23.4\"）か \"latest\"。`cocoon lock` で latest を凍結し checksum を cocoon.lock に記録。",
 	"init_toml_section_certificates": "# [certificates] — ホスト側 ~/.cocoon/certs/ の TLS 証明書をコンテナイメージに自動取り込み (opt-in)。\n" +
 		"#   enable = true のときジェネレータが docker-compose の additional_contexts と Dockerfile の\n" +
 		"#   RUN --mount=type=bind を配線し、ホスト側 *.crt / *.cer が build 時にトラストストアへマージされる。\n" +

@@ -17,8 +17,8 @@ import (
 // ErrPinLineEmptyID is returned by UpsertPinAndMethod when called with an empty id.
 var ErrPinLineEmptyID = errors.New("UpsertPinAndMethod: empty id")
 
-// ErrPinLineEmptyRef is returned by UpsertPinAndMethod when called with an empty ref.
-var ErrPinLineEmptyRef = errors.New("UpsertPinAndMethod: empty ref")
+// ErrPinLineEmptyRef is returned by UpsertPinAndMethod when called with an empty spec.
+var ErrPinLineEmptyRef = errors.New("UpsertPinAndMethod: empty spec")
 
 // sectionHeaderRE matches a TOML table header: `[name.space]` with optional
 // surrounding whitespace and a trailing comment.
@@ -30,24 +30,24 @@ var sectionHeaderRE = regexp.MustCompile(`^\s*\[([A-Za-z0-9_.-]+)\]\s*(#.*)?$`)
 // duplicate-key TOML, so the mutator refuses until the user converts.
 var ErrLegacyPinSubsection = errors.New(
 	"workspace.toml has legacy `[plugins.versions.<id>]` subsection block(s); " +
-		"cocoon now emits inline tables under a single `[plugins.versions]` section. " +
-		"Convert each block to `<id> = { pin = \"...\" }` under `[plugins.versions]` " +
+		"cocoon now emits one string line per id under a single `[plugins.versions]` section. " +
+		"Convert each block to `<id> = \"=<version>\"` (or `\"latest\"`) under `[plugins.versions]` " +
 		"before invoking --write")
 
-func upsertPinLineBytes(input []byte, id, ref, amd64Sum, arm64Sum string) ([]byte, error) {
+func upsertPinLineBytes(input []byte, id, spec string) ([]byte, error) {
 	hadTrailingNewline := bytes.HasSuffix(input, []byte("\n"))
 	lines := splitToLines(input)
 	if hasLegacySubsection(lines) {
 		return nil, ErrLegacyPinSubsection
 	}
-	// pin / checksum_* are rewritten from the dedicated arguments; any other
-	// inline-table keys the user already had (declared by the plugin via
-	// [install.extra_versions]) are carried through so --write does not
-	// drop them. Formatting is not preserved byte-for-byte: extras are
-	// re-emitted by FormatPinLineWithExtras in sorted key order with
-	// %q-quoted values, which normalises spacing and quoting style.
+	// The constraint is rewritten from spec; any inline-table extras the user
+	// already had (declared by the plugin via [install.extra_versions]) are
+	// carried through so --write does not drop them. Formatting is not
+	// preserved byte-for-byte: extras are re-emitted by FormatPinLineWithExtras
+	// in sorted key order with %q-quoted values, which normalises spacing and
+	// quoting style; a line with no extras is rewritten to the scalar form.
 	extras := extractExistingPinExtras(lines, "plugins.versions", id)
-	newLine := strings.TrimSuffix(FormatPinLineWithExtras(id, ref, amd64Sum, arm64Sum, extras), "\n")
+	newLine := strings.TrimSuffix(FormatPinLineWithExtras(id, spec, extras), "\n")
 	updated := upsertIDLineInSection(lines, "plugins.versions", id, newLine)
 	return renderLines(updated, hadTrailingNewline)
 }
@@ -73,7 +73,7 @@ func extractExistingPinExtras(lines []string, section, id string) map[string]str
 }
 
 // parseInlineTableExtras decodes a single inline-table value (e.g.
-// `{ pin = "1.2.3", api_level = "35" }`) and returns its non-reserved
+// `{ version = "=1.2.3", api_level = "35" }`) and returns its non-reserved
 // string keys. Decoding errors are swallowed: the existing line is
 // either valid TOML (the decoder will succeed) or it was already broken
 // before --write ran, in which case losing extras is not a new
@@ -87,7 +87,9 @@ func parseInlineTableExtras(value string) map[string]string {
 	}
 	out := make(map[string]string, len(tmp.V))
 	for k, v := range tmp.V {
-		if k == "pin" || k == "checksum_amd64" || k == "checksum_arm64" {
+		// "version" is the new reserved key; pin / checksum_* are the removed
+		// legacy keys — skip all so re-emitting an old line drops them.
+		if k == "version" || k == "pin" || k == "checksum_amd64" || k == "checksum_arm64" {
 			continue
 		}
 		s, ok := v.(string)
@@ -110,21 +112,23 @@ func upsertMethodLineBytes(input []byte, id, method string) ([]byte, error) {
 	return renderLines(updated, hadTrailingNewline)
 }
 
-// UpsertPinAndMethod atomically upserts the [plugins.versions] inline-table
-// pin line for id, and (when method != "") the [plugins.methods]
+// UpsertPinAndMethod atomically upserts the [plugins.versions] constraint
+// line for id (`<id> = "<spec>"`, or the inline-table form when the existing
+// line carried plugin extras), and (when method != "") the [plugins.methods]
 // `<id> = "<method>"` line. Both upserts share a single read-modify-write
 // cycle so a transient I/O failure cannot leave workspace.toml in a half-
 // updated state (writing the pin and method in two separate passes would
 // be non-transactional: a failure between them would persist the pin without
-// the matching method). Pass method = "" to upsert the pin alone.
+// the matching method). Pass method = "" to upsert the constraint alone.
 //
+// spec is the normalised version constraint ("=<version>" or "latest").
 // Returns ErrLegacyPinSubsection when the file carries the legacy
 // [plugins.versions.<id>] shape; the file is not modified in that case.
-func UpsertPinAndMethod(path, id, ref, amd64Sum, arm64Sum, method string) error {
+func UpsertPinAndMethod(path, id, spec, method string) error {
 	if id == "" {
 		return ErrPinLineEmptyID
 	}
-	if ref == "" {
+	if spec == "" {
 		return ErrPinLineEmptyRef
 	}
 	// method == "" is the "pin only" path; do not reject it.
@@ -136,7 +140,7 @@ func UpsertPinAndMethod(path, id, ref, amd64Sum, arm64Sum, method string) error 
 	if err != nil {
 		return fmt.Errorf("read %s: %w", path, err)
 	}
-	out, err := upsertPinLineBytes(body, id, ref, amd64Sum, arm64Sum)
+	out, err := upsertPinLineBytes(body, id, spec)
 	if err != nil {
 		return err
 	}

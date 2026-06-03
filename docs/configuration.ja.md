@@ -34,7 +34,7 @@
 | `[container.sudo]` | optional | sudo のパスワード方針（`mode`） |
 | `[[container.skel]]` | optional | `/etc/skel` 経由で配置する dotfiles |
 | `[plugins]` | **required** | 有効化するプラグイン |
-| `[plugins.versions]` | optional | プラグインのバージョン固定 + チェックサム |
+| `[plugins.versions]` | optional | プラグインのバージョン制約 |
 | `[apt]` | optional | 追加 apt パッケージ |
 | `[apt.mirror]` | optional | 地域 apt ミラー |
 | `[apt.proxy]` | optional | apt-get の HTTP/HTTPS プロキシ |
@@ -307,29 +307,32 @@ enable = ["go", "uv", "github-cli"]
 
 ### `[plugins.versions]`
 
-`version_capable` プラグインのバージョン固定。`checksum_amd64` / `checksum_arm64` (64 文字の小文字 hex) は **任意**: install スクリプトは既定で、上流がリリースと共に公開する checksum とダウンロードを照合するため、checksum の pin は追加のユーザー制御オーバーライド (`pin` と併用すると最強) となる。`verify = "pgp"` のプラグイン (例: `aws-cli`) は同梱署名でダウンロードを検証するため、`pin` のみで固定する — その種のプラグインに `checksum_amd64` / `checksum_arm64` を付けると `gen` 時に拒否される。
+`version_capable` プラグインのバージョン制約。各値は文字列で、`"=<exact>"` (先頭の `=` に注意) の厳密 pin か、`"latest"` (`"*"` も同義として受理) のいずれか。`"latest"` は `cocoon lock` が具体的なバージョンへ凍結する。範囲演算子 (`>=`, `^`, `~`, `<` …) は **非対応** — `=exact` と `latest` のみ。
 
 ```toml
 [plugins.versions]
-go = { pin = "1.22.5" }
-uv = { pin = "0.5.7", checksum_amd64 = "<sha256>", checksum_arm64 = "<sha256>" }
-aws-cli = { pin = "2.34.48" }
+go = "=1.22.5"
+node = "latest"
+aws-cli = "=2.34.48"   # verify = "pgp" — checksum は cocoon.lock が扱う
 ```
+
+checksum はここには **書かない**。per-arch SHA256 checksum は `cocoon lock` が `cocoon.lock` ファイルに記録し、同時に `"latest"` 制約を具体的なバージョンへ解決する。checksum が未記録のときも、install スクリプトは上流がリリースと共に公開する checksum とダウンロードを照合する (trust-on-first-use)。`verify = "pgp"` のプラグイン (例: `aws-cli`) は同梱署名でダウンロードを検証し、checksum を一切持たない。
 
 #### サブコンポーネントバージョン
 
 一部のプラグインは追加のバージョン指定（`[install.extra_versions]` で宣言。
-`cocoon plugin show <id>` で確認可能）を公開します。`pin` と並べてインライン
-テーブルのキーとして指定します:
+`cocoon plugin show <id>` で確認可能）を公開します。その種のプラグインは
+インラインテーブル形式を使い、バージョンは予約キー `version` 配下へ移り、
+追加の指定をその隣に並べます:
 
 ```toml
 [plugins.versions]
-android-sdk = { pin = "14742923", api_level = "36", build_tools = "36.0.0" }
+android-sdk = { version = "=14742923", api_level = "36", build_tools = "36.0.0" }
 ```
 
 宣言済みのキーのみ受理されます — 未知のキー（typo や上流で削除された宣言）は
 default に黙ってフォールバックせず `cocoon gen` が拒否します。override 値は
-`pin` と同じ制約に従います: `"`, `\`, `\n`, `\r`, `$`, backtick は不可
+`version` と同じ制約に従います: `"`, `\`, `\n`, `\r`, `$`, backtick は不可
 （いずれも Dockerfile の RUN プレフィックス `KEY="..."` env ペアに展開される
 ため）。宣言方法は[プラグイン作成ガイド](plugins.ja.md)を参照。
 

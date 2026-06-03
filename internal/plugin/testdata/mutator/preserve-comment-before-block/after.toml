@@ -4,4 +4,4 @@ enable = ["go"]
 # inline note: bump go quarterly
 
 [plugins.versions]
-go = { pin = "1.23.4" }
+go = "=1.23.4"

@@ -249,35 +249,29 @@ Resolves <id> through the same project > user > embedded layered view as
 and the source layer it was read from.`,
 
 	// cocoon plugin pin
-	"cmd_plugin_pin_short": "Emit inline-table pin lines for workspace.toml (stdout, or in-place with --write)",
-	"cmd_plugin_pin_long": `cocoon plugin pin — emit pin lines for [plugins.versions] (and optionally [plugins.methods])
+	"cmd_plugin_pin_short": "Emit a [plugins.versions] constraint line for workspace.toml (stdout, or in-place with --write)",
+	"cmd_plugin_pin_long": `cocoon plugin pin — emit a constraint line for [plugins.versions] (and optionally [plugins.methods])
 
-By default a ` + "`<id> = { pin = \"<ref>\" }`" + ` line is printed to stdout for you
-to paste under the [plugins.versions] section in workspace.toml. With
---write the line is upserted in place (inserted, or the existing
-<id> = { ... } line is replaced); comments and blank lines outside the
-target line are preserved verbatim.
+By default a ` + "`<id> = \"=<ref>\"`" + ` line is printed to stdout for you
+to paste under the [plugins.versions] section in workspace.toml. A bare
+version (1.23.4) is written as an exact pin (=1.23.4); pass "latest" to
+track the newest release. With --write the line is upserted in place
+(inserted, or the existing <id> line is replaced); comments and blank
+lines outside the target line are preserved verbatim.
 
-Use the --amd64-checksum / --arm64-checksum flags when the upstream
-release ships per-arch SHA256 sums you want the install script to
-verify. Plugins that declare verify = "pgp" in plugin.toml verify
-downloads against a bundled signature instead; passing checksum flags
-to those plugins is rejected.
+Versions are frozen to concrete releases — and per-arch SHA256 checksums
+recorded — by ` + "`cocoon lock`" + ` into cocoon.lock; checksums no longer
+live in workspace.toml.
 
 Pass --method <name> for plugins that declare two or more entries under
 [install.methods] in their plugin.toml — the pin then writes (or prints)
 both lines together: ` + "`<id> = \"<method>\"`" + ` for [plugins.methods] and
-the inline-table line for [plugins.versions]. Checksums are workspace-
-scoped (not per-method); when switching methods, refresh
---amd64-checksum / --arm64-checksum so the install script's SHA256
-verification still matches the new artifact.`,
-	"flag_plugin_pin_amd64_checksum_usage": "sha256 of the amd64 artifact (optional)",
-	"flag_plugin_pin_arm64_checksum_usage": "sha256 of the arm64 artifact (optional)",
+the constraint line for [plugins.versions].`,
 	"flag_plugin_pin_method_usage": "install method name; only meaningful for plugins that declare [install.methods]. " +
 		"When set, the command pins both [plugins.methods] and [plugins.versions] in a " +
 		"single workspace.toml read-write. When omitted, only [plugins.versions] is updated " +
 		"(the existing [plugins.methods] entry — or the plugin's default_method — stays in effect).",
-	"flag_plugin_pin_write_usage": "upsert the inline-table line in workspace.toml (auto-discovered from cwd)",
+	"flag_plugin_pin_write_usage": "upsert the constraint line in workspace.toml (auto-discovered from cwd)",
 
 	// cocoon plugin scaffold
 	"cmd_plugin_scaffold_cmd_short": "Create a new <id>/ plugin directory " +
@@ -496,33 +490,28 @@ tarball）を持っている場合、internal/plugin/catalog/<id>/ から
 source レイヤーを表示します。`,
 
 	// cocoon plugin pin
-	"cmd_plugin_pin_short": "workspace.toml 向けの inline-table pin 行を出力 (stdout、または --write で in-place)",
-	"cmd_plugin_pin_long": `cocoon plugin pin — [plugins.versions] (および任意で [plugins.methods]) の pin 行を出力
+	"cmd_plugin_pin_short": "workspace.toml 向けの [plugins.versions] 制約行を出力 (stdout、または --write で in-place)",
+	"cmd_plugin_pin_long": `cocoon plugin pin — [plugins.versions] (および任意で [plugins.methods]) の制約行を出力
 
-既定では ` + "`<id> = { pin = \"<ref>\" }`" + ` 行が stdout に出力されるので、
-workspace.toml の [plugins.versions] セクションに貼り付けてください。--write を
-付けると in-place で upsert されます (新規挿入、または既存の <id> = { ... } 行を
-置換)。対象行以外のコメントや空行は verbatim で保持されます。
+既定では ` + "`<id> = \"=<ref>\"`" + ` 行が stdout に出力されるので、
+workspace.toml の [plugins.versions] セクションに貼り付けてください。素のバージョン
+(1.23.4) は exact pin (=1.23.4) として書かれ、"latest" を渡すと最新リリースを
+追従します。--write を付けると in-place で upsert されます (新規挿入、または既存の
+<id> 行を置換)。対象行以外のコメントや空行は verbatim で保持されます。
 
-上流リリースが arch ごとの SHA256 を配布していて、それを install スクリプトに
-検証させたい場合は --amd64-checksum / --arm64-checksum を指定します。
-plugin.toml に verify = "pgp" を宣言しているプラグインはバンドル署名で検証する
-ため、これらのプラグインに checksum フラグを渡すと拒否されます。
+バージョンの具体リリースへの凍結と arch ごとの SHA256 checksum の記録は
+` + "`cocoon lock`" + ` が cocoon.lock に対して行います。checksum はもう
+workspace.toml には置きません。
 
 plugin.toml の [install.methods] に複数エントリを宣言しているプラグインには
 --method <name> を指定します。pin はその場合に
-` + "`<id> = \"<method>\"`" + ` 行（[plugins.methods] 向け）と inline-table 行
-（[plugins.versions] 向け）の両方をまとめて書き出します(または出力します)。
-checksum は workspace スコープ（method 毎ではない）なので、method を切り替える
-ときは install スクリプトの SHA256 検証が新成果物に合うよう
---amd64-checksum / --arm64-checksum も更新してください。`,
-	"flag_plugin_pin_amd64_checksum_usage": "amd64 成果物の sha256（任意）",
-	"flag_plugin_pin_arm64_checksum_usage": "arm64 成果物の sha256（任意）",
+` + "`<id> = \"<method>\"`" + ` 行（[plugins.methods] 向け）と制約行
+（[plugins.versions] 向け）の両方をまとめて書き出します(または出力します)。`,
 	"flag_plugin_pin_method_usage": "install メソッド名。[install.methods] を宣言したプラグインのみ意味を持ちます。" +
 		"指定すると単一の workspace.toml 読み書きで [plugins.methods] と [plugins.versions] の両方を pin します。" +
 		"省略時は [plugins.versions] のみ更新されます " +
 		"（既存の [plugins.methods] エントリ、またはプラグインの default_method が引き続き有効）。",
-	"flag_plugin_pin_write_usage": "workspace.toml の inline-table 行を upsert（cwd から自動探索）",
+	"flag_plugin_pin_write_usage": "workspace.toml の制約行を upsert（cwd から自動探索）",
 
 	// cocoon plugin scaffold
 	"cmd_plugin_scaffold_cmd_short": "新しい <id>/ プラグインディレクトリを作成 " +

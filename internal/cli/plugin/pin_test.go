@@ -48,8 +48,8 @@ func TestPin_StdoutOnlyByDefault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("pin: err=%v stderr=%s", err, stderr)
 	}
-	if !strings.Contains(stdout, "[plugins.versions]") || !strings.Contains(stdout, `go = { pin = "1.23.4" }`) {
-		t.Errorf("stdout missing inline pin line:\n%s", stdout)
+	if !strings.Contains(stdout, "[plugins.versions]") || !strings.Contains(stdout, `go = "=1.23.4"`) {
+		t.Errorf("stdout missing pin line:\n%s", stdout)
 	}
 	body, rerr := os.ReadFile(path) //nolint:gosec // tmp under t.TempDir
 	if rerr != nil {
@@ -81,7 +81,7 @@ func TestPin_WriteAppendsInlineLineInPlace(t *testing.T) {
 	if rerr != nil {
 		t.Fatalf("read: %v", rerr)
 	}
-	if !strings.Contains(string(got), "[plugins.versions]") || !strings.Contains(string(got), `go = { pin = "1.23.4" }`) {
+	if !strings.Contains(string(got), "[plugins.versions]") || !strings.Contains(string(got), `go = "=1.23.4"`) {
 		t.Errorf("workspace.toml missing new line:\n%s", got)
 	}
 }
@@ -98,7 +98,7 @@ func TestPin_WriteAppendsAlongsideExisting(t *testing.T) {
 enable = ["go", "uv"]
 
 [plugins.versions]
-go = { pin = "1.23.4" }
+go = "=1.23.4"
 
 [mounts]
 host = "./src"
@@ -117,8 +117,8 @@ host = "./src"
 	if strings.Count(body, "[plugins.versions]") != 1 {
 		t.Errorf("expected exactly one [plugins.versions] section header:\n%s", body)
 	}
-	goIdx := strings.Index(body, `go = { pin = "1.23.4" }`)
-	uvIdx := strings.Index(body, `uv = { pin = "0.5.7" }`)
+	goIdx := strings.Index(body, `go = "=1.23.4"`)
+	uvIdx := strings.Index(body, `uv = "=0.5.7"`)
 	mountsIdx := strings.Index(body, "[mounts]")
 	if goIdx < 0 || uvIdx < 0 {
 		t.Fatalf("expected both pins present:\n%s", body)
@@ -142,7 +142,7 @@ func TestPin_WriteReplacesExistingBlock(t *testing.T) {
 enable = ["go"]
 
 [plugins.versions]
-go = { pin = "1.22.0" }
+go = "=1.22.0"
 `)
 	t.Chdir(dir)
 
@@ -153,11 +153,11 @@ go = { pin = "1.22.0" }
 	if rerr != nil {
 		t.Fatalf("read: %v", rerr)
 	}
-	if strings.Contains(string(got), `pin = "1.22.0"`) {
+	if strings.Contains(string(got), "1.22.0") {
 		t.Errorf("old pin not replaced:\n%s", got)
 	}
-	if strings.Count(string(got), "go = {") != 1 {
-		t.Errorf("expected exactly one `go = {` line:\n%s", got)
+	if strings.Count(string(got), "go = ") != 1 {
+		t.Errorf("expected exactly one `go = ` line:\n%s", got)
 	}
 }
 
@@ -267,7 +267,7 @@ func TestPin_MethodStdoutEmitsBothBlocks(t *testing.T) {
 		"Under [plugins.methods]:",
 		`multi-method = "binary"`,
 		"Under [plugins.versions]:",
-		`multi-method = { pin = "1.2.3" }`,
+		`multi-method = "=1.2.3"`,
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("stdout missing %q:\n%s", want, stdout)
@@ -315,7 +315,7 @@ func TestPin_MethodWriteUpdatesBothSections(t *testing.T) {
 	body := string(got)
 	for _, want := range []string{
 		"[plugins.versions]",
-		`multi-method = { pin = "1.2.3" }`,
+		`multi-method = "=1.2.3"`,
 		"[plugins.methods]",
 		`multi-method = "binary"`,
 	} {
@@ -347,7 +347,7 @@ func TestPin_MethodUnknownNameFails(t *testing.T) {
 }
 
 // seedPGPPlugin drops a user-overlay plugin declaring verify = "pgp" so
-// pin can reject the checksum flags against it.
+// pin can be exercised against a pgp-verified plugin.
 func seedPGPPlugin(t *testing.T, home string) {
 	t.Helper()
 	dir := filepath.Join(home, ".cocoon", "plugins", "pgp-plugin")
@@ -376,48 +376,31 @@ verify = "pgp"
 	}
 }
 
-// --amd64-checksum / --arm64-checksum against a verify = "pgp" plugin must
-// fail with ErrUsage (the checksum vocabulary does not apply), while a
-// plain pin of the same plugin still succeeds.
+// A verify = "pgp" plugin is pinned the same way as any other
+// version_capable plugin — checksums are no longer a workspace concern
+// (cocoon lock records them), so there is no per-plugin checksum vocabulary
+// to reject. The pin line is the plain constraint form.
 //
 //nolint:paralleltest // t.Chdir + t.Setenv mutate process state.
-func TestPin_ChecksumRejectedForPGPPlugin(t *testing.T) {
+func TestPin_PgpPluginPins(t *testing.T) {
 	home := withIsolatedHome(t)
 	seedPGPPlugin(t, home)
 	dir := t.TempDir()
 	seedWorkspace(t, dir, "[plugins]\nenable = [\"pgp-plugin\"]\n")
 	t.Chdir(dir)
 
-	sha := "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
-	for _, flag := range []string{"--amd64-checksum", "--arm64-checksum"} {
-		flag := flag
-		t.Run("rejects_"+flag, func(t *testing.T) {
-			_, _, err := runPinCmd(t, "pgp-plugin", "2.0.0", flag, sha)
-			if !errors.Is(err, clihelpers.ErrUsage) {
-				t.Fatalf("err = %v, want ErrUsage", err)
-			}
-			if !strings.Contains(err.Error(), `verify = "pgp"`) {
-				t.Errorf("err should name the pgp verify method: %v", err)
-			}
-		})
+	stdout, stderr, err := runPinCmd(t, "pgp-plugin", "2.0.0")
+	if err != nil {
+		t.Fatalf("pin: err=%v stderr=%s", err, stderr)
 	}
-
-	t.Run("plain_pin_succeeds", func(t *testing.T) {
-		stdout, stderr, err := runPinCmd(t, "pgp-plugin", "2.0.0")
-		if err != nil {
-			t.Fatalf("pin: err=%v stderr=%s", err, stderr)
-		}
-		if !strings.Contains(stdout, `pgp-plugin = { pin = "2.0.0" }`) {
-			t.Errorf("stdout missing pin line:\n%s", stdout)
-		}
-	})
+	if !strings.Contains(stdout, `pgp-plugin = "=2.0.0"`) {
+		t.Errorf("stdout missing pin line:\n%s", stdout)
+	}
 }
 
 // pin against a plugin that is not version_capable must fail with ErrUsage
 // rather than emit a [plugins.versions] entry that cocoon gen would later
-// hard-reject. Covered with and without a checksum flag, since a plain pin
-// of a non-versioned plugin is just as invalid. docker-cli is an embedded
-// non-versioned plugin.
+// hard-reject. docker-cli is an embedded non-versioned plugin.
 //
 //nolint:paralleltest // t.Chdir mutates process cwd.
 func TestPin_RejectsNonVersionCapablePlugin(t *testing.T) {
@@ -426,28 +409,53 @@ func TestPin_RejectsNonVersionCapablePlugin(t *testing.T) {
 	seedWorkspace(t, dir, "[plugins]\nenable = [\"docker-cli\"]\n")
 	t.Chdir(dir)
 
-	cases := []struct {
-		name string
-		args []string
-	}{
-		{"plain_pin", []string{"docker-cli", "1.0.0"}},
-		{"with_checksum_flag", []string{
-			"docker-cli", "1.0.0", "--amd64-checksum",
-			"deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
-		}},
+	_, _, err := runPinCmd(t, "docker-cli", "1.0.0")
+	if !errors.Is(err, clihelpers.ErrUsage) {
+		t.Fatalf("err = %v, want ErrUsage", err)
 	}
-	for _, tc := range cases {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			_, _, err := runPinCmd(t, tc.args...)
-			if !errors.Is(err, clihelpers.ErrUsage) {
-				t.Fatalf("err = %v, want ErrUsage", err)
-			}
-			if !strings.Contains(err.Error(), "not version_capable") {
-				t.Errorf("err should explain the plugin is not version_capable: %v", err)
-			}
-		})
+	if !strings.Contains(err.Error(), "not version_capable") {
+		t.Errorf("err should explain the plugin is not version_capable: %v", err)
 	}
+}
+
+// pin normalises the <ref> argument: a bare version becomes an exact "="
+// pin, "latest" passes through, and a range operator is rejected with
+// ErrUsage (cocoon supports only exact pins and latest).
+//
+//nolint:paralleltest // t.Chdir mutates process cwd.
+func TestPin_AcceptsLatestAndRejectsRange(t *testing.T) {
+	withIsolatedHome(t)
+	dir := t.TempDir()
+	seedWorkspace(t, dir, "[plugins]\nenable = [\"go\"]\n")
+	t.Chdir(dir)
+
+	t.Run("latest", func(t *testing.T) {
+		stdout, stderr, err := runPinCmd(t, "go", "latest")
+		if err != nil {
+			t.Fatalf("pin latest: err=%v stderr=%s", err, stderr)
+		}
+		if !strings.Contains(stdout, `go = "latest"`) {
+			t.Errorf("stdout missing latest line:\n%s", stdout)
+		}
+	})
+	t.Run("explicit_exact", func(t *testing.T) {
+		stdout, _, err := runPinCmd(t, "go", "=1.23.4")
+		if err != nil {
+			t.Fatalf("pin =1.23.4: %v", err)
+		}
+		if !strings.Contains(stdout, `go = "=1.23.4"`) {
+			t.Errorf("stdout missing exact line:\n%s", stdout)
+		}
+	})
+	t.Run("range_rejected", func(t *testing.T) {
+		_, _, err := runPinCmd(t, "go", ">=1.20")
+		if !errors.Is(err, clihelpers.ErrUsage) {
+			t.Fatalf("err = %v, want ErrUsage", err)
+		}
+		if !strings.Contains(err.Error(), "ranges are not supported") {
+			t.Errorf("err should explain ranges are unsupported: %v", err)
+		}
+	})
 }
 
 // --method on a user-overlay plugin whose plugin.toml declares no

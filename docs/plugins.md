@@ -233,13 +233,13 @@ script to mistake it for. See
 `internal/plugin/catalog/copilot-cli/install.installer.sh` and
 `install.binary.sh` for the pattern.
 
-**Pin/checksum scope.** Pins live under `[plugins.versions]` and are
-**workspace-scoped, not method-scoped** — the catalog deliberately keeps
-`plugin.toml` free of per-method checksums to bound the diff every
-upstream release produces. When switching methods, refresh
-`checksum_amd64` / `checksum_arm64` in `workspace.toml` (or use
-`cocoon plugin pin --method <name>` to do both at once) so the install
-script's `sha256sum -c -` still matches the new artifact.
+**Pin/checksum scope.** Version constraints live under `[plugins.versions]`
+and are **workspace-scoped, not method-scoped** — the catalog deliberately
+keeps `plugin.toml` free of per-method checksums to bound the diff every
+upstream release produces. Per-arch checksums are recorded in `cocoon.lock`
+by `cocoon lock`, not in `workspace.toml`. When switching methods, re-run
+`cocoon lock` to refresh the recorded checksums so the install script's
+`sha256sum -c -` still matches the new artifact.
 
 **3-layer overlay.** Method resolution is currently **same-layer only**:
 a plugin's `plugin.toml` and every declared `install.<name>.sh` must
@@ -274,11 +274,11 @@ bash's environment for that step is composed from two sources:
 | `RC_SYNTAX`      | per-RUN env, always | `posix` (bash/zsh) or `fish`. Use this to branch when emitting rc lines. |
 | `LOGIN_SHELL`    | per-RUN env, always | `bash`, `zsh`, or `fish`. |
 | `USERNAME`       | Dockerfile `ARG`, always | The unprivileged container user name (declared via `ARG USERNAME` near the top of the generated Dockerfile and promoted to env by BuildKit). |
-| `PIN`            | per-RUN env, only when `[version].version_capable = true` | Version string from `[plugins.versions]`'s `<id> = { pin = "..." }` entry in `workspace.toml`. Empty means "use upstream latest". |
-| `CHECKSUM_AMD64` | per-RUN env, only when `version_capable = true` and `verify = "checksum"` | `sha256` of the amd64 artifact, or empty (the script then verifies against the upstream-published checksum, warning only if the upstream ships none). Not passed to `verify = "pgp"` plugins. |
+| `PIN`            | per-RUN env, only when `[version].version_capable = true` | Version string from `[plugins.versions]`'s `<id> = "=..."` entry in `workspace.toml` (e.g. `=1.23.4` → `PIN="1.23.4"`). Empty for `latest` with no lock yet, meaning "use upstream latest". |
+| `CHECKSUM_AMD64` | per-RUN env, only when `version_capable = true` and `verify = "checksum"` | `sha256` of the amd64 artifact from `cocoon.lock`, or empty until you run `cocoon lock` (the script then verifies against the upstream-published checksum, warning only if the upstream ships none). Not passed to `verify = "pgp"` plugins. |
 | `CHECKSUM_ARM64` | same as above | `sha256` of the arm64 artifact. |
 | `<BUILD_ARG>`    | per-RUN env (also declared as `ARG`), only when listed in `[install].build_args` | The generator emits one `ARG <name>` line per plugin (next to whichever hook runs first) and threads `<name>="${<name>}"` into the per-RUN prefix of every hook. The Dockerfile substitutes the value on each prefix line at build time. No catalog plugin currently declares one; the mechanism is for custom plugins. |
-| `<EXTRA_ENV>`    | per-RUN env, when declared under `[install.extra_versions]` | One env var per declared subcomponent version. The plugin spells out the env name and a default; the user can override the value from `workspace.toml`'s `[plugins.versions].<id>` inline table by writing the same key (e.g. `android-sdk = { pin = "...", api_level = "36" }`). The reserved env names above (`PIN`, `CHECKSUM_AMD64`, `CHECKSUM_ARM64`, `RC_FILE`, `RC_SYNTAX`, `LOGIN_SHELL`, `COCOON_INSTALL_METHOD`, `USERNAME`) are off-limits for collision reasons. See "Subcomponent versions" below. |
+| `<EXTRA_ENV>`    | per-RUN env, when declared under `[install.extra_versions]` | One env var per declared subcomponent version. The plugin spells out the env name and a default; the user can override the value from `workspace.toml`'s `[plugins.versions].<id>` inline table by writing the same key (e.g. `android-sdk = { version = "=...", api_level = "36" }`). The reserved env names above (`PIN`, `CHECKSUM_AMD64`, `CHECKSUM_ARM64`, `RC_FILE`, `RC_SYNTAX`, `LOGIN_SHELL`, `COCOON_INSTALL_METHOD`, `USERNAME`) are off-limits for collision reasons. See "Subcomponent versions" below. |
 
 Nothing on the developer's host machine evaluates the script — bash
 runs the body inside the build environment, with the env composed as
@@ -308,33 +308,33 @@ A versioned plugin agrees to:
     field in the upstream's release JSON — fetched from the same upstream
     as the artifact. A few upstreams publish no per-release checksum at
     all (e.g. `shfmt`, `shellcheck`): those scripts **warn loudly** and
-    proceed whenever no checksum is pinned (they never silently skip), so
-    pin `checksum_amd64` / `checksum_arm64` for a verified build.
+    proceed whenever no checksum is recorded (they never silently skip), so
+    run `cocoon lock` to record `checksum_amd64` / `checksum_arm64` for a
+    verified build.
     The fetched-checksum path defends against CDN/mirror corruption and
     accidental swaps; on its own it is not proof against a fully
-    compromised upstream — pin a checksum, or prefer a `verify = "pgp"`
-    plugin, when you need that.
+    compromised upstream — record a checksum with `cocoon lock`, or prefer
+    a `verify = "pgp"` plugin, when you need that.
   - `verify = "pgp"` — for upstreams that publish a detached signature
     but no SHA256 (e.g. AWS CLI). The script verifies the download
     in-script against a signing key bundled in the install script;
-    `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` are not passed, and setting
-    `checksum_amd64` / `checksum_arm64` in `[plugins.versions]` for
-    such a plugin is rejected at `gen` time.
+    `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` are not passed, and such a
+    plugin never carries a checksum.
 
-Users record pins in `workspace.toml` under a single
-`[plugins.versions]` section, one inline-table line per plugin.
-Checksums apply to `verify = "checksum"` plugins only:
+Users record version constraints in `workspace.toml` under a single
+`[plugins.versions]` section, one string constraint per plugin. Checksums
+are not recorded here — they live in `cocoon.lock` (via `cocoon lock`):
 
 ```toml
 [plugins.versions]
-go = { pin = "1.23.4", checksum_amd64 = "abc...", checksum_arm64 = "def..." }
-aws-cli = { pin = "2.34.48" }   # verify = "pgp" — no checksum fields
+go = "=1.23.4"
+aws-cli = "=2.34.48"   # verify = "pgp" — checksum handled by cocoon.lock
 ```
 
 `cocoon plugin pin <id> <ref> --write` upserts this line for you.
 See `docs/commands.md` for the full flag list.
 
-A plugin where `version_capable = false` cannot be pinned: `cocoon gen`
+A plugin where `version_capable = false` cannot be constrained: `cocoon gen`
 rejects any `[plugins.versions]` entry for it, and `cocoon plugin pin`
 refuses to emit one.
 
@@ -356,10 +356,10 @@ build_tools = { env = "ANDROID_SDK_BUILD_TOOLS", default = "35.0.0" }
 ```
 
 - **Key** (`api_level`, `build_tools`) — what the user writes in
-  `[plugins.versions].<id>`. Matches `^[a-z][a-z0-9_]*$`. `pin`,
-  `checksum_amd64`, and `checksum_arm64` are reserved by
-  `[plugins.versions]` and are rejected as extra keys (declaring them
-  would be a no-op — the user could never override the value).
+  `[plugins.versions].<id>`. Matches `^[a-z][a-z0-9_]*$`. `version` is
+  reserved by `[plugins.versions]` (it carries the plugin's own version
+  constraint in the inline-table form) and is rejected as an extra key
+  (declaring it would be a no-op — the user could never override the value).
 - **`env`** — the env name the install script reads. Matches
   `^[A-Z_][A-Z0-9_]*$`, must not collide with the reserved env
   variables above, with any name in `[install].build_args`, or with
@@ -375,11 +375,12 @@ build_tools = { env = "ANDROID_SDK_BUILD_TOOLS", default = "35.0.0" }
   trigger parameter or command substitution at build time instead of
   passing through as a literal version string.
 
-End-user override looks like any other `[plugins.versions]` entry:
+End-user override uses the inline-table form, with the plugin's own version
+under the reserved `version` key:
 
 ```toml
 [plugins.versions]
-android-sdk = { pin = "14742923", api_level = "36", build_tools = "36.0.0" }
+android-sdk = { version = "=14742923", api_level = "36", build_tools = "36.0.0" }
 ```
 
 Keys that are **not** declared under the plugin's
@@ -387,7 +388,7 @@ Keys that are **not** declared under the plugin's
 `ErrUnknownExtraVersion` so a typo (`api_levle = "..."`) does not
 silently fall through to the default. `cocoon plugin pin <id> <ref>
 --write` preserves any extra keys present on the existing line — it
-rewrites `pin` / `checksum_*` only.
+rewrites the `version` constraint only.
 
 ## Catalog tour
 

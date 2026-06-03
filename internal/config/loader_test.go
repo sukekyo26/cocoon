@@ -96,44 +96,51 @@ func TestValidationError_LocStringEmpty(t *testing.T) {
 }
 
 // TestLoadWorkspace_PluginVersionsExtra pins that workspace.toml's
-// [plugins.versions].<id> inline-table accepts keys beyond the reserved
-// triple (pin / checksum_amd64 / checksum_arm64) and routes them into
-// PluginVersionOverride.Extra. Without this, an Android SDK plugin
-// declaring api_level / build_tools under [install.extra_versions]
-// could not surface the workspace override into the install script.
+// [plugins.versions].<id> accepts either a scalar constraint string or an
+// inline table whose "version" key carries the constraint and whose extra
+// keys (declared by a plugin via [install.extra_versions]) route into
+// PluginVersionOverride.Extra. Without the table form, an Android SDK
+// plugin declaring api_level / build_tools could not surface the workspace
+// override into the install script.
 //
-// Four input shapes covered: pin only (Extra nil), pin + extras, pin +
-// checksum + extras, and a quoted bare-key form ("api_level" = "36").
+// Four input shapes covered: a scalar exact pin (Extra nil), a table with
+// version + extras, a table with version = "latest" + an extra, and a
+// quoted-key table form ("version" = "…").
 func TestLoadWorkspace_PluginVersionsExtra(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
 		name        string
 		versionLine string
+		wantSpec    string
 		wantPin     string
 		wantExtra   map[string]string
 	}{
 		{
-			name:        "pin_only_no_extra",
-			versionLine: `go = { pin = "1.23.4" }`,
+			name:        "scalar_exact_no_extra",
+			versionLine: `go = "=1.23.4"`,
+			wantSpec:    "=1.23.4",
 			wantPin:     "1.23.4",
 			wantExtra:   nil,
 		},
 		{
-			name:        "pin_plus_extras",
-			versionLine: `android-sdk = { pin = "14742923", api_level = "36", build_tools = "36.0.0" }`,
+			name:        "version_plus_extras",
+			versionLine: `android-sdk = { version = "=14742923", api_level = "36", build_tools = "36.0.0" }`,
+			wantSpec:    "=14742923",
 			wantPin:     "14742923",
 			wantExtra:   map[string]string{"api_level": "36", "build_tools": "36.0.0"},
 		},
 		{
-			name:        "pin_with_checksum_and_extra",
-			versionLine: `android-sdk = { pin = "14742923", checksum_amd64 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", api_level = "35" }`,
-			wantPin:     "14742923",
+			name:        "latest_plus_extra",
+			versionLine: `android-sdk = { version = "latest", api_level = "35" }`,
+			wantSpec:    "latest",
+			wantPin:     "",
 			wantExtra:   map[string]string{"api_level": "35"},
 		},
 		{
 			name:        "quoted_keys",
-			versionLine: `android-sdk = { "pin" = "14742923", "api_level" = "36" }`,
+			versionLine: `android-sdk = { "version" = "=14742923", "api_level" = "36" }`,
+			wantSpec:    "=14742923",
 			wantPin:     "14742923",
 			wantExtra:   map[string]string{"api_level": "36"},
 		},
@@ -165,6 +172,7 @@ enable = []
 				break
 			}
 			ov := ws.Plugins.Versions[id]
+			require.Equal(t, tc.wantSpec, ov.Spec)
 			require.Equal(t, tc.wantPin, ov.Pin)
 			require.Equal(t, tc.wantExtra, ov.Extra)
 		})
@@ -187,7 +195,7 @@ image_version = "24.04"
 enable = []
 
 [plugins.versions]
-android-sdk = { pin = "14742923", api_level = 36 }
+android-sdk = { version = "=14742923", api_level = 36 }
 `
 	tmp := t.TempDir() + "/ws.toml"
 	require.NoError(t, os.WriteFile(tmp, []byte(body), 0o600))
@@ -235,7 +243,7 @@ image_version = "24.04"
 enable = []
 
 [plugins.versions]
-android-sdk = { pin = "14742923", ` + tc.extraExpr + ` }
+android-sdk = { version = "=14742923", ` + tc.extraExpr + ` }
 `
 			tmp := t.TempDir() + "/ws.toml"
 			require.NoError(t, os.WriteFile(tmp, []byte(body), 0o600))
@@ -246,28 +254,30 @@ android-sdk = { pin = "14742923", ` + tc.extraExpr + ` }
 	}
 }
 
-// TestLoadWorkspace_PluginVersionsPinUnsafeValue pins that the `pin` field
-// gets the same UnsafeExtraVersionRune guard as extra override values: it
-// flows into the identical Dockerfile RUN-prefix `PIN="..."` env pair, so a
-// bare ", \, \n, \r, $, or backtick must be rejected at decode time rather
-// than enabling shell injection at docker build.
-func TestLoadWorkspace_PluginVersionsPinUnsafeValue(t *testing.T) {
+// TestLoadWorkspace_PluginVersionsConstraintRejectsUnsafe pins that the
+// version constraint string is bounded to the rxImageVersion tag charset: a
+// ", \, space, ;, $, or backtick in the version would otherwise break out of
+// the Dockerfile RUN-prefix `PIN="..."` env pair, so it must be rejected at
+// decode time (well before docker build) with a *ValidationError at
+// plugins.versions.<id>.
+func TestLoadWorkspace_PluginVersionsConstraintRejectsUnsafe(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name       string
-		pinExpr    string
+		spec       string
 		wantUnsafe bool
 	}{
-		{"plain", `pin = "14742923"`, false},
-		{"double_quote", `pin = "1.0.0\" rm -rf / \""`, true},
-		{"backslash", `pin = "1.0.0\\nfoo"`, true},
-		{"newline", `pin = "1.0.0\nfoo"`, true},
-		{"carriage_return", `pin = "1.0.0\rfoo"`, true},
-		{"dollar", `pin = "$(date)"`, true},
-		// The exact injection PoC from the evaluation report: a closing
-		// quote lets the rest break out of the PIN="..." env pair.
-		{"injection_poc", `pin = "1.0.0\"; echo PWNED > /tmp/pwn; PIN2=\""`, true},
-		{"backtick", "pin = \"`whoami`\"", true},
+		{"plain_exact", `"=14742923"`, false},
+		{"latest", `"latest"`, false},
+		{"double_quote", `"=1.0.0\" rm -rf / \""`, true},
+		{"backslash", `"=1.0.0\\nfoo"`, true},
+		{"newline", `"=1.0.0\nfoo"`, true},
+		{"carriage_return", `"=1.0.0\rfoo"`, true},
+		{"dollar", `"=$(date)"`, true},
+		// The exact injection PoC from the evaluation report: a closing quote
+		// would let the rest break out of the PIN="..." env pair.
+		{"injection_poc", `"=1.0.0\"; echo PWNED > /tmp/pwn; PIN2=\""`, true},
+		{"backtick", "\"=`whoami`\"", true},
 	}
 	for _, tc := range cases {
 		tc := tc
@@ -284,8 +294,7 @@ image_version = "24.04"
 enable = []
 
 [plugins.versions]
-go = { ` + tc.pinExpr + ` }
-`
+go = ` + tc.spec + "\n"
 			tmp := t.TempDir() + "/ws.toml"
 			require.NoError(t, os.WriteFile(tmp, []byte(body), 0o600))
 			_, err := config.LoadWorkspace(tmp)
@@ -294,22 +303,22 @@ go = { ` + tc.pinExpr + ` }
 				return
 			}
 			require.Error(t, err)
-			// Assert the failure class and the exact field location, not
-			// just a substring: the guard must surface as a decode-time
-			// *ValidationError pointing at plugins.versions.<id>.pin (a
-			// regression that moved to a different validator or key would
-			// still match the substring otherwise).
+			// Assert the failure class and the exact field location, not just
+			// a substring: the guard must surface as a decode-time
+			// *ValidationError at plugins.versions.<id> (a regression that
+			// relaxed the charset or moved the check would still otherwise
+			// match the substring).
 			var verr *config.ValidationError
 			require.ErrorAsf(t, err, &verr, "expected *ValidationError, got %T: %v", err, err)
 			var hit *config.FieldError
 			for i := range verr.Errors {
-				if verr.Errors[i].LocString() == "plugins.versions.go.pin" {
+				if verr.Errors[i].LocString() == "plugins.versions.go" {
 					hit = &verr.Errors[i]
 					break
 				}
 			}
-			require.NotNilf(t, hit, "no FieldError at plugins.versions.go.pin; errors = %+v", verr.Errors)
-			require.Contains(t, hit.Message, "unsafe character")
+			require.NotNilf(t, hit, "no FieldError at plugins.versions.go; errors = %+v", verr.Errors)
+			require.Contains(t, hit.Message, "unsupported characters")
 		})
 	}
 }

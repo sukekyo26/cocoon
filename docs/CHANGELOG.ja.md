@@ -6,6 +6,26 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+### 変更
+
+- **BREAKING**: `[plugins.versions]` のエントリは文字列のバージョン制約に
+  なりました — `<id> = "=1.23.4"`（exact pin）または `<id> = "latest"`。
+  従来のインラインテーブル形式（`<id> = { pin = "1.23.4" }`）は廃止されたので、
+  各エントリを文字列に書き換えてください。追加のバージョン入力を持つプラグイン
+  （例: android-sdk の `api_level` / `build_tools`）はテーブル形式を維持し、制約を
+  `version` キーに置きます: `<id> = { version = "=…", api_level = "…" }`。旧 `pin`
+  形式は読み込み時に移行ヒント付きで拒否されます。range 演算子（`>=`・`^`・`~`
+  など）は非対応です。
+- **BREAKING**: `cocoon plugin pin <id> <ref>` は文字列制約 `<id> = "=<ref>"` を
+  書き込むようになりました（素の `<ref>` は exact pin、`latest` を渡すと最新
+  リリースを追従）。`--amd64-checksum` / `--arm64-checksum` は受け付けません。
+
+### 削除
+
+- **BREAKING**: `workspace.toml` の `[plugins.versions]` で `checksum_amd64` /
+  `checksum_arm64` キーは無効になりました。arch ごとの checksum は `cocoon.lock`
+  に記録されます。これらを残した `workspace.toml` は移行ヒント付きで拒否されます。
+
 ## [0.13.0] - 2026-06-03
 
 ### 追加

@@ -14,7 +14,7 @@
 | `cocoon gen workspace` | プロジェクトルートに `<name>.code-workspace` を生成 |
 | `cocoon plugin list` | 利用可能な全プラグインを表示 (埋め込み + 上書き) |
 | `cocoon plugin show <id>` | 解決後の plugin マニフェストを表示 |
-| `cocoon plugin pin <id> <ref>` | `[plugins.versions]` 配下の inline-table 行を生成 (stdout / `--write` で in-place) |
+| `cocoon plugin pin <id> <ref>` | `[plugins.versions]` の制約行を生成 (stdout / `--write` で in-place) |
 | `cocoon plugin scaffold <id>` | テンプレートから新規 `<id>/` ディレクトリを作成 |
 | `cocoon self-update` | 最新 GitHub リリースで自分自身を置換 |
 | `cocoon version` | バイナリのバージョンを表示 |
@@ -45,7 +45,7 @@
 | `--sudo <mode>` | string | コンテナ内 sudo の方針: `nopasswd`（既定・パスワード不要）/ `password`（`.devcontainer/.env.local` の `SUDO_PASSWORD` を build secret 経由で要求）/ `none`（`no_new_privileges = true`・sudo 無効化）。対話で `password` を選ぶとパスワードを尋ねて `.env.local`（0600）を生成。 |
 | `--apt-categories <ids>` | string | カンマ区切り apt カテゴリ ID (プロンプトをスキップ)。 |
 | `--plugins <ids>` | string | カンマ区切りで有効化するプラグイン ID。 |
-| `--plugin-versions <id>=<ref>,...` | string | カンマ区切りの `<id>=<ref>` でプラグインを pin する。各 `<id>` は `--plugins` にも含まれ、かつ `version_capable = true` である必要があり、重複は不可。`[plugins.versions]` セクションに inline-table 行 (`<id> = { pin = "..." }`) を直接書き込む。 |
+| `--plugin-versions <id>=<ref>,...` | string | カンマ区切りの `<id>=<ref>` で `version_capable` プラグインの制約を指定する。各 `<id>` は `--plugins` にも含まれ、かつ `version_capable = true` である必要があり、重複は不可。生成される `workspace.toml` の `[plugins.versions]` セクションへ文字列制約 (`<id> = "=<ref>"`、checksum なし) として直接書き込む。 |
 | `--alias-bundles <ids>` | string | カンマ区切りエイリアスバンドル ID (例: `git,ls`)。 |
 | `--ports <values>` | string | カンマ区切りの docker-compose short-form ポートマッピング (例: `3000:3000,5432:5432`)。`[ports].forward` で扱う全形式を受理: コンテナ単独 `3000`、範囲 `3000-3005:3000-3005`、IPv4/IPv6 バインド `127.0.0.1:8001:8001` / `[::1]:80:80`、プロトコル `6060:6060/udp`。プロンプトをスキップ。空 / 未指定の場合はアクティブな `[ports]` ブロックを書かない（コメント雛形のみ残り、後から有効化できる）。 |
 | `--force` | bool | 既存 `workspace.toml` を上書き。 |
@@ -209,15 +209,15 @@ volumes: [/home/${USERNAME}/go]
 
 ### `cocoon plugin pin <id> <ref>`
 
-**目的:** `version_capable` プラグイン用に上流バージョン (任意で per-arch チェックサム) を `workspace.toml` の `[plugins.versions]` 配下に記録する。エントリは 1 行の inline-table — `<id> = { pin = "<ref>", checksum_amd64 = "...", checksum_arm64 = "..." }` — として出力され、プラグインの install スクリプトが `$PIN` / `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` から読む。
+**目的:** `version_capable` プラグイン用にバージョン制約を `workspace.toml` の `[plugins.versions]` 配下に記録する。エントリは文字列制約行 — `<id> = "=<ref>"` — として出力され、プラグインの install スクリプトが `$PIN` から読む。素の `<ref>` (例: `1.23.4`) は厳密 pin (`=1.23.4`) として書かれ、`latest` を渡すと `latest` が書かれ、範囲 (`>=`, `^` …) は usage error で拒否される。
 
 **例 (デフォルト — stdout, 手動貼り付け):**
 
 ```console
-$ cocoon plugin pin go 1.23.4 --amd64-checksum abc123 --arm64-checksum def456
+$ cocoon plugin pin go 1.23.4
 # Add the following line under [plugins.versions] in workspace.toml:
 
-go = { pin = "1.23.4", checksum_amd64 = "abc123", checksum_arm64 = "def456" }
+go = "=1.23.4"
 ```
 
 **例 (`--write` — in-place 編集):**
@@ -227,22 +227,21 @@ $ cocoon plugin pin go 1.23.4 --write
 Updated /home/alice/proj/workspace.toml: [plugins.versions] go
 ```
 
-`--write` は `workspace.toml` を行ベースでパースし、`[plugins.versions]` セクション内の既存 `<id> = { ... }` 行があれば置換、無ければそのセクションへ新しい行を追加する。対象行外のコメント・空行は保持される。
+`--write` は `workspace.toml` を行ベースでパースし、`[plugins.versions]` セクション内の `<id>` 制約行を upsert する (既存行は置換 — 古い `{ pin = ... }` 行はスカラー形式へ移行する — し、無ければそのセクションへ新しい行を追加)。対象行外のコメント・空行は保持される。
 
 **フラグ:**
 
 | フラグ | 説明 |
 |---|---|
-| `--amd64-checksum <sha256>` | amd64 アーティファクトの SHA256。 |
-| `--arm64-checksum <sha256>` | arm64 アーティファクトの SHA256。 |
-| `--write` | `workspace.toml` (cwd から自動検出) に inline-table 行を in-place 挿入・置換。 |
+| `--method <name>` | ref を検証する install メソッド (プラグインが複数宣言する場合)。 |
+| `--write` | `workspace.toml` (cwd から自動検出) に制約行を upsert する。 |
 
 **落とし穴:**
 
-- `pin` は `[version].version_capable = true` のプラグインでのみ意味を持つ。それ以外では `gen` 時に無視される。
-- チェックサムフラグは install スクリプトが実際に `$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` を読む場合 — 典型的には `binary` / `archive` メソッドの artifact 検証 — のみ意味を持つ。`installer` / `apt` メソッドでは vendor 側に検証を委ねるため無視される。
+- 制約は `[version].version_capable = true` のプラグインでのみ意味を持つ。それ以外では `gen` 時に無視される。
+- checksum はここでは pin しない。checksum は `cocoon lock` が `cocoon.lock` に記録する。それまでは install スクリプトの fallback が上流のリリース公開 checksum とダウンロードを照合する。
 - `--write` は cwd から `workspace.toml` を発見できる必要がある。`--write` 無しなら id 検証用に LayeredFS を解決するだけなので、どこからでも動く。
-- `--write` は inline-table 形式 (`[plugins.versions]` セクション直下の `<id> = { pin = "..." }` 行) のみを編集する。legacy の `[plugins.versions.<id>]` subsection ブロックが残っているファイルに対しては、重複追加を避けるため `--write` は usage error で停止する。各ブロックを inline-table 行へ変換するか、`workspace.toml` を手動編集する。
+- `--write` は文字列制約形式 (`[plugins.versions]` セクション直下の `<id> = "=..."` 行) のみを編集し、見つけた古い `<id> = { pin = ... }` 行はスカラー形式へ移行する。legacy の `[plugins.versions.<id>]` subsection ブロックが残っているファイルに対しては、重複追加を避けるため `--write` は usage error で停止する。各ブロックを文字列制約行 `<id> = "=<version>"` へ変換するか、`workspace.toml` を手動編集する。
 
 ### `cocoon plugin scaffold <id>`
 

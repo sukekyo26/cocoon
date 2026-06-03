@@ -336,29 +336,44 @@ type Resources struct {
 // [install.methods] section); absent entries fall back to the plugin's
 // default_method.
 //
-// VersionsRaw is the TOML-decoded shape of [plugins.versions]; it carries
-// any extra inline-table keys (declared by plugins via
-// [install.extra_versions]) past the strict unmarshal gate. LoadWorkspace
-// post-processes VersionsRaw into the typed Versions map so callers can
-// keep working with PluginVersionOverride. Test code that bypasses
-// LoadWorkspace must populate Versions directly.
+// VersionsRaw is the TOML-decoded shape of [plugins.versions]; each value
+// is either a constraint string ("=1.23.4" / "latest") or an inline table
+// ({ version = "…", <extra-key> = "…" }) for plugins that declare
+// [install.extra_versions]. The map-of-any element type carries both forms
+// (and any extra inline-table keys) past the strict unmarshal gate.
+// LoadWorkspace post-processes VersionsRaw into the typed Versions map so
+// callers can keep working with PluginVersionOverride. Test code that
+// bypasses LoadWorkspace must populate Versions directly.
 type PluginsSpec struct {
 	Enable      []string                         `toml:"enable"`
-	VersionsRaw map[string]map[string]any        `toml:"versions,omitempty"`
+	VersionsRaw map[string]any                   `toml:"versions,omitempty"`
 	Methods     map[string]string                `toml:"methods,omitempty"`
 	Versions    map[string]PluginVersionOverride `toml:"-"`
 }
 
-// PluginVersionOverride models one entry under [plugins.versions]. Pin /
-// ChecksumAmd64 / ChecksumArm64 are the three reserved keys cocoon has
-// always supported; Extra carries any additional inline-table keys a
-// plugin opts into via [install.extra_versions] (e.g. Android SDK's
-// api_level / build_tools). Extra is nil when no extra keys are set.
+// PluginVersionOverride models one entry under [plugins.versions]. Spec is
+// the user's version constraint: either "=<version>" (an exact pin) or
+// "latest" (frozen to a concrete version by `cocoon lock`). Pin is the
+// concrete version baked into the generated Dockerfile's PIN="..." env —
+// the exact version for an "=<version>" Spec and "" for "latest"
+// (build-time resolution) — and is overwritten by a cocoon.lock entry when
+// one exists. ChecksumAmd64 / ChecksumArm64 come from cocoon.lock (never
+// from workspace.toml) and are nil until `cocoon lock` records them. Extra
+// carries any additional inline-table keys a plugin opts into via
+// [install.extra_versions] (e.g. Android SDK's api_level / build_tools);
+// it is nil when no extra keys are set.
 type PluginVersionOverride struct {
+	Spec          string
 	Pin           string
 	ChecksumAmd64 *string
 	ChecksumArm64 *string
 	Extra         map[string]string
+}
+
+// IsLatest reports whether the constraint is the floating "latest" form
+// rather than an exact "=<version>" pin.
+func (o PluginVersionOverride) IsLatest() bool {
+	return o.Spec == VersionSpecLatest
 }
 
 // PortsSpec models [ports]. Each Forward entry is either a docker-compose

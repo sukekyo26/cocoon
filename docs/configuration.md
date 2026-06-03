@@ -34,7 +34,7 @@ The first match wins. Pass `--workspace <path>` to `cocoon gen` to override disc
 | `[container.sudo]` | optional | sudo password policy (`mode`) |
 | `[[container.skel]]` | optional | Dotfiles seeded into `/etc/skel` |
 | `[plugins]` | **required** | Enabled plugins |
-| `[plugins.versions]` | optional | Plugin version pins + checksums |
+| `[plugins.versions]` | optional | Plugin version constraints |
 | `[apt]` | optional | Extra apt packages |
 | `[apt.mirror]` | optional | Regional apt mirror |
 | `[apt.proxy]` | optional | apt-get HTTP / HTTPS proxy |
@@ -309,29 +309,32 @@ Run `cocoon plugin list` to see every available plugin (embedded + user / projec
 
 ### `[plugins.versions]`
 
-Pin specific versions for `version_capable` plugins. `checksum_amd64` / `checksum_arm64` (64 lowercase hex chars) are **optional**: by default the install scripts already verify each download against the checksum the upstream publishes with the release, so pinning a checksum is an extra, user-controlled override (strongest when paired with a `pin`). Plugins with `verify = "pgp"` (e.g. `aws-cli`) verify downloads against a bundled signature instead — pin them with `pin` only; adding `checksum_amd64` / `checksum_arm64` to such a plugin is rejected at `gen` time.
+Constrain versions for `version_capable` plugins. Each value is a string: either an exact pin `"=<exact>"` (note the leading `=`) or `"latest"` (`"*"` is an accepted synonym), which `cocoon lock` freezes to a concrete version. Range operators (`>=`, `^`, `~`, `<`, …) are **not** supported — only `=exact` and `latest`.
 
 ```toml
 [plugins.versions]
-go = { pin = "1.22.5" }
-uv = { pin = "0.5.7", checksum_amd64 = "<sha256>", checksum_arm64 = "<sha256>" }
-aws-cli = { pin = "2.34.48" }
+go = "=1.22.5"
+node = "latest"
+aws-cli = "=2.34.48"   # verify = "pgp" — checksum handled by cocoon.lock
 ```
+
+Checksums do **not** live here. Per-arch SHA256 checksums are recorded in a `cocoon.lock` file by `cocoon lock`, which also resolves any `"latest"` constraint to a concrete version. When no checksum has been recorded yet, the install scripts still verify each download against the checksum the upstream publishes with the release (trust-on-first-use). Plugins with `verify = "pgp"` (e.g. `aws-cli`) verify downloads against a bundled signature and never carry a checksum.
 
 #### Subcomponent versions
 
 Some plugins expose extra version knobs (declared under
-`[install.extra_versions]` — run `cocoon plugin show <id>` to see them). Set
-them as additional inline-table keys next to `pin`:
+`[install.extra_versions]` — run `cocoon plugin show <id>` to see them). Such
+plugins use the inline-table form, where the version moves under a reserved
+`version` key and the extra knobs sit next to it:
 
 ```toml
 [plugins.versions]
-android-sdk = { pin = "14742923", api_level = "36", build_tools = "36.0.0" }
+android-sdk = { version = "=14742923", api_level = "36", build_tools = "36.0.0" }
 ```
 
 Only keys the plugin declares are accepted — an unknown key (a typo, or a
 declaration removed upstream) is rejected by `cocoon gen` instead of silently
-falling back to the default. Override values follow the same rule as `pin`:
+falling back to the default. Override values follow the same rule as `version`:
 no `"`, `\`, `\n`, `\r`, `$`, or backtick, since each flows into the
 Dockerfile RUN-prefix `KEY="..."` env pair. See the
 [plugin authoring guide](plugins.md) for how a plugin declares these.

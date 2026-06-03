@@ -128,11 +128,13 @@ enable = []
 # [plugins.methods]
 # <plugin-id> = "<method-name>"
 
-# [plugins.versions] — pin specific versions for version_capable plugins.
-#   For verify = "checksum" plugins, checksum_amd64 / checksum_arm64 (64 lowercase hex chars) verify downloads.
+# [plugins.versions] — version constraints for version_capable plugins.
+#   Value is "=<exact>" (e.g. "=1.23.4") or "latest". Run `cocoon lock` to freeze "latest"
+#   and record checksums in cocoon.lock.
 # [plugins.versions]
-# go = { pin = "1.22.5" }
-# uv = { pin = "0.5.7", checksum_amd64 = "<sha256>" }
+# go = "=1.22.5"
+# starship = "latest"
+# android-sdk = { version = "=14742923", api_level = "35" }
 
 # [apt] — extra apt packages installed on top of cocoon's minimal base + selected categories.
 #   Re-run `cocoon init --force` to change category checkboxes, or edit this list directly.

@@ -356,7 +356,7 @@ func writePluginVersions(sb *strings.Builder, cat *i18n.Catalog, pins map[string
 	}
 	lines := make([]plugin.PinLine, 0, len(pins))
 	for id, ref := range pins {
-		lines = append(lines, plugin.PinLine{ID: id, Ref: ref, ChecksumAmd64: "", ChecksumArm64: ""})
+		lines = append(lines, plugin.PinLine{ID: id, Spec: "=" + ref})
 	}
 	sb.WriteString(cat.Msg("init_toml_section_plugins_versions"))
 	sb.WriteByte('\n')

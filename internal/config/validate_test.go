@@ -1143,13 +1143,75 @@ func TestValidate_PluginsBadIDChar(t *testing.T) {
 	require.Contains(t, err.Error(), "plugin id does not match")
 }
 
-func TestValidate_PluginVersionPinEmpty(t *testing.T) {
+// TestValidate_PluginVersionEmptyConstraint pins that an empty constraint
+// string is rejected (the user almost certainly meant to remove the entry
+// or write "latest"), not silently treated as "no pin".
+func TestValidate_PluginVersionEmptyConstraint(t *testing.T) {
 	t.Parallel()
 	body := minimalWorkspace() +
-		"\n[plugins.versions.go]\npin = \"\"\n"
+		"\n[plugins.versions]\ngo = \"\"\n"
 	err := loadWS(t, body)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "pin must not be empty")
+	require.Contains(t, err.Error(), "must not be empty")
+}
+
+// TestParseVersionSpec covers the constraint grammar by category: exact pins,
+// latest (and its "*" synonym), and every reject class (range operators, bare
+// versions, empty, bad charset) classified by sentinel via errors.Is.
+func TestParseVersionSpec(t *testing.T) {
+	t.Parallel()
+	t.Run("accepted", func(t *testing.T) {
+		t.Parallel()
+		cases := []struct {
+			name, in, wantSpec, wantPin string
+		}{
+			{"exact", "=1.23.4", "=1.23.4", "1.23.4"},
+			{"exact_v_prefix", "=v1.2.3", "=v1.2.3", "v1.2.3"},
+			{"exact_padded", "  =1.2.3  ", "=1.2.3", "1.2.3"},
+			{"latest", "latest", "latest", ""},
+			{"star_synonym", "*", "latest", ""},
+		}
+		for _, tc := range cases {
+			tc := tc
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+				ov, err := config.ParseVersionSpec(tc.in)
+				require.NoError(t, err)
+				require.Equal(t, tc.wantSpec, ov.Spec)
+				require.Equal(t, tc.wantPin, ov.Pin)
+				require.Equal(t, tc.wantSpec == config.VersionSpecLatest, ov.IsLatest())
+			})
+		}
+	})
+	t.Run("rejected", func(t *testing.T) {
+		t.Parallel()
+		cases := []struct {
+			name, in string
+			want     error
+		}{
+			{"empty", "", config.ErrVersionSpecEmpty},
+			{"whitespace", "   ", config.ErrVersionSpecEmpty},
+			{"range_gte", ">=1.20", config.ErrVersionSpecRange},
+			{"range_gt", ">1.0", config.ErrVersionSpecRange},
+			{"range_lte", "<=2.0", config.ErrVersionSpecRange},
+			{"range_lt", "<2.0", config.ErrVersionSpecRange},
+			{"range_caret", "^1.2.3", config.ErrVersionSpecRange},
+			{"range_tilde", "~1.2", config.ErrVersionSpecRange},
+			{"range_neq", "!=1.0", config.ErrVersionSpecRange},
+			{"bare", "1.23.4", config.ErrVersionSpecBare},
+			{"charset_space", "=1.0 0", config.ErrVersionSpecCharset},
+			{"charset_dollar", "=$(x)", config.ErrVersionSpecCharset},
+			{"charset_empty_after_eq", "=", config.ErrVersionSpecCharset},
+		}
+		for _, tc := range cases {
+			tc := tc
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+				_, err := config.ParseVersionSpec(tc.in)
+				require.ErrorIs(t, err, tc.want)
+			})
+		}
+	})
 }
 
 // TestValidate_PluginsMethodsAccepted pins the happy path: a
@@ -1195,13 +1257,25 @@ func TestValidate_PluginsMethodsEmptyValueRejected(t *testing.T) {
 	require.Contains(t, err.Error(), "method name does not match")
 }
 
-func TestValidate_PluginVersionBadChecksum(t *testing.T) {
+// TestValidate_PluginVersionLegacyFormRejected pins that the removed
+// inline-table pin / checksum keys are rejected at load with the migration
+// hint that points the user at the string form + `cocoon lock`.
+func TestValidate_PluginVersionLegacyFormRejected(t *testing.T) {
 	t.Parallel()
-	body := minimalWorkspace() +
-		"\n[plugins.versions.go]\npin = \"1.23.4\"\nchecksum_amd64 = \"NOT-A-HEX\"\n"
-	err := loadWS(t, body)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "checksum_amd64")
+	cases := []struct{ name, line string }{
+		{"pin_key", `go = { pin = "1.23.4" }`},
+		{"checksum_key", `go = { version = "=1.23.4", checksum_amd64 = "abc" }`},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			body := minimalWorkspace() + "\n[plugins.versions]\n" + tc.line + "\n"
+			err := loadWS(t, body)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "inline-table pin form was removed")
+		})
+	}
 }
 
 func TestValidate_PortsOutOfRange(t *testing.T) {

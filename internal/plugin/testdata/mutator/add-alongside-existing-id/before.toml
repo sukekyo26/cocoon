@@ -3,7 +3,7 @@ enable = ["go", "uv"]
 
 # Pinned versions: keep these in sync with the team's release notes.
 [plugins.versions]
-go = { pin = "1.23.4" }
+go = "=1.23.4"
 
 [mounts]
 host = "./src"

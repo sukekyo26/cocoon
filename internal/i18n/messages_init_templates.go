@@ -83,11 +83,13 @@ var messagesEN_initTemplates = map[string]string{
 		"# <plugin-id> = \"<method-name>\"",
 
 	// [plugins.versions] (rendered immediately after [plugins.methods]).
-	"init_toml_template_plugins_versions": "# [plugins.versions] — pin specific versions for version_capable plugins.\n" +
-		"#   For verify = \"checksum\" plugins, checksum_amd64 / checksum_arm64 (64 lowercase hex chars) verify downloads.\n" +
+	"init_toml_template_plugins_versions": "# [plugins.versions] — version constraints for version_capable plugins.\n" +
+		"#   Value is \"=<exact>\" (e.g. \"=1.23.4\") or \"latest\". Run `cocoon lock` to freeze \"latest\"\n" +
+		"#   and record checksums in cocoon.lock.\n" +
 		"# [plugins.versions]\n" +
-		"# go = { pin = \"1.22.5\" }\n" +
-		"# uv = { pin = \"0.5.7\", checksum_amd64 = \"<sha256>\" }",
+		"# go = \"=1.22.5\"\n" +
+		"# starship = \"latest\"\n" +
+		"# android-sdk = { version = \"=14742923\", api_level = \"35\" }",
 
 	// [apt.*] extras (rendered immediately after [apt]).
 	"init_toml_template_apt_mirror": "# [apt.mirror] — rewrite upstream apt URLs to a regional mirror.\n" +
@@ -258,11 +260,13 @@ var messagesJA_initTemplates = map[string]string{
 		"# <plugin-id> = \"<method-name>\"",
 
 	// [plugins.versions]
-	"init_toml_template_plugins_versions": "# [plugins.versions] — version_capable プラグインのバージョン固定。\n" +
-		"#   verify = \"checksum\" のプラグインは checksum_amd64 / checksum_arm64（64 文字の小文字 hex）でダウンロードを検証可。\n" +
+	"init_toml_template_plugins_versions": "# [plugins.versions] — version_capable プラグインのバージョン制約。\n" +
+		"#   値は \"=<exact>\"（例 \"=1.23.4\"）か \"latest\"。`cocoon lock` で \"latest\" を凍結し\n" +
+		"#   checksum を cocoon.lock に記録。\n" +
 		"# [plugins.versions]\n" +
-		"# go = { pin = \"1.22.5\" }\n" +
-		"# uv = { pin = \"0.5.7\", checksum_amd64 = \"<sha256>\" }",
+		"# go = \"=1.22.5\"\n" +
+		"# starship = \"latest\"\n" +
+		"# android-sdk = { version = \"=14742923\", api_level = \"35\" }",
 
 	// [apt.*] extras
 	"init_toml_template_apt_mirror": "# [apt.mirror] — 上流 apt URL を地域ミラーに書き換え。\n" +

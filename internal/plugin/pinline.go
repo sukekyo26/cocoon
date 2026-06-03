@@ -6,69 +6,64 @@ import (
 	"strings"
 )
 
-// FormatPinLine returns one inline-table assignment line for [plugins.versions]:
+// FormatPinLine returns one scalar-string assignment line for
+// [plugins.versions]:
 //
-//	<id> = { pin = "<ref>", checksum_amd64 = "...", checksum_arm64 = "..." }
+//	<id> = "<spec>"
 //
-// Empty checksum fields are omitted. The output ends with exactly one newline.
-// This is the per-id body emitted under the shared `[plugins.versions]`
-// section header.
-func FormatPinLine(id, ref, amd64Checksum, arm64Checksum string) string {
-	return FormatPinLineWithExtras(id, ref, amd64Checksum, arm64Checksum, nil)
+// where spec is a version constraint ("=1.23.4" or "latest"). The output
+// ends with exactly one newline. This is the per-id body emitted under the
+// shared `[plugins.versions]` section header.
+func FormatPinLine(id, spec string) string {
+	return FormatPinLineWithExtras(id, spec, nil)
 }
 
-// FormatPinLineWithExtras is FormatPinLine plus any caller-supplied extra
-// keys (declared by the plugin via [install.extra_versions]). Extras are
-// emitted in sorted key order so the output is stable across calls.
-// Passing a nil/empty extras map reproduces FormatPinLine's output
-// byte-for-byte.
+// FormatPinLineWithExtras renders the [plugins.versions] line for id. With
+// no extras it is the scalar `<id> = "<spec>"`; with extras (keys a plugin
+// declares via [install.extra_versions]) it is the inline-table form
+// `<id> = { version = "<spec>", <key> = "<val>", … }`, where the constraint
+// moves under the reserved "version" key. Extras are emitted in sorted key
+// order so the output is stable across calls; a nil/empty extras map
+// reproduces FormatPinLine's scalar output byte-for-byte.
 //
 // Keys are emitted unquoted as TOML bare keys, so any key that does not
-// match rxExtraVersionKey (^[a-z][a-z0-9_]*$) is skipped — emitting it
-// raw would produce invalid TOML. The caller upstream of this function
-// (validation on plugin.toml decode, plus rxExtraVersionKey enforcement
-// in validateExtraVersions) is what actually rejects bad keys; this
-// filter is a belt-and-suspenders guard for the mutator path where
-// extras come from parsing an existing workspace.toml line and could
-// legally carry TOML quoted-keys like "weird.key".
-func FormatPinLineWithExtras(id, ref, amd64Checksum, arm64Checksum string, extras map[string]string) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "%s = { pin = %q", id, ref)
-	if amd64Checksum != "" {
-		fmt.Fprintf(&b, ", checksum_amd64 = %q", amd64Checksum)
-	}
-	if arm64Checksum != "" {
-		fmt.Fprintf(&b, ", checksum_arm64 = %q", arm64Checksum)
-	}
-	if len(extras) > 0 {
-		keys := make([]string, 0, len(extras))
-		for k := range extras {
-			if !rxExtraVersionKey.MatchString(k) {
-				continue
-			}
+// match rxExtraVersionKey (^[a-z][a-z0-9_]*$) is skipped — emitting it raw
+// would produce invalid TOML. The caller upstream (validation on
+// plugin.toml decode, plus rxExtraVersionKey enforcement in
+// validateExtraVersions) is what actually rejects bad keys; this filter is
+// a belt-and-suspenders guard for the mutator path where extras come from
+// parsing an existing workspace.toml line and could legally carry TOML
+// quoted-keys like "weird.key".
+func FormatPinLineWithExtras(id, spec string, extras map[string]string) string {
+	keys := make([]string, 0, len(extras))
+	for k := range extras {
+		if rxExtraVersionKey.MatchString(k) {
 			keys = append(keys, k)
 		}
-		sort.Strings(keys)
-		for _, k := range keys {
-			fmt.Fprintf(&b, ", %s = %q", k, extras[k])
-		}
+	}
+	if len(keys) == 0 {
+		return fmt.Sprintf("%s = %q\n", id, spec)
+	}
+	sort.Strings(keys)
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s = { version = %q", id, spec)
+	for _, k := range keys {
+		fmt.Fprintf(&b, ", %s = %q", k, extras[k])
 	}
 	b.WriteString(" }\n")
 	return b.String()
 }
 
-// PinLine describes one entry to emit under [plugins.versions]. ID and Ref
-// are required; checksum fields are optional.
+// PinLine describes one entry to emit under [plugins.versions]. ID and Spec
+// are required; Spec is the version constraint ("=1.23.4" or "latest").
 type PinLine struct {
-	ID            string
-	Ref           string
-	ChecksumAmd64 string
-	ChecksumArm64 string
+	ID   string
+	Spec string
 }
 
 // FormatPinSection returns the full `[plugins.versions]` section with one
-// inline-table line per pin, alphabetically sorted by id. Returns an empty
-// string when pins is empty.
+// scalar line per pin, alphabetically sorted by id. Returns an empty string
+// when pins is empty.
 func FormatPinSection(pins []PinLine) string {
 	if len(pins) == 0 {
 		return ""
@@ -80,7 +75,7 @@ func FormatPinSection(pins []PinLine) string {
 	var b strings.Builder
 	b.WriteString("[plugins.versions]\n")
 	for _, p := range sorted {
-		b.WriteString(FormatPinLine(p.ID, p.Ref, p.ChecksumAmd64, p.ChecksumArm64))
+		b.WriteString(FormatPinLine(p.ID, p.Spec))
 	}
 	return b.String()
 }

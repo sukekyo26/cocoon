@@ -639,28 +639,24 @@ func checkExtraOverrideKeys(
 		ErrUnknownExtraVersion, id, unknown, id)
 }
 
-// warnMissingChecksum emits the "pin without checksum" advisory for a
-// checksum-verified plugin whose [plugins.versions] entry omits one or both
-// checksums. No-op when warnings is nil or both checksums are present.
+// warnMissingChecksum emits the "pin without recorded checksum" advisory for
+// a checksum-verified plugin whose effective override carries no checksum
+// (the common case until `cocoon lock` records one). No-op when warnings is
+// nil or both checksums are present. The install step still verifies the
+// download against the upstream-published checksum, so this is a
+// reproducibility / supply-chain notice, not an integrity gap.
 func warnMissingChecksum(warnings io.Writer, id string, override config.PluginVersionOverride) {
 	if warnings == nil {
 		return
 	}
-	var missing []string
-	if override.ChecksumAmd64 == nil {
-		missing = append(missing, "checksum_amd64")
-	}
-	if override.ChecksumArm64 == nil {
-		missing = append(missing, "checksum_arm64")
-	}
-	if len(missing) == 0 {
+	if override.ChecksumAmd64 != nil && override.ChecksumArm64 != nil {
 		return
 	}
 	fmt.Fprintf(warnings,
-		"WARNING: [plugins.versions.%s] sets pin=\"%s\" without %s; "+
-			"the install step will skip SHA256 verification. "+
-			"Provide the checksum(s) in workspace.toml to enable integrity checking.\n",
-		id, override.Pin, strings.Join(missing, ", "))
+		"WARNING: [plugins.versions.%s] pins %q without a recorded checksum; "+
+			"the install step verifies the download against the upstream-published "+
+			"checksum (trust-on-first-use).\n",
+		id, override.Pin)
 }
 
 // userDirsBlockTmpl omits the trailing `USER ${USERNAME}`: the caller

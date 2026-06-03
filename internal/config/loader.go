@@ -37,16 +37,15 @@ func LoadWorkspace(path string) (*Workspace, error) {
 
 // materializePluginVersions converts PluginsSpec.VersionsRaw (the
 // map-of-any shape that survived strict unmarshal) into the typed
-// PluginsSpec.Versions map. Reserved keys (pin / checksum_amd64 /
-// checksum_arm64) populate the dedicated fields; any remaining keys go
-// into Extra so a plugin's [install.extra_versions] can pick them up at
-// generation time. Non-string values and extra-key values containing
-// any rune in UnsafeExtraVersionRune's reject set
-// ('"', '\\', '\n', '\r', '$', '`') produce a *ValidationError — see
-// UnsafeExtraVersionRune's doc for the rationale (Dockerfile RUN-prefix
-// shell-quoting / parameter / command-substitution hazards). Plugin
-// ids and per-entry keys are iterated in sorted order so the
-// FieldError sequence (and hence the "first error" summary) is
+// PluginsSpec.Versions map. Each value is a constraint string
+// ("=1.23.4" / "latest") or an inline table whose "version" key carries
+// the constraint and whose remaining keys feed a plugin's
+// [install.extra_versions]. Extra-key values containing any rune in
+// UnsafeExtraVersionRune's reject set ('"', '\\', '\n', '\r', '$', '`')
+// produce a *ValidationError — see UnsafeExtraVersionRune's doc for the
+// rationale (Dockerfile RUN-prefix shell-quoting / parameter /
+// command-substitution hazards). Plugin ids are iterated in sorted order
+// so the FieldError sequence (and hence the "first error" summary) is
 // deterministic across runs.
 func materializePluginVersions(path string, ws *Workspace) error {
 	if len(ws.Plugins.VersionsRaw) == 0 {
@@ -65,50 +64,113 @@ func materializePluginVersions(path string, ws *Workspace) error {
 	return nil
 }
 
-// materializeOneOverride pulls the per-plugin loop body out of
-// materializePluginVersions so the outer fn stays under the gocognit
-// threshold. Errors accumulate on a; the returned override is always
-// safe to store even on partial failure (later validation surfaces the
-// accumulated errors).
-func materializeOneOverride(a *Accumulator, id string, raw map[string]any) PluginVersionOverride {
+// materializeOneOverride converts one [plugins.versions].<id> value — a
+// constraint string or an inline table — into a PluginVersionOverride.
+// Errors accumulate on a; the returned override is always safe to store
+// even on partial failure (later validation surfaces the accumulated
+// errors). Pulled out of materializePluginVersions so the outer fn stays
+// under the gocognit threshold.
+func materializeOneOverride(a *Accumulator, id string, raw any) PluginVersionOverride {
+	switch v := raw.(type) {
+	case string:
+		ov, err := ParseVersionSpec(v)
+		if err != nil {
+			a.Add(versionSpecMessage(err), "plugins", "versions", id)
+			return PluginVersionOverride{} //nolint:exhaustruct // error accumulated
+		}
+		return ov
+	case map[string]any:
+		return materializeTableOverride(a, id, v)
+	default:
+		a.Add(fmt.Sprintf(
+			"value for [plugins.versions].%s must be a constraint string "+
+				`(e.g. "=1.23.4" or "latest") or an inline table { version = "…", … }`, id),
+			"plugins", "versions", id)
+		return PluginVersionOverride{} //nolint:exhaustruct // error accumulated
+	}
+}
+
+// materializeTableOverride handles the inline-table form
+// ({ version = "=…", <extra-key> = "…" }) used by plugins that declare
+// [install.extra_versions]. The removed legacy pin / checksum keys are
+// detected and turned into a precise migration hint.
+func materializeTableOverride(a *Accumulator, id string, raw map[string]any) PluginVersionOverride {
 	entry := PluginVersionOverride{} //nolint:exhaustruct // filled below
-	keys := slices.Sorted(maps.Keys(raw))
-	for _, k := range keys {
-		v := raw[k]
-		s, ok := v.(string)
+	for _, legacy := range []string{"pin", "checksum_amd64", "checksum_arm64"} {
+		if _, ok := raw[legacy]; ok {
+			a.Add(legacyPinTableMessage(id, raw), "plugins", "versions", id)
+			return entry
+		}
+	}
+	verRaw, ok := raw["version"]
+	if !ok {
+		a.Add("inline table for [plugins.versions]."+id+` must set "version" `+
+			`(e.g. { version = "=1.23.4", … })`, "plugins", "versions", id, "version")
+		return entry
+	}
+	verStr, ok := verRaw.(string)
+	if !ok {
+		a.Add(fmt.Sprintf("value for %q must be a string, got %T", "version", verRaw),
+			"plugins", "versions", id, "version")
+		return entry
+	}
+	parsed, err := ParseVersionSpec(verStr)
+	if err != nil {
+		a.Add(versionSpecMessage(err), "plugins", "versions", id, "version")
+		return entry
+	}
+	entry.Spec = parsed.Spec
+	entry.Pin = parsed.Pin
+	materializeExtras(a, id, raw, &entry)
+	return entry
+}
+
+// materializeExtras routes the non-"version" inline-table keys into
+// entry.Extra, applying the shell-safety guard each value must pass before
+// it can reach the Dockerfile RUN-prefix `<ENV>="..."` pair. Keys are
+// iterated in sorted order for deterministic error sequencing.
+func materializeExtras(a *Accumulator, id string, raw map[string]any, entry *PluginVersionOverride) {
+	for _, k := range slices.Sorted(maps.Keys(raw)) {
+		if k == "version" {
+			continue
+		}
+		s, ok := raw[k].(string)
 		if !ok {
-			a.Add(fmt.Sprintf("value for %q must be a string, got %T", k, v),
+			a.Add(fmt.Sprintf("value for %q must be a string, got %T", k, raw[k]),
 				"plugins", "versions", id, k)
 			continue
 		}
-		switch k {
-		case "pin":
-			// pin flows into the same Dockerfile RUN-prefix `PIN="..."` env
-			// pair as the extra values below, so it gets the same unsafe-rune
-			// guard (checksums are constrained by rxSha256 in validate).
-			if bad, r := UnsafeExtraVersionRune(s); bad {
-				a.Add(UnsafeExtraVersionMessage("value", r), "plugins", "versions", id, k)
-				continue
-			}
-			entry.Pin = s
-		case "checksum_amd64":
-			cs := s
-			entry.ChecksumAmd64 = &cs
-		case "checksum_arm64":
-			cs := s
-			entry.ChecksumArm64 = &cs
-		default:
-			if bad, r := UnsafeExtraVersionRune(s); bad {
-				a.Add(UnsafeExtraVersionMessage("value", r), "plugins", "versions", id, k)
-				continue
-			}
-			if entry.Extra == nil {
-				entry.Extra = make(map[string]string)
-			}
-			entry.Extra[k] = s
+		if bad, r := UnsafeExtraVersionRune(s); bad {
+			a.Add(UnsafeExtraVersionMessage("value", r), "plugins", "versions", id, k)
+			continue
 		}
+		if entry.Extra == nil {
+			entry.Extra = make(map[string]string)
+		}
+		entry.Extra[k] = s
 	}
-	return entry
+}
+
+// versionSpecMessage augments a ParseVersionSpec error with the two
+// supported forms so the workspace.toml author sees the fix inline.
+func versionSpecMessage(err error) string {
+	return err.Error() + ` — write an exact pin as "=1.23.4" or use "latest"`
+}
+
+// legacyPinTableMessage builds the migration hint shown when a
+// [plugins.versions] entry still uses the removed inline-table pin form.
+// The echoed replacement carries the user's actual pin value (no guessed
+// default); when only a checksum was present it falls back to a placeholder.
+func legacyPinTableMessage(id string, raw map[string]any) string {
+	ver := "=<version>"
+	if p, ok := raw["pin"].(string); ok && p != "" {
+		ver = "=" + p
+	}
+	return fmt.Sprintf(
+		"the [plugins.versions] inline-table pin form was removed; write the "+
+			"constraint as a string and run `cocoon lock` (checksums now live in "+
+			"cocoon.lock):\n    %s = %q",
+		id, ver)
 }
 
 // StrictUnmarshal decodes data into v with DisallowUnknownFields enabled. The

@@ -21,7 +21,7 @@ tarball）を持っている場合、internal/plugin/catalog/<id>/ から
 サブコマンド:
   help        このコマンドの使い方を表示
   list        利用可能なプラグインとその source (embedded / user / project) を表示
-  pin         workspace.toml 向けの inline-table pin 行を出力 (stdout、または --write で in-place)
+  pin         workspace.toml 向けの [plugins.versions] 制約行を出力 (stdout、または --write で in-place)
   scaffold    新しい <id>/ プラグインディレクトリを作成 (既定: <workspace>/.cocoon/plugins、--plugins-dir で上書き)
   show        単一プラグインの解決済みマニフェストを表示
 

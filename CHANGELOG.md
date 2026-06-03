@@ -6,6 +6,28 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING**: `[plugins.versions]` entries are now string version
+  constraints — `<id> = "=1.23.4"` (an exact pin) or `<id> = "latest"`. The
+  previous inline-table form (`<id> = { pin = "1.23.4" }`) was removed; rewrite
+  each entry as a string. Plugins with extra version inputs (e.g. android-sdk's
+  `api_level` / `build_tools`) keep the table form with the constraint under a
+  `version` key: `<id> = { version = "=…", api_level = "…" }`. cocoon rejects
+  the old `pin` form at load with a migration hint. Range operators (`>=`,
+  `^`, `~`, …) are not supported.
+- **BREAKING**: `cocoon plugin pin <id> <ref>` now writes the string
+  constraint `<id> = "=<ref>"` (a bare `<ref>` is pinned exactly; pass `latest`
+  to track the newest release) and no longer accepts `--amd64-checksum` /
+  `--arm64-checksum`.
+
+### Removed
+
+- **BREAKING**: `checksum_amd64` / `checksum_arm64` are no longer valid keys
+  under `[plugins.versions]` in `workspace.toml`; per-arch checksums are
+  recorded in `cocoon.lock`. cocoon rejects a `workspace.toml` that still
+  carries them, with a migration hint.
+
 ## [0.13.0] - 2026-06-03
 
 ### Added
