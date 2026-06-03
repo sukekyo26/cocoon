@@ -853,6 +853,9 @@ func ParseVersionSpec(s string) (PluginVersionOverride, error) {
 // hasRangeOperator reports whether t begins with a version-range operator
 // cocoon deliberately does not support (only "=<version>" / "latest" are).
 func hasRangeOperator(t string) bool {
+	if t == "" {
+		return false // t[0] below would panic on ""; callers already exclude it
+	}
 	if strings.HasPrefix(t, "!=") {
 		return true
 	}

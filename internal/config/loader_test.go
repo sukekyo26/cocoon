@@ -134,6 +134,32 @@ enable = ["go=1.23.4", "node=latest", "deno=*", "docker-cli"]`)
 	require.False(t, hasDocker)
 }
 
+// TestLoadWorkspace_EnableRejectsBadID pins the two id-rejection messages: an
+// empty id (a stray leading "=") points the author at the "<id>=..." form and
+// echoes the typed version, while a charset-violating id reports the pattern.
+func TestLoadWorkspace_EnableRejectsBadID(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name, entry, want string
+	}{
+		{"empty_id_with_spec", `"=1.2.3"`, `write "<id>=1.2.3"`},
+		{"empty_id_bare", `"="`, "has no plugin id"},
+		{"bad_charset", `"Go=1.2"`, "plugin id does not match"},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			body := pluginsTestWorkspace("[plugins]\nenable = [" + tc.entry + "]")
+			tmp := t.TempDir() + "/ws.toml"
+			require.NoError(t, os.WriteFile(tmp, []byte(body), 0o600))
+			_, err := config.LoadWorkspace(tmp)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.want)
+		})
+	}
+}
+
 // TestLoadWorkspace_OptionsExtras pins that [plugins.options].<id> folds a
 // plugin's [install.extra_versions] knobs into Versions[id].Extra while the
 // main version stays in the enable array. Without it, an Android SDK plugin

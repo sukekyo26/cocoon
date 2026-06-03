@@ -67,7 +67,7 @@ func materializeEnable(a *Accumulator, raw []string) ([]string, map[string]Plugi
 	for i, entry := range raw {
 		id, spec, hasSpec := splitEnableEntry(entry)
 		if !rxPluginID.MatchString(id) {
-			a.Add("plugin id does not match "+rxPluginID.String(), "plugins", "enable", strconv.Itoa(i))
+			a.Add(enableIDMessage(entry, id, spec), "plugins", "enable", strconv.Itoa(i))
 			continue
 		}
 		ids = append(ids, id)
@@ -115,6 +115,19 @@ func parseEnableSpec(raw string) (PluginVersionOverride, error) {
 // forms so the workspace.toml author sees the fix inline.
 func enableSpecMessage(err error) string {
 	return err.Error() + ` — write the version bare ("<id>=1.23.4"), "<id>=latest", or "<id>" to enable unpinned`
+}
+
+// enableIDMessage explains why an enable entry's id was rejected. An empty id
+// (e.g. "=1.2.3" or a stray "=") names no plugin, so it points at the
+// "<id>=..." form; a non-empty id simply violates the id charset.
+func enableIDMessage(entry, id, spec string) string {
+	if id != "" {
+		return "plugin id does not match " + rxPluginID.String()
+	}
+	if spec != "" {
+		return fmt.Sprintf("enable entry %q has no plugin id — write %q", entry, "<id>="+spec)
+	}
+	return fmt.Sprintf("enable entry %q has no plugin id — write %q or %q", entry, "<id>=<version>", "<id>")
 }
 
 // materializeOptions folds each [plugins.options].<id> inline table into the
