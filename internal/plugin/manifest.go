@@ -78,14 +78,79 @@ const (
 
 // Version mirrors plugin.toml [version].
 type Version struct {
-	VersionCapable bool   `toml:"version_capable"`
-	Verify         string `toml:"verify,omitempty"`
+	VersionCapable bool           `toml:"version_capable"`
+	Verify         string         `toml:"verify,omitempty"`
+	Source         *VersionSource `toml:"source,omitempty"`
 }
 
 // VerifiesByChecksum reports whether the plugin's install script verifies
-// downloads against $CHECKSUM_AMD64 / $CHECKSUM_ARM64. An empty Verify
-// defaults to the checksum mechanism; VerifyPGP plugins verify in-script
-// against a bundled signing key and take no per-workspace checksum.
+// downloads against $CHECKSUM_AMD64 / $CHECKSUM_ARM64 (recorded in
+// cocoon.lock by `cocoon lock`). An empty Verify defaults to the checksum
+// mechanism; VerifyPGP plugins verify in-script against a bundled signing
+// key and take no checksum.
 func (v Version) VerifiesByChecksum() bool {
 	return v.Verify == "" || v.Verify == VerifyChecksum
+}
+
+// VersionSource declares how `cocoon lock` discovers the latest version of a
+// version_capable plugin and where it fetches the per-arch SHA256 checksum.
+// The two axes are independent: Latest answers "what is the newest version",
+// Checksum answers "what is the SHA256 of the <version>/<arch> artifact". A
+// plugin with no Source cannot resolve "latest" (the user must pin an exact
+// version) and records no checksum. URLs may use ${version} and ${arch}
+// placeholders; ${arch} is substituted via the Arch map (e.g. node needs
+// x64/arm64, just needs x86_64/aarch64). ${version} is always the clean
+// version with no leading "v"; templates spell out a literal "v${version}"
+// where the upstream tag carries one.
+type VersionSource struct {
+	Latest   LatestSpec        `toml:"latest"`
+	Checksum ChecksumSpec      `toml:"checksum"`
+	Arch     map[string]string `toml:"arch,omitempty"`
+}
+
+// Latest-discovery kinds for [version.source.latest].type.
+const (
+	// LatestGitHubRelease reads tag_name from the GitHub releases/latest API
+	// for Repo (e.g. "casey/just").
+	LatestGitHubRelease = "github-release"
+	// LatestText GETs URL and takes the first line (e.g. go.dev/VERSION).
+	LatestText = "text"
+	// LatestJSONField GETs URL, decodes JSON, and reads the dotted Field
+	// (e.g. HashiCorp's checkpoint API .current_version).
+	LatestJSONField = "json-field"
+	// LatestTab GETs a TSV index (Node's dist/index.tab); with LTSOnly it
+	// takes the first row whose LTS column is non-"-".
+	LatestTab = "tab"
+)
+
+// LatestSpec mirrors [version.source.latest].
+type LatestSpec struct {
+	Type        string `toml:"type"`
+	URL         string `toml:"url,omitempty"`
+	Repo        string `toml:"repo,omitempty"`
+	StripPrefix string `toml:"strip_prefix,omitempty"`
+	Field       string `toml:"field,omitempty"`
+	LTSOnly     bool   `toml:"lts_only,omitempty"`
+}
+
+// Checksum-fetch kinds for [version.source.checksum].type.
+const (
+	// ChecksumNone records no checksum (pgp plugins, or | bash installers
+	// whose per-arch artifact hash cocoon cannot fetch independently).
+	ChecksumNone = "none"
+	// ChecksumSidecar GETs AssetURL+Suffix; the body is a bare hash
+	// (e.g. go's .sha256 sidecar).
+	ChecksumSidecar = "sidecar"
+	// ChecksumShasumsFile GETs ManifestURL (one SHASUMS-style file) and finds
+	// the line whose filename field matches AssetName.
+	ChecksumShasumsFile = "shasums-file"
+)
+
+// ChecksumSpec mirrors [version.source.checksum].
+type ChecksumSpec struct {
+	Type        string `toml:"type"`
+	AssetURL    string `toml:"asset_url,omitempty"`
+	Suffix      string `toml:"suffix,omitempty"`
+	ManifestURL string `toml:"manifest_url,omitempty"`
+	AssetName   string `toml:"asset_name,omitempty"`
 }

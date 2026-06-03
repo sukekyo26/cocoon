@@ -5,17 +5,19 @@ import (
 	"maps"
 	"regexp"
 	"slices"
+	"strings"
 
 	"github.com/sukekyo26/cocoon/internal/config"
 )
 
 var (
-	rxEnvKey          = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
-	rxBuildArg        = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`)
-	rxPluginVolume    = regexp.MustCompile(`^/home/\$\{USERNAME\}/[^/]+$`)
-	rxPluginURL       = regexp.MustCompile(`^https://[^\s]+$`)
-	rxMethodName      = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
-	rxExtraVersionKey = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+	rxEnvKey              = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+	rxBuildArg            = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`)
+	rxPluginVolume        = regexp.MustCompile(`^/home/\$\{USERNAME\}/[^/]+$`)
+	rxPluginURL           = regexp.MustCompile(`^https://[^\s]+$`)
+	rxMethodName          = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
+	rxExtraVersionKey     = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+	rxTemplatePlaceholder = regexp.MustCompile(`\$\{[a-z]+\}`)
 )
 
 // reservedExtraVersionKeys lists the [plugins.versions].<id> keys that
@@ -91,6 +93,84 @@ func (v *Version) validate(a *config.Accumulator) {
 	}
 	if v.Verify != "" && !v.VersionCapable {
 		a.Add("verify requires version_capable = true", "verify")
+	}
+	if v.Source != nil {
+		if !v.VersionCapable {
+			a.Add("[version.source] requires version_capable = true", "source")
+		}
+		v.Source.validate(a.At("source"), v.Verify)
+	}
+}
+
+func (s *VersionSource) validate(a *config.Accumulator, verify string) {
+	s.Latest.validate(a.At("latest"))
+	s.Checksum.validate(a.At("checksum"), verify)
+	if s.usesArch() && len(s.Arch) == 0 {
+		a.Add(`arch map is required when a url or asset_name uses ${arch}`, "arch")
+	}
+}
+
+func (s *VersionSource) usesArch() bool {
+	return strings.Contains(s.Latest.URL, "${arch}") ||
+		strings.Contains(s.Checksum.AssetURL, "${arch}") ||
+		strings.Contains(s.Checksum.ManifestURL, "${arch}") ||
+		strings.Contains(s.Checksum.AssetName, "${arch}")
+}
+
+func (l *LatestSpec) validate(a *config.Accumulator) {
+	switch l.Type {
+	case LatestGitHubRelease:
+		if l.Repo == "" {
+			a.Add(`repo is required for latest.type = "github-release"`, "repo")
+		}
+	case LatestText, LatestTab:
+		validateSourceURL(a, l.URL, "url")
+	case LatestJSONField:
+		validateSourceURL(a, l.URL, "url")
+		if l.Field == "" {
+			a.Add(`field is required for latest.type = "json-field"`, "field")
+		}
+	case "":
+		a.Add("latest.type must be set", "type")
+	default:
+		a.Add(fmt.Sprintf("latest.type %q is not one of %q, %q, %q, %q",
+			l.Type, LatestGitHubRelease, LatestText, LatestJSONField, LatestTab), "type")
+	}
+}
+
+func (c *ChecksumSpec) validate(a *config.Accumulator, verify string) {
+	switch c.Type {
+	case ChecksumNone:
+	case ChecksumSidecar:
+		validateSourceURL(a, c.AssetURL, "asset_url")
+	case ChecksumShasumsFile:
+		validateSourceURL(a, c.ManifestURL, "manifest_url")
+		if c.AssetName == "" {
+			a.Add(`asset_name is required for checksum.type = "shasums-file"`, "asset_name")
+		}
+	case "":
+		a.Add("checksum.type must be set", "type")
+	default:
+		a.Add(fmt.Sprintf("checksum.type %q is not one of %q, %q, %q",
+			c.Type, ChecksumNone, ChecksumSidecar, ChecksumShasumsFile), "type")
+	}
+	if c.Type != "" && c.Type != ChecksumNone && verify == VerifyPGP {
+		a.Add(`checksum.type must be "none" when verify = "pgp"`, "type")
+	}
+}
+
+// validateSourceURL checks a source URL after stripping ${...} placeholders
+// so the https-only / no-whitespace contract holds for the literal parts a
+// third-party plugin.toml supplies (the interpolated segments are filled by
+// the resolver at lock time). Untrusted-input gate per defensive-coding §5.
+func validateSourceURL(a *config.Accumulator, raw, field string) {
+	if raw == "" {
+		a.Add(field+" must not be empty", field)
+		return
+	}
+	stripped := rxTemplatePlaceholder.ReplaceAllString(raw, "x")
+	if !rxPluginURL.MatchString(stripped) {
+		a.Add(field+" must start with https:// and contain no whitespace", field)
 	}
 }
 

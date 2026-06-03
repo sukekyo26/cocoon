@@ -291,6 +291,143 @@ func TestValidate_MethodsNoDefault(t *testing.T) {
 	require.Contains(t, err.Error(), "default_method must be set")
 }
 
+// versionSourcePlugin builds a Plugin with a valid Install and the given
+// [version] block so [version.source] validation runs without unrelated
+// failures masking the result.
+func versionSourcePlugin(versionCapable bool, verify string, src *plugin.VersionSource) *plugin.Plugin {
+	return &plugin.Plugin{
+		Metadata: validMetadata(),
+		Install: plugin.Install{
+			DefaultMethod: "official",
+			Methods:       map[string]plugin.InstallMethod{"official": {Description: "x"}},
+		},
+		Version: plugin.Version{VersionCapable: versionCapable, Verify: verify, Source: src},
+	}
+}
+
+// TestValidate_VersionSourceAccepted pins the well-formed [version.source]
+// shapes for the latest × checksum kind combinations cocoon ships.
+func TestValidate_VersionSourceAccepted(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		src  plugin.VersionSource
+	}{
+		{
+			name: "github_release_shasums",
+			src: plugin.VersionSource{
+				Latest:   plugin.LatestSpec{Type: plugin.LatestGitHubRelease, Repo: "casey/just"},
+				Checksum: plugin.ChecksumSpec{Type: plugin.ChecksumShasumsFile, ManifestURL: "https://github.com/casey/just/releases/download/${version}/SHA256SUMS", AssetName: "just-${version}-${arch}.tar.gz"},
+				Arch:     map[string]string{"amd64": "x86_64", "arm64": "aarch64"},
+			},
+		},
+		{
+			name: "text_sidecar",
+			src: plugin.VersionSource{
+				Latest:   plugin.LatestSpec{Type: plugin.LatestText, URL: "https://go.dev/VERSION?m=text", StripPrefix: "go"},
+				Checksum: plugin.ChecksumSpec{Type: plugin.ChecksumSidecar, AssetURL: "https://dl.google.com/go/go${version}.linux-${arch}.tar.gz", Suffix: ".sha256"},
+				Arch:     map[string]string{"amd64": "amd64", "arm64": "arm64"},
+			},
+		},
+		{
+			name: "json_field_none",
+			src: plugin.VersionSource{
+				Latest:   plugin.LatestSpec{Type: plugin.LatestJSONField, URL: "https://x.test/v", Field: "current_version"},
+				Checksum: plugin.ChecksumSpec{Type: plugin.ChecksumNone},
+			},
+		},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			src := tc.src
+			require.NoError(t, versionSourcePlugin(true, "", &src).Validate("test/plugin.toml"))
+		})
+	}
+}
+
+// TestValidate_VersionSourceRejected covers each [version.source] reject
+// path: missing version_capable, unknown/blank kinds, missing per-kind
+// required fields, an insecure URL, a pgp/checksum contradiction, and a
+// ${arch} template without an arch map.
+func TestValidate_VersionSourceRejected(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name           string
+		versionCapable bool
+		verify         string
+		src            plugin.VersionSource
+		wantContains   string
+	}{
+		{
+			name:           "source_without_version_capable",
+			versionCapable: false,
+			src:            plugin.VersionSource{Latest: plugin.LatestSpec{Type: plugin.LatestText, URL: "https://x.test/v"}, Checksum: plugin.ChecksumSpec{Type: plugin.ChecksumNone}},
+			wantContains:   "[version.source] requires version_capable = true",
+		},
+		{
+			name:           "unknown_latest_type",
+			versionCapable: true,
+			src:            plugin.VersionSource{Latest: plugin.LatestSpec{Type: "wat"}, Checksum: plugin.ChecksumSpec{Type: plugin.ChecksumNone}},
+			wantContains:   "latest.type",
+		},
+		{
+			name:           "github_missing_repo",
+			versionCapable: true,
+			src:            plugin.VersionSource{Latest: plugin.LatestSpec{Type: plugin.LatestGitHubRelease}, Checksum: plugin.ChecksumSpec{Type: plugin.ChecksumNone}},
+			wantContains:   "repo is required",
+		},
+		{
+			name:           "json_missing_field",
+			versionCapable: true,
+			src:            plugin.VersionSource{Latest: plugin.LatestSpec{Type: plugin.LatestJSONField, URL: "https://x.test/v"}, Checksum: plugin.ChecksumSpec{Type: plugin.ChecksumNone}},
+			wantContains:   "field is required",
+		},
+		{
+			name:           "text_insecure_url",
+			versionCapable: true,
+			src:            plugin.VersionSource{Latest: plugin.LatestSpec{Type: plugin.LatestText, URL: "http://insecure.test/v"}, Checksum: plugin.ChecksumSpec{Type: plugin.ChecksumNone}},
+			wantContains:   "must start with https://",
+		},
+		{
+			name:           "unknown_checksum_type",
+			versionCapable: true,
+			src:            plugin.VersionSource{Latest: plugin.LatestSpec{Type: plugin.LatestText, URL: "https://x.test/v"}, Checksum: plugin.ChecksumSpec{Type: "wat"}},
+			wantContains:   "checksum.type",
+		},
+		{
+			name:           "shasums_missing_asset_name",
+			versionCapable: true,
+			src:            plugin.VersionSource{Latest: plugin.LatestSpec{Type: plugin.LatestText, URL: "https://x.test/v"}, Checksum: plugin.ChecksumSpec{Type: plugin.ChecksumShasumsFile, ManifestURL: "https://x.test/SHA"}},
+			wantContains:   "asset_name is required",
+		},
+		{
+			name:           "pgp_with_checksum",
+			versionCapable: true,
+			verify:         plugin.VerifyPGP,
+			src:            plugin.VersionSource{Latest: plugin.LatestSpec{Type: plugin.LatestText, URL: "https://x.test/v"}, Checksum: plugin.ChecksumSpec{Type: plugin.ChecksumSidecar, AssetURL: "https://x.test/${version}.tar.gz", Suffix: ".sha256"}, Arch: map[string]string{"amd64": "amd64"}},
+			wantContains:   `checksum.type must be "none" when verify = "pgp"`,
+		},
+		{
+			name:           "arch_template_without_map",
+			versionCapable: true,
+			src:            plugin.VersionSource{Latest: plugin.LatestSpec{Type: plugin.LatestText, URL: "https://x.test/${arch}/v"}, Checksum: plugin.ChecksumSpec{Type: plugin.ChecksumNone}},
+			wantContains:   "arch map is required",
+		},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			src := tc.src
+			err := versionSourcePlugin(tc.versionCapable, tc.verify, &src).Validate("test/plugin.toml")
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.wantContains)
+		})
+	}
+}
+
 // TestValidate_MethodsBadName covers method-name regex rejection across
 // input categories (uppercase / digit-prefix / punctuation / whitespace).
 func TestValidate_MethodsBadName(t *testing.T) {
