@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/pelletier/go-toml/v2"
 	"github.com/stretchr/testify/require"
 
+	"github.com/sukekyo26/cocoon/internal/config"
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
 
@@ -45,8 +45,12 @@ func TestCatalog_VersionSourceCoverage(t *testing.T) {
 			path := filepath.Join("catalog", id, "plugin.toml")
 			data, rerr := os.ReadFile(path) //nolint:gosec // catalog file
 			require.NoError(t, rerr)
+			// Strict-decode exactly as production plugin loading does
+			// (config.StrictUnmarshal rejects unknown fields), so a misspelled
+			// key in a catalog plugin.toml fails this contract instead of being
+			// silently ignored here but rejected at runtime.
 			var p plugin.Plugin
-			require.NoError(t, toml.Unmarshal(data, &p))
+			require.NoError(t, config.StrictUnmarshal(path, data, &p))
 
 			switch {
 			case !p.Version.VersionCapable:
