@@ -415,6 +415,12 @@ func TestValidate_VersionSourceRejected(t *testing.T) {
 			src:            plugin.VersionSource{Latest: plugin.LatestSpec{Type: plugin.LatestText, URL: "https://x.test/${arch}/v"}, Checksum: plugin.ChecksumSpec{Type: plugin.ChecksumNone}},
 			wantContains:   "arch map is required",
 		},
+		{
+			name:           "unknown_placeholder",
+			versionCapable: true,
+			src:            plugin.VersionSource{Latest: plugin.LatestSpec{Type: plugin.LatestText, URL: "https://x.test/${foo}/v"}, Checksum: plugin.ChecksumSpec{Type: plugin.ChecksumNone}},
+			wantContains:   "unknown placeholder ${foo}",
+		},
 	}
 	for _, tc := range cases {
 		tc := tc

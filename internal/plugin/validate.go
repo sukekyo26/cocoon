@@ -159,14 +159,21 @@ func (c *ChecksumSpec) validate(a *config.Accumulator, verify string) {
 	}
 }
 
-// validateSourceURL checks a source URL after stripping ${...} placeholders
-// so the https-only / no-whitespace contract holds for the literal parts a
-// third-party plugin.toml supplies (the interpolated segments are filled by
-// the resolver at lock time). Untrusted-input gate per defensive-coding §5.
+// validateSourceURL checks a source URL: every ${...} placeholder must be one
+// the resolver expands (${version} / ${arch}), and after stripping them the
+// https-only / no-whitespace contract must hold for the literal parts a
+// third-party plugin.toml supplies. Untrusted-input gate per defensive-coding §5.
 func validateSourceURL(a *config.Accumulator, raw, field string) {
 	if raw == "" {
 		a.Add(field+" must not be empty", field)
 		return
+	}
+	// The resolver only expands ${version} / ${arch}; reject any other
+	// placeholder so a typo fails here, not with a confusing lock-time fetch.
+	for _, ph := range rxTemplatePlaceholder.FindAllString(raw, -1) {
+		if ph != "${version}" && ph != "${arch}" {
+			a.Add(fmt.Sprintf("%s has unknown placeholder %s (only ${version} and ${arch} are expanded)", field, ph), field)
+		}
 	}
 	stripped := rxTemplatePlaceholder.ReplaceAllString(raw, "x")
 	if !rxPluginURL.MatchString(stripped) {

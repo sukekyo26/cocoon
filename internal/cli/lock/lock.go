@@ -49,8 +49,14 @@ func specHashInput(specs []pluginSpec) map[string]string {
 
 // checkLock verifies (offline) that the lock matches workspace.toml: present,
 // inputs_hash current, and an entry for every enabled plugin with a matching
-// requested spec. Any drift is a usage error so CI can gate on it.
+// requested spec. Any drift is a usage error so CI can gate on it. A workspace
+// with no version-capable plugins needs no lock, so --check passes there even
+// when the file is absent.
 func checkLock(log *logx.Logger, lockPath string, existing *lockfile.Lock, specs []pluginSpec) error {
+	if len(specs) == 0 {
+		log.Success("no version-capable plugins enabled; nothing to lock")
+		return nil
+	}
 	if existing == nil {
 		return fmt.Errorf("%w: %s is missing; run `cocoon lock`", clihelpers.ErrUsage, lockPath)
 	}

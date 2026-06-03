@@ -154,6 +154,18 @@ func TestLock_RespectsCustomLockFileName(t *testing.T) {
 	require.True(t, os.IsNotExist(defErr), "default cocoon.lock must not be written")
 }
 
+// TestLock_CheckPassesWithNoVersionCapablePlugins pins that `cocoon lock --check`
+// succeeds (no lock required) when the workspace enables no version-capable
+// plugins, so it stays usable as a generic CI gate.
+//
+//nolint:paralleltest // mutates cwd/HOME via seedProject.
+func TestLock_CheckPassesWithNoVersionCapablePlugins(t *testing.T) {
+	seedProject(t, "", nil) // no plugins enabled → nothing to lock
+	out, err := runLockCmd(t, "--check")
+	require.NoError(t, err, "out=%s", out)
+	require.Contains(t, out, "nothing to lock")
+}
+
 func runLockCmd(t *testing.T, args ...string) (string, error) {
 	t.Helper()
 	var stdout, stderr bytes.Buffer
