@@ -33,8 +33,9 @@
 | `[container.security_opt]` | optional | Compose の `security_opt` |
 | `[container.sudo]` | optional | sudo のパスワード方針（`mode`） |
 | `[[container.skel]]` | optional | `/etc/skel` 経由で配置する dotfiles |
-| `[plugins]` | **required** | 有効化するプラグイン |
-| `[plugins.versions]` | optional | プラグインのバージョン制約 |
+| `[plugins]` | **required** | 有効化するプラグイン（バージョンは `enable` 内にインライン pin） |
+| `[plugins.methods]` | optional | プラグインごとの install method 選択 |
+| `[plugins.options]` | optional | プラグインごとのサブコンポーネント版つまみ |
 | `[apt]` | optional | 追加 apt パッケージ |
 | `[apt.mirror]` | optional | 地域 apt ミラー |
 | `[apt.proxy]` | optional | apt-get の HTTP/HTTPS プロキシ |
@@ -105,7 +106,7 @@ devcontainer = true
 
 すべての候補イメージは apt ベースなので、既存のプラグインカタログがどの image でもそのまま機能します。`ubuntu` は Ubuntu archives (archive.ubuntu.com) を引き、残り 6 つは Debian (bookworm) 系で deb.debian.org を引きます。apt mirror の書き換えはこの違いで分岐 (`internal/generate/dockerfile/dockerfile.go` の `aptMirrorOriginHosts` 参照)。
 
-**image とプラグインの mutually exclusive ルール:** ベースが言語ランタイムを既に提供している場合、同名の cocoon プラグインを併用すると、プラグインがベースを上書き (go) もしくは PATH で覆い隠す (rust) ため、validation で reject します。`[plugins].enable` から外すか、`image = "ubuntu" / "debian"` に切り替えて `[plugins.versions]` でバージョン固定してください。
+**image とプラグインの mutually exclusive ルール:** ベースが言語ランタイムを既に提供している場合、同名の cocoon プラグインを併用すると、プラグインがベースを上書き (go) もしくは PATH で覆い隠す (rust) ため、validation で reject します。`[plugins].enable` から外すか、`image = "ubuntu" / "debian"` に切り替えて `enable` 配列内でインライン pin（例: `"go=1.23.4"`）してください。
 
 | 選んだ `image` | プラグイン有効化 | 結果 |
 |---|---|---|
@@ -296,45 +297,89 @@ target = ".bashrc"
 
 | フィールド | 型 | バリデーション |
 |---|---|---|
-| `enable` | array of strings | プラグイン ID は `^[a-z][a-z0-9-]*$`。重複不可。 |
+| `enable` | array of strings | 各要素は `"<id>"` か `"<id>=<version>"`。id は `^[a-z][a-z0-9-]*$`。id の重複不可。**配列の順序が install 順序**（保持される）。 |
+
+`enable` は有効化リストであると同時にバージョン pin リストでもあります — バージョンは
+id と同じ要素の `=` の後にインラインで書きます。各要素は次のいずれか:
+
+| 要素の形式 | 意味 |
+|---|---|
+| `"<id>"` | 有効化、未 pin。lock / build 時に upstream 最新へ解決。 |
+| `"<id>=<version>"` | 厳密 pin。バージョンは **そのまま**（例: `"go=1.23.4"`、`"go==1.23.4"` ではない）。install スクリプトへ `$PIN` 経由で渡る。 |
+| `"<id>=latest"` | 浮動 latest。`cocoon lock` が具体バージョンへ凍結。 |
+
+範囲演算子 (`>=`, `^`, `~`, `<` …) は **非対応** で拒否される — 受理するのは
+そのままの厳密バージョンか `latest` のみ。
 
 ```toml
 [plugins]
-enable = ["go", "uv", "github-cli"]
+enable = [
+    "go=1.23.4",       # 厳密 pin
+    "node=latest",     # 浮動 latest（cocoon lock が凍結）
+    "uv",              # 未 pin、== latest
+    "github-cli",
+]
 ```
 
 利用可能なプラグイン一覧は `cocoon plugin list` で確認できます (埋め込み + ユーザー / プロジェクト上書き含む)。
 
-### `[plugins.versions]`
+一部のプラグインは上流が machine-readable な「latest」を公開していません
+（`aws-cli` / `android-sdk` / `flutter` — [`cocoon lock`](commands.ja.md#exact-only-プラグイン) 参照）。
+これらは `enable` 配列で厳密バージョンに pin する **必要があります**（例:
+`"flutter=3.44.1"`）。未 pin や `latest` のままだと `cocoon lock` がエラーになります。
 
-`version_capable` プラグインのバージョン制約。各値は文字列で、`"=<exact>"` (先頭の `=` に注意) の厳密 pin か、`"latest"` (`"*"` も同義として受理) のいずれか。`"latest"` は `cocoon lock` が具体的なバージョンへ凍結する。範囲演算子 (`>=`, `^`, `~`, `<` …) は **非対応** — `=exact` と `latest` のみ。
+> **移行メモ。** 旧 `[plugins.versions]` セクションは **削除** されました。残っている
+> `workspace.toml` はロード時に拒否され、pin を `enable` 配列へ移すヒントが出ます。
+> `go = "=1.23.4"` のような `[plugins.versions]` 行は enable 配列要素 `"go=1.23.4"`
+> （先頭の `=` を落とす）へ、`node = "latest"` は `"node=latest"` へ置き換えてください。
+
+checksum は `workspace.toml` には **書きません**。per-arch SHA256 checksum は
+`cocoon lock` が `cocoon.lock` ファイルに記録し、同時に `latest` 要素を具体的な
+バージョンへ解決します。checksum が未記録のときも、install スクリプトは上流が
+リリースと共に公開する checksum とダウンロードを照合します (trust-on-first-use)。
+`verify = "pgp"` のプラグイン (例: `aws-cli`) は同梱署名でダウンロードを検証し、
+checksum を一切持ちません。
+
+### `[plugins.methods]`
+
+`[install.methods]` を複数宣言するプラグインの install method を選びます。各値は
+method 名で、ここに無いプラグインは `default_method` を使います。
 
 ```toml
-[plugins.versions]
-go = "=1.22.5"
-node = "latest"
-aws-cli = "=2.34.48"   # verify = "pgp" — checksum は cocoon.lock が扱う
+[plugins.methods]
+copilot-cli = "binary"
 ```
 
-checksum はここには **書かない**。per-arch SHA256 checksum は `cocoon lock` が `cocoon.lock` ファイルに記録し、同時に `"latest"` 制約を具体的なバージョンへ解決する。checksum が未記録のときも、install スクリプトは上流がリリースと共に公開する checksum とダウンロードを照合する (trust-on-first-use)。`verify = "pgp"` のプラグイン (例: `aws-cli`) は同梱署名でダウンロードを検証し、checksum を一切持たない。
+プラグインが method を宣言する方法は
+[複数インストール方式](plugins.ja.md#複数インストール方式installmethods) を参照。
 
-#### サブコンポーネントバージョン
+### `[plugins.options]`
 
-一部のプラグインは追加のバージョン指定（`[install.extra_versions]` で宣言。
-`cocoon plugin show <id>` で確認可能）を公開します。その種のプラグインは
-インラインテーブル形式を使い、バージョンは予約キー `version` 配下へ移り、
-追加の指定をその隣に並べます:
+プラグインが `[install.extra_versions]` で宣言する **サブコンポーネント版つまみ**
+（`cocoon plugin show <id>` で確認可能）のためのプラグインごとサイドテーブル。
+ここに載るのはその追加つまみ **のみ** で、プラグイン自身のバージョンは `enable`
+配列に書きます（ここではない）。android-sdk が典型例です: `cmdline-tools` は
+`enable`（`"android-sdk=14742923"`）で pin し、`api_level` / `build_tools` は
+ここで選びます:
 
 ```toml
-[plugins.versions]
-android-sdk = { version = "=14742923", api_level = "36", build_tools = "36.0.0" }
+[plugins]
+enable = [
+    "android-sdk=14742923",   # cmdline-tools のバージョン
+]
+
+[plugins.options]
+android-sdk = { api_level = "36", build_tools = "36.0.0" }
 ```
 
-宣言済みのキーのみ受理されます — 未知のキー（typo や上流で削除された宣言）は
-default に黙ってフォールバックせず `cocoon gen` が拒否します。override 値は
-`version` と同じ制約に従います: `"`, `\`, `\n`, `\r`, `$`, backtick は不可
-（いずれも Dockerfile の RUN プレフィックス `KEY="..."` env ペアに展開される
-ため）。宣言方法は[プラグイン作成ガイド](plugins.ja.md)を参照。
+各値はインラインテーブル。プラグインが `[install.extra_versions]` で宣言した
+キーのみ受理されます — 未知のキー（typo や上流で削除された宣言）は default に
+黙ってフォールバックせず `cocoon gen` が拒否します。予約キー `version` はここでは
+**拒否** されます（主バージョンは `enable` 配列に属する）。`pin` / `checksum_*`
+キーも同様（per-arch checksum は `workspace.toml` ではなく `cocoon.lock` に存在）。
+override 値はインラインバージョンと同じ文字制約に従います: `"`, `\`, `\n`,
+`\r`, `$`, backtick は不可（いずれも Dockerfile の RUN プレフィックス
+`KEY="..."` env ペアに展開されるため）。宣言方法は[プラグイン作成ガイド](plugins.ja.md)を参照。
 
 ---
 

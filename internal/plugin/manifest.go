@@ -55,7 +55,7 @@ type InstallMethod struct {
 
 // ExtraVersionSpec mirrors plugin.toml [install.extra_versions.<key>].
 // It declares one user-overridable subcomponent version: workspace.toml
-// can write `<key> = "..."` inside [plugins.versions].<id> and the value
+// can write `<key> = "..."` inside [plugins.options].<id> and the value
 // is exported into the install script as the env variable named in Env.
 // Default is used when the workspace.toml override is absent. Both Env
 // and Default are required (an empty Env is rejected during validation
@@ -69,7 +69,7 @@ type ExtraVersionSpec struct {
 // Verification methods for [version].verify.
 const (
 	// VerifyChecksum verifies downloads against $CHECKSUM_AMD64 /
-	// $CHECKSUM_ARM64 recorded per workspace in [plugins.versions].
+	// $CHECKSUM_ARM64 recorded in cocoon.lock.
 	VerifyChecksum = "checksum"
 	// VerifyPGP verifies downloads in-script against a bundled signing
 	// key; it takes no per-workspace checksum.

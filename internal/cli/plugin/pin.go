@@ -51,7 +51,7 @@ func runPin(stdout, stderr io.Writer, id, ref, method string, write bool) error 
 	override, specErr := normalizePinSpec(ref)
 	if specErr != nil {
 		return fmt.Errorf(
-			`%w: [plugins.versions].%s: %w — write an exact pin as "=1.23.4" or use "latest"`,
+			`%w: invalid version for %q: %w — write a bare version (1.23.4) or "latest"`,
 			clihelpers.ErrUsage, id, specErr)
 	}
 	spec := override.Spec
@@ -67,13 +67,13 @@ func runPin(stdout, stderr io.Writer, id, ref, method string, write bool) error 
 		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, lErr)
 	}
 	// A pin only means something for a version_capable plugin: cocoon gen
-	// hard-rejects a [plugins.versions] entry for any other plugin. Fail fast
-	// here so `plugin pin` never emits a config that cannot generate.
+	// hard-rejects a pinned enable entry for any other plugin. Fail fast here
+	// so `plugin pin` never emits a config that cannot generate.
 	if !p.Version.VersionCapable {
 		return fmt.Errorf(
 			"%w: plugin %q is not version_capable; it cannot be pinned "+
-				"([plugins.versions] entries for it are rejected by cocoon gen)",
-			clihelpers.ErrUsage, id)
+				"(a \"%s=<version>\" enable entry is rejected by cocoon gen)",
+			clihelpers.ErrUsage, id, id)
 	}
 	if method != "" {
 		if mErr := validateMethodForPin(p, id, method); mErr != nil {
@@ -128,13 +128,13 @@ func runPinWrite(stdout, stderr io.Writer, id, spec, method string) error {
 			clihelpers.ErrUsage)
 	}
 	if uErr := plugin.UpsertPinAndMethod(wsPath, id, spec, method); uErr != nil {
-		if errors.Is(uErr, plugin.ErrLegacyPinSubsection) {
+		if errors.Is(uErr, plugin.ErrLegacyPluginVersions) {
 			return fmt.Errorf("%w: %w (in %s)", clihelpers.ErrUsage, uErr, wsPath)
 		}
 		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, uErr)
 	}
 	log := logx.New(stdout, stderr)
-	log.Successf("Updated %s: [plugins.versions] %s = %q", wsPath, id, spec)
+	log.Successf("Updated %s: [plugins].enable %q", wsPath, plugin.FormatEnableEntry(id, spec))
 	if method != "" {
 		log.Successf("Updated %s: [plugins.methods] %s = %q", wsPath, id, method)
 	}
@@ -142,24 +142,25 @@ func runPinWrite(stdout, stderr io.Writer, id, spec, method string) error {
 }
 
 // renderPinSnippet returns the stdout block the user pastes into
-// workspace.toml when --write is absent. Empty method emits the
-// [plugins.versions] line alone; a non-empty method prepends a
-// [plugins.methods] snippet so the user sees both halves of the pick.
+// workspace.toml when --write is absent. Empty method emits the enable-array
+// entry alone; a non-empty method appends a [plugins.methods] snippet so the
+// user sees both halves of the pick.
 func renderPinSnippet(id, spec, method string) string {
 	var b strings.Builder
+	entry := plugin.FormatEnableEntry(id, spec)
 	if method == "" {
-		fmt.Fprintln(&b, "# Add the following line under [plugins.versions] in workspace.toml:")
+		fmt.Fprintln(&b, "# Add (or update) this entry in the [plugins].enable array in workspace.toml:")
 		fmt.Fprintln(&b)
-		b.WriteString(plugin.FormatPinLine(id, spec))
+		fmt.Fprintf(&b, "%q\n", entry)
 		return b.String()
 	}
-	fmt.Fprintln(&b, "# Add the following lines to workspace.toml:")
+	fmt.Fprintln(&b, "# Add the following to workspace.toml:")
+	fmt.Fprintln(&b)
+	fmt.Fprintln(&b, "# In the [plugins].enable array:")
+	fmt.Fprintf(&b, "%q\n", entry)
 	fmt.Fprintln(&b)
 	fmt.Fprintln(&b, "# Under [plugins.methods]:")
 	b.WriteString(plugin.FormatMethodLine(id, method))
-	fmt.Fprintln(&b)
-	fmt.Fprintln(&b, "# Under [plugins.versions]:")
-	b.WriteString(plugin.FormatPinLine(id, spec))
 	return b.String()
 }
 

@@ -1,7 +1,0 @@
-# top-level comment that must survive
-[plugins]
-enable = ["go"]
-# inline note: bump go quarterly
-
-[plugins.versions]
-go = "=1.23.4"

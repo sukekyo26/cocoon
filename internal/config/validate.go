@@ -837,18 +837,13 @@ func hasRangeOperator(t string) bool {
 }
 
 func (p *PluginsSpec) validate(a *Accumulator) {
-	for i, id := range p.Enable {
-		if !rxPluginID.MatchString(id) {
-			a.Add("plugin id does not match "+rxPluginID.String(), "enable", fmt.Sprintf("%d", i))
-		}
-	}
 	if HasDuplicates(p.Enable) {
 		a.Add("plugins.enable contains duplicate entries", "enable")
 	}
-	// [plugins.versions] constraints are parsed and validated in
-	// materializePluginVersions (string|table form via ParseVersionSpec); by
-	// the time validate runs they are already well-formed, and checksums no
-	// longer live in workspace.toml (they are recorded in cocoon.lock).
+	// Enable entries (id + optional "=<version>"/"latest" constraint) and the
+	// [plugins.options] table are parsed and validated in materializePlugins
+	// before validate runs; by the time we get here Enable holds clean ids and
+	// checksums live in cocoon.lock, not workspace.toml.
 	// Sort plugin ids so ValidationError.Error()'s "first error"
 	// summary stays stable across runs (map iteration is randomised).
 	methodIDs := slices.Sorted(maps.Keys(p.Methods))

@@ -96,8 +96,8 @@ func TestPluginPin_PrintsConstraintLine(t *testing.T) {
 	}
 	out := stdout.String()
 	for _, w := range []string{
-		"[plugins.versions]",
-		`uv = "=0.5.7"`,
+		"[plugins].enable",
+		`"uv=0.5.7"`,
 	} {
 		if !strings.Contains(out, w) {
 			t.Errorf("missing %q in:\n%s", w, out)

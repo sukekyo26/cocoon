@@ -25,25 +25,25 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- **BREAKING**: `[plugins.versions]` entries are now string version
-  constraints — `<id> = "=1.23.4"` (an exact pin) or `<id> = "latest"`. The
-  previous inline-table form (`<id> = { pin = "1.23.4" }`) was removed; rewrite
-  each entry as a string. Plugins with extra version inputs (e.g. android-sdk's
-  `api_level` / `build_tools`) keep the table form with the constraint under a
-  `version` key: `<id> = { version = "=…", api_level = "…" }`. cocoon rejects
-  the old `pin` form at load with a migration hint. Range operators (`>=`,
-  `^`, `~`, …) are not supported.
-- **BREAKING**: `cocoon plugin pin <id> <ref>` now writes the string
-  constraint `<id> = "=<ref>"` (a bare `<ref>` is pinned exactly; pass `latest`
-  to track the newest release) and no longer accepts `--amd64-checksum` /
-  `--arm64-checksum`.
+- **BREAKING**: Plugin versions are now pinned inline in the `[plugins].enable`
+  array (uv/pip-style), so each plugin is named once. An element is `"<id>"`
+  (enabled, unpinned), `"<id>=1.23.4"` (an exact pin, version spelled bare), or
+  `"<id>=latest"`. Array order is the install order. Plugins with extra version
+  inputs (e.g. android-sdk's `api_level` / `build_tools`) declare them in a new
+  `[plugins.options]` table — the main version stays in `enable`. Range
+  operators (`>=`, `^`, `~`, …) are not supported.
+- **BREAKING**: `cocoon plugin pin <id> <ref>` now emits (or, with `--write`,
+  upserts) a `[plugins].enable` array element — `"<id>=<ref>"`, or
+  `"<id>=latest"` — instead of a `[plugins.versions]` line, and no longer
+  accepts `--amd64-checksum` / `--arm64-checksum`.
 
 ### Removed
 
-- **BREAKING**: `checksum_amd64` / `checksum_arm64` are no longer valid keys
-  under `[plugins.versions]` in `workspace.toml`; per-arch checksums are
-  recorded in `cocoon.lock`. cocoon rejects a `workspace.toml` that still
-  carries them, with a migration hint.
+- **BREAKING**: The `[plugins.versions]` table was removed from `workspace.toml`
+  (including its `checksum_amd64` / `checksum_arm64` keys). Versions move to the
+  `[plugins].enable` array, extra knobs to `[plugins.options]`, and per-arch
+  checksums are recorded in `cocoon.lock`. cocoon rejects a `workspace.toml`
+  that still carries `[plugins.versions]`, with a migration hint.
 
 ## [0.13.0] - 2026-06-03
 

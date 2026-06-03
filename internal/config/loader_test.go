@@ -95,108 +95,104 @@ func TestValidationError_LocStringEmpty(t *testing.T) {
 	require.Equal(t, "(root)", fe.LocString())
 }
 
-// TestLoadWorkspace_PluginVersionsExtra pins that workspace.toml's
-// [plugins.versions].<id> accepts either a scalar constraint string or an
-// inline table whose "version" key carries the constraint and whose extra
-// keys (declared by a plugin via [install.extra_versions]) route into
-// PluginVersionOverride.Extra. Without the table form, an Android SDK
-// plugin declaring api_level / build_tools could not surface the workspace
-// override into the install script.
-//
-// Four input shapes covered: a scalar exact pin (Extra nil), a table with
-// version + extras, a table with version = "latest" + an extra, and a
-// quoted-key table form ("version" = "…").
-func TestLoadWorkspace_PluginVersionsExtra(t *testing.T) {
-	t.Parallel()
+// pluginsTestWorkspace wraps a [plugins] body in the minimal container
+// preamble so the enable-array + [plugins.options] parsing can be exercised
+// in isolation.
+func pluginsTestWorkspace(pluginsBody string) string {
+	return `
+[container]
+service_name = "dev"
+username = "developer"
+image = "ubuntu"
+image_version = "24.04"
 
+` + pluginsBody + "\n"
+}
+
+// TestLoadWorkspace_EnableArrayConstraints pins that a [plugins].enable entry
+// carries the version constraint inline (uv/pip-style): a bare "<id>" enables
+// the plugin unpinned (no Versions entry), "<id>=<version>" seeds an exact
+// pin, and "<id>=latest" / "<id>=*" stay floating. Array order is the install
+// order, so it is preserved into Enable.
+func TestLoadWorkspace_EnableArrayConstraints(t *testing.T) {
+	t.Parallel()
+	body := pluginsTestWorkspace(`[plugins]
+enable = ["go=1.23.4", "node=latest", "deno=*", "docker-cli"]`)
+	tmp := t.TempDir() + "/ws.toml"
+	require.NoError(t, os.WriteFile(tmp, []byte(body), 0o600))
+	ws, err := config.LoadWorkspace(tmp)
+	require.NoError(t, err)
+
+	require.Equal(t, []string{"go", "node", "deno", "docker-cli"}, ws.Plugins.Enable)
+
+	require.Equal(t, "=1.23.4", ws.Plugins.Versions["go"].Spec)
+	require.Equal(t, "1.23.4", ws.Plugins.Versions["go"].Pin)
+	require.Equal(t, "latest", ws.Plugins.Versions["node"].Spec)
+	require.Equal(t, "latest", ws.Plugins.Versions["deno"].Spec)
+	// A bare id leaves no Versions entry (zero override → "latest" downstream).
+	_, hasDocker := ws.Plugins.Versions["docker-cli"]
+	require.False(t, hasDocker)
+}
+
+// TestLoadWorkspace_OptionsExtras pins that [plugins.options].<id> folds a
+// plugin's [install.extra_versions] knobs into Versions[id].Extra while the
+// main version stays in the enable array. Without it, an Android SDK plugin
+// declaring api_level / build_tools could not surface the workspace override.
+func TestLoadWorkspace_OptionsExtras(t *testing.T) {
+	t.Parallel()
+	body := pluginsTestWorkspace(`[plugins]
+enable = ["android-sdk=14742923"]
+
+[plugins.options]
+android-sdk = { api_level = "36", build_tools = "36.0.0" }`)
+	tmp := t.TempDir() + "/ws.toml"
+	require.NoError(t, os.WriteFile(tmp, []byte(body), 0o600))
+	ws, err := config.LoadWorkspace(tmp)
+	require.NoError(t, err)
+
+	ov := ws.Plugins.Versions["android-sdk"]
+	require.Equal(t, "=14742923", ov.Spec)
+	require.Equal(t, "14742923", ov.Pin)
+	require.Equal(t, map[string]string{"api_level": "36", "build_tools": "36.0.0"}, ov.Extra)
+}
+
+// TestLoadWorkspace_OptionsReservedKeys pins that the keys carrying the main
+// version (version / pin) and the per-arch checksums (recorded in cocoon.lock)
+// are rejected under [plugins.options] with a migration hint.
+func TestLoadWorkspace_OptionsReservedKeys(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
-		name        string
-		versionLine string
-		wantSpec    string
-		wantPin     string
-		wantExtra   map[string]string
+		name, line, want string
 	}{
-		{
-			name:        "scalar_exact_no_extra",
-			versionLine: `go = "=1.23.4"`,
-			wantSpec:    "=1.23.4",
-			wantPin:     "1.23.4",
-			wantExtra:   nil,
-		},
-		{
-			name:        "version_plus_extras",
-			versionLine: `android-sdk = { version = "=14742923", api_level = "36", build_tools = "36.0.0" }`,
-			wantSpec:    "=14742923",
-			wantPin:     "14742923",
-			wantExtra:   map[string]string{"api_level": "36", "build_tools": "36.0.0"},
-		},
-		{
-			name:        "latest_plus_extra",
-			versionLine: `android-sdk = { version = "latest", api_level = "35" }`,
-			wantSpec:    "latest",
-			wantPin:     "",
-			wantExtra:   map[string]string{"api_level": "35"},
-		},
-		{
-			name:        "quoted_keys",
-			versionLine: `android-sdk = { "version" = "=14742923", "api_level" = "36" }`,
-			wantSpec:    "=14742923",
-			wantPin:     "14742923",
-			wantExtra:   map[string]string{"api_level": "36"},
-		},
+		{"version", `android-sdk = { version = "=14742923" }`, "version belongs in the enable array"},
+		{"pin", `go = { pin = "1.23.4" }`, `"pin" key was removed`},
+		{"checksum_amd64", `codex = { checksum_amd64 = "abc" }`, "recorded in cocoon.lock"},
+		{"checksum_arm64", `codex = { checksum_arm64 = "abc" }`, "recorded in cocoon.lock"},
 	}
 	for _, tc := range cases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			body := `
-[container]
-service_name = "dev"
-username = "developer"
-image = "ubuntu"
-image_version = "24.04"
-
-[plugins]
-enable = []
-
-[plugins.versions]
-` + tc.versionLine + "\n"
+			body := pluginsTestWorkspace("[plugins]\nenable = []\n\n[plugins.options]\n" + tc.line)
 			tmp := t.TempDir() + "/ws.toml"
 			require.NoError(t, os.WriteFile(tmp, []byte(body), 0o600))
-			ws, err := config.LoadWorkspace(tmp)
-			require.NoError(t, err)
-			require.NotNil(t, ws.Plugins.Versions)
-			var id string
-			for k := range ws.Plugins.Versions {
-				id = k
-				break
-			}
-			ov := ws.Plugins.Versions[id]
-			require.Equal(t, tc.wantSpec, ov.Spec)
-			require.Equal(t, tc.wantPin, ov.Pin)
-			require.Equal(t, tc.wantExtra, ov.Extra)
+			_, err := config.LoadWorkspace(tmp)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.want)
 		})
 	}
 }
 
-// TestLoadWorkspace_PluginVersionsExtraNonString pins that a non-string
-// value under [plugins.versions].<id>.<key> is rejected as a
-// *ValidationError rather than silently dropped.
-func TestLoadWorkspace_PluginVersionsExtraNonString(t *testing.T) {
+// TestLoadWorkspace_OptionsExtraNonString pins that a non-string value under
+// [plugins.options].<id>.<key> is rejected as a *ValidationError rather than
+// silently dropped.
+func TestLoadWorkspace_OptionsExtraNonString(t *testing.T) {
 	t.Parallel()
-	body := `
-[container]
-service_name = "dev"
-username = "developer"
-image = "ubuntu"
-image_version = "24.04"
+	body := pluginsTestWorkspace(`[plugins]
+enable = ["android-sdk=14742923"]
 
-[plugins]
-enable = []
-
-[plugins.versions]
-android-sdk = { version = "=14742923", api_level = 36 }
-`
+[plugins.options]
+android-sdk = { api_level = 36 }`)
 	tmp := t.TempDir() + "/ws.toml"
 	require.NoError(t, os.WriteFile(tmp, []byte(body), 0o600))
 	_, err := config.LoadWorkspace(tmp)
@@ -204,12 +200,12 @@ android-sdk = { version = "=14742923", api_level = 36 }
 	require.Contains(t, err.Error(), "must be a string")
 }
 
-// TestLoadWorkspace_PluginVersionsExtraUnsafeValue covers the rune
-// classes UnsafeExtraVersionRune rejects on a workspace override value.
-// A bare ", \, \n, or \r would break the Dockerfile RUN-prefix
-// `KEY="..."` env pair the value is later embedded into, so they have
-// to be rejected at decode time (well before docker build).
-func TestLoadWorkspace_PluginVersionsExtraUnsafeValue(t *testing.T) {
+// TestLoadWorkspace_OptionsExtraUnsafeValue covers the rune classes
+// UnsafeExtraVersionRune rejects on a workspace override value. A bare ", \,
+// \n, or \r would break the Dockerfile RUN-prefix `KEY="..."` env pair the
+// value is later embedded into, so they have to be rejected at decode time
+// (well before docker build).
+func TestLoadWorkspace_OptionsExtraUnsafeValue(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name      string
@@ -232,19 +228,11 @@ func TestLoadWorkspace_PluginVersionsExtraUnsafeValue(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			body := `
-[container]
-service_name = "dev"
-username = "developer"
-image = "ubuntu"
-image_version = "24.04"
+			body := pluginsTestWorkspace(`[plugins]
+enable = ["android-sdk=14742923"]
 
-[plugins]
-enable = []
-
-[plugins.versions]
-android-sdk = { version = "=14742923", ` + tc.extraExpr + ` }
-`
+[plugins.options]
+android-sdk = { ` + tc.extraExpr + ` }`)
 			tmp := t.TempDir() + "/ws.toml"
 			require.NoError(t, os.WriteFile(tmp, []byte(body), 0o600))
 			_, err := config.LoadWorkspace(tmp)
@@ -254,71 +242,78 @@ android-sdk = { version = "=14742923", ` + tc.extraExpr + ` }
 	}
 }
 
-// TestLoadWorkspace_PluginVersionsConstraintRejectsUnsafe pins that the
-// version constraint string is bounded to the rxImageVersion tag charset: a
-// ", \, space, ;, $, or backtick in the version would otherwise break out of
-// the Dockerfile RUN-prefix `PIN="..."` env pair, so it must be rejected at
-// decode time (well before docker build) with a *ValidationError at
-// plugins.versions.<id>.
-func TestLoadWorkspace_PluginVersionsConstraintRejectsUnsafe(t *testing.T) {
+// TestLoadWorkspace_EnableConstraintRejectsUnsafe pins that the enable-entry
+// version constraint is bounded to the rxImageVersion tag charset and rejects
+// range operators: a ", \, space, $, or backtick in the version would
+// otherwise break out of the Dockerfile RUN-prefix `PIN="..."` env pair, so it
+// must be rejected at decode time with a *ValidationError at plugins.enable.<i>.
+func TestLoadWorkspace_EnableConstraintRejectsUnsafe(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name       string
-		spec       string
-		wantUnsafe bool
+		entry      string
+		wantReject bool
 	}{
-		{"plain_exact", `"=14742923"`, false},
-		{"latest", `"latest"`, false},
-		{"double_quote", `"=1.0.0\" rm -rf / \""`, true},
-		{"backslash", `"=1.0.0\\nfoo"`, true},
-		{"newline", `"=1.0.0\nfoo"`, true},
-		{"carriage_return", `"=1.0.0\rfoo"`, true},
-		{"dollar", `"=$(date)"`, true},
-		// The exact injection PoC from the evaluation report: a closing quote
-		// would let the rest break out of the PIN="..." env pair.
-		{"injection_poc", `"=1.0.0\"; echo PWNED > /tmp/pwn; PIN2=\""`, true},
-		{"backtick", "\"=`whoami`\"", true},
+		{"plain_exact", `go=14742923`, false},
+		{"latest", `go=latest`, false},
+		{"bare_id", `go`, false},
+		{"range_gte", `go=>=1.0`, true},
+		{"double_quote", `go=1.0.0\" rm -rf / \"`, true},
+		{"dollar", `go=$(date)`, true},
+		// The injection PoC from the evaluation report: a closing quote would
+		// let the rest break out of the PIN="..." env pair.
+		{"injection_poc", `go=1.0.0\"; echo PWNED > /tmp/pwn; PIN2=\"`, true},
+		{"backtick", "go=`whoami`", true},
 	}
 	for _, tc := range cases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			body := `
-[container]
-service_name = "dev"
-username = "developer"
-image = "ubuntu"
-image_version = "24.04"
-
-[plugins]
-enable = []
-
-[plugins.versions]
-go = ` + tc.spec + "\n"
+			body := pluginsTestWorkspace("[plugins]\nenable = [\"" + tc.entry + "\"]")
 			tmp := t.TempDir() + "/ws.toml"
 			require.NoError(t, os.WriteFile(tmp, []byte(body), 0o600))
 			_, err := config.LoadWorkspace(tmp)
-			if !tc.wantUnsafe {
+			if !tc.wantReject {
 				require.NoError(t, err)
 				return
 			}
 			require.Error(t, err)
-			// Assert the failure class and the exact field location, not just
-			// a substring: the guard must surface as a decode-time
-			// *ValidationError at plugins.versions.<id> (a regression that
-			// relaxed the charset or moved the check would still otherwise
-			// match the substring).
+			// Assert the failure class and the field location: the guard must
+			// surface as a decode-time *ValidationError at plugins.enable.0.
 			var verr *config.ValidationError
 			require.ErrorAsf(t, err, &verr, "expected *ValidationError, got %T: %v", err, err)
 			var hit *config.FieldError
 			for i := range verr.Errors {
-				if verr.Errors[i].LocString() == "plugins.versions.go" {
+				if verr.Errors[i].LocString() == "plugins.enable.0" {
 					hit = &verr.Errors[i]
 					break
 				}
 			}
-			require.NotNilf(t, hit, "no FieldError at plugins.versions.go; errors = %+v", verr.Errors)
-			require.Contains(t, hit.Message, "unsupported characters")
+			require.NotNilf(t, hit, "no FieldError at plugins.enable.0; errors = %+v", verr.Errors)
+		})
+	}
+}
+
+// TestLoadWorkspace_LegacyPluginVersionsRejected pins that the removed
+// [plugins.versions] table (any inline form) is rejected at strict-decode time
+// with the migration hint pointing at the enable array + [plugins.options].
+func TestLoadWorkspace_LegacyPluginVersionsRejected(t *testing.T) {
+	t.Parallel()
+	cases := []struct{ name, line string }{
+		{"string_form", `go = "=1.23.4"`},
+		{"pin_table", `go = { pin = "1.23.4" }`},
+		{"checksum_table", `go = { version = "=1.23.4", checksum_amd64 = "abc" }`},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			body := pluginsTestWorkspace("[plugins]\nenable = []\n\n[plugins.versions]\n" + tc.line)
+			tmp := t.TempDir() + "/ws.toml"
+			require.NoError(t, os.WriteFile(tmp, []byte(body), 0o600))
+			_, err := config.LoadWorkspace(tmp)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "[plugins.versions] was removed")
 		})
 	}
 }

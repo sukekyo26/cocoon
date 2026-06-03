@@ -42,5 +42,5 @@ version_capable = true
 # No [version.source]: Flutter's releases_linux.json exposes the stable release
 # as a commit hash, and the human version (e.g. "3.44.1") lives in a releases[]
 # array element matched by that hash — not a simple dotted field cocoon can
-# resolve. Flutter is therefore exact-only: pin a version in [plugins.versions]
-# (`flutter = "=3.44.1"`); `cocoon lock` rejects "latest" for it.
+# resolve. Flutter is therefore exact-only: pin a version in the enable array
+# (`"flutter=3.44.1"`); `cocoon lock` rejects "latest" for it.

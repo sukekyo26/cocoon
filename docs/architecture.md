@@ -31,7 +31,7 @@ flowchart LR
 
 `cocoon init` walks the user through an interactive form and writes `workspace.toml`. `cocoon gen` then turns that file into a `.devcontainer/` directory consumable by either Docker or VS Code.
 
-For reproducible builds, an optional `cocoon lock` step sits between the two: it resolves every enabled `version_capable` plugin's `[plugins.versions]` constraint to a concrete version and per-arch checksums **over the network**, then writes `cocoon.lock` at the workspace root. `cocoon gen` consumes that lock **offline**, so the same `workspace.toml` + `cocoon.lock` always generate the same `.devcontainer/`. The lock is the only point in the pipeline that reaches the network; generation itself stays hermetic. See [`cocoon lock` in `commands.md`](commands.md) for the file format and flags.
+For reproducible builds, an optional `cocoon lock` step sits between the two: it resolves every enabled `version_capable` plugin's version constraint (pinned inline in the `[plugins].enable` array) to a concrete version and per-arch checksums **over the network**, then writes `cocoon.lock` at the workspace root. `cocoon gen` consumes that lock **offline**, so the same `workspace.toml` + `cocoon.lock` always generate the same `.devcontainer/`. The lock is the only point in the pipeline that reaches the network; generation itself stays hermetic. See [`cocoon lock` in `commands.md`](commands.md) for the file format and flags.
 
 ## Components
 

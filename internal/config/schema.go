@@ -331,35 +331,49 @@ type Resources struct {
 	NofileHard      *int     `toml:"nofile_hard,omitempty"`
 }
 
-// PluginsSpec models [plugins]. Methods maps a plugin id to the
-// user-selected install method name (a key in that plugin's
-// [install.methods] section); absent entries fall back to the plugin's
-// default_method.
+// PluginsSpec models [plugins]. A plugin is enabled (and optionally
+// version-pinned) by one entry in the EnableRaw array; install method and
+// extra knobs live in the two side tables.
 //
-// VersionsRaw is the TOML-decoded shape of [plugins.versions]; each value
-// is either a constraint string ("=1.23.4" / "latest") or an inline table
-// ({ version = "…", <extra-key> = "…" }) for plugins that declare
-// [install.extra_versions]. The map-of-any element type carries both forms
-// (and any extra inline-table keys) past the strict unmarshal gate.
-// LoadWorkspace post-processes VersionsRaw into the typed Versions map so
-// callers can keep working with PluginVersionOverride. Test code that
-// bypasses LoadWorkspace must populate Versions directly.
+// EnableRaw is the TOML-decoded [plugins].enable array. Each element is
+// "<id>" (enable, unpinned), "<id>=<version>" (exact pin) or "<id>=latest"
+// (floating, frozen by `cocoon lock`) — uv/pip-style so a plugin is named
+// once, and array order is the deterministic install order. LoadWorkspace
+// post-processes EnableRaw into Enable (the ordered id list) and seeds the
+// matching Versions[id].Spec/Pin.
+//
+// OptionsRaw is the TOML-decoded [plugins.options] table: per-id inline
+// tables carrying a plugin's [install.extra_versions] knobs (e.g. Android
+// SDK's api_level / build_tools) and optional manual checksum_amd64 /
+// checksum_arm64 (only for plugins whose upstream publishes none). It never
+// carries the main version — that is in the enable array. LoadWorkspace
+// folds it into Versions[id].Extra / Checksum*.
+//
+// Methods maps a plugin id to the user-selected install method name (a key
+// in that plugin's [install.methods] section); absent entries fall back to
+// the plugin's default_method.
+//
+// Test code that bypasses LoadWorkspace must populate Enable and Versions
+// directly (EnableRaw / OptionsRaw are decode-only).
 type PluginsSpec struct {
-	Enable      []string                         `toml:"enable"`
-	VersionsRaw map[string]any                   `toml:"versions,omitempty"`
-	Methods     map[string]string                `toml:"methods,omitempty"`
-	Versions    map[string]PluginVersionOverride `toml:"-"`
+	EnableRaw  []string                         `toml:"enable"`
+	OptionsRaw map[string]any                   `toml:"options,omitempty"`
+	Methods    map[string]string                `toml:"methods,omitempty"`
+	Enable     []string                         `toml:"-"`
+	Versions   map[string]PluginVersionOverride `toml:"-"`
 }
 
-// PluginVersionOverride models one entry under [plugins.versions]. Spec is
-// the user's version constraint: either "=<version>" (an exact pin) or
-// "latest" (frozen to a concrete version by `cocoon lock`). Pin is the
-// concrete version baked into the generated Dockerfile's PIN="..." env —
-// the exact version for an "=<version>" Spec and "" for "latest"
-// (build-time resolution) — and is overwritten by a cocoon.lock entry when
-// one exists. ChecksumAmd64 / ChecksumArm64 come from cocoon.lock (never
-// from workspace.toml) and are nil until `cocoon lock` records them. Extra
-// carries any additional inline-table keys a plugin opts into via
+// PluginVersionOverride models the resolved version inputs for one enabled
+// plugin. Spec is the user's version constraint, derived from the
+// [plugins].enable entry: either "=<version>" (an exact pin) or "latest"
+// (frozen to a concrete version by `cocoon lock`). Pin is the concrete
+// version baked into the generated Dockerfile's PIN="..." env — the exact
+// version for an "=<version>" Spec and "" for "latest" (build-time
+// resolution) — and is overwritten by a cocoon.lock entry when one exists.
+// ChecksumAmd64 / ChecksumArm64 normally come from cocoon.lock and are nil
+// until `cocoon lock` records them; a plugin whose upstream publishes no
+// checksum may instead carry a manual value from [plugins.options]. Extra
+// carries any [plugins.options] knobs a plugin opts into via
 // [install.extra_versions] (e.g. Android SDK's api_level / build_tools);
 // it is nil when no extra keys are set.
 type PluginVersionOverride struct {

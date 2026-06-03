@@ -736,8 +736,8 @@ func TestBuildInstallEnvPairs_VerifyGatesChecksum(t *testing.T) {
 	}
 }
 
-// TestValidateVersionOverrides_ChecksumRejectedForPGP pins that setting
-// checksum_amd64 / checksum_arm64 for a pgp-verified plugin is a hard
+// TestValidateVersionOverrides_ChecksumRejectedForPGP pins that a recorded
+// per-arch checksum for a pgp-verified plugin is a hard
 // ErrInvalidVersionOverride: the checksum vocabulary does not apply.
 func TestValidateVersionOverrides_ChecksumRejectedForPGP(t *testing.T) {
 	t.Parallel()
@@ -768,7 +768,7 @@ func TestValidateVersionOverrides_ChecksumRejectedForPGP(t *testing.T) {
 			if !errors.Is(err, ErrInvalidVersionOverride) {
 				t.Fatalf("err = %v, want errors.Is(.., ErrInvalidVersionOverride)", err)
 			}
-			if !strings.Contains(err.Error(), "remove checksum_amd64/checksum_arm64") {
+			if !strings.Contains(err.Error(), "cocoon lock") {
 				t.Errorf("error must tell the user what to do: %v", err)
 			}
 		})
@@ -912,9 +912,9 @@ func TestBuildInstallEnvPairs_ExtraVersions(t *testing.T) {
 }
 
 // TestValidateVersionOverrides_UnknownExtraKey pins that
-// [plugins.versions].<id> setting a key outside pin / checksum_* is
-// rejected with ErrUnknownExtraVersion unless the plugin declares it
-// under [install.extra_versions]. This is the typo-detection path.
+// [plugins.options].<id> setting a key the plugin does not declare under
+// [install.extra_versions] is rejected with ErrUnknownExtraVersion. This is
+// the typo-detection path.
 func TestValidateVersionOverrides_UnknownExtraKey(t *testing.T) {
 	t.Parallel()
 	p := &plugin.Plugin{

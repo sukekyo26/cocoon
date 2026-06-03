@@ -29,15 +29,14 @@ var entrypointScript string
 // EntrypointScript is written next to the Dockerfile with mode 0o755.
 func EntrypointScript() string { return entrypointScript }
 
-// ErrInvalidVersionOverride is returned when [plugins.versions] references an
-// unknown plugin or one whose install method does not allow pinning.
+// ErrInvalidVersionOverride is returned when the enable array pins an unknown
+// plugin or one whose install method does not allow pinning.
 var ErrInvalidVersionOverride = errors.New("dockerfile: invalid version override")
 
-// ErrUnknownExtraVersion is returned when [plugins.versions].<id> sets an
-// extra key (anything beyond pin / checksum_amd64 / checksum_arm64) that
-// the plugin's plugin.toml does not declare under [install.extra_versions].
-// Surfaced as a sentinel so callers and tests can match the typo-detection
-// failure class with errors.Is.
+// ErrUnknownExtraVersion is returned when [plugins.options].<id> sets an
+// extra key that the plugin's plugin.toml does not declare under
+// [install.extra_versions]. Surfaced as a sentinel so callers and tests can
+// match the typo-detection failure class with errors.Is.
 var ErrUnknownExtraVersion = errors.New("dockerfile: unknown extra version key")
 
 // Options carries inputs Generate needs beyond ctx.

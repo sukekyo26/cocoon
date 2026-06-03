@@ -2,7 +2,6 @@ package plugin_test
 
 import (
 	"errors"
-	"flag"
 	"os"
 	"path/filepath"
 	"testing"
@@ -10,60 +9,72 @@ import (
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
 
-var updateGolden = flag.Bool("update-golden", false, "update mutator golden files")
-
-// upsertPin upserts a constraint line alone through the combined writer
+// upsertPin upserts an enable entry alone through the combined writer
 // (method == ""), the same path production uses; the standalone pin writer
 // was removed.
 func upsertPin(path, id, spec string) error {
 	return plugin.UpsertPinAndMethod(path, id, spec, "")
 }
 
+// TestUpsertPin pins the enable-array upsert across the shapes that matter:
+// creating [plugins] from nothing, replacing a bare id, replacing a pinned
+// id, appending a new id, and leaving surrounding sections untouched. The
+// array is always re-emitted in cocoon's canonical multi-line style.
 func TestUpsertPin(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		name     string
-		id, spec string
+		name       string
+		seed, want string
+		id, spec   string
 	}{
-		{name: "empty-file", id: "go", spec: "=1.23.4"},
-		{name: "no-versions-section", id: "go", spec: "latest"},
-		{name: "add-alongside-existing-id", id: "uv", spec: "=0.5.7"},
-		{name: "replace-existing-id", id: "go", spec: "=1.24.0"},
-		{name: "preserve-comment-before-block", id: "go", spec: "=1.23.4"},
+		{
+			name: "empty_file_creates_section",
+			seed: "",
+			id:   "go", spec: "=1.23.4",
+			want: "[plugins]\nenable = [\n    \"go=1.23.4\",\n]",
+		},
+		{
+			name: "replace_bare_id",
+			seed: "[plugins]\nenable = [\"go\"]\n",
+			id:   "go", spec: "=1.23.4",
+			want: "[plugins]\nenable = [\n    \"go=1.23.4\",\n]\n",
+		},
+		{
+			name: "replace_pinned_id",
+			seed: "[plugins]\nenable = [\n    \"go=1.22.0\",\n    \"node=22.0.0\",\n]\n",
+			id:   "go", spec: "=1.24.0",
+			want: "[plugins]\nenable = [\n    \"go=1.24.0\",\n    \"node=22.0.0\",\n]\n",
+		},
+		{
+			name: "append_new_id",
+			seed: "[plugins]\nenable = [\n    \"node=22.0.0\",\n]\n",
+			id:   "go", spec: "latest",
+			want: "[plugins]\nenable = [\n    \"node=22.0.0\",\n    \"go=latest\",\n]\n",
+		},
+		{
+			name: "preserves_surrounding_sections",
+			seed: "# top comment\n[plugins]\nenable = [\n    \"go=1.22.0\",\n]\n\n[plugins.methods]\ncopilot-cli = \"binary\"\n",
+			id:   "go", spec: "=1.24.0",
+			want: "# top comment\n[plugins]\nenable = [\n    \"go=1.24.0\",\n]\n\n[plugins.methods]\ncopilot-cli = \"binary\"\n",
+		},
 	}
 	for _, tc := range cases {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			beforePath := filepath.Join("testdata", "mutator", tc.name, "before.toml")
-			afterPath := filepath.Join("testdata", "mutator", tc.name, "after.toml")
-			before, err := os.ReadFile(beforePath) //nolint:gosec // testdata
+			path := filepath.Join(t.TempDir(), "ws.toml")
+			if err := os.WriteFile(path, []byte(tc.seed), 0o600); err != nil {
+				t.Fatalf("seed: %v", err)
+			}
+			if err := upsertPin(path, tc.id, tc.spec); err != nil {
+				t.Fatalf("upsertPin: %v", err)
+			}
+			got, err := os.ReadFile(path) //nolint:gosec // tmp path under t.TempDir
 			if err != nil {
-				t.Fatalf("read %s: %v", beforePath, err)
+				t.Fatalf("read: %v", err)
 			}
-			tmp := filepath.Join(t.TempDir(), "ws.toml")
-			if writeErr := os.WriteFile(tmp, before, 0o600); writeErr != nil { //nolint:gosec // tmp path under t.TempDir
-				t.Fatalf("seed: %v", writeErr)
-			}
-			if upErr := upsertPin(tmp, tc.id, tc.spec); upErr != nil {
-				t.Fatalf("upsertPin: %v", upErr)
-			}
-			got, err := os.ReadFile(tmp) //nolint:gosec // tmp
-			if err != nil {
-				t.Fatalf("read result: %v", err)
-			}
-			if *updateGolden {
-				if writeErr := os.WriteFile(afterPath, got, 0o644); writeErr != nil { //nolint:gosec // testdata
-					t.Fatalf("write golden %s: %v", afterPath, writeErr)
-				}
-				return
-			}
-			want, err := os.ReadFile(afterPath) //nolint:gosec // testdata
-			if err != nil {
-				t.Fatalf("read %s: %v", afterPath, err)
-			}
-			if string(got) != string(want) {
-				t.Errorf("golden mismatch (run with -update-golden to refresh)\n--- got ---\n%s\n--- want ---\n%s",
-					got, want)
+			if string(got) != tc.want {
+				t.Errorf("mismatch\n--- got ---\n%q\n--- want ---\n%q", got, tc.want)
 			}
 		})
 	}
@@ -84,16 +95,13 @@ func TestUpsertPinRejectsEmptyArgs(t *testing.T) {
 	}
 }
 
-// Whitespace-only "blank" lines (e.g. "  " or "\t") between an existing
-// line and the next section must round-trip verbatim through the replace
-// path. The renderLines re-emit must preserve the exact blank-line
-// whitespace, not normalize to empty strings.
+// Whitespace-only "blank" lines (e.g. "  " or "\t") after the enable array
+// must round-trip verbatim through the replace path. The renderLines re-emit
+// must preserve the exact blank-line whitespace, not normalize it to empty.
 func TestUpsertPinReplacePreservesWhitespaceBlankLines(t *testing.T) {
 	t.Parallel()
-	tmp := t.TempDir()
-	path := filepath.Join(tmp, "ws.toml")
-	// "  " (two-space) and "\t" (tab) lines between go's pin and [mounts].
-	body := []byte("[plugins.versions]\ngo = \"=1.22.0\"\n  \n\t\n[mounts]\nhost = \"./src\"\n")
+	path := filepath.Join(t.TempDir(), "ws.toml")
+	body := []byte("[plugins]\nenable = [\n    \"go=1.22.0\",\n]\n  \n\t\n[mounts]\nhost = \"./src\"\n")
 	if err := os.WriteFile(path, body, 0o600); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
@@ -104,18 +112,17 @@ func TestUpsertPinReplacePreservesWhitespaceBlankLines(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	want := "[plugins.versions]\ngo = \"=1.23.4\"\n  \n\t\n[mounts]\nhost = \"./src\"\n"
+	want := "[plugins]\nenable = [\n    \"go=1.23.4\",\n]\n  \n\t\n[mounts]\nhost = \"./src\"\n"
 	if string(got) != want {
 		t.Errorf("whitespace-only blank lines were not preserved verbatim\n--- got ---\n%q\n--- want ---\n%q", got, want)
 	}
 }
 
 // Trailing blank lines outside the modified section must be preserved
-// verbatim. The append-new-section path must not strip them.
+// verbatim through the in-place array replacement.
 func TestUpsertPinPreservesTrailingBlankLines(t *testing.T) {
 	t.Parallel()
-	tmp := t.TempDir()
-	path := filepath.Join(tmp, "ws.toml")
+	path := filepath.Join(t.TempDir(), "ws.toml")
 	body := []byte("[plugins]\nenable = []\n\n\n") // two trailing blank lines
 	if err := os.WriteFile(path, body, 0o600); err != nil {
 		t.Fatalf("seed: %v", err)
@@ -127,7 +134,7 @@ func TestUpsertPinPreservesTrailingBlankLines(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	want := "[plugins]\nenable = []\n\n\n[plugins.versions]\ngo = \"=1.23.4\"\n"
+	want := "[plugins]\nenable = [\n    \"go=1.23.4\",\n]\n\n\n"
 	if string(got) != want {
 		t.Errorf("trailing blank lines were not preserved\n--- got ---\n%q\n--- want ---\n%q", got, want)
 	}
@@ -137,8 +144,7 @@ func TestUpsertPinPreservesTrailingBlankLines(t *testing.T) {
 // without one. Regression guard for the renderLines newline convention.
 func TestUpsertPinPreservesNoTrailingNewline(t *testing.T) {
 	t.Parallel()
-	tmp := t.TempDir()
-	path := filepath.Join(tmp, "ws.toml")
+	path := filepath.Join(t.TempDir(), "ws.toml")
 	body := []byte(`[plugins]
 enable = ["go"]`) // no trailing \n
 	if err := os.WriteFile(path, body, 0o600); err != nil {
@@ -159,8 +165,7 @@ enable = ["go"]`) // no trailing \n
 // upsertPin must not silently relax workspace.toml's permissions.
 func TestUpsertPinPreservesFileMode(t *testing.T) {
 	t.Parallel()
-	tmp := t.TempDir()
-	path := filepath.Join(tmp, "ws.toml")
+	path := filepath.Join(t.TempDir(), "ws.toml")
 	if err := os.WriteFile(path, []byte("[plugins]\nenable = []\n"), 0o600); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
@@ -202,15 +207,13 @@ func TestFormatMethodLine(t *testing.T) {
 
 // TestUpsertPinAndMethod pins the combined mutator's promises:
 //
-//   - method == "" reduces to "pin only" — only the [plugins.versions]
-//     line is written and [plugins.methods] is left untouched.
-//   - method != "" produces a single read-write cycle that lands both
-//     sections together; the disk state never holds a pin without its
-//     matching method (the regression this combined function exists to
-//     prevent).
-//   - empty id / spec → existing sentinel errors (ErrPinLineEmptyID /
-//     ErrPinLineEmptyRef). Empty method is the "pin only" path, not an
-//     error, so it must NOT trigger ErrMethodLineEmptyMethod.
+//   - method == "" reduces to "enable only" — only the [plugins].enable entry
+//     is written and [plugins.methods] is left untouched.
+//   - method != "" produces a single read-write cycle that lands both the
+//     enable entry and the [plugins.methods] line together; the disk state
+//     never holds a pin without its matching method.
+//   - empty id / spec → existing sentinel errors. Empty method is the
+//     "enable only" path, not an error.
 func TestUpsertPinAndMethod(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -222,27 +225,26 @@ func TestUpsertPinAndMethod(t *testing.T) {
 			name: "pin_and_method_on_empty_file",
 			seed: "",
 			id:   "copilot-cli", spec: "=1.0.47", method: "binary",
-			want: "[plugins.versions]\ncopilot-cli = \"=1.0.47\"\n\n[plugins.methods]\ncopilot-cli = \"binary\"",
+			want: "[plugins]\nenable = [\n    \"copilot-cli=1.0.47\",\n]\n\n[plugins.methods]\ncopilot-cli = \"binary\"",
 		},
 		{
 			name: "pin_only_when_method_empty",
 			seed: "",
 			id:   "go", spec: "=1.23.4", method: "",
-			want: "[plugins.versions]\ngo = \"=1.23.4\"",
+			want: "[plugins]\nenable = [\n    \"go=1.23.4\",\n]",
 		},
 		{
 			name: "replace_both_existing",
-			seed: "[plugins.versions]\ncopilot-cli = \"=1.0.46\"\n\n[plugins.methods]\ncopilot-cli = \"gh-cli\"\n",
+			seed: "[plugins]\nenable = [\n    \"copilot-cli=1.0.46\",\n]\n\n[plugins.methods]\ncopilot-cli = \"gh-cli\"\n",
 			id:   "copilot-cli", spec: "=1.0.47", method: "binary",
-			want: "[plugins.versions]\ncopilot-cli = \"=1.0.47\"\n\n[plugins.methods]\ncopilot-cli = \"binary\"\n",
+			want: "[plugins]\nenable = [\n    \"copilot-cli=1.0.47\",\n]\n\n[plugins.methods]\ncopilot-cli = \"binary\"\n",
 		},
 	}
 	for _, tc := range cases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			tmp := t.TempDir()
-			path := filepath.Join(tmp, "ws.toml")
+			path := filepath.Join(t.TempDir(), "ws.toml")
 			if err := os.WriteFile(path, []byte(tc.seed), 0o600); err != nil {
 				t.Fatalf("seed: %v", err)
 			}
@@ -273,132 +275,66 @@ func TestUpsertPinAndMethodRejectsEmptyArgs(t *testing.T) {
 	if err := plugin.UpsertPinAndMethod(path, "go", "", "binary"); !errors.Is(err, plugin.ErrPinLineEmptyRef) {
 		t.Errorf("empty spec: got %v, want ErrPinLineEmptyRef", err)
 	}
-	// Empty method is the "pin only" path; must succeed, not error.
+	// Empty method is the "enable only" path; must succeed, not error.
 	if err := plugin.UpsertPinAndMethod(path, "go", "=1.0", ""); err != nil {
-		t.Errorf("empty method should be the pin-only path, got error: %v", err)
+		t.Errorf("empty method should be the enable-only path, got error: %v", err)
 	}
 }
 
-// TestUpsertPinAndMethodRejectsLegacySubsection guards the legacy-shape
-// migration prompt across the combined writer too: a workspace.toml with
-// `[plugins.versions.<id>]` must be rejected before any in-place edit so
-// the user is not surprised by a partial-shape file.
-func TestUpsertPinAndMethodRejectsLegacySubsection(t *testing.T) {
+// TestUpsertPinRejectsLegacyVersions guards the migration prompt: a
+// workspace.toml that still carries a [plugins.versions] section (or the older
+// [plugins.versions.<id>] subsection) must be rejected before any in-place
+// edit so the user is not left with an inconsistent file.
+func TestUpsertPinRejectsLegacyVersions(t *testing.T) {
 	t.Parallel()
-	body := `[plugins]
-enable = ["copilot-cli"]
-
-[plugins.versions.copilot-cli]
-pin = "1.0.46"
-`
-	tmp := t.TempDir()
-	path := filepath.Join(tmp, "ws.toml")
-	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
-		t.Fatalf("seed: %v", err)
+	cases := []struct{ name, body string }{
+		{"section", "[plugins]\nenable = [\"go\"]\n\n[plugins.versions]\ngo = \"=1.22.5\"\n"},
+		{"subsection", "[plugins]\nenable = [\"go\"]\n\n[plugins.versions.go]\npin = \"1.22.5\"\n"},
 	}
-	err := plugin.UpsertPinAndMethod(path, "copilot-cli", "=1.0.47", "binary")
-	if !errors.Is(err, plugin.ErrLegacyPinSubsection) {
-		t.Errorf("got %v, want ErrLegacyPinSubsection", err)
-	}
-	got, rerr := os.ReadFile(path) //nolint:gosec // tmp path under t.TempDir
-	if rerr != nil {
-		t.Fatalf("read after refusal: %v", rerr)
-	}
-	if string(got) != body {
-		t.Errorf("workspace.toml was modified despite refusal:\n--- got ---\n%s", got)
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			path := filepath.Join(t.TempDir(), "ws.toml")
+			if err := os.WriteFile(path, []byte(tc.body), 0o600); err != nil {
+				t.Fatalf("seed: %v", err)
+			}
+			err := plugin.UpsertPinAndMethod(path, "go", "=1.23.4", "")
+			if !errors.Is(err, plugin.ErrLegacyPluginVersions) {
+				t.Errorf("got %v, want ErrLegacyPluginVersions", err)
+			}
+			got, rerr := os.ReadFile(path) //nolint:gosec // tmp path under t.TempDir
+			if rerr != nil {
+				t.Fatalf("read after refusal: %v", rerr)
+			}
+			if string(got) != tc.body {
+				t.Errorf("workspace.toml was modified despite refusal:\n--- got ---\n%s", got)
+			}
+		})
 	}
 }
 
-// TestUpsertPinPreservesExtras pins the regression contract: when the
-// existing inline-table line carries extra keys declared by the plugin via
-// [install.extra_versions] (e.g. android-sdk's api_level / build_tools),
-// `pin --write` rewrites the version in place without dropping those
-// extras. Without this guard the user's subcomponent versions silently
-// vanish on every pin bump.
-func TestUpsertPinPreservesExtras(t *testing.T) {
+// TestUpsertPinPreservesOptions pins the separation of concerns: bumping a
+// plugin's version touches only its enable entry. A [plugins.options] table
+// carrying that plugin's [install.extra_versions] knobs is left verbatim.
+func TestUpsertPinPreservesOptions(t *testing.T) {
 	t.Parallel()
-	body := `[plugins]
-enable = ["android-sdk"]
-
-[plugins.versions]
-android-sdk = { version = "=14742923", api_level = "35", build_tools = "35.0.0" }
-`
-	tmp := t.TempDir()
-	path := filepath.Join(tmp, "ws.toml")
+	path := filepath.Join(t.TempDir(), "ws.toml")
+	body := "[plugins]\nenable = [\n    \"android-sdk=14742923\",\n]\n\n" +
+		"[plugins.options]\nandroid-sdk = { api_level = \"35\", build_tools = \"35.0.0\" }\n"
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 	if err := upsertPin(path, "android-sdk", "=14999999"); err != nil {
 		t.Fatalf("upsertPin: %v", err)
 	}
-	got, rerr := os.ReadFile(path) //nolint:gosec // tmp path
-	if rerr != nil {
-		t.Fatalf("read after upsert: %v", rerr)
-	}
-	want := `[plugins]
-enable = ["android-sdk"]
-
-[plugins.versions]
-android-sdk = { version = "=14999999", api_level = "35", build_tools = "35.0.0" }
-`
-	if string(got) != want {
-		t.Errorf("extras were not preserved:\n--- got ---\n%s\n--- want ---\n%s", got, want)
-	}
-}
-
-// TestUpsertPinNoExtrasUnchanged is the regression mirror: a line
-// without extras must stay scalar after rewrite (the parse-and-re-emit
-// path can't fabricate keys it didn't see).
-func TestUpsertPinNoExtrasUnchanged(t *testing.T) {
-	t.Parallel()
-	body := `[plugins.versions]
-go = "=1.22.5"
-`
-	tmp := t.TempDir()
-	path := filepath.Join(tmp, "ws.toml")
-	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
-	if err := upsertPin(path, "go", "=1.23.4"); err != nil {
-		t.Fatalf("upsertPin: %v", err)
-	}
-	got, rerr := os.ReadFile(path) //nolint:gosec // tmp path
+	got, rerr := os.ReadFile(path) //nolint:gosec // tmp path under t.TempDir
 	if rerr != nil {
 		t.Fatalf("read: %v", rerr)
 	}
-	want := `[plugins.versions]
-go = "=1.23.4"
-`
+	want := "[plugins]\nenable = [\n    \"android-sdk=14999999\",\n]\n\n" +
+		"[plugins.options]\nandroid-sdk = { api_level = \"35\", build_tools = \"35.0.0\" }\n"
 	if string(got) != want {
-		t.Errorf("got:\n%s\nwant:\n%s", got, want)
-	}
-}
-
-// Legacy `[plugins.versions.<id>]` subsection blocks (cocoon's previous
-// emission form) collide with the inline-table / scalar layout. The mutator
-// must refuse so the user explicitly migrates the file.
-func TestUpsertPinRejectsLegacySubsection(t *testing.T) {
-	t.Parallel()
-	body := `[plugins]
-enable = ["go"]
-
-[plugins.versions.go]
-pin = "1.22.5"
-`
-	tmp := t.TempDir()
-	path := filepath.Join(tmp, "ws.toml")
-	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
-	err := upsertPin(path, "go", "=1.23.4")
-	if !errors.Is(err, plugin.ErrLegacyPinSubsection) {
-		t.Errorf("got %v, want ErrLegacyPinSubsection", err)
-	}
-	got, rerr := os.ReadFile(path) //nolint:gosec // tmp path under t.TempDir
-	if rerr != nil {
-		t.Fatalf("read after refusal: %v", rerr)
-	}
-	if string(got) != body {
-		t.Errorf("workspace.toml was modified despite refusal:\n--- got ---\n%s", got)
+		t.Errorf("options were not preserved:\n--- got ---\n%s\n--- want ---\n%s", got, want)
 	}
 }

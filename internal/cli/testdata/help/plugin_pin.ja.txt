@@ -1,24 +1,24 @@
-cocoon plugin pin — [plugins.versions] (および任意で [plugins.methods]) の制約行を出力
+cocoon plugin pin — [plugins].enable エントリ (および任意で [plugins.methods]) を出力
 
-既定では `<id> = "=<ref>"` 行が stdout に出力されるので、
-workspace.toml の [plugins.versions] セクションに貼り付けてください。素のバージョン
-(1.23.4) は exact pin (=1.23.4) として書かれ、"latest" を渡すと最新リリースを
-追従します。--write を付けると in-place で upsert されます (新規挿入、または既存の
-<id> 行を置換)。対象行以外のコメントや空行は verbatim で保持されます。
+既定では `"<id>=<ref>"` という配列要素が stdout に出力されるので、
+workspace.toml の [plugins].enable 配列に追加してください。素のバージョン
+(1.23.4) は exact pin (<id>=1.23.4) として書かれ、"latest" を渡すと最新リリースを
+追従します。--write を付けると in-place で upsert されます (新規追加、または既存の
+<id> 要素を置換)。ファイルの残りは verbatim で保持されます。
 
 バージョンの具体リリースへの凍結と arch ごとの SHA256 checksum の記録は
 `cocoon lock` が cocoon.lock に対して行います。checksum はもう
 workspace.toml には置きません。
 
 plugin.toml の [install.methods] に複数エントリを宣言しているプラグインには
---method <name> を指定します。pin はその場合に
-`<id> = "<method>"` 行（[plugins.methods] 向け）と制約行
-（[plugins.versions] 向け）の両方をまとめて書き出します(または出力します)。
+--method <name> を指定します。pin はその場合に `"<id>=<ref>"` の
+enable エントリと `<id> = "<method>"` 行（[plugins.methods] 向け）の
+両方をまとめて書き出します(または出力します)。
 
 使い方:
   cocoon plugin pin <id> <ref> [flags]
 
 フラグ:
   -h, --help            pin のヘルプを表示
-      --method string   install メソッド名。[install.methods] を宣言したプラグインのみ意味を持ちます。指定すると単一の workspace.toml 読み書きで [plugins.methods] と [plugins.versions] の両方を pin します。省略時は [plugins.versions] のみ更新されます （既存の [plugins.methods] エントリ、またはプラグインの default_method が引き続き有効）。
-      --write           workspace.toml の制約行を upsert（cwd から自動探索）
+      --method string   install メソッド名。[install.methods] を宣言したプラグインのみ意味を持ちます。指定すると単一の workspace.toml 読み書きで [plugins.methods] と [plugins].enable エントリの両方を pin します。省略時は enable エントリのみ更新されます （既存の [plugins.methods] エントリ、またはプラグインの default_method が引き続き有効）。
+      --write           workspace.toml の enable エントリを upsert（cwd から自動探索）

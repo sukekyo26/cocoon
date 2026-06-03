@@ -33,8 +33,9 @@ The first match wins. Pass `--workspace <path>` to `cocoon gen` to override disc
 | `[container.security_opt]` | optional | Compose `security_opt` |
 | `[container.sudo]` | optional | sudo password policy (`mode`) |
 | `[[container.skel]]` | optional | Dotfiles seeded into `/etc/skel` |
-| `[plugins]` | **required** | Enabled plugins |
-| `[plugins.versions]` | optional | Plugin version constraints |
+| `[plugins]` | **required** | Enabled plugins (versions pinned inline in `enable`) |
+| `[plugins.methods]` | optional | Per-plugin install-method selection |
+| `[plugins.options]` | optional | Per-plugin subcomponent version knobs |
 | `[apt]` | optional | Extra apt packages |
 | `[apt.mirror]` | optional | Regional apt mirror |
 | `[apt.proxy]` | optional | apt-get HTTP / HTTPS proxy |
@@ -105,7 +106,7 @@ Image identity. `service_name`, `username`, `image`, `image_version` are all req
 
 Every supported image is apt-based, so the existing plugin catalog works the same across all of them. `ubuntu` pulls from Ubuntu archives (archive.ubuntu.com); the other six are Debian (bookworm) variants and pull from deb.debian.org. apt-mirror rewriting branches on this in `aptMirrorOriginHosts` (see `internal/generate/dockerfile/dockerfile.go`).
 
-**Image vs plugin (mutually exclusive pairs):** picking a language-runtime image that overlaps with an existing cocoon plugin is rejected at validation time, because the plugin would either overwrite the base layer (go) or shadow it on `$PATH` (rust). Either drop the plugin from `[plugins].enable`, or switch back to `image = "ubuntu" / "debian"` and pin the version via `[plugins.versions]`.
+**Image vs plugin (mutually exclusive pairs):** picking a language-runtime image that overlaps with an existing cocoon plugin is rejected at validation time, because the plugin would either overwrite the base layer (go) or shadow it on `$PATH` (rust). Either drop the plugin from `[plugins].enable`, or switch back to `image = "ubuntu" / "debian"` and pin the version inline in the `enable` array (e.g. `"go=1.23.4"`).
 
 | Picking `image = …` | …and enabling plugin | Outcome |
 |---|---|---|
@@ -298,45 +299,93 @@ target = ".bashrc"
 
 | Field | Type | Validation |
 |---|---|---|
-| `enable` | array of strings | Plugin IDs must match `^[a-z][a-z0-9-]*$`. Duplicates rejected. |
+| `enable` | array of strings | Each element is `"<id>"` or `"<id>=<version>"`. The id must match `^[a-z][a-z0-9-]*$`. Duplicate ids rejected. **Array order is the install order** (preserved). |
+
+`enable` is both the activation list and the version-pin list — the version is
+spelled inline after `=`, on the same element as the id. Each element is one of:
+
+| Element form | Meaning |
+|---|---|
+| `"<id>"` | Enable, unpinned. Resolves to upstream latest at lock / build time. |
+| `"<id>=<version>"` | Exact pin. The version is **bare** (e.g. `"go=1.23.4"`, not `"go==1.23.4"`). The install script receives it via `$PIN`. |
+| `"<id>=latest"` | Floating latest, frozen to a concrete version by `cocoon lock`. |
+
+Range operators (`>=`, `^`, `~`, `<`, …) are **not** supported and are rejected
+— only a bare exact version or `latest`.
 
 ```toml
 [plugins]
-enable = ["go", "uv", "github-cli"]
+enable = [
+    "go=1.23.4",       # exact pin
+    "node=latest",     # floating latest (cocoon lock freezes it)
+    "uv",              # unpinned, == latest
+    "github-cli",
+]
 ```
 
 Run `cocoon plugin list` to see every available plugin (embedded + user / project overlays).
 
-### `[plugins.versions]`
+A few plugins' upstreams expose no machine-readable "latest" (`aws-cli`,
+`android-sdk`, `flutter` — see [`cocoon lock`](commands.md#exact-only-plugins));
+those **must** be pinned to an exact version in the `enable` array (e.g.
+`"flutter=3.44.1"`). Left unpinned or on `latest`, `cocoon lock` errors.
 
-Constrain versions for `version_capable` plugins. Each value is a string: either an exact pin `"=<exact>"` (note the leading `=`) or `"latest"` (`"*"` is an accepted synonym), which `cocoon lock` freezes to a concrete version. Range operators (`>=`, `^`, `~`, `<`, …) are **not** supported — only `=exact` and `latest`.
+> **Migration note.** The old `[plugins.versions]` section was **removed**. A
+> `workspace.toml` that still has it is rejected at load with a hint to move
+> the pins into the `enable` array. Replace a `[plugins.versions]` line like
+> `go = "=1.23.4"` with the enable-array element `"go=1.23.4"` (drop the
+> leading `=`); replace `node = "latest"` with `"node=latest"`.
+
+Checksums do **not** live in `workspace.toml`. Per-arch SHA256 checksums are
+recorded in a `cocoon.lock` file by `cocoon lock`, which also resolves any
+`latest` element to a concrete version. When no checksum has been recorded yet,
+the install scripts still verify each download against the checksum the upstream
+publishes with the release (trust-on-first-use). Plugins with `verify = "pgp"`
+(e.g. `aws-cli`) verify downloads against a bundled signature and never carry a
+checksum.
+
+### `[plugins.methods]`
+
+Pick the install method for plugins that declare more than one
+`[install.methods]` entry. Each value is the method name; plugins absent here
+use their `default_method`.
 
 ```toml
-[plugins.versions]
-go = "=1.22.5"
-node = "latest"
-aws-cli = "=2.34.48"   # verify = "pgp" — checksum handled by cocoon.lock
+[plugins.methods]
+copilot-cli = "binary"
 ```
 
-Checksums do **not** live here. Per-arch SHA256 checksums are recorded in a `cocoon.lock` file by `cocoon lock`, which also resolves any `"latest"` constraint to a concrete version. When no checksum has been recorded yet, the install scripts still verify each download against the checksum the upstream publishes with the release (trust-on-first-use). Plugins with `verify = "pgp"` (e.g. `aws-cli`) verify downloads against a bundled signature and never carry a checksum.
+See [Multiple install methods](plugins.md#multiple-install-methods-installmethods)
+for how a plugin declares methods.
 
-#### Subcomponent versions
+### `[plugins.options]`
 
-Some plugins expose extra version knobs (declared under
-`[install.extra_versions]` — run `cocoon plugin show <id>` to see them). Such
-plugins use the inline-table form, where the version moves under a reserved
-`version` key and the extra knobs sit next to it:
+Per-plugin side table for the **subcomponent version knobs** a plugin declares
+under `[install.extra_versions]` (run `cocoon plugin show <id>` to see them).
+It carries **only** those extra knobs — the plugin's own version stays in the
+`enable` array, not here. android-sdk is the motivating example: `cmdline-tools`
+is pinned in `enable` (`"android-sdk=14742923"`), while `api_level` /
+`build_tools` are selected here:
 
 ```toml
-[plugins.versions]
-android-sdk = { version = "=14742923", api_level = "36", build_tools = "36.0.0" }
+[plugins]
+enable = [
+    "android-sdk=14742923",   # the cmdline-tools version
+]
+
+[plugins.options]
+android-sdk = { api_level = "36", build_tools = "36.0.0" }
 ```
 
-Only keys the plugin declares are accepted — an unknown key (a typo, or a
+Each value is an inline table. Only keys the plugin declares under
+`[install.extra_versions]` are accepted — an unknown key (a typo, or a
 declaration removed upstream) is rejected by `cocoon gen` instead of silently
-falling back to the default. Override values follow the same rule as `version`:
-no `"`, `\`, `\n`, `\r`, `$`, or backtick, since each flows into the
-Dockerfile RUN-prefix `KEY="..."` env pair. See the
+falling back to the default. The reserved `version` key is **rejected** here
+(the main version belongs in the `enable` array); so are `pin` and
+`checksum_*` keys (per-arch checksums live in `cocoon.lock`, not
+`workspace.toml`). Override values follow the same character rules as the
+inline version: no `"`, `\`, `\n`, `\r`, `$`, or backtick, since each flows
+into the Dockerfile RUN-prefix `KEY="..."` env pair. See the
 [plugin authoring guide](plugins.md) for how a plugin declares these.
 
 ---

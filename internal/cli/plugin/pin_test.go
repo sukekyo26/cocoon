@@ -48,8 +48,8 @@ func TestPin_StdoutOnlyByDefault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("pin: err=%v stderr=%s", err, stderr)
 	}
-	if !strings.Contains(stdout, "[plugins.versions]") || !strings.Contains(stdout, `go = "=1.23.4"`) {
-		t.Errorf("stdout missing pin line:\n%s", stdout)
+	if !strings.Contains(stdout, "[plugins].enable") || !strings.Contains(stdout, `"go=1.23.4"`) {
+		t.Errorf("stdout missing enable entry:\n%s", stdout)
 	}
 	body, rerr := os.ReadFile(path) //nolint:gosec // tmp under t.TempDir
 	if rerr != nil {
@@ -60,8 +60,8 @@ func TestPin_StdoutOnlyByDefault(t *testing.T) {
 	}
 }
 
-// --write happy path: workspace.toml gets a new [plugins.versions] section
-// + inline-table line appended, stdout reports the path that was edited.
+// --write happy path: the bare "go" enable entry gets its version pinned in
+// place, stdout reports the path that was edited.
 //
 //nolint:paralleltest // t.Chdir mutates process cwd.
 func TestPin_WriteAppendsInlineLineInPlace(t *testing.T) {
@@ -74,31 +74,30 @@ func TestPin_WriteAppendsInlineLineInPlace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("pin --write: err=%v stderr=%s", err, stderr)
 	}
-	if !strings.Contains(stdout, "Updated") || !strings.Contains(stdout, "[plugins.versions]") {
+	if !strings.Contains(stdout, "Updated") || !strings.Contains(stdout, `"go=1.23.4"`) {
 		t.Errorf("stdout missing Updated marker:\n%s", stdout)
 	}
 	got, rerr := os.ReadFile(path) //nolint:gosec // tmp under t.TempDir
 	if rerr != nil {
 		t.Fatalf("read: %v", rerr)
 	}
-	if !strings.Contains(string(got), "[plugins.versions]") || !strings.Contains(string(got), `go = "=1.23.4"`) {
-		t.Errorf("workspace.toml missing new line:\n%s", got)
+	if !strings.Contains(string(got), `"go=1.23.4"`) {
+		t.Errorf("workspace.toml missing pinned enable entry:\n%s", got)
 	}
 }
 
-// --write on a workspace.toml that already has [plugins.versions] with
-// another id pinned must append the new line alongside (within the same
-// section), not at EOF or under a new section.
+// --write on a workspace.toml whose enable array already pins another id must
+// append the new entry alongside (within the same array), not at EOF or under
+// a new section, leaving later sections intact.
 //
 //nolint:paralleltest // t.Chdir mutates process cwd.
 func TestPin_WriteAppendsAlongsideExisting(t *testing.T) {
 	withIsolatedHome(t)
 	dir := t.TempDir()
 	path := seedWorkspace(t, dir, `[plugins]
-enable = ["go", "uv"]
-
-[plugins.versions]
-go = "=1.23.4"
+enable = [
+    "go=1.23.4",
+]
 
 [mounts]
 host = "./src"
@@ -113,12 +112,12 @@ host = "./src"
 		t.Fatalf("read: %v", rerr)
 	}
 	body := string(got)
-	// Section header must be unique, both ids must be present, [mounts] intact.
-	if strings.Count(body, "[plugins.versions]") != 1 {
-		t.Errorf("expected exactly one [plugins.versions] section header:\n%s", body)
+	// Exactly one [plugins] header, both ids in the array, [mounts] intact.
+	if strings.Count(body, "[plugins]") != 1 {
+		t.Errorf("expected exactly one [plugins] section header:\n%s", body)
 	}
-	goIdx := strings.Index(body, `go = "=1.23.4"`)
-	uvIdx := strings.Index(body, `uv = "=0.5.7"`)
+	goIdx := strings.Index(body, `"go=1.23.4"`)
+	uvIdx := strings.Index(body, `"uv=0.5.7"`)
 	mountsIdx := strings.Index(body, "[mounts]")
 	if goIdx < 0 || uvIdx < 0 {
 		t.Fatalf("expected both pins present:\n%s", body)
@@ -131,18 +130,17 @@ host = "./src"
 	}
 }
 
-// --write on a workspace.toml that already has a pin for the same id must
-// replace the existing line rather than append a duplicate.
+// --write on a workspace.toml whose enable array already pins the same id must
+// replace the existing entry rather than append a duplicate.
 //
 //nolint:paralleltest // t.Chdir mutates process cwd.
 func TestPin_WriteReplacesExistingBlock(t *testing.T) {
 	withIsolatedHome(t)
 	dir := t.TempDir()
 	path := seedWorkspace(t, dir, `[plugins]
-enable = ["go"]
-
-[plugins.versions]
-go = "=1.22.0"
+enable = [
+    "go=1.22.0",
+]
 `)
 	t.Chdir(dir)
 
@@ -156,14 +154,14 @@ go = "=1.22.0"
 	if strings.Contains(string(got), "1.22.0") {
 		t.Errorf("old pin not replaced:\n%s", got)
 	}
-	if strings.Count(string(got), "go = ") != 1 {
-		t.Errorf("expected exactly one `go = ` line:\n%s", got)
+	if strings.Count(string(got), `"go=`) != 1 {
+		t.Errorf("expected exactly one go enable entry:\n%s", got)
 	}
 }
 
-// --write on a workspace.toml that still uses the legacy
-// `[plugins.versions.<id>]` subsection format must refuse with ErrUsage and
-// leave the file untouched. The error message must point at the migration.
+// --write on a workspace.toml that still carries a [plugins.versions] section
+// must refuse with ErrUsage and leave the file untouched. The error message
+// must point at the migration.
 //
 //nolint:paralleltest // t.Chdir mutates process cwd.
 func TestPin_WriteRefusesLegacySubsection(t *testing.T) {
@@ -172,8 +170,8 @@ func TestPin_WriteRefusesLegacySubsection(t *testing.T) {
 	original := `[plugins]
 enable = ["go"]
 
-[plugins.versions.go]
-pin = "1.22.5"
+[plugins.versions]
+go = "=1.22.5"
 `
 	path := seedWorkspace(t, dir, original)
 	t.Chdir(dir)
@@ -182,8 +180,8 @@ pin = "1.22.5"
 	if !errors.Is(err, clihelpers.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage", err)
 	}
-	if !strings.Contains(err.Error(), "subsection") {
-		t.Errorf("err should mention subsection: %v\nstderr: %s", err, stderr)
+	if !strings.Contains(err.Error(), "[plugins.versions]") {
+		t.Errorf("err should mention the removed [plugins.versions] section: %v\nstderr: %s", err, stderr)
 	}
 	got, rerr := os.ReadFile(path) //nolint:gosec // tmp under t.TempDir
 	if rerr != nil {
@@ -248,8 +246,8 @@ version_capable = true
 }
 
 // --method on a plugin that declares methods, stdout (no --write): both
-// the [plugins.methods] and [plugins.versions] snippets must appear, and
-// the workspace.toml on disk stays untouched.
+// the [plugins.methods] line and the enable entry must appear, and the
+// workspace.toml on disk stays untouched.
 //
 //nolint:paralleltest // t.Chdir + t.Setenv mutate process state.
 func TestPin_MethodStdoutEmitsBothBlocks(t *testing.T) {
@@ -266,8 +264,8 @@ func TestPin_MethodStdoutEmitsBothBlocks(t *testing.T) {
 	for _, want := range []string{
 		"Under [plugins.methods]:",
 		`multi-method = "binary"`,
-		"Under [plugins.versions]:",
-		`multi-method = "=1.2.3"`,
+		"In the [plugins].enable array:",
+		`"multi-method=1.2.3"`,
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("stdout missing %q:\n%s", want, stdout)
@@ -282,11 +280,8 @@ func TestPin_MethodStdoutEmitsBothBlocks(t *testing.T) {
 	}
 }
 
-// --method + --write: both [plugins.methods] and [plugins.versions]
-// receive a new line in the same file. Order of insertion is methods
-// after versions because the method pass appends a new section at EOF
-// when the section is absent — both grow as new sections in the seed
-// workspace.
+// --method + --write: the enable entry is pinned in place and a new
+// [plugins.methods] line is appended in the same file.
 //
 //nolint:paralleltest // t.Chdir + t.Setenv mutate process state.
 func TestPin_MethodWriteUpdatesBothSections(t *testing.T) {
@@ -301,7 +296,7 @@ func TestPin_MethodWriteUpdatesBothSections(t *testing.T) {
 		t.Fatalf("pin --write --method: err=%v stderr=%s", err, stderr)
 	}
 	for _, want := range []string{
-		"[plugins.versions] multi-method",
+		`[plugins].enable "multi-method=1.2.3"`,
 		`[plugins.methods] multi-method = "binary"`,
 	} {
 		if !strings.Contains(stdout, want) {
@@ -314,8 +309,7 @@ func TestPin_MethodWriteUpdatesBothSections(t *testing.T) {
 	}
 	body := string(got)
 	for _, want := range []string{
-		"[plugins.versions]",
-		`multi-method = "=1.2.3"`,
+		`"multi-method=1.2.3"`,
 		"[plugins.methods]",
 		`multi-method = "binary"`,
 	} {
@@ -393,13 +387,13 @@ func TestPin_PgpPluginPins(t *testing.T) {
 	if err != nil {
 		t.Fatalf("pin: err=%v stderr=%s", err, stderr)
 	}
-	if !strings.Contains(stdout, `pgp-plugin = "=2.0.0"`) {
+	if !strings.Contains(stdout, `"pgp-plugin=2.0.0"`) {
 		t.Errorf("stdout missing pin line:\n%s", stdout)
 	}
 }
 
 // pin against a plugin that is not version_capable must fail with ErrUsage
-// rather than emit a [plugins.versions] entry that cocoon gen would later
+// rather than emit a pinned enable entry that cocoon gen would later
 // hard-reject. docker-cli is an embedded non-versioned plugin.
 //
 //nolint:paralleltest // t.Chdir mutates process cwd.
@@ -434,7 +428,7 @@ func TestPin_AcceptsLatestAndRejectsRange(t *testing.T) {
 		if err != nil {
 			t.Fatalf("pin latest: err=%v stderr=%s", err, stderr)
 		}
-		if !strings.Contains(stdout, `go = "latest"`) {
+		if !strings.Contains(stdout, `"go=latest"`) {
 			t.Errorf("stdout missing latest line:\n%s", stdout)
 		}
 	})
@@ -443,7 +437,7 @@ func TestPin_AcceptsLatestAndRejectsRange(t *testing.T) {
 		if err != nil {
 			t.Fatalf("pin =1.23.4: %v", err)
 		}
-		if !strings.Contains(stdout, `go = "=1.23.4"`) {
+		if !strings.Contains(stdout, `"go=1.23.4"`) {
 			t.Errorf("stdout missing exact line:\n%s", stdout)
 		}
 	})

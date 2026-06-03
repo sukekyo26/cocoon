@@ -1,11 +1,11 @@
-cocoon plugin pin — emit a constraint line for [plugins.versions] (and optionally [plugins.methods])
+cocoon plugin pin — emit an enable entry for [plugins].enable (and optionally [plugins.methods])
 
-By default a `<id> = "=<ref>"` line is printed to stdout for you
-to paste under the [plugins.versions] section in workspace.toml. A bare
-version (1.23.4) is written as an exact pin (=1.23.4); pass "latest" to
-track the newest release. With --write the line is upserted in place
-(inserted, or the existing <id> line is replaced); comments and blank
-lines outside the target line are preserved verbatim.
+By default a `"<id>=<ref>"` array element is printed to stdout for
+you to add to the [plugins].enable array in workspace.toml. A bare version
+(1.23.4) is written as an exact pin (<id>=1.23.4); pass "latest" to track
+the newest release. With --write the entry is upserted in place (added, or
+the existing <id> element is replaced); the rest of the file is preserved
+verbatim.
 
 Versions are frozen to concrete releases — and per-arch SHA256 checksums
 recorded — by `cocoon lock` into cocoon.lock; checksums no longer
@@ -13,13 +13,13 @@ live in workspace.toml.
 
 Pass --method <name> for plugins that declare two or more entries under
 [install.methods] in their plugin.toml — the pin then writes (or prints)
-both lines together: `<id> = "<method>"` for [plugins.methods] and
-the constraint line for [plugins.versions].
+both: the `"<id>=<ref>"` enable entry and a
+`<id> = "<method>"` line for [plugins.methods].
 
 Usage:
   cocoon plugin pin <id> <ref> [flags]
 
 Flags:
   -h, --help            help for pin
-      --method string   install method name; only meaningful for plugins that declare [install.methods]. When set, the command pins both [plugins.methods] and [plugins.versions] in a single workspace.toml read-write. When omitted, only [plugins.versions] is updated (the existing [plugins.methods] entry — or the plugin's default_method — stays in effect).
-      --write           upsert the constraint line in workspace.toml (auto-discovered from cwd)
+      --method string   install method name; only meaningful for plugins that declare [install.methods]. When set, the command pins both [plugins.methods] and the [plugins].enable entry in a single workspace.toml read-write. When omitted, only the enable entry is updated (the existing [plugins.methods] entry — or the plugin's default_method — stays in effect).
+      --write           upsert the enable entry in workspace.toml (auto-discovered from cwd)

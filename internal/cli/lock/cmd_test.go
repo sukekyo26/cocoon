@@ -200,12 +200,14 @@ func TestLock_CheckUpToDateAndDrift(t *testing.T) {
 	_, err = runLockCmd(t, "--check")
 	require.NoError(t, err)
 
-	// Mutate workspace.toml to pin demo (changes inputs_hash) → drift.
+	// Pin demo inline in the enable array (changes inputs_hash) → drift.
 	wsPath := filepath.Join(filepath.Dir(lockPath), "workspace.toml")
 	body, rerr := os.ReadFile(wsPath) //nolint:gosec // test path under t.TempDir
 	require.NoError(t, rerr)
+	mutated := bytes.Replace(body, []byte(`["demo"]`), []byte(`["demo=9.9.9"]`), 1)
+	require.NotEqual(t, string(body), string(mutated), "enable rewrite must change the file")
 	//nolint:gosec // test path under t.TempDir
-	require.NoError(t, os.WriteFile(wsPath, append(body, []byte("\n[plugins.versions]\ndemo = \"=9.9.9\"\n")...), 0o600))
+	require.NoError(t, os.WriteFile(wsPath, mutated, 0o600))
 	_, err = runLockCmd(t, "--check")
 	require.ErrorIs(t, err, clihelpers.ErrUsage)
 }
@@ -235,8 +237,10 @@ func TestLock_ExactPinSkipsLatestFetch(t *testing.T) {
 	wsPath := filepath.Join(filepath.Dir(lockPath), "workspace.toml")
 	body, rerr := os.ReadFile(wsPath) //nolint:gosec // test path under t.TempDir
 	require.NoError(t, rerr)
+	mutated := bytes.Replace(body, []byte(`["nosrc"]`), []byte(`["nosrc=2.0.0"]`), 1)
+	require.NotEqual(t, string(body), string(mutated), "enable rewrite must change the file")
 	//nolint:gosec // test path under t.TempDir
-	require.NoError(t, os.WriteFile(wsPath, append(body, []byte("\n[plugins.versions]\nnosrc = \"=2.0.0\"\n")...), 0o600))
+	require.NoError(t, os.WriteFile(wsPath, mutated, 0o600))
 	swapFetcher(t, &countingFetcher{bodies: map[string]string{}})
 
 	_, err := runLockCmd(t)

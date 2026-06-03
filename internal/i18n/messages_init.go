@@ -110,11 +110,9 @@ var messagesEN_init = map[string]string{
 	"init_toml_comment_image_path_fix_volumes_removal": "# Removing a line below loses `%s` results on the next container recreation; to delete the volume itself, run e.g. `docker compose down -v` or `docker volume rm <name>`.",
 	"init_toml_comment_image_path_fix_volumes_extra":   "# Append extra named volumes under this same [volumes] block — do not open a second [volumes] section (TOML rejects duplicate tables).",
 	"init_toml_section_plugins": "# [plugins] — enable cocoon plugins (run `cocoon plugin list` for the catalog).\n" +
-		"#   Pin versions in [plugins.versions] when you need reproducible builds.",
+		"#   Pin a version inline in the enable array (e.g. \"go=1.23.4\", \"node=latest\") for reproducible builds; run `cocoon lock` to freeze latest.",
 	"init_toml_section_plugins_methods": "# [plugins.methods] — install method picked for plugins that declare multiple methods.\n" +
 		"#   Plugins with a single declared method ignore this section.",
-	"init_toml_section_plugins_versions": "# [plugins.versions] — version constraints for the enabled plugins above.\n" +
-		"#   Value is \"=<exact>\" (e.g. \"=1.23.4\") or \"latest\"; run `cocoon lock` to freeze latest and record checksums in cocoon.lock.",
 	"init_toml_section_apt": "# [apt] — extra apt packages installed on top of cocoon's minimal base + selected categories.\n" +
 		"#   Re-run `cocoon init --force` to change category checkboxes, or edit this list directly.",
 	"init_toml_section_certificates": "# [certificates] — TLS certificate auto-bake from ~/.cocoon/certs/ on the host.\n" +
@@ -276,11 +274,9 @@ var messagesJA_init = map[string]string{
 	"init_toml_comment_image_path_fix_volumes_removal": "# 行を削除すると、コンテナ再生成時に `%s` の結果が失われる（named volume 自体を消すには `docker compose down -v` または `docker volume rm <name>` 等）。",
 	"init_toml_comment_image_path_fix_volumes_extra":   "# 追加の named volume はこの同じ [volumes] ブロックに追記する（2 つ目の [volumes] セクションを開かない。TOML が同一テーブルの二重定義を拒否するため）。",
 	"init_toml_section_plugins": "# [plugins] — cocoon プラグインの有効化（一覧は `cocoon plugin list`）。\n" +
-		"#   再現性が必要なら [plugins.versions] でバージョン固定。",
+		"#   再現性が必要なら enable 配列にバージョンをインライン指定（例 \"go=1.23.4\", \"node=latest\"）。`cocoon lock` で latest を凍結。",
 	"init_toml_section_plugins_methods": "# [plugins.methods] — 複数のインストール方式を提供するプラグインに対する選択。\n" +
 		"#   方式を 1 つしか持たないプラグインはこのセクションを無視。",
-	"init_toml_section_plugins_versions": "# [plugins.versions] — 上で有効化したプラグインに対するバージョン制約。\n" +
-		"#   値は \"=<exact>\"（例 \"=1.23.4\"）か \"latest\"。`cocoon lock` で latest を凍結し checksum を cocoon.lock に記録。",
 	"init_toml_section_certificates": "# [certificates] — ホスト側 ~/.cocoon/certs/ の TLS 証明書をコンテナイメージに自動取り込み (opt-in)。\n" +
 		"#   enable = true のときジェネレータが docker-compose の additional_contexts と Dockerfile の\n" +
 		"#   RUN --mount=type=bind を配線し、ホスト側 *.crt / *.cer が build 時にトラストストアへマージされる。\n" +

@@ -586,19 +586,18 @@ func validateVersionOverrides(
 		override := overrides[id]
 		p, ok := plugins[id]
 		if !ok {
-			return fmt.Errorf("%w: [plugins.versions] references '%s', but that plugin is not enabled in [plugins].enable",
+			return fmt.Errorf("%w: the enable array pins a version for '%s', but that plugin is not available",
 				ErrInvalidVersionOverride, id)
 		}
 		if !p.Version.VersionCapable {
-			return fmt.Errorf("%w: [plugins.versions.%s] is not allowed: plugin '%s' has"+
-				" version_capable = false (version pinning is unsupported by this plugin's install method)",
-				ErrInvalidVersionOverride, id, id)
+			return fmt.Errorf("%w: '%s' has version_capable = false and cannot be pinned"+
+				" (drop the \"=<version>\" suffix from its [plugins].enable entry)",
+				ErrInvalidVersionOverride, id)
 		}
 		if !p.Version.VerifiesByChecksum() && (override.ChecksumAmd64 != nil || override.ChecksumArm64 != nil) {
-			return fmt.Errorf("%w: [plugins.versions.%s] sets checksum_amd64/checksum_arm64, but plugin '%s'"+
-				" declares verify = %q and verifies downloads in-script (not against a per-workspace checksum);"+
-				" remove checksum_amd64/checksum_arm64 from [plugins.versions.%s]",
-				ErrInvalidVersionOverride, id, id, p.Version.Verify, id)
+			return fmt.Errorf("%w: a checksum is recorded for '%s', but it declares verify = %q and"+
+				" verifies downloads in-script (not against a per-arch checksum); re-run `cocoon lock`",
+				ErrInvalidVersionOverride, id, p.Version.Verify)
 		}
 		if err := checkExtraOverrideKeys(id, override, p.Install.ExtraVersions); err != nil {
 			return err
@@ -612,10 +611,9 @@ func validateVersionOverrides(
 	return nil
 }
 
-// checkExtraOverrideKeys rejects [plugins.versions].<id>.<key> entries
-// (beyond the reserved pin / checksum_* triple) that the plugin does not
-// declare under [install.extra_versions]. Keys are sorted so the error
-// message stays stable across runs.
+// checkExtraOverrideKeys rejects [plugins.options].<id>.<key> entries that
+// the plugin does not declare under [install.extra_versions]. Keys are sorted
+// so the error message stays stable across runs.
 func checkExtraOverrideKeys(
 	id string,
 	override config.PluginVersionOverride,
@@ -634,7 +632,7 @@ func checkExtraOverrideKeys(
 		return nil
 	}
 	sort.Strings(unknown)
-	return fmt.Errorf("%w: [plugins.versions.%s] sets %v; plugin '%s' does not declare these keys"+
+	return fmt.Errorf("%w: [plugins.options.%s] sets %v; plugin '%s' does not declare these keys"+
 		" under [install.extra_versions]; remove them or fix the typo",
 		ErrUnknownExtraVersion, id, unknown, id)
 }
@@ -653,9 +651,9 @@ func warnMissingChecksum(warnings io.Writer, id string, override config.PluginVe
 		return
 	}
 	fmt.Fprintf(warnings,
-		"WARNING: [plugins.versions.%s] pins %q without a recorded checksum; "+
+		"WARNING: '%s' is pinned to %q without a recorded checksum; "+
 			"the install step verifies the download against the upstream-published "+
-			"checksum (trust-on-first-use).\n",
+			"checksum (trust-on-first-use). Run `cocoon lock` to record it.\n",
 		id, override.Pin)
 }
 

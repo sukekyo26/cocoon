@@ -1143,13 +1143,12 @@ func TestValidate_PluginsBadIDChar(t *testing.T) {
 	require.Contains(t, err.Error(), "plugin id does not match")
 }
 
-// TestValidate_PluginVersionEmptyConstraint pins that an empty constraint
-// string is rejected (the user almost certainly meant to remove the entry
-// or write "latest"), not silently treated as "no pin".
+// TestValidate_PluginVersionEmptyConstraint pins that a trailing "=" with no
+// version ("go=") is rejected (the user almost certainly meant a bare "go" or
+// "go=latest"), not silently treated as "no pin".
 func TestValidate_PluginVersionEmptyConstraint(t *testing.T) {
 	t.Parallel()
-	body := minimalWorkspace() +
-		"\n[plugins.versions]\ngo = \"\"\n"
+	body := strings.ReplaceAll(minimalWorkspace(), "enable = []", `enable = ["go="]`)
 	err := loadWS(t, body)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "must not be empty")
@@ -1255,27 +1254,6 @@ func TestValidate_PluginsMethodsEmptyValueRejected(t *testing.T) {
 	err := loadWS(t, body)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "method name does not match")
-}
-
-// TestValidate_PluginVersionLegacyFormRejected pins that the removed
-// inline-table pin / checksum keys are rejected at load with the migration
-// hint that points the user at the string form + `cocoon lock`.
-func TestValidate_PluginVersionLegacyFormRejected(t *testing.T) {
-	t.Parallel()
-	cases := []struct{ name, line string }{
-		{"pin_key", `go = { pin = "1.23.4" }`},
-		{"checksum_key", `go = { version = "=1.23.4", checksum_amd64 = "abc" }`},
-	}
-	for _, tc := range cases {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			body := minimalWorkspace() + "\n[plugins.versions]\n" + tc.line + "\n"
-			err := loadWS(t, body)
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "inline-table pin form was removed")
-		})
-	}
 }
 
 func TestValidate_PortsOutOfRange(t *testing.T) {

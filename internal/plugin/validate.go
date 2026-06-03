@@ -20,14 +20,14 @@ var (
 	rxTemplatePlaceholder = regexp.MustCompile(`\$\{[a-z]+\}`)
 )
 
-// reservedExtraVersionKeys lists the [plugins.versions].<id> keys that
-// the workspace loader consumes into dedicated PluginVersionOverride
-// fields (Pin / ChecksumAmd64 / ChecksumArm64). A plugin declaring one
-// of these names under [install.extra_versions] would be a silent no-op:
-// the user can never override the value via [plugins.versions] because
-// the loader routes the matching key into the reserved field, never
-// into Extra. Reject the declaration up front so the plugin author sees
-// the conflict instead of debugging a "default that never moves".
+// reservedExtraVersionKeys lists the [plugins.options].<id> keys that the
+// workspace loader treats specially (pin is removed; checksum_amd64 /
+// checksum_arm64 feed the dedicated PluginVersionOverride checksum fields). A
+// plugin declaring one of these names under [install.extra_versions] would be
+// a silent no-op: the user could never override the value via
+// [plugins.options] because the loader never routes a reserved key into Extra.
+// Reject the declaration up front so the plugin author sees the conflict
+// instead of debugging a "default that never moves".
 //
 //nolint:gochecknoglobals // pin-down table for validation.
 var reservedExtraVersionKeys = map[string]struct{}{
@@ -273,9 +273,8 @@ func validateOneExtraVersion(
 	seenEnv map[string]string,
 ) {
 	if _, reserved := reservedExtraVersionKeys[k]; reserved {
-		a.Add(fmt.Sprintf("extra_versions key %q is reserved by [plugins.versions] "+
-			"(consumed as the dedicated %s field, never as an extra) — pick a different key",
-			k, k), "extra_versions", k)
+		a.Add(fmt.Sprintf("extra_versions key %q is reserved under [plugins.options] "+
+			"(never routed as an extra) — pick a different key", k), "extra_versions", k)
 		return
 	}
 	if !rxExtraVersionKey.MatchString(k) {

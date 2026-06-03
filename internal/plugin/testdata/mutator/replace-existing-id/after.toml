@@ -1,9 +1,0 @@
-[plugins]
-enable = ["go"]
-
-# Keep pins together for review.
-[plugins.versions]
-go = "=1.24.0"
-
-[mounts]
-host = "./src"

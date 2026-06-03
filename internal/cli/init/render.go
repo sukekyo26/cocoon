@@ -8,7 +8,6 @@ import (
 
 	"github.com/sukekyo26/cocoon/internal/config"
 	"github.com/sukekyo26/cocoon/internal/i18n"
-	"github.com/sukekyo26/cocoon/internal/plugin"
 )
 
 type containerSpec struct {
@@ -215,8 +214,9 @@ func writeImagePathFixVolumes(sb *strings.Builder, cat *i18n.Catalog, s containe
 	sb.WriteByte('\n')
 }
 
-// writePluginsSection emits the [plugins] block plus the [plugins.methods]
-// and [plugins.versions] sub-blocks.
+// writePluginsSection emits the [plugins] block (with each plugin's version
+// pinned inline in the enable array) plus the [plugins.methods] and
+// [plugins.options] sub-blocks.
 func writePluginsSection(sb *strings.Builder, cat *i18n.Catalog, s containerSpec) {
 	sb.WriteString(cat.Msg("init_toml_section_plugins"))
 	sb.WriteByte('\n')
@@ -226,13 +226,27 @@ func writePluginsSection(sb *strings.Builder, cat *i18n.Catalog, s containerSpec
 	} else {
 		sb.WriteString("enable = [\n")
 		for _, id := range s.Plugins {
-			fmt.Fprintf(sb, "    %q,\n", id)
+			fmt.Fprintf(sb, "    %q,\n", enableEntry(id, s.PluginVersions[id]))
 		}
 		sb.WriteString("]\n\n")
 	}
 
 	writePluginMethods(sb, cat, s.PluginMethods)
-	writePluginVersions(sb, cat, s.PluginVersions)
+	writePluginOptions(sb, cat)
+}
+
+// enableEntry formats one [plugins].enable element: a bare id when the plugin
+// is unpinned, else "<id>=<version>" (or "<id>=latest"). ref is the bare
+// version the picker recorded ("" when none).
+func enableEntry(id, ref string) string {
+	switch ref {
+	case "":
+		return id
+	case "latest":
+		return id + "=latest"
+	default:
+		return id + "=" + ref
+	}
 }
 
 // writeAptSection emits the [apt] block followed by its commented-out
@@ -345,23 +359,12 @@ func writePluginMethods(sb *strings.Builder, cat *i18n.Catalog, picks map[string
 	sb.WriteByte('\n')
 }
 
-// writePluginVersions emits a single `[plugins.versions]` section with one
-// inline-table line per pin, alphabetically sorted by id. When pins is empty
-// it falls back to the commented-out example template so the reader still
-// discovers the section.
-func writePluginVersions(sb *strings.Builder, cat *i18n.Catalog, pins map[string]string) {
-	if len(pins) == 0 {
-		emitTemplate(sb, cat, "init_toml_template_plugins_versions")
-		return
-	}
-	lines := make([]plugin.PinLine, 0, len(pins))
-	for id, ref := range pins {
-		lines = append(lines, plugin.PinLine{ID: id, Spec: "=" + ref})
-	}
-	sb.WriteString(cat.Msg("init_toml_section_plugins_versions"))
-	sb.WriteByte('\n')
-	sb.WriteString(plugin.FormatPinSection(lines))
-	sb.WriteByte('\n')
+// writePluginOptions emits the commented-out [plugins.options] example
+// template. `cocoon init` pins versions inline in the enable array and does
+// not collect per-plugin extras (e.g. android-sdk's api_level) or manual
+// checksums interactively, so it always falls back to the template.
+func writePluginOptions(sb *strings.Builder, cat *i18n.Catalog) {
+	emitTemplate(sb, cat, "init_toml_template_plugins_options")
 }
 
 // emitTemplate writes a localized commented-out section template to sb,

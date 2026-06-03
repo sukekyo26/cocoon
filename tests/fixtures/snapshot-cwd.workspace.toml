@@ -52,30 +52,22 @@ key_url = "https://download.opensuse.org/repositories/shells:fish:release:3/xUbu
 
 [plugins]
 enable = [
-    "proto",
+    "proto=0.46.1",
     "docker-cli",
     "aws-cli",
     "aws-sam-cli",
     "github-cli",
-    "copilot-cli",
+    "copilot-cli=0.0.369",
     "claude-code",
-    "zig",
-    "uv",
+    "zig=0.14.0",
+    "uv=0.5.7",
     "rust",
-    "go",
-    "lazygit",
+    "go=1.26.1",
+    "lazygit=0.44.1",
 ]
 
 [ports]
 forward = ["3000:3000"]
-
-[plugins.versions]
-go = "=1.26.1"
-lazygit = "=0.44.1"
-uv = "=0.5.7"
-proto = "=0.46.1"
-zig = "=0.14.0"
-copilot-cli = "=0.0.369"
 
 [volumes]
 deno = "/home/${USERNAME}/.deno"
