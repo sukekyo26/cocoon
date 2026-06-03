@@ -50,6 +50,12 @@ var (
 	ErrBadChecksum = errors.New("lockfile: checksum is not 64 lowercase hex chars")
 	// ErrEmptyVersion is returned by Load when a plugin entry has no version.
 	ErrEmptyVersion = errors.New("lockfile: plugin entry has an empty version")
+	// ErrMissingVersion is returned by Load when the file has no lock_version
+	// (decoded as 0): a malformed or foreign lock that must be regenerated.
+	ErrMissingVersion = errors.New("lockfile: missing lock_version (regenerate with `cocoon lock`)")
+	// ErrDuplicatePlugin is returned by Load when two entries share a plugin
+	// id, which would make Find's first-match overlay ambiguous.
+	ErrDuplicatePlugin = errors.New("lockfile: duplicate plugin id")
 )
 
 // Lock is the parsed cocoon.lock. Plugins is kept sorted by ID so the
@@ -105,10 +111,18 @@ func Load(path string) (*Lock, error) {
 }
 
 func (l *Lock) validate() error {
-	if l.LockVersion > Version {
+	switch {
+	case l.LockVersion < 1:
+		return ErrMissingVersion
+	case l.LockVersion > Version:
 		return fmt.Errorf("%w: file is v%d, this cocoon understands v%d", ErrUnsupportedVersion, l.LockVersion, Version)
 	}
+	seen := make(map[string]struct{}, len(l.Plugins))
 	for _, p := range l.Plugins {
+		if _, dup := seen[p.ID]; dup {
+			return fmt.Errorf("plugin %q: %w", p.ID, ErrDuplicatePlugin)
+		}
+		seen[p.ID] = struct{}{}
 		if p.Version == "" {
 			return fmt.Errorf("plugin %q: %w", p.ID, ErrEmptyVersion)
 		}
@@ -148,9 +162,9 @@ func Save(path string, l *Lock) error {
 
 // ComputeInputsHash returns a stable SHA256 over the enabled
 // version_capable plugins' (id, requested-spec) pairs. `cocoon lock --check`
-// and `cocoon gen --locked` recompute it offline and compare to detect a
-// lock that no longer matches workspace.toml (a plugin added/removed or a
-// constraint changed).
+// recomputes it offline and compares it against the lock's recorded hash to
+// detect a lock that no longer matches workspace.toml (a plugin added/removed
+// or a constraint changed).
 func ComputeInputsHash(requestedByID map[string]string) string {
 	ids := make([]string, 0, len(requestedByID))
 	for id := range requestedByID {

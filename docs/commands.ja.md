@@ -316,7 +316,7 @@ Updated /home/alice/proj/workspace.toml: [plugins].enable "go=1.23.4"
 - pin は `[version].version_capable = true` のプラグインでのみ意味を持つ。それ以外では要素のバージョンが `gen` 時に無視される。
 - checksum はここでは pin しない。checksum は `cocoon lock` が `cocoon.lock` に記録する。それまでは install スクリプトの fallback が上流のリリース公開 checksum とダウンロードを照合する。
 - `--write` は cwd から `workspace.toml` を発見できる必要がある。`--write` 無しなら id 検証用に LayeredFS を解決するだけなので、どこからでも動く。
-- `--write` は `workspace.toml` に `[plugins.versions]` セクション (削除済みスキーマ) がまだ残っていると usage error で停止する。まず各 pin を `[plugins].enable` 配列へ移行し — `go = "=1.23.4"` 行を要素 `"go=1.23.4"` (先頭の `=` を落とす) にして `[plugins.versions]` セクションを削除する — 再実行するか、`workspace.toml` を手動編集する。
+- `--write` は `workspace.toml` に `[plugins.versions]` セクション (削除済みスキーマ) がまだ残っていると usage error で停止する。まず各 pin を `[plugins].enable` 配列へ移行し — `go = { pin = "1.23.4" }` のようなインラインテーブル pin を要素 `"go=1.23.4"` にして `[plugins.versions]` セクションを削除する — 再実行するか、`workspace.toml` を手動編集する。
 
 ### `cocoon plugin scaffold <id>`
 

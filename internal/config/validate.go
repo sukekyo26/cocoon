@@ -629,7 +629,7 @@ func containsWhitespaceOrCtrl(s string) bool {
 //
 // Both the plugin-author-side default (plugin.toml's
 // [install.extra_versions].<key>.default) and the user-side override
-// (workspace.toml's [plugins.versions].<id>.<key>) are checked through
+// (workspace.toml's [plugins.options].<id>.<key>) are checked through
 // this helper so the failure surfaces at decode/validate time, not at
 // docker build.
 func UnsafeExtraVersionRune(s string) (bool, rune) {
@@ -803,13 +803,13 @@ func (s *ContainerShellSpec) validate(a *Accumulator) {
 	CheckMapValues(a.At("env"), s.Env, "\n\r", shellValueHazard)
 }
 
-// VersionSpecLatest is the canonical floating [plugins.versions] constraint.
+// VersionSpecLatest is the canonical floating enable-array version constraint.
 // "*" is accepted as a synonym on input and normalised to this value.
 const VersionSpecLatest = "latest"
 
 // Version-spec sentinels. ParseVersionSpec wraps these with the offending
 // input so callers (cocoon plugin pin, the workspace loader) can classify a
-// bad [plugins.versions] constraint via errors.Is.
+// bad version constraint via errors.Is.
 var (
 	// ErrVersionSpecEmpty is returned for an empty constraint string.
 	ErrVersionSpecEmpty = errors.New("version constraint must not be empty")
@@ -823,7 +823,7 @@ var (
 	ErrVersionSpecCharset = errors.New("version contains unsupported characters")
 )
 
-// ParseVersionSpec parses one [plugins.versions] constraint into a
+// ParseVersionSpec parses one enable-array version constraint into a
 // PluginVersionOverride (Spec plus the derived Pin; Extra and checksums are
 // left zero for the caller to fill). Accepted forms: "=<version>" (an exact
 // pin) and "latest"/"*" (floating, frozen by `cocoon lock`). Range

@@ -316,7 +316,7 @@ Updated /home/alice/proj/workspace.toml: [plugins].enable "go=1.23.4"
 - A pin only makes sense for plugins whose `[version].version_capable = true`. The element's version is ignored at `gen` time for non-version-capable plugins.
 - Checksums are not pinned here. They are recorded in `cocoon.lock` by `cocoon lock`; until then the install script's fallback verifies each download against the checksum the upstream publishes with the release.
 - `--write` requires a discoverable `workspace.toml` from cwd; without `--write`, the command works from anywhere because it only resolves the layered FS for id validation.
-- `--write` refuses with a usage error if `workspace.toml` still contains a `[plugins.versions]` section (the removed schema). Migrate each pin into the `[plugins].enable` array first — turn a `go = "=1.23.4"` line into the element `"go=1.23.4"` (drop the leading `=`) and delete the `[plugins.versions]` section — then re-run, or edit `workspace.toml` manually.
+- `--write` refuses with a usage error if `workspace.toml` still contains a `[plugins.versions]` section (the removed schema). Migrate each pin into the `[plugins].enable` array first — turn an inline-table pin like `go = { pin = "1.23.4" }` into the element `"go=1.23.4"` and delete the `[plugins.versions]` section — then re-run, or edit `workspace.toml` manually.
 
 ### `cocoon plugin scaffold <id>`
 

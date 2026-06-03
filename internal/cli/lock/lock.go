@@ -100,7 +100,7 @@ func buildLock(
 		if err != nil {
 			if errors.Is(err, resolve.ErrLatestUnsupported) {
 				return nil, fmt.Errorf(
-					`%w: plugin %q cannot resolve 'latest'; pin an exact version: %s = "=<version>"`,
+					`%w: plugin %q cannot resolve 'latest'; pin an exact version in [plugins].enable: "%s=<version>"`,
 					clihelpers.ErrUsage, s.id, s.id)
 			}
 			return nil, fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)

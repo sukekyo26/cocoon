@@ -105,6 +105,16 @@ func TestLoad_Errors(t *testing.T) {
 			wantContains: "empty version",
 		},
 		{
+			name:         "missing_lock_version",
+			body:         "inputs_hash = 'x'\n",
+			wantContains: "missing lock_version",
+		},
+		{
+			name:         "duplicate_plugin_id",
+			body:         "lock_version = 1\ninputs_hash = 'x'\n\n[[plugins]]\nid = 'go'\nrequested = '=1.0'\nversion = '1.0'\n\n[[plugins]]\nid = 'go'\nrequested = '=1.1'\nversion = '1.1'\n",
+			wantContains: "duplicate plugin id",
+		},
+		{
 			name:         "unknown_field",
 			body:         "lock_version = 1\ninputs_hash = 'x'\nbogus = true\n",
 			wantContains: "unknown field",

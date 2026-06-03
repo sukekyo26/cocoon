@@ -332,9 +332,11 @@ those **must** be pinned to an exact version in the `enable` array (e.g.
 
 > **Migration note.** The old `[plugins.versions]` section was **removed**. A
 > `workspace.toml` that still has it is rejected at load with a hint to move
-> the pins into the `enable` array. Replace a `[plugins.versions]` line like
-> `go = "=1.23.4"` with the enable-array element `"go=1.23.4"` (drop the
-> leading `=`); replace `node = "latest"` with `"node=latest"`.
+> the pins into the `enable` array. Turn an inline-table pin like
+> `go = { pin = "1.23.4" }` into the enable element `"go=1.23.4"`, move any
+> extra keys (e.g. android-sdk's `api_level`) to `[plugins.options]` and
+> per-arch checksums into `cocoon.lock` (written by `cocoon lock`), then delete
+> the `[plugins.versions]` section.
 
 Checksums do **not** live in `workspace.toml`. Per-arch SHA256 checksums are
 recorded in a `cocoon.lock` file by `cocoon lock`, which also resolves any

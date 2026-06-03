@@ -330,8 +330,10 @@ enable = [
 
 > **移行メモ。** 旧 `[plugins.versions]` セクションは **削除** されました。残っている
 > `workspace.toml` はロード時に拒否され、pin を `enable` 配列へ移すヒントが出ます。
-> `go = "=1.23.4"` のような `[plugins.versions]` 行は enable 配列要素 `"go=1.23.4"`
-> （先頭の `=` を落とす）へ、`node = "latest"` は `"node=latest"` へ置き換えてください。
+> `go = { pin = "1.23.4" }` のようなインラインテーブル pin を enable 配列要素
+> `"go=1.23.4"` にし、追加キー（例: android-sdk の `api_level`）は `[plugins.options]`
+> へ、per-arch checksum は `cocoon.lock`（`cocoon lock` が生成）へ移したうえで、
+> `[plugins.versions]` セクションを削除してください。
 
 checksum は `workspace.toml` には **書きません**。per-arch SHA256 checksum は
 `cocoon lock` が `cocoon.lock` ファイルに記録し、同時に `latest` 要素を具体的な
