@@ -17,7 +17,7 @@ var (
 	rxPluginURL           = regexp.MustCompile(`^https://[^\s]+$`)
 	rxMethodName          = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
 	rxExtraVersionKey     = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
-	rxTemplatePlaceholder = regexp.MustCompile(`\$\{[a-z]+\}`)
+	rxTemplatePlaceholder = regexp.MustCompile(`\$\{[^}]*\}`)
 )
 
 // reservedExtraVersionKeys lists the [plugins.options].<id> keys that the

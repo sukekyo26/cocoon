@@ -421,6 +421,14 @@ func TestValidate_VersionSourceRejected(t *testing.T) {
 			src:            plugin.VersionSource{Latest: plugin.LatestSpec{Type: plugin.LatestText, URL: "https://x.test/${foo}/v"}, Checksum: plugin.ChecksumSpec{Type: plugin.ChecksumNone}},
 			wantContains:   "unknown placeholder ${foo}",
 		},
+		{
+			// Non-lowercase placeholders must also be caught (the regex matches
+			// any ${...}, not just [a-z]+), else an ${ARCH} typo slips past load.
+			name:           "unknown_placeholder_uppercase",
+			versionCapable: true,
+			src:            plugin.VersionSource{Latest: plugin.LatestSpec{Type: plugin.LatestText, URL: "https://x.test/${ARCH}/v"}, Checksum: plugin.ChecksumSpec{Type: plugin.ChecksumNone}},
+			wantContains:   "unknown placeholder ${ARCH}",
+		},
 	}
 	for _, tc := range cases {
 		tc := tc
