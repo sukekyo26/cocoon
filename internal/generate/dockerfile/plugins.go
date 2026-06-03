@@ -586,7 +586,8 @@ func validateVersionOverrides(
 		override := overrides[id]
 		p, ok := plugins[id]
 		if !ok {
-			return fmt.Errorf("%w: the enable array pins a version for '%s', but that plugin is not available",
+			return fmt.Errorf("%w: workspace.toml sets a version or [plugins.options] for '%s', but it is not an "+
+				"enabled plugin (add it to [plugins].enable, or remove the entry)",
 				ErrInvalidVersionOverride, id)
 		}
 		if !p.Version.VersionCapable {

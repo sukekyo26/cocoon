@@ -251,7 +251,7 @@ func (l *LockFileSpec) validate(a *Accumulator) {
 	name := *l.Name
 	switch {
 	case !rxCodeWorkspaceName.MatchString(name):
-		a.Add(`name must be a single filename of [A-Za-z0-9._-] (no "/", "." or "..")`, "name")
+		a.Add(`name must be a single filename of [A-Za-z0-9._-] (no "/")`, "name")
 	case name == "." || name == "..":
 		a.Add(`name must not be "." or ".."`, "name")
 	case name == "workspace.toml":
