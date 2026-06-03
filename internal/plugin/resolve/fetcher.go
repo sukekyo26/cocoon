@@ -15,6 +15,12 @@ import (
 // than pattern-matching the wrapped status message.
 var ErrHTTPStatus = errors.New("resolve: unexpected http status")
 
+// ErrBodyTooLarge is returned when a response exceeds maxBody. Get reads
+// maxBody+1 bytes and checks the length so an oversized or misconfigured
+// endpoint fails fast here instead of being silently truncated and surfacing
+// as a confusing downstream parse error.
+var ErrBodyTooLarge = errors.New("resolve: response body exceeds size limit")
+
 const (
 	// defaultTimeout caps a single GET when the caller's context carries no
 	// deadline so a stalled upstream cannot freeze `cocoon lock`.
@@ -67,9 +73,12 @@ func (f HTTPFetcher) Get(ctx context.Context, url string) ([]byte, error) {
 	if resp.StatusCode/100 != 2 {
 		return nil, fmt.Errorf("%w: %s for %s", ErrHTTPStatus, resp.Status, url)
 	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBody))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBody+1))
 	if err != nil {
 		return nil, fmt.Errorf("read body %s: %w", url, err)
+	}
+	if int64(len(body)) > maxBody {
+		return nil, fmt.Errorf("%w: %s (limit %d bytes)", ErrBodyTooLarge, url, maxBody)
 	}
 	return body, nil
 }
