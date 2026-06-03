@@ -90,7 +90,7 @@ cocoon init --yes \
 
 ## `cocoon gen`
 
-`workspace.toml` を読み、レイヤード FS (project ∪ user ∪ embedded) でプラグインカタログを解決し、`.devcontainer/` を出力。プラグインの install スクリプトは生成 Dockerfile 内に直接埋め込まれるため、ビルドはプロジェクトツリー以外を必要としない。
+`workspace.toml` を読み、レイヤード FS (project ∪ user ∪ embedded) でプラグインカタログを解決し、`.devcontainer/` を出力。プラグインの install スクリプトは生成 Dockerfile 内に直接埋め込まれるため、ビルドはプロジェクトツリー以外を必要としない。生成は完全オフライン: [`cocoon.lock`](#cocoon-lock) があれば、ロック済みプラグインの解決バージョンと arch ごとの checksum が Dockerfile (`PIN` / `CHECKSUM_*`) に焼き込まれ、ビルドが再現可能になる。
 
 ### フラグ
 
@@ -98,6 +98,7 @@ cocoon init --yes \
 |---|---|---|
 | `--workspace <path>` | string | `workspace.toml` のパス (デフォルト: cwd から探索)。 |
 | `--output <dir>` | string | 成果物の書き出し先プロジェクトルート (デフォルト: `workspace.toml` のディレクトリ)。 |
+| `--locked` | bool | 有効なプラグインが `cocoon.lock` エントリ無しで `"latest"` を使っていれば失敗 (再現性 CI 用)。付けない場合、該当プラグインは警告のうえ build 時に最新を解決するフォールバックになる。 |
 
 ### 例
 

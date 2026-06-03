@@ -17,6 +17,11 @@ adheres to [Semantic Versioning](https://semver.org/).
   re-resolves `"latest"` constraints. Plugins whose upstream exposes no
   machine-readable version (`aws-cli`, `android-sdk`, `flutter`) must be pinned
   to an exact version.
+- `cocoon gen` now consumes `cocoon.lock` (when present) to bake each locked
+  plugin's resolved version and checksums into the generated Dockerfile —
+  offline and reproducibly. `cocoon gen --locked` fails if any enabled plugin
+  uses `"latest"` without a lock entry (for reproducible CI); without it, such
+  plugins warn and fall back to resolving the latest version at build time.
 
 ### Changed
 

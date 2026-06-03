@@ -16,6 +16,11 @@ cocoon の主要な変更を記録します。フォーマットは
   `workspace.toml` と一致するか検証（CI 用）、`--upgrade` は `"latest"` 制約を
   再解決します。上流が機械可読なバージョンを公開しないプラグイン（`aws-cli`,
   `android-sdk`, `flutter`）は exact バージョンへの pin が必要です。
+- `cocoon gen` が（存在すれば）`cocoon.lock` を消費し、ロック済みプラグインの
+  解決バージョンと checksum を生成 Dockerfile にオフラインかつ再現的に焼き込み
+  ます。`cocoon gen --locked` は、有効なプラグインが lock エントリ無しで
+  `"latest"` を使っていれば失敗します（再現性 CI 用）。付けない場合、該当
+  プラグインは警告のうえ build 時に最新を解決するフォールバックになります。
 
 ### 変更
 

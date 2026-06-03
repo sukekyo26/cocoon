@@ -8,6 +8,8 @@ import (
 
 	"github.com/sukekyo26/cocoon/internal/config"
 	"github.com/sukekyo26/cocoon/internal/generate"
+	"github.com/sukekyo26/cocoon/internal/lockfile"
+	"github.com/sukekyo26/cocoon/internal/plugin"
 )
 
 func ptr[T any](v T) *T { return &v }
@@ -453,5 +455,65 @@ func TestWorkspaceContext_DevicesIPCGpus(t *testing.T) {
 	}
 	if empty.IPC() != "" || empty.Gpus() != "" {
 		t.Errorf("IPC/Gpus should be empty when unset")
+	}
+}
+
+// TestEffectivePluginVersions_OverlaysLock pins that a cocoon.lock entry
+// overlays the workspace constraint: the resolved version + checksum bake into
+// the override even when the workspace asked for "latest".
+func TestEffectivePluginVersions_OverlaysLock(t *testing.T) {
+	t.Parallel()
+	c := &generate.WorkspaceContext{ //nolint:exhaustruct // partial fixture
+		WS: &config.Workspace{Plugins: config.PluginsSpec{ //nolint:exhaustruct // partial fixture
+			Enable:   []string{"go"},
+			Versions: map[string]config.PluginVersionOverride{"go": {Spec: "latest"}}, //nolint:exhaustruct // latest
+		}},
+		Lock: &lockfile.Lock{Plugins: []lockfile.LockPlugin{ //nolint:exhaustruct // partial fixture
+			{ID: "go", Requested: "latest", Version: "1.23.4", ChecksumAMD64: "a1b2"}, //nolint:exhaustruct // no arm/extra
+		}},
+	}
+	eff := c.EffectivePluginVersions()
+	if eff["go"].Pin != "1.23.4" {
+		t.Errorf("Pin = %q, want 1.23.4 (lock overlay)", eff["go"].Pin)
+	}
+	if eff["go"].ChecksumAmd64 == nil || *eff["go"].ChecksumAmd64 != "a1b2" {
+		t.Errorf("ChecksumAmd64 = %v, want a1b2", eff["go"].ChecksumAmd64)
+	}
+}
+
+// TestEffectivePluginVersions_NoLockEqualsBase pins that without a lock the
+// effective overrides equal the workspace overrides unchanged.
+func TestEffectivePluginVersions_NoLockEqualsBase(t *testing.T) {
+	t.Parallel()
+	c := &generate.WorkspaceContext{ //nolint:exhaustruct // partial fixture
+		WS: &config.Workspace{Plugins: config.PluginsSpec{ //nolint:exhaustruct // partial fixture
+			Versions: map[string]config.PluginVersionOverride{"go": {Spec: "=1.22.0", Pin: "1.22.0"}}, //nolint:exhaustruct // no checksum
+		}},
+	}
+	if c.EffectivePluginVersions()["go"].Pin != "1.22.0" {
+		t.Errorf("no-lock effective overrides should equal the base override")
+	}
+}
+
+// TestUnlockedLatestPlugins pins the gen reproducibility gate: only enabled
+// version_capable plugins on "latest" with no lock entry are reported. Exact
+// pins and non-version_capable plugins are excluded; a locked latest is too.
+func TestUnlockedLatestPlugins(t *testing.T) {
+	t.Parallel()
+	vc := &plugin.Plugin{Version: plugin.Version{VersionCapable: true}}     //nolint:exhaustruct // partial fixture
+	nonVC := &plugin.Plugin{Version: plugin.Version{VersionCapable: false}} //nolint:exhaustruct // partial fixture
+	c := &generate.WorkspaceContext{                                        //nolint:exhaustruct // partial fixture
+		WS: &config.Workspace{Plugins: config.PluginsSpec{ //nolint:exhaustruct // partial fixture
+			Enable:   []string{"go", "node", "exact", "novc"},
+			Versions: map[string]config.PluginVersionOverride{"exact": {Spec: "=1.0.0", Pin: "1.0.0"}}, //nolint:exhaustruct // no checksum
+		}},
+		Plugins: map[string]*plugin.Plugin{"go": vc, "node": vc, "exact": vc, "novc": nonVC},
+		Lock: &lockfile.Lock{Plugins: []lockfile.LockPlugin{ //nolint:exhaustruct // partial fixture
+			{ID: "go", Requested: "latest", Version: "1.23.4"}, //nolint:exhaustruct // no checksum
+		}},
+	}
+	got := c.UnlockedLatestPlugins()
+	if len(got) != 1 || got[0] != "node" {
+		t.Errorf("UnlockedLatestPlugins = %v, want [node]", got)
 	}
 }

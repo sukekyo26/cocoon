@@ -90,7 +90,7 @@ cocoon init --yes \
 
 ## `cocoon gen`
 
-Read `workspace.toml`, resolve the layered plugin catalog (project ∪ user ∪ embedded), and write `.devcontainer/`. Plugin install scripts are inlined directly into the generated Dockerfile, so the build needs no external context beyond the project tree.
+Read `workspace.toml`, resolve the layered plugin catalog (project ∪ user ∪ embedded), and write `.devcontainer/`. Plugin install scripts are inlined directly into the generated Dockerfile, so the build needs no external context beyond the project tree. Generation is fully offline: when a [`cocoon.lock`](#cocoon-lock) is present, each locked plugin's resolved version and per-arch checksums are baked into the Dockerfile (`PIN` / `CHECKSUM_*`) so the build is reproducible.
 
 ### Flags
 
@@ -98,6 +98,7 @@ Read `workspace.toml`, resolve the layered plugin catalog (project ∪ user ∪ 
 |---|---|---|
 | `--workspace <path>` | string | Path to `workspace.toml` (default: discovered from cwd). |
 | `--output <dir>` | string | Project root to write artifacts under (default: directory of `workspace.toml`). |
+| `--locked` | bool | Fail if any enabled plugin uses `"latest"` without a `cocoon.lock` entry (reproducible CI). Without it, such plugins warn and fall back to resolving the latest version at build time. |
 
 ### Examples
 

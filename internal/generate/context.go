@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/sukekyo26/cocoon/internal/config"
+	"github.com/sukekyo26/cocoon/internal/lockfile"
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
 
@@ -34,6 +35,10 @@ type WorkspaceContext struct {
 	// Plugins is iterated in WS.Plugins.Enable order so generators emit
 	// deterministic output.
 	Plugins map[string]*plugin.Plugin
+	// Lock is the parsed cocoon.lock, or nil when no lock file is present.
+	// EffectivePluginVersions overlays it so a locked plugin bakes its
+	// resolved version + checksums into the Dockerfile.
+	Lock *lockfile.Lock
 	// Warnings receives non-fatal messages (e.g. TZ override). Nil drops them.
 	Warnings io.Writer
 }
@@ -544,6 +549,70 @@ func (c *WorkspaceContext) PluginVersionOverrides() map[string]config.PluginVers
 		return map[string]config.PluginVersionOverride{}
 	}
 	return c.WS.Plugins.Versions
+}
+
+// EffectivePluginVersions returns the version overrides that drive the
+// generated Dockerfile's PIN / CHECKSUM_* env, with any cocoon.lock entry
+// overlaid on the workspace constraint: a locked plugin contributes its
+// resolved version and per-arch checksums, so even a "latest" constraint
+// bakes a concrete, verified version. Without a lock this equals
+// PluginVersionOverrides. Never returns nil.
+func (c *WorkspaceContext) EffectivePluginVersions() map[string]config.PluginVersionOverride {
+	base := c.PluginVersionOverrides()
+	if c.Lock == nil {
+		return base
+	}
+	out := make(map[string]config.PluginVersionOverride, len(base)+len(c.Lock.Plugins))
+	for id, ov := range base {
+		out[id] = ov
+	}
+	for _, lp := range c.Lock.Plugins {
+		ov := out[lp.ID]
+		ov.Pin = lp.Version
+		ov.ChecksumAmd64 = nonEmptyPtr(lp.ChecksumAMD64)
+		ov.ChecksumArm64 = nonEmptyPtr(lp.ChecksumARM64)
+		if len(lp.Extra) > 0 {
+			ov.Extra = lp.Extra
+		}
+		out[lp.ID] = ov
+	}
+	return out
+}
+
+func nonEmptyPtr(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+// UnlockedLatestPlugins returns the enabled version_capable plugins whose
+// constraint is "latest" (or unpinned) but have no cocoon.lock entry, so the
+// build will resolve them non-reproducibly. `cocoon gen` warns on these;
+// `cocoon gen --locked` treats them as an error. Exact pins are reproducible
+// even without a lock and are never reported. Returned in enable order.
+func (c *WorkspaceContext) UnlockedLatestPlugins() []string {
+	if c.WS == nil {
+		return nil
+	}
+	var out []string
+	for _, id := range c.EnabledPlugins() {
+		p, ok := c.Plugins[id]
+		if !ok || !p.Version.VersionCapable {
+			continue
+		}
+		ov := c.WS.Plugins.Versions[id]
+		if ov.Spec != "" && !ov.IsLatest() {
+			continue // exact pin
+		}
+		if c.Lock != nil {
+			if e, found := c.Lock.Find(id); found && e.Version != "" {
+				continue // locked
+			}
+		}
+		out = append(out, id)
+	}
+	return out
 }
 
 // PluginMethods returns the user's [plugins.methods] map. Never nil

@@ -252,7 +252,7 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 	for _, k := range slices.Sorted(maps.Keys(customVols)) {
 		customVolPaths = append(customVolPaths, customVols[k])
 	}
-	overrides := ctx.PluginVersionOverrides()
+	overrides := ctx.EffectivePluginVersions()
 	enabled := ctx.EnabledPlugins()
 
 	pluginInstalls, err := generatePluginInstalls(

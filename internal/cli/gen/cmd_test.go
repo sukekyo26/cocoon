@@ -787,3 +787,56 @@ func TestGen_MissingWorkspaceReturnsUsage(t *testing.T) {
 		t.Errorf("expected ErrUsage, got %v", err)
 	}
 }
+
+const lockedTestWorkspaceTOML = `[workspace]
+mount_root = "."
+devcontainer = false
+
+[container]
+service_name = "demo"
+username = "alice"
+image = "ubuntu"
+image_version = "24.04"
+
+[plugins]
+enable = ["go"]
+`
+
+// TestGen_LockedFailsOnUnlockedLatest pins the --locked reproducibility gate:
+// an enabled version_capable plugin on "latest" with no cocoon.lock is a usage
+// error under --locked, and a warning (but success) without it.
+func TestGen_LockedFailsOnUnlockedLatest(t *testing.T) {
+	work := t.TempDir()
+	home := filepath.Join(work, "home")
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		t.Fatalf("mkdir home: %v", err)
+	}
+	t.Setenv("HOME", home)
+	pinEnglish(t)
+	t.Chdir(work)
+	if err := os.WriteFile(filepath.Join(work, "workspace.toml"), []byte(lockedTestWorkspaceTOML), 0o600); err != nil {
+		t.Fatalf("write workspace.toml: %v", err)
+	}
+
+	// --locked: go is on "latest" with no cocoon.lock → usage error naming it.
+	var stdout, stderr bytes.Buffer
+	cmd := gencli.NewCommand(&stdout, &stderr)
+	cmd.SetArgs([]string{"--locked"})
+	if err := cmd.Execute(); !errors.Is(err, clihelpers.ErrUsage) {
+		t.Fatalf("gen --locked err = %v, want ErrUsage", err)
+	} else if !strings.Contains(err.Error(), "go") {
+		t.Errorf("err should name the unlocked plugin: %v", err)
+	}
+
+	// Default gen: warns but succeeds.
+	stdout.Reset()
+	stderr.Reset()
+	cmd = gencli.NewCommand(&stdout, &stderr)
+	cmd.SetArgs(nil)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("gen (default) should succeed: %v\nstderr: %s", err, stderr.String())
+	}
+	if !strings.Contains(stdout.String()+stderr.String(), "without a cocoon.lock entry") {
+		t.Errorf("gen should warn about unlocked latest;\nstdout:\n%s\nstderr:\n%s", stdout.String(), stderr.String())
+	}
+}

@@ -183,6 +183,7 @@ After generation, start the container yourself:
 …or open the project in VS Code and pick "Reopen in Container".`,
 	"flag_gen_workspace_usage": "path to workspace.toml (default: discovered from cwd)",
 	"flag_gen_output_usage":    "project root to write generated artifacts under (default: directory of workspace.toml)",
+	"flag_gen_locked_usage":    `fail if any plugin uses "latest" without a cocoon.lock entry (reproducible CI)`,
 
 	// cocoon lock
 	"cmd_lock_short": "Resolve plugin versions and write cocoon.lock for reproducible builds",
@@ -439,6 +440,7 @@ CI など非対話実行では --yes に加えて --service-name / --username
 …または VS Code でプロジェクトを開き「Reopen in Container」を選びます。`,
 	"flag_gen_workspace_usage": "workspace.toml のパス（既定: cwd から探索）",
 	"flag_gen_output_usage":    "生成物の出力先プロジェクトルート（既定: workspace.toml のあるディレクトリ）",
+	"flag_gen_locked_usage":    `cocoon.lock のエントリ無しで "latest" を使うプラグインがあれば失敗（再現性 CI 用）`,
 
 	// cocoon lock
 	"cmd_lock_short": "プラグインのバージョンを解決し cocoon.lock を書き出して再現性を確保",
