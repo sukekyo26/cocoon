@@ -21,3 +21,17 @@ PATH = "/usr/local/go/bin:$GOPATH/bin:$PATH"
 
 [version]
 version_capable = true
+
+[version.source.latest]
+type = "text"
+url = "https://go.dev/VERSION?m=text"
+strip_prefix = "go"
+
+[version.source.checksum]
+type = "sidecar"
+asset_url = "https://dl.google.com/go/go${version}.linux-${arch}.tar.gz"
+suffix = ".sha256"
+
+[version.source.arch]
+amd64 = "amd64"
+arm64 = "arm64"

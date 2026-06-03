@@ -13,6 +13,7 @@ Available Commands:
   gen         Generate .devcontainer/ artifacts from workspace.toml
   help        Help about any command
   init        Create workspace.toml in the current directory
+  lock        Resolve plugin versions and write cocoon.lock for reproducible builds
   plugin      Inspect and author cocoon plugins (list / show / pin / scaffold)
   self-update Replace this binary with the latest released version
   version     Print the cocoon binary version

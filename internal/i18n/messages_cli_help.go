@@ -184,6 +184,22 @@ After generation, start the container yourself:
 	"flag_gen_workspace_usage": "path to workspace.toml (default: discovered from cwd)",
 	"flag_gen_output_usage":    "project root to write generated artifacts under (default: directory of workspace.toml)",
 
+	// cocoon lock
+	"cmd_lock_short": "Resolve plugin versions and write cocoon.lock for reproducible builds",
+	"cmd_lock_long": `cocoon lock — resolve each enabled version_capable plugin's constraint to a
+concrete version (and per-arch SHA256 checksums) over the network, and write
+cocoon.lock at the workspace root. ` + "`cocoon gen`" + ` then consumes the lock
+offline so the generated .devcontainer/ is reproducible.
+
+A "latest" constraint is frozen to the newest release; an "=x.y.z" pin keeps
+its version and gains recorded checksums. Plugins with no [version.source]
+(e.g. aws-cli) must be pinned to an exact version. Re-running is idempotent:
+already-locked entries are reused without a network call unless --upgrade is
+passed.`,
+	"flag_lock_workspace_usage": "path to workspace.toml (default: discovered from cwd)",
+	"flag_lock_check_usage":     "verify cocoon.lock matches workspace.toml without resolving (non-zero exit on drift; for CI)",
+	"flag_lock_upgrade_usage":   `re-resolve "latest" constraints even if already locked (exact pins are unchanged)`,
+
 	// cocoon gen workspace
 	"cmd_gen_workspace_short": "Generate <name>.code-workspace at the project root from workspace.toml",
 	"cmd_gen_workspace_long": `cocoon gen workspace — generate a VS Code .code-workspace file
@@ -423,6 +439,21 @@ CI など非対話実行では --yes に加えて --service-name / --username
 …または VS Code でプロジェクトを開き「Reopen in Container」を選びます。`,
 	"flag_gen_workspace_usage": "workspace.toml のパス（既定: cwd から探索）",
 	"flag_gen_output_usage":    "生成物の出力先プロジェクトルート（既定: workspace.toml のあるディレクトリ）",
+
+	// cocoon lock
+	"cmd_lock_short": "プラグインのバージョンを解決し cocoon.lock を書き出して再現性を確保",
+	"cmd_lock_long": `cocoon lock — 有効な version_capable プラグインの制約を、ネットワーク越しに
+具体バージョン（と arch ごとの SHA256 checksum）へ解決し、workspace ルートに
+cocoon.lock を書き出します。` + "`cocoon gen`" + ` はこの lock をオフラインで消費し、
+生成される .devcontainer/ を再現可能にします。
+
+"latest" 制約は最新リリースへ凍結され、"=x.y.z" pin はバージョンを保ったまま
+checksum を記録します。[version.source] を持たないプラグイン（例: aws-cli）は
+exact バージョンへの pin が必要です。再実行はべき等で、既にロック済みのエントリは
+--upgrade を付けない限りネットワークアクセスなしで再利用されます。`,
+	"flag_lock_workspace_usage": "workspace.toml のパス（既定: cwd から探索）",
+	"flag_lock_check_usage":     "解決せずに cocoon.lock が workspace.toml と一致するか検証（ドリフト時は非ゼロ終了・CI 用）",
+	"flag_lock_upgrade_usage":   `既にロック済みでも "latest" 制約を再解決（exact pin は不変）`,
 
 	// cocoon gen workspace
 	"cmd_gen_workspace_short": "workspace.toml から <name>.code-workspace をプロジェクトルートに生成",

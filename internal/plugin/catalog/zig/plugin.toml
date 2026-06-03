@@ -16,3 +16,15 @@ description = "Multi-file Zig toolchain tarball from ziglang.org index.json"
 
 [version]
 version_capable = true
+
+[version.source.latest]
+type = "json-field"
+url = "https://ziglang.org/download/index.json"
+field = "master.version"
+
+[version.source.checksum]
+type = "none"
+
+[version.source.arch]
+amd64 = "x86_64"
+arm64 = "aarch64"

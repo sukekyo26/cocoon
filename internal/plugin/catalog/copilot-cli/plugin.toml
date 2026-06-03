@@ -20,3 +20,17 @@ PATH = "/home/${USERNAME}/.local/bin:$PATH"
 
 [version]
 version_capable = true
+
+[version.source.latest]
+type = "github-release"
+repo = "github/copilot-cli"
+strip_prefix = "v"
+
+[version.source.checksum]
+type = "shasums-file"
+manifest_url = "https://github.com/github/copilot-cli/releases/download/v${version}/SHA256SUMS.txt"
+asset_name = "copilot-linux-${arch}.tar.gz"
+
+[version.source.arch]
+amd64 = "x64"
+arm64 = "arm64"

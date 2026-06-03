@@ -6,6 +6,17 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+### 追加
+
+- `cocoon lock` が、有効な `version_capable` プラグインのバージョン制約を
+  ネットワーク越しに具体バージョン（と arch ごとの SHA256 checksum）へ解決し、
+  workspace ルートに `cocoon.lock` を書き出します。これにより `cocoon gen` が
+  再現可能なワークスペースを生成します。`"latest"` 制約は最新リリースへ凍結され、
+  `"=x.y.z"` pin は checksum を記録します。`--check` は解決せずに lock が
+  `workspace.toml` と一致するか検証（CI 用）、`--upgrade` は `"latest"` 制約を
+  再解決します。上流が機械可読なバージョンを公開しないプラグイン（`aws-cli`,
+  `android-sdk`, `flutter`）は exact バージョンへの pin が必要です。
+
 ### 変更
 
 - **BREAKING**: `[plugins.versions]` のエントリは文字列のバージョン制約に

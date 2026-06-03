@@ -6,6 +6,18 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `cocoon lock` resolves each enabled `version_capable` plugin's version
+  constraint to a concrete version (and per-arch SHA256 checksums) over the
+  network and writes `cocoon.lock` at the workspace root, so `cocoon gen`
+  produces a reproducible workspace. A `"latest"` constraint is frozen to the
+  newest release; `"=x.y.z"` pins gain recorded checksums. `--check` verifies
+  the lock matches `workspace.toml` without resolving (for CI); `--upgrade`
+  re-resolves `"latest"` constraints. Plugins whose upstream exposes no
+  machine-readable version (`aws-cli`, `android-sdk`, `flutter`) must be pinned
+  to an exact version.
+
 ### Changed
 
 - **BREAKING**: `[plugins.versions]` entries are now string version

@@ -1,0 +1,19 @@
+cocoon lock — resolve each enabled version_capable plugin's constraint to a
+concrete version (and per-arch SHA256 checksums) over the network, and write
+cocoon.lock at the workspace root. `cocoon gen` then consumes the lock
+offline so the generated .devcontainer/ is reproducible.
+
+A "latest" constraint is frozen to the newest release; an "=x.y.z" pin keeps
+its version and gains recorded checksums. Plugins with no [version.source]
+(e.g. aws-cli) must be pinned to an exact version. Re-running is idempotent:
+already-locked entries are reused without a network call unless --upgrade is
+passed.
+
+Usage:
+  cocoon lock [flags]
+
+Flags:
+      --check              verify cocoon.lock matches workspace.toml without resolving (non-zero exit on drift; for CI)
+  -h, --help               help for lock
+      --upgrade            re-resolve "latest" constraints even if already locked (exact pins are unchanged)
+      --workspace string   path to workspace.toml (default: discovered from cwd)

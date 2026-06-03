@@ -13,3 +13,17 @@ description = "Single binary extracted from a GitHub Release tarball"
 
 [version]
 version_capable = true
+
+[version.source.latest]
+type = "github-release"
+repo = "golangci/golangci-lint"
+strip_prefix = "v"
+
+[version.source.checksum]
+type = "shasums-file"
+manifest_url = "https://github.com/golangci/golangci-lint/releases/download/v${version}/golangci-lint-${version}-checksums.txt"
+asset_name = "golangci-lint-${version}-linux-${arch}.tar.gz"
+
+[version.source.arch]
+amd64 = "amd64"
+arm64 = "arm64"
