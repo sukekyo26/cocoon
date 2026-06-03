@@ -152,6 +152,7 @@ TOML スキーマとパス解決ルールは [`configuration.ja.md` の `[code_w
 
 - `"latest"` 制約は最新リリースへ凍結される。`"=x.y.z"` の厳密 pin はバージョンを保ったまま arch ごとの checksum を記録する。
 - 再実行はべき等。`--upgrade` を渡さない限り、既に lock 済みのエントリは **ネットワークなし** で再利用される。`--upgrade` は `"latest"` 制約を現在の最新リリースへ再解決する。厳密 pin は変化しない。
+- lock ファイル名は既定で `cocoon.lock`。`workspace.toml` の [`[lockfile].name`](configuration.ja.md#lockfile) で別の basename にできる（`cocoon lock` / `cocoon gen` 両方が従う）。
 
 ### `cocoon.lock`
 

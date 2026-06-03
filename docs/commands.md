@@ -151,6 +151,7 @@ See [`[code_workspace]` in `configuration.md`](configuration.md#code_workspace) 
 Resolve every enabled `version_capable` plugin's `[plugins].enable` version pin to a concrete version (plus per-arch SHA256 checksums) over the network, and write `cocoon.lock` at the workspace root (next to `workspace.toml`). `cocoon gen` then consumes `cocoon.lock` offline so the generated `.devcontainer/` is reproducible — same plugin versions, same checksums, no network call at generation time.
 
 - A `"latest"` constraint is frozen to the newest release. An `"=x.y.z"` exact pin keeps its version and gains recorded per-arch checksums.
+- The lock file is named `cocoon.lock` by default; set [`[lockfile].name`](configuration.md#lockfile) in `workspace.toml` to use a different basename (both `cocoon lock` and `cocoon gen` honor it).
 - Re-running is idempotent: already-locked entries are reused with **no network call** unless `--upgrade` is passed. `--upgrade` re-resolves `"latest"` constraints to the current newest release; exact pins never change.
 
 ### `cocoon.lock`

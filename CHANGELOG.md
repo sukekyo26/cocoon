@@ -28,6 +28,10 @@ adheres to [Semantic Versioning](https://semver.org/).
   so those can still be built with SHA256 verification. `cocoon gen` rejects a
   manual checksum for any plugin whose checksum `cocoon lock` resolves
   automatically (the lock value would win) or for a `verify = "pgp"` plugin.
+- `[lockfile].name` in `workspace.toml` overrides the lock file's basename
+  (default `cocoon.lock`); both `cocoon lock` (write) and `cocoon gen` (read)
+  honor it. The name must be a single safe filename and is not part of the
+  lock's `inputs_hash`.
 
 ### Changed
 

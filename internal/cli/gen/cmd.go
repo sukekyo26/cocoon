@@ -113,7 +113,7 @@ func loadGenContext(stderr io.Writer, workspaceFlag, outputFlag string) (
 	// gen consumes cocoon.lock (when present) for reproducible PIN/CHECKSUM_*;
 	// a malformed lock is a hard failure here (unlike `cocoon lock`, which
 	// overwrites it).
-	lock, lockErr := lockfile.Load(filepath.Join(filepath.Dir(wsPath), lockfile.FileName))
+	lock, lockErr := lockfile.Load(lockfile.PathFor(wsPath, ctx.WS))
 	if lockErr != nil && !lockfile.IsNotExist(lockErr) {
 		return "", nil, fmt.Errorf("%w: %w", clihelpers.ErrFailure, lockErr)
 	}

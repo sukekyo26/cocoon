@@ -404,6 +404,26 @@ each flows into the Dockerfile RUN-prefix `KEY="..."` env pair. See the
 
 ---
 
+## `[lockfile]`
+
+Optional. Overrides the lock file's name. `cocoon lock` writes it and
+`cocoon gen` reads it, both alongside `workspace.toml`.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `name` | string | `cocoon.lock` | Lock file basename. Must be a single filename of `[A-Za-z0-9._-]` — no `/` (so the lock always lands next to `workspace.toml`), no `.` / `..`, and not `workspace.toml` (it would overwrite your config). |
+
+```toml
+[lockfile]
+name = "deps.lock"
+```
+
+Omit the section to keep the default `cocoon.lock`. The name is metadata only —
+it is not part of the lock's `inputs_hash`, so renaming it does not trip
+`cocoon lock --check` or `cocoon gen --locked`.
+
+---
+
 ## `[apt]`
 
 | Field | Type | Description |

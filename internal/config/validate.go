@@ -233,6 +233,30 @@ func (w *Workspace) runValidate(a *Accumulator) {
 	if w.CodeWorkspace != nil {
 		w.CodeWorkspace.validate(a.At("code_workspace"))
 	}
+	if w.Lockfile != nil {
+		w.Lockfile.validate(a.At("lockfile"))
+	}
+}
+
+// validate checks [lockfile].name is a single safe basename. An unset or empty
+// name defaults to DefaultLockFileName (matching [workspace].dir's "empty =
+// default" policy), so only a non-empty value is checked. The charset reuses
+// rxCodeWorkspaceName (no slash, so the lock always lands beside workspace.toml
+// and cannot traverse out); "." / ".." and "workspace.toml" are rejected
+// explicitly — the latter would overwrite the user's own config.
+func (l *LockFileSpec) validate(a *Accumulator) {
+	if l.Name == nil || *l.Name == "" {
+		return
+	}
+	name := *l.Name
+	switch {
+	case !rxCodeWorkspaceName.MatchString(name):
+		a.Add(`name must be a single filename of [A-Za-z0-9._-] (no "/", "." or "..")`, "name")
+	case name == "." || name == "..":
+		a.Add(`name must not be "." or ".."`, "name")
+	case name == "workspace.toml":
+		a.Add(`name must not be "workspace.toml" (it would overwrite your config)`, "name")
+	}
 }
 
 // validate checks [code_workspace] structurally. Path-level semantics — "~"

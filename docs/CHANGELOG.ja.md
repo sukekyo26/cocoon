@@ -27,6 +27,10 @@ cocoon の主要な変更を記録します。フォーマットは
   でも SHA256 検証付きで build できます。`cocoon gen` は、`cocoon lock` が
   checksum を自動解決できるプラグイン（lock 値が優先されるため）や
   `verify = "pgp"` プラグインへの手動 checksum を拒否します。
+- `workspace.toml` の `[lockfile].name` で lock ファイルの basename を変更
+  できるようになりました（既定 `cocoon.lock`）。`cocoon lock`（書き込み）と
+  `cocoon gen`（読み込み）の両方が従います。名前は単一の安全なファイル名で、
+  lock の `inputs_hash` には含まれません。
 
 ### 変更
 

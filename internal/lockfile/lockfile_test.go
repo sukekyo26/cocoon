@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/sukekyo26/cocoon/internal/config"
 	"github.com/sukekyo26/cocoon/internal/lockfile"
 )
 
@@ -141,4 +142,19 @@ func TestFind_NilSafe(t *testing.T) {
 	var l *lockfile.Lock
 	_, ok := l.Find("go")
 	require.False(t, ok)
+}
+
+// TestPathFor pins the lock path resolution: with no [lockfile] section the
+// basename defaults to FileName; with a configured name it wins. Both join to
+// the workspace.toml directory.
+func TestPathFor(t *testing.T) {
+	t.Parallel()
+	wsPath := filepath.Join("proj", "workspace.toml")
+	require.Equal(t,
+		filepath.Join("proj", lockfile.FileName),
+		lockfile.PathFor(wsPath, &config.Workspace{}))
+	name := "custom.lock"
+	require.Equal(t,
+		filepath.Join("proj", "custom.lock"),
+		lockfile.PathFor(wsPath, &config.Workspace{Lockfile: &config.LockFileSpec{Name: &name}}))
 }

@@ -107,14 +107,22 @@ version_capable = true
 // seedProject writes an isolated HOME, a workspace.toml enabling the named
 // plugins, and a project-overlay plugin per (id → plugin.toml) entry. It
 // chdirs into the project so config.Discover finds the workspace. Returns the
-// cocoon.lock path.
+// default cocoon.lock path.
 func seedProject(t *testing.T, enable string, plugins map[string]string) string {
+	t.Helper()
+	return filepath.Join(seedProjectExtra(t, enable, "", plugins), lockfile.FileName)
+}
+
+// seedProjectExtra is seedProject with an extra block of top-level TOML
+// appended after [plugins] (e.g. a [lockfile] section). It returns the project
+// directory so callers can assert on arbitrary output paths.
+func seedProjectExtra(t *testing.T, enable, extraTOML string, plugins map[string]string) string {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	proj := t.TempDir()
 	ws := "[container]\nservice_name = \"dev\"\nusername = \"dev\"\nimage = \"ubuntu\"\nimage_version = \"24.04\"\n\n" +
-		"[plugins]\nenable = [" + enable + "]\n"
+		"[plugins]\nenable = [" + enable + "]\n" + extraTOML
 	require.NoError(t, os.WriteFile(filepath.Join(proj, "workspace.toml"), []byte(ws), 0o600))
 	for id, toml := range plugins {
 		dir := filepath.Join(proj, ".cocoon", "plugins", id)
@@ -123,7 +131,27 @@ func seedProject(t *testing.T, enable string, plugins map[string]string) string 
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "install.binary.sh"), []byte("#!/usr/bin/env bash\necho "+id+"\n"), 0o600))
 	}
 	t.Chdir(proj)
-	return filepath.Join(proj, lockfile.FileName)
+	return proj
+}
+
+// TestLock_RespectsCustomLockFileName pins that `cocoon lock` writes the
+// configured [lockfile].name (and not the default cocoon.lock).
+//
+//nolint:paralleltest // mutates defaultFetcher global + cwd/HOME.
+func TestLock_RespectsCustomLockFileName(t *testing.T) {
+	proj := seedProjectExtra(t, `"demo"`, "\n[lockfile]\nname = \"custom.lock\"\n",
+		map[string]string{"demo": demoPluginTOML})
+	swapFetcher(t, demoFetcher())
+
+	_, err := runLockCmd(t)
+	require.NoError(t, err)
+
+	l, err := lockfile.Load(filepath.Join(proj, "custom.lock"))
+	require.NoError(t, err, "custom.lock should be written and valid")
+	_, ok := l.Find("demo")
+	require.True(t, ok)
+	_, defErr := os.Stat(filepath.Join(proj, "cocoon.lock"))
+	require.True(t, os.IsNotExist(defErr), "default cocoon.lock must not be written")
 }
 
 func runLockCmd(t *testing.T, args ...string) (string, error) {

@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -24,9 +25,11 @@ import (
 )
 
 const (
-	// FileName is the lock file's basename, written at the workspace root
-	// alongside workspace.toml.
-	FileName = "cocoon.lock"
+	// FileName is the default lock file basename, written at the workspace
+	// root alongside workspace.toml when [lockfile].name is unset. It aliases
+	// config.DefaultLockFileName (the schema accessor's source of truth) so
+	// the two never drift.
+	FileName = config.DefaultLockFileName
 	// Version is the current lock-format version. A lock with a newer
 	// Version is rejected so an older cocoon does not silently misread it.
 	Version = 1
@@ -168,4 +171,13 @@ func ComputeInputsHash(requestedByID map[string]string) string {
 // IsNotExist reports whether err is the "no lock file" condition.
 func IsNotExist(err error) bool {
 	return errors.Is(err, fs.ErrNotExist)
+}
+
+// PathFor returns the lock file path for ws: the configured (or default)
+// basename joined to wsPath's directory. Both `cocoon lock` and `cocoon gen`
+// call it so the write and read paths resolve identically. ws must be the
+// parsed workspace (callers always have one by this point); NameOrDefault is
+// nil-safe on a missing [lockfile] section.
+func PathFor(wsPath string, ws *config.Workspace) string {
+	return filepath.Join(filepath.Dir(wsPath), ws.Lockfile.NameOrDefault())
 }

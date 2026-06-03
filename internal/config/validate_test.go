@@ -1256,6 +1256,49 @@ func TestValidate_PluginsMethodsEmptyValueRejected(t *testing.T) {
 	require.Contains(t, err.Error(), "method name does not match")
 }
 
+// TestLockFileSpec_NameOrDefault pins the nil-safe accessor: a nil receiver,
+// a nil Name, and an empty string all fall back to DefaultLockFileName; a set
+// value is returned verbatim.
+func TestLockFileSpec_NameOrDefault(t *testing.T) {
+	t.Parallel()
+	var nilSpec *config.LockFileSpec
+	require.Equal(t, config.DefaultLockFileName, nilSpec.NameOrDefault())
+	empty := ""
+	require.Equal(t, config.DefaultLockFileName, (&config.LockFileSpec{Name: &empty}).NameOrDefault())
+	custom := "my.lock"
+	require.Equal(t, "my.lock", (&config.LockFileSpec{Name: &custom}).NameOrDefault())
+}
+
+// TestValidate_LockFileName pins the [lockfile].name guard by category: a
+// plain basename is accepted; a slash, "." / "..", or "workspace.toml" are
+// rejected (the last would overwrite the user's own config).
+func TestValidate_LockFileName(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name, value string
+		wantErr     bool
+	}{
+		{"plain", "custom.lock", false},
+		{"slash", "sub/custom.lock", true},
+		{"dot", ".", true},
+		{"dotdot", "..", true},
+		{"workspace_collision", "workspace.toml", true},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			body := minimalWorkspace() + "\n[lockfile]\nname = \"" + tc.value + "\"\n"
+			err := loadWS(t, body)
+			if tc.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
+
 func TestValidate_PortsOutOfRange(t *testing.T) {
 	t.Parallel()
 	body := minimalWorkspace() +

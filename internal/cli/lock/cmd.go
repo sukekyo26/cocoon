@@ -73,7 +73,7 @@ func runLock(ctx context.Context, stdout, stderr io.Writer, opts lockOptions) er
 		return err
 	}
 	requested := requestedSpecs(wctx)
-	lockPath := filepath.Join(filepath.Dir(wsPath), lockfile.FileName)
+	lockPath := lockfile.PathFor(wsPath, wctx.WS)
 	existing, err := loadExistingLock(lockPath)
 	if err != nil {
 		return err

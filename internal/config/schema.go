@@ -21,9 +21,34 @@ type Workspace struct {
 	Services      map[string]SidecarService `toml:"services,omitempty"`
 	Devcontainer  Devcontainer              `toml:"devcontainer,omitempty"`
 	CodeWorkspace *CodeWorkspaceSpec        `toml:"code_workspace,omitempty"`
+	Lockfile      *LockFileSpec             `toml:"lockfile,omitempty"`
 }
 
 func (w *Workspace) HasDevcontainer() bool { return len(w.Devcontainer) > 0 }
+
+// DefaultLockFileName is the lock file's basename when [lockfile].name is
+// unset. It lives here (not in internal/lockfile) so the schema accessor can
+// reference it without the import cycle that internal/lockfile → config
+// already establishes.
+const DefaultLockFileName = "cocoon.lock"
+
+// LockFileSpec models the optional [lockfile] section. It currently carries
+// only the lock file's basename; the section exists so lock-related knobs can
+// be added later without a second top-level table.
+type LockFileSpec struct {
+	// Name overrides the lock file's basename (written next to workspace.toml).
+	// Pointer distinguishes "field omitted" (default DefaultLockFileName) from
+	// an explicit value.
+	Name *string `toml:"name,omitempty"`
+}
+
+// NameOrDefault is safe on a nil receiver and defaults to DefaultLockFileName.
+func (l *LockFileSpec) NameOrDefault() string {
+	if l == nil || l.Name == nil || *l.Name == "" {
+		return DefaultLockFileName
+	}
+	return *l.Name
+}
 
 // WorkspaceSpec models the optional [workspace] section. Defaults apply when
 // the section is missing or fields are zero.
