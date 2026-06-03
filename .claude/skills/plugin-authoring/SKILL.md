@@ -88,8 +88,8 @@ cocoon plugin scaffold my-tool \
 が「最新バージョンの発見」と「arch ごとの checksum の取得」をネットワーク越しに
 行えるようになる（解決結果は workspace ルートの `cocoon.lock` に記録され、`cocoon gen`
 はそれをオフラインで消費する）。`[version.source]` を **書かない** プラグインは
-**exact-only** — `cocoon lock` で `"latest"` を解決できず、`[plugins.versions]` で
-厳密バージョンに pin する必要がある。
+**exact-only** — `cocoon lock` で `"latest"` を解決できず、`[plugins].enable` 配列に
+インライン（例: `"aws-cli=2.34.48"`）で厳密バージョンを pin する必要がある。
 
 `[version.source.latest]`（最新の探し方）と `[version.source.checksum]`（hash の取り方）の
 2 ブロックで構成し、URL / asset 名に `${arch}` を使うときだけ `[version.source.arch]`
@@ -190,8 +190,8 @@ type = "none"
 
 exact-only（`[version.source]` を持てない上流）の参考: `aws-cli`（バージョン無し
 ダウンロード alias）/ `android-sdk`（HTML スクレイプのビルド番号）/ `flutter`
-（コミットハッシュをキーとするリリース）。これらは `[plugins.versions]` で必ず
-厳密 pin する。
+（コミットハッシュをキーとするリリース）。これらは `[plugins].enable` 配列に
+インライン（例: `"aws-cli=2.34.48"`）で必ず厳密 pin する。
 
 ## ステップ 3: 既存プラグインを参考にする
 
