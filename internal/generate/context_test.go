@@ -14,6 +14,19 @@ import (
 
 func ptr[T any](v T) *T { return &v }
 
+// TestPluginVersionOverrides_NeverNil pins the documented "never returns nil"
+// contract on the nil-WS path and the nil-Versions-map path (a Workspace built
+// without config.LoadWorkspace leaves Plugins.Versions nil).
+func TestPluginVersionOverrides_NeverNil(t *testing.T) {
+	t.Parallel()
+	if got := (&generate.WorkspaceContext{}).PluginVersionOverrides(); got == nil {
+		t.Error("nil WS: PluginVersionOverrides returned nil, want non-nil")
+	}
+	if got := (&generate.WorkspaceContext{WS: &config.Workspace{}}).PluginVersionOverrides(); got == nil {
+		t.Error("nil Versions map: PluginVersionOverrides returned nil, want non-nil")
+	}
+}
+
 func TestWorkspaceContext_NilSafe(t *testing.T) {
 	t.Parallel()
 	c := &generate.WorkspaceContext{}

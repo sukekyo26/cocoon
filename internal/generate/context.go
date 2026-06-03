@@ -543,9 +543,10 @@ func (c *WorkspaceContext) DockerfilePostPlugins() string {
 	return *c.WS.Dockerfile.PostPlugins
 }
 
-// PluginVersionOverrides never returns nil.
+// PluginVersionOverrides never returns nil (a Workspace built without
+// config.LoadWorkspace can leave Plugins.Versions nil, so guard it here too).
 func (c *WorkspaceContext) PluginVersionOverrides() map[string]config.PluginVersionOverride {
-	if c.WS == nil {
+	if c.WS == nil || c.WS.Plugins.Versions == nil {
 		return map[string]config.PluginVersionOverride{}
 	}
 	return c.WS.Plugins.Versions
