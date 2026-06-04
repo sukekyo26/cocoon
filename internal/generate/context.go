@@ -579,9 +579,12 @@ func (c *WorkspaceContext) EffectivePluginVersions() map[string]config.PluginVer
 		if v := lp.ChecksumARM64; v != "" {
 			ov.ChecksumArm64 = &v
 		}
-		if len(lp.Extra) > 0 {
-			ov.Extra = lp.Extra
-		}
+		// Extra is overlaid unconditionally: unlike checksums (which a none-type
+		// source legitimately cannot record), the lock always captures the
+		// workspace's [plugins.options] knobs verbatim, so the lock is
+		// authoritative. An empty lock entry means there were none at lock time;
+		// a stale workspace change is caught by `cocoon lock --check`.
+		ov.Extra = lp.Extra
 		out[lp.ID] = ov
 	}
 	return out

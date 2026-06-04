@@ -519,6 +519,45 @@ func TestEffectivePluginVersions_LockEmptyChecksumKeepsManual(t *testing.T) {
 	}
 }
 
+// TestEffectivePluginVersions_LockExtraIsAuthoritative pins that the lock entry
+// is authoritative for Extra: it overlays unconditionally, so a stale workspace
+// [plugins.options] knob does not leak through when the lock recorded none (and
+// the lock's own Extra wins when it has them).
+func TestEffectivePluginVersions_LockExtraIsAuthoritative(t *testing.T) {
+	t.Parallel()
+	// Lock recorded no Extra → the workspace knob must NOT leak through.
+	empty := &generate.WorkspaceContext{ //nolint:exhaustruct // partial fixture
+		WS: &config.Workspace{Plugins: config.PluginsSpec{ //nolint:exhaustruct // partial fixture
+			Enable: []string{"android-sdk"},
+			Versions: map[string]config.PluginVersionOverride{ //nolint:exhaustruct // no checksum
+				"android-sdk": {Spec: "=11076708", Pin: "11076708", Extra: map[string]string{"build_tools": "35.0.0"}},
+			},
+		}},
+		Lock: &lockfile.Lock{Plugins: []lockfile.LockPlugin{ //nolint:exhaustruct // partial fixture
+			{ID: "android-sdk", Requested: "=11076708", Version: "11076708"}, // no Extra recorded
+		}},
+	}
+	if got := empty.EffectivePluginVersions()["android-sdk"].Extra; len(got) != 0 {
+		t.Errorf("stale workspace Extra leaked past an empty lock entry: %v", got)
+	}
+
+	// Lock recorded Extra → those values win.
+	locked := &generate.WorkspaceContext{ //nolint:exhaustruct // partial fixture
+		WS: &config.Workspace{Plugins: config.PluginsSpec{ //nolint:exhaustruct // partial fixture
+			Enable: []string{"android-sdk"},
+			Versions: map[string]config.PluginVersionOverride{ //nolint:exhaustruct // no checksum
+				"android-sdk": {Spec: "=11076708", Pin: "11076708", Extra: map[string]string{"build_tools": "35.0.0"}},
+			},
+		}},
+		Lock: &lockfile.Lock{Plugins: []lockfile.LockPlugin{ //nolint:exhaustruct // partial fixture
+			{ID: "android-sdk", Requested: "=11076708", Version: "11076708", Extra: map[string]string{"build_tools": "34.0.0"}},
+		}},
+	}
+	if got := locked.EffectivePluginVersions()["android-sdk"].Extra["build_tools"]; got != "34.0.0" {
+		t.Errorf("lock Extra should win, got build_tools=%q", got)
+	}
+}
+
 // TestEffectivePluginVersions_NoLockEqualsBase pins that without a lock the
 // effective overrides equal the workspace overrides unchanged.
 func TestEffectivePluginVersions_NoLockEqualsBase(t *testing.T) {
