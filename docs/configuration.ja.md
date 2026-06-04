@@ -392,7 +392,9 @@ codex = { checksum_amd64 = "<64-hex>", checksum_arm64 = "<64-hex>" }
 
 `checksum_*` の値は 64 桁の小文字 16 進数。`cocoon lock` が checksum を解決
 **できる** プラグインに設定すると拒否されます（lock 値が黙って優先されるため）。
-`verify = "pgp"` プラグイン（スクリプト内で署名検証）への設定も拒否されます。
+`verify = "pgp"` プラグイン（スクリプト内で署名検証）や、install method が
+`installer` / `apt` のプラグイン（上流スクリプトや apt-get で導入し
+`$CHECKSUM_*` を消費しない）への設定も拒否されます。
 override 値はインラインバージョンと同じ文字制約に従います: `"`, `\`, `\n`,
 `\r`, `$`, backtick は不可（いずれも Dockerfile の RUN プレフィックス
 `KEY="..."` env ペアに展開されるため）。宣言方法は[プラグイン作成ガイド](plugins.ja.md)を参照。

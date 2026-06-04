@@ -6,6 +6,14 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+### 修正
+
+- `cocoon gen` が、checksum を消費できない install method のプラグイン
+  （`installer` / `apt` カテゴリ、例: `uv`）に対して、手動 `[plugins.options]`
+  checksum の設定を促す警告を出さなくなりました。これらの install ステップへ
+  空の `CHECKSUM_AMD64` / `CHECKSUM_ARM64` も出力しません。該当プラグインへの
+  手動 checksum 設定は明確なエラーで拒否されるようになりました。
+
 ## [0.14.0] - 2026-06-04
 
 ### 追加

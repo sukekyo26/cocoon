@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- `cocoon gen` no longer warns to set a manual `[plugins.options]` checksum for
+  plugins whose install method cannot consume one (`installer` and `apt`
+  categories, e.g. `uv`), and no longer emits an empty `CHECKSUM_AMD64` /
+  `CHECKSUM_ARM64` on their install step. Setting a manual checksum for such a
+  plugin is now rejected with a clear error.
+
 ## [0.14.0] - 2026-06-04
 
 ### Added

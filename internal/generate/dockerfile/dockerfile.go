@@ -256,7 +256,7 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 
 	// Gate the [plugins.options] manual checksum hatch on the pre-lock base
 	// overrides, where a present checksum is necessarily user-typed.
-	if err := validateManualChecksums(opts.Plugins, ctx.PluginVersionOverrides()); err != nil {
+	if err := validateManualChecksums(opts.Plugins, ctx.PluginVersionOverrides(), ctx.PluginMethods()); err != nil {
 		return "", err
 	}
 
