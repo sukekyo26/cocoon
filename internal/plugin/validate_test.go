@@ -429,6 +429,14 @@ func TestValidate_VersionSourceRejected(t *testing.T) {
 			src:            plugin.VersionSource{Latest: plugin.LatestSpec{Type: plugin.LatestText, URL: "https://x.test/${ARCH}/v"}, Checksum: plugin.ChecksumSpec{Type: plugin.ChecksumNone}},
 			wantContains:   "unknown placeholder ${ARCH}",
 		},
+		{
+			// asset_name is template-expanded too (matched against the SHASUMS
+			// manifest), so a typo there must fail at load, not at lock time.
+			name:           "unknown_placeholder_in_asset_name",
+			versionCapable: true,
+			src:            plugin.VersionSource{Latest: plugin.LatestSpec{Type: plugin.LatestText, URL: "https://x.test/v"}, Checksum: plugin.ChecksumSpec{Type: plugin.ChecksumShasumsFile, ManifestURL: "https://x.test/SHA", AssetName: "tool-${foo}-${arch}.tar.gz"}},
+			wantContains:   "asset_name has unknown placeholder ${foo}",
+		},
 	}
 	for _, tc := range cases {
 		tc := tc

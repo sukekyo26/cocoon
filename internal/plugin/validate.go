@@ -147,6 +147,10 @@ func (c *ChecksumSpec) validate(a *config.Accumulator, verify string) {
 		validateSourceURL(a, c.ManifestURL, "manifest_url")
 		if c.AssetName == "" {
 			a.Add(`asset_name is required for checksum.type = "shasums-file"`, "asset_name")
+		} else {
+			// asset_name is template-expanded by the resolver (matched against
+			// the SHASUMS manifest), so a typo'd placeholder must fail here too.
+			validateTemplatePlaceholders(a, c.AssetName, "asset_name")
 		}
 	case "":
 		a.Add("checksum.type must be set", "type")
@@ -159,6 +163,17 @@ func (c *ChecksumSpec) validate(a *config.Accumulator, verify string) {
 	}
 }
 
+// validateTemplatePlaceholders rejects any ${...} the resolver does not expand
+// (only ${version} / ${arch}) in a template-expanded field, so a typo fails at
+// plugin.toml load instead of with a confusing lock-time fetch / not-found.
+func validateTemplatePlaceholders(a *config.Accumulator, raw, field string) {
+	for _, ph := range rxTemplatePlaceholder.FindAllString(raw, -1) {
+		if ph != "${version}" && ph != "${arch}" {
+			a.Add(fmt.Sprintf("%s has unknown placeholder %s (only ${version} and ${arch} are expanded)", field, ph), field)
+		}
+	}
+}
+
 // validateSourceURL checks a source URL: every ${...} placeholder must be one
 // the resolver expands (${version} / ${arch}), and after stripping them the
 // https-only / no-whitespace contract must hold for the literal parts a
@@ -168,13 +183,7 @@ func validateSourceURL(a *config.Accumulator, raw, field string) {
 		a.Add(field+" must not be empty", field)
 		return
 	}
-	// The resolver only expands ${version} / ${arch}; reject any other
-	// placeholder so a typo fails here, not with a confusing lock-time fetch.
-	for _, ph := range rxTemplatePlaceholder.FindAllString(raw, -1) {
-		if ph != "${version}" && ph != "${arch}" {
-			a.Add(fmt.Sprintf("%s has unknown placeholder %s (only ${version} and ${arch} are expanded)", field, ph), field)
-		}
-	}
+	validateTemplatePlaceholders(a, raw, field)
 	stripped := rxTemplatePlaceholder.ReplaceAllString(raw, "x")
 	if !rxPluginURL.MatchString(stripped) {
 		a.Add(field+" must start with https:// and contain no whitespace", field)
