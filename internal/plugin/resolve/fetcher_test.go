@@ -47,4 +47,18 @@ func TestHTTPFetcher_Get(t *testing.T) {
 		_, err := resolve.HTTPFetcher{}.Get(context.Background(), srv.URL)
 		require.ErrorIs(t, err, resolve.ErrHTTPStatus)
 	})
+
+	t.Run("sends_user_agent", func(t *testing.T) {
+		t.Parallel()
+		var gotUA string
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			gotUA = r.Header.Get("User-Agent")
+			_, _ = w.Write([]byte("ok")) //nolint:errcheck // test mock server response
+		}))
+		t.Cleanup(srv.Close)
+		_, err := resolve.HTTPFetcher{}.Get(context.Background(), srv.URL)
+		require.NoError(t, err)
+		// GitHub rejects an empty User-Agent (403); assert cocoon identifies itself.
+		require.Contains(t, gotUA, "cocoon")
+	})
 }

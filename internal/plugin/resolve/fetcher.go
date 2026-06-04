@@ -28,6 +28,10 @@ const (
 	// maxBody bounds a response read so a hostile or misconfigured endpoint
 	// cannot exhaust memory; version indexes and checksum files are tiny.
 	maxBody = 8 << 20 // 8 MiB
+	// userAgent identifies cocoon to upstreams. GitHub's REST API rejects a
+	// request with no User-Agent (403), so relying on the implicit Go default
+	// is fragile; send a stable, identifying string on every request.
+	userAgent = "cocoon (+https://github.com/sukekyo26/cocoon)"
 )
 
 // Fetcher performs an HTTP GET and returns the 2xx response body. Tests
@@ -61,6 +65,7 @@ func (f HTTPFetcher) Get(ctx context.Context, url string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("build request %s: %w", url, err)
 	}
+	req.Header.Set("User-Agent", userAgent)
 	req.Header.Set("Accept", "application/vnd.github+json, */*")
 	if tok := os.Getenv("GITHUB_TOKEN"); tok != "" && strings.HasPrefix(url, "https://api.github.com/") {
 		req.Header.Set("Authorization", "Bearer "+tok)
