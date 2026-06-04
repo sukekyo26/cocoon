@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-06-04
+
 ### Added
 
 - `cocoon lock` resolves each enabled `version_capable` plugin's version
@@ -629,7 +631,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Add `COMPOSE_PROJECT_NAME` derivation from the project directory basename so docker compose namespacing matches the host directory.
 - Add i18n catalog (English / Japanese) covering every CLI prompt, error message, and inline `workspace.toml` comment, switched via `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG`.
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/sukekyo26/cocoon/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/sukekyo26/cocoon/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/sukekyo26/cocoon/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/sukekyo26/cocoon/compare/v0.10.2...v0.11.0
