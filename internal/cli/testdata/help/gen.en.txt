@@ -23,6 +23,7 @@ Available Commands:
 
 Flags:
   -h, --help               help for gen
+      --locked             fail if any plugin uses "latest" without a lock-file entry (reproducible CI)
       --output string      project root to write generated artifacts under (default: directory of workspace.toml)
       --workspace string   path to workspace.toml (default: discovered from cwd)
 

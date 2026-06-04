@@ -19,8 +19,8 @@ curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-erro
   "${base}/Meslo.tar.xz" -o /tmp/Meslo.tar.xz
 
 # Meslo.tar.xz is architecture-independent, so checksum_amd64 and
-# checksum_arm64 are the same hash. Verify against whichever the workspace
-# supplied rather than ignoring a checksum the user actually set.
+# checksum_arm64 are the same hash. Verify against whichever cocoon.lock
+# recorded rather than ignoring a checksum that was resolved.
 CHECKSUM="${CHECKSUM_AMD64:-$CHECKSUM_ARM64}"
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/Meslo.tar.xz" | sha256sum -c -

@@ -1,6 +1,6 @@
 module github.com/sukekyo26/cocoon
 
-go 1.26.3
+go 1.26.4
 
 require (
 	github.com/charmbracelet/bubbles v1.0.0

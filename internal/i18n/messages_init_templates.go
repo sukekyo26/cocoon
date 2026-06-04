@@ -74,7 +74,7 @@ var messagesEN_initTemplates = map[string]string{
 		"# gpus = \"all\"",
 
 	// [plugins.methods] (rendered immediately after [plugins], before
-	// [plugins.versions] because picking a method may change the upstream
+	// [plugins.options] because picking a method may change the upstream
 	// URL used to pick a version).
 	"init_toml_template_plugins_methods": "# [plugins.methods] — for plugins that declare multiple [install.methods],\n" +
 		"#   pick which install path to use. Plugins with a single declared method\n" +
@@ -82,12 +82,14 @@ var messagesEN_initTemplates = map[string]string{
 		"# [plugins.methods]\n" +
 		"# <plugin-id> = \"<method-name>\"",
 
-	// [plugins.versions] (rendered immediately after [plugins.methods]).
-	"init_toml_template_plugins_versions": "# [plugins.versions] — pin specific versions for version_capable plugins.\n" +
-		"#   For verify = \"checksum\" plugins, checksum_amd64 / checksum_arm64 (64 lowercase hex chars) verify downloads.\n" +
-		"# [plugins.versions]\n" +
-		"# go = { pin = \"1.22.5\" }\n" +
-		"# uv = { pin = \"0.5.7\", checksum_amd64 = \"<sha256>\" }",
+	// [plugins.options] (rendered immediately after [plugins.methods]).
+	"init_toml_template_plugins_options": "# [plugins.options] — extra per-plugin knobs for the enabled plugins above.\n" +
+		"#   Pin versions inline in the enable array (e.g. \"go=1.22.5\", \"starship=latest\");\n" +
+		"#   run `cocoon lock` to freeze \"latest\" and record checksums in cocoon.lock.\n" +
+		"#   Use this table only for [install.extra_versions] knobs (e.g. android-sdk's\n" +
+		"#   api_level / build_tools).\n" +
+		"# [plugins.options]\n" +
+		"# android-sdk = { api_level = \"35\", build_tools = \"35.0.0\" }",
 
 	// [apt.*] extras (rendered immediately after [apt]).
 	"init_toml_template_apt_mirror": "# [apt.mirror] — rewrite upstream apt URLs to a regional mirror.\n" +
@@ -250,19 +252,21 @@ var messagesJA_initTemplates = map[string]string{
 	"init_toml_template_container_gpus": "# gpus — GPU アクセスを要求。現状 \"all\" のみサポート。\n" +
 		"# gpus = \"all\"",
 
-	// [plugins.methods]（[plugins] の直後、[plugins.versions] の前に出力。
+	// [plugins.methods]（[plugins] の直後、[plugins.options] の前に出力。
 	// method の切替で上流 URL が変わる場合があるため、version より先に置く）。
 	"init_toml_template_plugins_methods": "# [plugins.methods] — 複数の [install.methods] を持つプラグインで、どの方式を使うか指定。\n" +
 		"#   方式を 1 つしか持たないプラグインはこのセクションを無視。\n" +
 		"# [plugins.methods]\n" +
 		"# <plugin-id> = \"<method-name>\"",
 
-	// [plugins.versions]
-	"init_toml_template_plugins_versions": "# [plugins.versions] — version_capable プラグインのバージョン固定。\n" +
-		"#   verify = \"checksum\" のプラグインは checksum_amd64 / checksum_arm64（64 文字の小文字 hex）でダウンロードを検証可。\n" +
-		"# [plugins.versions]\n" +
-		"# go = { pin = \"1.22.5\" }\n" +
-		"# uv = { pin = \"0.5.7\", checksum_amd64 = \"<sha256>\" }",
+	// [plugins.options]
+	"init_toml_template_plugins_options": "# [plugins.options] — 上で有効化したプラグインの追加設定。\n" +
+		"#   バージョンは enable 配列にインラインで指定（例 \"go=1.22.5\", \"starship=latest\"）。\n" +
+		"#   `cocoon lock` で \"latest\" を凍結し checksum を cocoon.lock に記録。\n" +
+		"#   このテーブルは [install.extra_versions] の項目（例 android-sdk の\n" +
+		"#   api_level / build_tools）専用。\n" +
+		"# [plugins.options]\n" +
+		"# android-sdk = { api_level = \"35\", build_tools = \"35.0.0\" }",
 
 	// [apt.*] extras
 	"init_toml_template_apt_mirror": "# [apt.mirror] — 上流 apt URL を地域ミラーに書き換え。\n" +

@@ -592,7 +592,7 @@ curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-erro
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  aws-sam-cli.zip" | sha256sum -c -
 else
-  printf '%sWARNING: SHA256 verification skipped for AWS SAM CLI (no checksum for aws-sam-cli in [plugins.versions])%s\n' "$C_YEL" "$C_RST" >&2
+  printf '%sWARNING: SHA256 verification skipped for AWS SAM CLI (no upstream checksum; set checksum_amd64/arm64 in [plugins.options].aws-sam-cli)%s\n' "$C_YEL" "$C_RST" >&2
 fi
 
 unzip aws-sam-cli.zip -d sam-installation

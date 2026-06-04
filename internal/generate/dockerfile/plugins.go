@@ -586,19 +586,14 @@ func validateVersionOverrides(
 		override := overrides[id]
 		p, ok := plugins[id]
 		if !ok {
-			return fmt.Errorf("%w: [plugins.versions] references '%s', but that plugin is not enabled in [plugins].enable",
+			return fmt.Errorf("%w: workspace.toml sets a version or [plugins.options] for '%s', but it is not an "+
+				"enabled plugin (add it to [plugins].enable, or remove the entry)",
 				ErrInvalidVersionOverride, id)
 		}
 		if !p.Version.VersionCapable {
-			return fmt.Errorf("%w: [plugins.versions.%s] is not allowed: plugin '%s' has"+
-				" version_capable = false (version pinning is unsupported by this plugin's install method)",
-				ErrInvalidVersionOverride, id, id)
-		}
-		if !p.Version.VerifiesByChecksum() && (override.ChecksumAmd64 != nil || override.ChecksumArm64 != nil) {
-			return fmt.Errorf("%w: [plugins.versions.%s] sets checksum_amd64/checksum_arm64, but plugin '%s'"+
-				" declares verify = %q and verifies downloads in-script (not against a per-workspace checksum);"+
-				" remove checksum_amd64/checksum_arm64 from [plugins.versions.%s]",
-				ErrInvalidVersionOverride, id, id, p.Version.Verify, id)
+			return fmt.Errorf("%w: '%s' has version_capable = false and cannot be pinned"+
+				" (drop the \"=<version>\" suffix from its [plugins].enable entry)",
+				ErrInvalidVersionOverride, id)
 		}
 		if err := checkExtraOverrideKeys(id, override, p.Install.ExtraVersions); err != nil {
 			return err
@@ -606,16 +601,53 @@ func validateVersionOverrides(
 		// The missing-checksum warning applies only to checksum-verified
 		// plugins; a pgp plugin pinned without a checksum is fully verified.
 		if override.Pin != "" && p.Version.VerifiesByChecksum() {
-			warnMissingChecksum(warnings, id, override)
+			warnMissingChecksum(warnings, id, override, p.Version.Source)
 		}
 	}
 	return nil
 }
 
-// checkExtraOverrideKeys rejects [plugins.versions].<id>.<key> entries
-// (beyond the reserved pin / checksum_* triple) that the plugin does not
-// declare under [install.extra_versions]. Keys are sorted so the error
-// message stays stable across runs.
+// validateManualChecksums gates the [plugins.options] manual checksum escape
+// hatch. It runs on the BASE (workspace-sourced) overrides — before the lock
+// overlay — so a present checksum is necessarily one the user typed by hand. A
+// manual checksum is only meaningful for a plugin whose upstream publishes
+// none (so `cocoon lock` cannot record one): for a pgp plugin the checksum
+// vocabulary does not apply, and for an auto-resolvable plugin `cocoon lock`
+// would silently override the hand-typed value, so both are rejected.
+func validateManualChecksums(plugins map[string]*plugin.Plugin, base map[string]config.PluginVersionOverride) error {
+	for _, id := range slices.Sorted(maps.Keys(base)) {
+		ov := base[id]
+		if ov.ChecksumAmd64 == nil && ov.ChecksumArm64 == nil {
+			continue
+		}
+		p, ok := plugins[id]
+		if !ok {
+			continue // not-enabled is reported by validateVersionOverrides
+		}
+		if !p.Version.VerifiesByChecksum() {
+			return fmt.Errorf("%w: [plugins.options.%s] sets a checksum, but '%s' declares verify = %q and"+
+				" verifies downloads in-script (not against a per-arch checksum); remove the checksum",
+				ErrInvalidVersionOverride, id, id, p.Version.Verify)
+		}
+		if autoResolvesChecksum(p.Version.Source) {
+			return fmt.Errorf("%w: [plugins.options.%s] sets a manual checksum, but `cocoon lock` resolves"+
+				" '%s's checksum automatically; remove it from [plugins.options] and run `cocoon lock`",
+				ErrInvalidVersionOverride, id, id)
+		}
+	}
+	return nil
+}
+
+// autoResolvesChecksum reports whether cocoon lock can fetch a per-arch
+// checksum for the plugin (a sidecar / shasums-file source). A nil source or a
+// "none" checksum kind means it cannot, so a manual checksum is permitted.
+func autoResolvesChecksum(src *plugin.VersionSource) bool {
+	return src != nil && src.Checksum.Type != "" && src.Checksum.Type != plugin.ChecksumNone
+}
+
+// checkExtraOverrideKeys rejects [plugins.options].<id>.<key> entries that
+// the plugin does not declare under [install.extra_versions]. Keys are sorted
+// so the error message stays stable across runs.
 func checkExtraOverrideKeys(
 	id string,
 	override config.PluginVersionOverride,
@@ -634,33 +666,41 @@ func checkExtraOverrideKeys(
 		return nil
 	}
 	sort.Strings(unknown)
-	return fmt.Errorf("%w: [plugins.versions.%s] sets %v; plugin '%s' does not declare these keys"+
+	return fmt.Errorf("%w: [plugins.options.%s] sets %v; plugin '%s' does not declare these keys"+
 		" under [install.extra_versions]; remove them or fix the typo",
 		ErrUnknownExtraVersion, id, unknown, id)
 }
 
-// warnMissingChecksum emits the "pin without checksum" advisory for a
-// checksum-verified plugin whose [plugins.versions] entry omits one or both
-// checksums. No-op when warnings is nil or both checksums are present.
-func warnMissingChecksum(warnings io.Writer, id string, override config.PluginVersionOverride) {
+// warnMissingChecksum emits the "pin without recorded checksum" advisory for a
+// checksum-verified plugin whose effective override carries no checksum. No-op
+// when warnings is nil or both checksums are present. The message depends on
+// whether the source can auto-resolve a checksum: an auto-resolvable plugin's
+// install step still verifies the download against the upstream-published
+// checksum (so running `cocoon lock` records it), whereas a plugin whose
+// upstream publishes none downloads WITHOUT verification until the user records
+// a manual checksum in [plugins.options].
+func warnMissingChecksum(
+	warnings io.Writer, id string, override config.PluginVersionOverride, src *plugin.VersionSource,
+) {
 	if warnings == nil {
 		return
 	}
-	var missing []string
-	if override.ChecksumAmd64 == nil {
-		missing = append(missing, "checksum_amd64")
+	if override.ChecksumAmd64 != nil && override.ChecksumArm64 != nil {
+		return
 	}
-	if override.ChecksumArm64 == nil {
-		missing = append(missing, "checksum_arm64")
-	}
-	if len(missing) == 0 {
+	if autoResolvesChecksum(src) {
+		fmt.Fprintf(warnings,
+			"WARNING: '%s' is pinned to %q without a recorded checksum; the install step still "+
+				"verifies the download against the upstream-published checksum. "+
+				"Run `cocoon lock` to record it for reproducible builds.\n",
+			id, override.Pin)
 		return
 	}
 	fmt.Fprintf(warnings,
-		"WARNING: [plugins.versions.%s] sets pin=\"%s\" without %s; "+
-			"the install step will skip SHA256 verification. "+
-			"Provide the checksum(s) in workspace.toml to enable integrity checking.\n",
-		id, override.Pin, strings.Join(missing, ", "))
+		"WARNING: '%s' is pinned to %q but its upstream publishes no checksum, so the install step "+
+			"downloads it WITHOUT verification. Set checksum_amd64/checksum_arm64 in "+
+			"[plugins.options].%s to verify.\n",
+		id, override.Pin, id)
 }
 
 // userDirsBlockTmpl omits the trailing `USER ${USERNAME}`: the caller

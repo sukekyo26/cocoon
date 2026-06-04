@@ -13,3 +13,16 @@ description = "Single cocoon binary downloaded from its GitHub Pages mirror"
 
 [version]
 version_capable = true
+
+[version.source.latest]
+type = "text"
+url = "https://sukekyo26.github.io/cocoon/VERSION"
+
+[version.source.checksum]
+type = "shasums-file"
+manifest_url = "https://sukekyo26.github.io/cocoon/v${version}/SHA256SUMS"
+asset_name = "cocoon-linux-${arch}"
+
+[version.source.arch]
+amd64 = "amd64"
+arm64 = "arm64"

@@ -13,3 +13,17 @@ description = "Single binary from the docker/buildx GitHub Release"
 
 [version]
 version_capable = true
+
+[version.source.latest]
+type = "github-release"
+repo = "docker/buildx"
+strip_prefix = "v"
+
+[version.source.checksum]
+type = "shasums-file"
+manifest_url = "https://github.com/docker/buildx/releases/download/v${version}/checksums.txt"
+asset_name = "buildx-v${version}.linux-${arch}"
+
+[version.source.arch]
+amd64 = "amd64"
+arm64 = "arm64"

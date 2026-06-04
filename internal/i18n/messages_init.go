@@ -110,11 +110,9 @@ var messagesEN_init = map[string]string{
 	"init_toml_comment_image_path_fix_volumes_removal": "# Removing a line below loses `%s` results on the next container recreation; to delete the volume itself, run e.g. `docker compose down -v` or `docker volume rm <name>`.",
 	"init_toml_comment_image_path_fix_volumes_extra":   "# Append extra named volumes under this same [volumes] block — do not open a second [volumes] section (TOML rejects duplicate tables).",
 	"init_toml_section_plugins": "# [plugins] — enable cocoon plugins (run `cocoon plugin list` for the catalog).\n" +
-		"#   Pin versions in [plugins.versions] when you need reproducible builds.",
+		"#   Pin a version inline in the enable array (e.g. \"go=1.23.4\", \"node=latest\") for reproducible builds; run `cocoon lock` to freeze latest.",
 	"init_toml_section_plugins_methods": "# [plugins.methods] — install method picked for plugins that declare multiple methods.\n" +
 		"#   Plugins with a single declared method ignore this section.",
-	"init_toml_section_plugins_versions": "# [plugins.versions] — pinned versions for the enabled plugins above.\n" +
-		"#   checksum_amd64 / checksum_arm64 (64 lowercase hex chars) verify downloads — verify = \"checksum\" plugins only.",
 	"init_toml_section_apt": "# [apt] — extra apt packages installed on top of cocoon's minimal base + selected categories.\n" +
 		"#   Re-run `cocoon init --force` to change category checkboxes, or edit this list directly.",
 	"init_toml_section_certificates": "# [certificates] — TLS certificate auto-bake from ~/.cocoon/certs/ on the host.\n" +
@@ -158,6 +156,7 @@ var messagesEN_init = map[string]string{
 	"gen_home_files_notice_item":            "    ~/%s",
 	"gen_home_files_in_container_warning":   "WARNING: cocoon gen is running inside a container (/.dockerenv detected); [home_files] entries will be touched in this container's HOME, not the Docker host's. Run `cocoon gen` on the host before `docker compose up`.",
 	"gen_home_files_is_directory":           "%s exists as a directory (likely auto-created by a previous `docker compose up` when the file was missing); remove it with `rm -rf %s` and re-run `cocoon gen`",
+	"gen_unlocked_latest_warning":           "WARNING: plugin %q uses \"latest\" without a %s entry; the build will resolve it non-reproducibly. Run `cocoon lock` to freeze it (or `cocoon gen --locked` to make this an error).",
 	"gen_docker_cli_without_socket_warning": "WARNING: the docker-cli plugin is enabled but [container].docker_socket is not enabled (unset or false); the in-container docker client has no daemon socket to reach, so `docker ...` will fail with \"cannot connect to the Docker daemon\". Add `docker_socket = true` under [container] in workspace.toml, or remove the docker-cli plugin. Ignore this if the container talks to a remote DOCKER_HOST.",
 	"gen_password_sudo_missing_secret":      "WARNING: password sudo is enabled but %s is missing or empty; `docker compose build` will fail until it contains a single line `SUDO_PASSWORD=<your-password>` (it is gitignored and read at build time via a Docker build secret).",
 	"gen_sudo_gitignore_ensured":            "ensured %s ignores the sudo password secret (.env.local)",
@@ -275,11 +274,9 @@ var messagesJA_init = map[string]string{
 	"init_toml_comment_image_path_fix_volumes_removal": "# 行を削除すると、コンテナ再生成時に `%s` の結果が失われる（named volume 自体を消すには `docker compose down -v` または `docker volume rm <name>` 等）。",
 	"init_toml_comment_image_path_fix_volumes_extra":   "# 追加の named volume はこの同じ [volumes] ブロックに追記する（2 つ目の [volumes] セクションを開かない。TOML が同一テーブルの二重定義を拒否するため）。",
 	"init_toml_section_plugins": "# [plugins] — cocoon プラグインの有効化（一覧は `cocoon plugin list`）。\n" +
-		"#   再現性が必要なら [plugins.versions] でバージョン固定。",
+		"#   再現性が必要なら enable 配列にバージョンをインライン指定（例 \"go=1.23.4\", \"node=latest\"）。`cocoon lock` で latest を凍結。",
 	"init_toml_section_plugins_methods": "# [plugins.methods] — 複数のインストール方式を提供するプラグインに対する選択。\n" +
 		"#   方式を 1 つしか持たないプラグインはこのセクションを無視。",
-	"init_toml_section_plugins_versions": "# [plugins.versions] — 上で有効化したプラグインに対するバージョン固定。\n" +
-		"#   verify = \"checksum\" のプラグインは checksum_amd64 / checksum_arm64（64 文字小文字 hex）でダウンロードを検証できる。",
 	"init_toml_section_certificates": "# [certificates] — ホスト側 ~/.cocoon/certs/ の TLS 証明書をコンテナイメージに自動取り込み (opt-in)。\n" +
 		"#   enable = true のときジェネレータが docker-compose の additional_contexts と Dockerfile の\n" +
 		"#   RUN --mount=type=bind を配線し、ホスト側 *.crt / *.cer が build 時にトラストストアへマージされる。\n" +
@@ -322,6 +319,7 @@ var messagesJA_init = map[string]string{
 	"gen_home_files_notice_item":            "    ~/%s",
 	"gen_home_files_in_container_warning":   "警告: cocoon gen がコンテナ内 (/.dockerenv を検出) で実行されています。[home_files] エントリは Docker ホストではなくこのコンテナの HOME に対して touch されます。`docker compose up` の前にホスト側で `cocoon gen` を実行してください。",
 	"gen_home_files_is_directory":           "%s がディレクトリとして存在します (以前の `docker compose up` がファイル不在時に自動作成した可能性)。`rm -rf %s` で削除してから `cocoon gen` を再実行してください",
+	"gen_unlocked_latest_warning":           "警告: プラグイン %q は %s のエントリ無しで \"latest\" を使っています。build 時に非再現的に解決されます。`cocoon lock` で凍結してください（`cocoon gen --locked` でエラー化できます）。",
 	"gen_docker_cli_without_socket_warning": "警告: docker-cli プラグインは有効ですが [container].docker_socket が有効化されていません (未設定または false)。コンテナ内の docker クライアントが接続できる daemon ソケットが無いため、`docker ...` は \"cannot connect to the Docker daemon\" で失敗します。workspace.toml の [container] に `docker_socket = true` を追加するか、docker-cli プラグインを外してください。リモートの DOCKER_HOST に接続する構成ならこの警告は無視して構いません。",
 	"gen_password_sudo_missing_secret":      "警告: password sudo が有効ですが %s が存在しないか空です。`SUDO_PASSWORD=<パスワード>` の 1 行を記述するまで `docker compose build` は失敗します (このファイルは gitignore 対象で、ビルド時に Docker build secret として読まれます)。",
 	"gen_sudo_gitignore_ensured":            "%s が sudo パスワードの secret (.env.local) を無視するようにしました",

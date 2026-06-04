@@ -14,3 +14,11 @@ description = "Single codex binary extracted from a GitHub Release tarball"
 
 [version]
 version_capable = true
+
+[version.source.latest]
+type = "github-release"
+repo = "openai/codex"
+strip_prefix = "rust-v"
+
+[version.source.checksum]
+type = "none"

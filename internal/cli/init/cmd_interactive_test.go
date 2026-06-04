@@ -114,11 +114,11 @@ var baseInteractiveArgs = []string{
 //
 //nolint:paralleltest // os.Stdin/os.Stdout/TERM and t.Chdir are process-global.
 func TestRunInit_InteractiveSelectOrInput(t *testing.T) {
-	// When `go` is unpinned (the user kept LATEST, or stdin EOF'd),
-	// writePluginVersions emits the commented [plugins.versions] template —
-	// which itself carries an example "# go = { pin = ... }" line. So the
-	// live-pin check looks for a pin line with no leading "#", i.e.
-	// "\ngo = { pin =", not the bare substring.
+	// The version is pinned inline in the enable array: an unpinned `go` (the
+	// user kept LATEST, or stdin EOF'd) is the bare element `"go"`, while a
+	// pinned one is `"go=<version>"`. Assertions anchor on the exact enable-
+	// array block (`enable = [\n    "go"...`) rather than the bare `"go="`
+	// substring, which also appears in the [plugins] help comment example.
 	cases := []struct {
 		name            string
 		script          string
@@ -134,9 +134,7 @@ func TestRunInit_InteractiveSelectOrInput(t *testing.T) {
 			wantContains: []string{
 				`image_version = "24.04"`,
 				"[plugins]\nenable = [\n    \"go\",\n]",
-				"pin specific versions for version_capable plugins",
 			},
-			wantNotContains: []string{"\ngo = { pin ="},
 			wantStdout: []string{
 				"Image version",
 				"go version",
@@ -152,9 +150,9 @@ func TestRunInit_InteractiveSelectOrInput(t *testing.T) {
 			script: "24.04-patched\n1.23.4\n",
 			wantContains: []string{
 				`image_version = "24.04-patched"`,
-				"[plugins.versions]\ngo = { pin = \"1.23.4\" }\n",
+				"[plugins]\nenable = [\n    \"go=1.23.4\",\n]",
 			},
-			wantNotContains: []string{"pin specific versions for version_capable plugins"},
+			wantNotContains: []string{"\n    \"go\",\n"},
 			wantStdout:      nil,
 		},
 		{
@@ -165,9 +163,9 @@ func TestRunInit_InteractiveSelectOrInput(t *testing.T) {
 			script: "bad/tag\n24.04\n1\n",
 			wantContains: []string{
 				`image_version = "24.04"`,
-				"pin specific versions for version_capable plugins",
+				"[plugins]\nenable = [\n    \"go\",\n]",
 			},
-			wantNotContains: []string{`image_version = "bad/tag"`, "\ngo = { pin ="},
+			wantNotContains: []string{`image_version = "bad/tag"`},
 			wantStdout:      []string{"must be a plain Docker tag"},
 		},
 		{
@@ -177,10 +175,9 @@ func TestRunInit_InteractiveSelectOrInput(t *testing.T) {
 			script: "\n26.04\n1\n",
 			wantContains: []string{
 				`image_version = "26.04"`,
-				"pin specific versions for version_capable plugins",
+				"[plugins]\nenable = [\n    \"go\",\n]",
 			},
-			wantNotContains: []string{"\ngo = { pin ="},
-			wantStdout:      []string{"empty input not accepted"},
+			wantStdout: []string{"empty input not accepted"},
 		},
 		{
 			// Only the image-version answer is scripted; stdin EOFs
@@ -194,10 +191,9 @@ func TestRunInit_InteractiveSelectOrInput(t *testing.T) {
 			script: "24.04\n",
 			wantContains: []string{
 				`image_version = "24.04"`,
-				"pin specific versions for version_capable plugins",
+				"[plugins]\nenable = [\n    \"go\",\n]",
 			},
-			wantNotContains: []string{"\ngo = { pin ="},
-			wantStdout:      nil,
+			wantStdout: nil,
 		},
 	}
 

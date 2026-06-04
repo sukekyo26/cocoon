@@ -6,6 +6,54 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+### 追加
+
+- `cocoon lock` が、有効な `version_capable` プラグインのバージョン制約を
+  ネットワーク越しに具体バージョン（と arch ごとの SHA256 checksum）へ解決し、
+  workspace ルートに `cocoon.lock` を書き出します。これにより `cocoon gen` が
+  再現可能なワークスペースを生成します。`"latest"` 制約は最新リリースへ凍結され、
+  `"=x.y.z"` pin は checksum を記録します。`--check` は解決せずに lock が
+  `workspace.toml` と一致するか検証（CI 用）、`--upgrade` は `"latest"` 制約を
+  再解決します。上流が機械可読なバージョンを公開しないプラグイン（`aws-cli`,
+  `android-sdk`, `flutter`）は exact バージョンへの pin が必要です。
+- `cocoon gen` が（存在すれば）`cocoon.lock` を消費し、ロック済みプラグインの
+  解決バージョンと checksum を生成 Dockerfile にオフラインかつ再現的に焼き込み
+  ます。`cocoon gen --locked` は、有効なプラグインが lock エントリ無しで
+  `"latest"` を使っていれば失敗します（再現性 CI 用）。付けない場合、該当
+  プラグインは警告のうえ build 時に最新を解決するフォールバックになります。
+- `[plugins.options].<id>` が手動の `checksum_amd64` / `checksum_arm64`（64 桁の
+  小文字 16 進数）を受け付けるようになりました。上流が機械可読な checksum を
+  公開していない一部プラグイン（`codex` / `shellcheck` / `shfmt` / `aws-sam-cli`）
+  でも SHA256 検証付きで build できます。`cocoon gen` は、`cocoon lock` が
+  checksum を自動解決できるプラグイン（lock 値が優先されるため）や
+  `verify = "pgp"` プラグインへの手動 checksum を拒否します。
+- `workspace.toml` の `[lockfile].name` で lock ファイルの basename を変更
+  できるようになりました（既定 `cocoon.lock`）。`cocoon lock`（書き込み）と
+  `cocoon gen`（読み込み）の両方が従います。名前は単一の安全なファイル名で、
+  lock の `inputs_hash` には含まれません。
+
+### 変更
+
+- **BREAKING**: プラグインのバージョンは `[plugins].enable` 配列にインライン
+  指定するようになりました（uv/pip 形式）。1 プラグイン 1 記述です。各要素は
+  `"<id>"`（有効化・未 pin）/ `"<id>=1.23.4"`（exact pin、バージョンは素で書く）/
+  `"<id>=latest"` のいずれか。配列順がインストール順です。追加のバージョン入力を
+  持つプラグイン（例: android-sdk の `api_level` / `build_tools`）は新しい
+  `[plugins.options]` テーブルに記述します — 主バージョンは `enable` に残します。
+  range 演算子（`>=`・`^`・`~` など）は非対応です。
+- **BREAKING**: `cocoon plugin pin <id> <ref>` は `[plugins.versions]` 行ではなく
+  `[plugins].enable` の配列要素（`"<id>=<ref>"` または `"<id>=latest"`）を出力
+  （`--write` で in-place upsert）するようになりました。`--amd64-checksum` /
+  `--arm64-checksum` は受け付けません。
+
+### 削除
+
+- **BREAKING**: `workspace.toml` から `[plugins.versions]` テーブルを削除しました
+  （`checksum_amd64` / `checksum_arm64` キーを含む）。バージョンは `[plugins].enable`
+  配列へ、追加の項目は `[plugins.options]` へ、arch ごとの checksum は `cocoon.lock`
+  に移動します。`[plugins.versions]` を残した `workspace.toml` は移行ヒント付きで
+  拒否されます。
+
 ## [0.13.0] - 2026-06-03
 
 ### 追加

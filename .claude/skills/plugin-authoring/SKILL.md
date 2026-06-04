@@ -82,6 +82,117 @@ cocoon plugin scaffold my-tool \
 - `install.<category>.sh` 本体 — 上流 URL / 依存ロジック / cleanup
 - 必要なら `install_user.sh` — rc 編集や `<tool> init` 系のユーザー権限処理
 
+## `[version.source]` — `cocoon lock` 対応の宣言
+
+`version_capable = true` のプラグインに `[version.source]` を書くと、`cocoon lock`
+が「最新バージョンの発見」と「arch ごとの checksum の取得」をネットワーク越しに
+行えるようになる（解決結果は workspace ルートの `cocoon.lock` に記録され、`cocoon gen`
+はそれをオフラインで消費する）。`[version.source]` を **書かない** プラグインは
+**exact-only** — `cocoon lock` で `"latest"` を解決できず、`[plugins].enable` 配列に
+インライン（例: `"aws-cli=2.34.48"`）で厳密バージョンを pin する必要がある。
+
+`[version.source.latest]`（最新の探し方）と `[version.source.checksum]`（hash の取り方）の
+2 ブロックで構成し、URL / asset 名に `${arch}` を使うときだけ `[version.source.arch]`
+で arch トークンの対応表を足す。
+
+### `[version.source.latest]` — `type` 別
+
+| `type` | 必須キー | 任意キー | 動作 |
+|:---|:---|:---|:---|
+| `github-release` | `repo = "owner/name"` | `strip_prefix` | resolver が `repo` から GitHub の `releases/latest` API を叩く（`plugin.toml` に `api.github.com` は書かない）。タグ先頭に `v` が付くなら `strip_prefix = "v"` |
+| `text` | `url` | `strip_prefix` | レスポンスの **1 行目** をバージョンとして読む |
+| `json-field` | `url`, `field = "dotted.path"` | `strip_prefix` | JSON を取得し dotted path のフィールドを読む |
+| `tab` | `url` | `lts_only` | Node の `dist/index.tab` 形式。`lts_only = true` で LTS のみ対象 |
+
+### `[version.source.checksum]` — `type` 別
+
+| `type` | 必須キー | 任意キー | 動作 |
+|:---|:---|:---|:---|
+| `sidecar` | `asset_url` | `suffix`（既定 `.sha256`） | `asset_url + suffix` を取得。body は素の hash 1 個 |
+| `shasums-file` | `manifest_url`, `asset_name` | — | `manifest_url`（`SHA256SUMS` 等）を取得し、`asset_name` に一致する行の hash を取る |
+| `none` | — | — | fetch 可能な arch ごとの hash が無いプラグイン（pgp 検証、または hash 非公開の `\| bash` インストーラ）。checksum は記録されない |
+
+### `${version}` / `${arch}` テンプレート
+
+`url` / `asset_url` / `manifest_url` / `asset_name` では次を展開できる:
+
+- `${version}` — 解決後のクリーンなバージョン（先頭の `v` は付かない）。上流タグが
+  `v` を持つ URL には **リテラルで** `v${version}` と書く。
+- `${arch}` — `[version.source.arch]` の対応表で置換される arch トークン
+  （例: node→`x64`、just→`x86_64`）。`amd64` / `arm64` の 2 キーを宣言する。
+  `${arch}` を一切使わないなら `[version.source.arch]` ブロックは不要。
+
+### カタログ実例
+
+`text` + `sidecar`（`internal/plugin/catalog/go/plugin.toml`）:
+
+```toml
+[version.source.latest]
+type = "text"
+url = "https://go.dev/VERSION?m=text"
+strip_prefix = "go"
+
+[version.source.checksum]
+type = "sidecar"
+asset_url = "https://dl.google.com/go/go${version}.linux-${arch}.tar.gz"
+suffix = ".sha256"
+
+[version.source.arch]
+amd64 = "amd64"
+arm64 = "arm64"
+```
+
+`tab` + `shasums-file`（`internal/plugin/catalog/node/plugin.toml`）:
+
+```toml
+[version.source.latest]
+type = "tab"
+url = "https://nodejs.org/dist/index.tab"
+lts_only = true
+
+[version.source.checksum]
+type = "shasums-file"
+manifest_url = "https://nodejs.org/dist/v${version}/SHASUMS256.txt"
+asset_name = "node-v${version}-linux-${arch}.tar.xz"
+
+[version.source.arch]
+amd64 = "x64"
+arm64 = "arm64"
+```
+
+`github-release` + `shasums-file`（`internal/plugin/catalog/just/plugin.toml`）:
+
+```toml
+[version.source.latest]
+type = "github-release"
+repo = "casey/just"
+
+[version.source.checksum]
+type = "shasums-file"
+manifest_url = "https://github.com/casey/just/releases/download/${version}/SHA256SUMS"
+asset_name = "just-${version}-${arch}-unknown-linux-musl.tar.gz"
+
+[version.source.arch]
+amd64 = "x86_64"
+arm64 = "aarch64"
+```
+
+`github-release` + `none`（`internal/plugin/catalog/uv/plugin.toml`、`installer` で per-arch hash を取らない）:
+
+```toml
+[version.source.latest]
+type = "github-release"
+repo = "astral-sh/uv"
+
+[version.source.checksum]
+type = "none"
+```
+
+exact-only（`[version.source]` を持てない上流）の参考: `aws-cli`（バージョン無し
+ダウンロード alias）/ `android-sdk`（HTML スクレイプのビルド番号）/ `flutter`
+（コミットハッシュをキーとするリリース）。これらは `[plugins].enable` 配列に
+インライン（例: `"aws-cli=2.34.48"`）で必ず厳密 pin する。
+
 ## ステップ 3: 既存プラグインを参考にする
 
 カテゴリ別の参照ポイント:

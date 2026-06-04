@@ -53,11 +53,15 @@ func LoadContext(
 	if cerr := plugin.CheckConflicts(plugins); cerr != nil {
 		return nil, fmt.Errorf("%w: %w", clihelpers.ErrFailure, cerr)
 	}
+	// Lock is left nil here so callers that overwrite cocoon.lock (e.g.
+	// `cocoon lock`) are not blocked by a malformed existing lock; `cocoon gen`
+	// loads + attaches it via loadGenContext.
 	return &generate.WorkspaceContext{
 		WS:         ws,
 		PluginsFS:  pluginsFS,
 		ProjectDir: filepath.Dir(wsPath),
 		Plugins:    plugins,
+		Lock:       nil,
 		Warnings:   warnW,
 	}, nil
 }

@@ -28,6 +28,7 @@ import (
 	"github.com/sukekyo26/cocoon/internal/fsx"
 	"github.com/sukekyo26/cocoon/internal/generate"
 	"github.com/sukekyo26/cocoon/internal/i18n"
+	"github.com/sukekyo26/cocoon/internal/lockfile"
 	"github.com/sukekyo26/cocoon/internal/logx"
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
@@ -44,6 +45,7 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 	var (
 		workspaceFlag string
 		outputFlag    string
+		locked        bool
 	)
 	cmd := &cobra.Command{
 		Use:           "gen",
@@ -53,11 +55,12 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(_ *cobra.Command, _ []string) error {
-			return runGen(stdout, stderr, workspaceFlag, outputFlag)
+			return runGen(stdout, stderr, workspaceFlag, outputFlag, locked)
 		},
 	}
 	cmd.Flags().StringVar(&workspaceFlag, "workspace", "", cat.Msg("flag_gen_workspace_usage"))
 	cmd.Flags().StringVar(&outputFlag, "output", "", cat.Msg("flag_gen_output_usage"))
+	cmd.Flags().BoolVar(&locked, "locked", false, cat.Msg("flag_gen_locked_usage"))
 	clihelpers.AttachHelpAlias(cmd)
 	cmd.AddCommand(newWorkspaceCmd(stdout, stderr))
 	return cmd
@@ -107,15 +110,26 @@ func loadGenContext(stderr io.Writer, workspaceFlag, outputFlag string) (
 		// would double the "failure:" prefix (defensive-coding §3).
 		return "", nil, err //nolint:wrapcheck // ErrFailure already attached by generatecli
 	}
+	// gen consumes the lock file (when present) for reproducible PIN/CHECKSUM_*;
+	// a malformed lock is a hard failure here (unlike `cocoon lock`, which
+	// overwrites it). The basename is configurable via [lockfile].name.
+	lock, lockErr := lockfile.Load(lockfile.PathFor(wsPath, ctx.WS))
+	if lockErr != nil && !lockfile.IsNotExist(lockErr) {
+		return "", nil, fmt.Errorf("%w: %w", clihelpers.ErrFailure, lockErr)
+	}
+	ctx.Lock = lock // nil when absent
 	return outDir, ctx, nil
 }
 
-func runGen(stdout, stderr io.Writer, workspaceFlag, outputFlag string) error {
+func runGen(stdout, stderr io.Writer, workspaceFlag, outputFlag string, locked bool) error {
 	cat := i18n.New(i18n.Detect())
 	log := logx.New(stdout, stderr)
 	outDir, ctx, err := loadGenContext(stderr, workspaceFlag, outputFlag)
 	if err != nil {
 		return err
+	}
+	if lockErr := enforceLocked(ctx, locked, log, cat); lockErr != nil {
+		return lockErr
 	}
 	arts, err := generatecli.BuildArtifacts(ctx, stderr)
 	if err != nil {
@@ -236,6 +250,27 @@ func printNextSteps(log *logx.Logger, cat *i18n.Catalog, devcontainer bool) {
 		log.Info(cat.Msg("gen_next_step_vscode"))
 	}
 	log.Info(cat.Msg("gen_next_step_manage"))
+}
+
+// enforceLocked applies the cocoon.lock reproducibility policy: any enabled
+// plugin whose "latest" constraint has no lock entry resolves
+// non-reproducibly at build time. Without --locked each is a warning; with
+// --locked the set is a usage error pointing at `cocoon lock`.
+func enforceLocked(ctx *generate.WorkspaceContext, locked bool, log *logx.Logger, cat *i18n.Catalog) error {
+	unlocked := ctx.UnlockedLatestPlugins()
+	if len(unlocked) == 0 {
+		return nil
+	}
+	lockName := ctx.WS.Lockfile.NameOrDefault()
+	if locked {
+		return fmt.Errorf(
+			`%w: plugins use "latest" without a %s entry: %s; run `+"`cocoon lock`"+` (or drop --locked)`,
+			clihelpers.ErrUsage, lockName, strings.Join(unlocked, ", "))
+	}
+	for _, id := range unlocked {
+		log.Warn(cat.Msg("gen_unlocked_latest_warning", id, lockName))
+	}
+	return nil
 }
 
 // warnDockerCLIWithoutSocket flags the docker-cli-without-docker_socket

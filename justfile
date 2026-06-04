@@ -62,11 +62,10 @@ cover-check:
 vuln:
     govulncheck ./...
 
-# Run after intentional changes to generators, plugin mutators, or
-# `cocoon init` output, then commit the updated golden / snapshot
-# files under each package's testdata/ along with the source change
-# (covers `*.expected`, `testdata/init/*.workspace.toml`, and
-# `testdata/mutator/**/after.toml`). CI runs without -update-golden,
+# Run after intentional changes to generators or `cocoon init` output,
+# then commit the updated golden / snapshot files under each package's
+# testdata/ along with the source change (covers `*.expected` and
+# `testdata/init/*.workspace.toml`). CI runs without -update-golden,
 # so any drift fails the test job.
 # Regenerate all golden / snapshot files in one shot.
 regen-snapshots:
@@ -74,7 +73,6 @@ regen-snapshots:
     go test ./internal/generate/compose          -update-golden
     go test ./internal/generate/devcontainerjson -update-golden
     go test ./internal/generate/codeworkspace    -update-golden
-    go test ./internal/plugin                    -update-golden
     go test ./internal/cli/init                  -update-golden
     go test ./internal/cli                       -run TestHelpGolden -update-golden
 

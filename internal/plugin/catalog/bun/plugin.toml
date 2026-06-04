@@ -21,3 +21,11 @@ PATH = "$BUN_INSTALL/bin:$PATH"
 
 [version]
 version_capable = true
+
+[version.source.latest]
+type = "github-release"
+repo = "oven-sh/bun"
+strip_prefix = "bun-v"
+
+[version.source.checksum]
+type = "none"

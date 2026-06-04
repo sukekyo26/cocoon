@@ -13,6 +13,7 @@ import (
 	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
 	gencli "github.com/sukekyo26/cocoon/internal/cli/gen"
 	initcli "github.com/sukekyo26/cocoon/internal/cli/init"
+	lockcli "github.com/sukekyo26/cocoon/internal/cli/lock"
 	plugincli "github.com/sukekyo26/cocoon/internal/cli/plugin"
 	selfupdatecli "github.com/sukekyo26/cocoon/internal/cli/selfupdate"
 	"github.com/sukekyo26/cocoon/internal/i18n"
@@ -51,6 +52,7 @@ func newRootCommand(version string, stdout, stderr io.Writer) *cobra.Command {
 	root.AddCommand(
 		initcli.NewCommand(stdout, stderr),
 		gencli.NewCommand(stdout, stderr),
+		lockcli.NewCommand(stdout, stderr),
 		selfupdatecli.NewCommand(stdout, stderr),
 		plugincli.NewCommand(stdout, stderr),
 		newVersionSubcommand(version, stdout, cat),

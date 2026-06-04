@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 # Auto-generated from workspace.toml — do not edit directly.
 ARG IMAGE=golang
-ARG IMAGE_VERSION=1.26.3-bookworm
+ARG IMAGE_VERSION=1.26.4-bookworm
 FROM ${IMAGE}:${IMAGE_VERSION}
 
 ARG USERNAME
@@ -593,7 +593,7 @@ curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-erro
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/shellcheck.tar.xz" | sha256sum -c -
 else
-  printf '%sWARNING: SHA256 verification skipped for ShellCheck (no checksum for shellcheck in [plugins.versions])%s\n' "$C_YEL" "$C_RST" >&2
+  printf '%sWARNING: SHA256 verification skipped for ShellCheck (no upstream checksum; set checksum_amd64/arm64 in [plugins.options].shellcheck)%s\n' "$C_YEL" "$C_RST" >&2
 fi
 
 # The tarball ships `shellcheck-v<ver>/shellcheck`; --strip-components=1 +
@@ -653,7 +653,7 @@ curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-erro
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/shfmt" | sha256sum -c -
 else
-  printf '%sWARNING: SHA256 verification skipped for shfmt (no checksum for shfmt in [plugins.versions])%s\n' "$C_YEL" "$C_RST" >&2
+  printf '%sWARNING: SHA256 verification skipped for shfmt (no upstream checksum; set checksum_amd64/arm64 in [plugins.options].shfmt)%s\n' "$C_YEL" "$C_RST" >&2
 fi
 
 install -o root -g root -m 0755 /tmp/shfmt /usr/local/bin/shfmt

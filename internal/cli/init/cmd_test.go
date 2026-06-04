@@ -535,7 +535,7 @@ func TestRunInit_YesNoDefaultPlugins(t *testing.T) {
 }
 
 //nolint:paralleltest // t.Chdir
-func TestRunInit_PluginVersionsFlagWritesInlineLines(t *testing.T) {
+func TestRunInit_PluginVersionsFlagWritesConstraintLines(t *testing.T) {
 	pinEnglish(t)
 	work := t.TempDir()
 	t.Chdir(work)
@@ -553,17 +553,16 @@ func TestRunInit_PluginVersionsFlagWritesInlineLines(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read workspace.toml: %v", err)
 	}
-	// Sorted by id: go before starship; one [plugins.versions] section header
-	// plus an inline-table line per pin (no checksums emitted from --plugin-versions).
-	want := "[plugins.versions]\ngo = { pin = \"1.23.4\" }\nstarship = { pin = \"1.21.1\" }\n"
+	// Versions are pinned inline in the enable array, in --plugins order
+	// (go, uv, starship); uv is left unpinned, the others carry their pin.
+	want := "enable = [\n    \"go=1.23.4\",\n    \"uv\",\n    \"starship=1.21.1\",\n]"
 	if !strings.Contains(string(body), want) {
-		t.Errorf("workspace.toml missing pin lines\n--- want ---\n%s\n--- got ---\n%s", want, body)
+		t.Errorf("workspace.toml missing pinned enable array\n--- want ---\n%s\n--- got ---\n%s", want, body)
 	}
-	// The commented-out example template must NOT appear when real pins
-	// were emitted — otherwise the user sees both the example and their own
-	// entries. The template's leading comment is unique to the example.
-	if strings.Contains(string(body), "pin specific versions for version_capable plugins") {
-		t.Errorf("commented [plugins.versions] template should not coexist with real pins\n--- got ---\n%s", body)
+	// init does not collect [plugins.options], so the table stays commented
+	// (no uncommented [plugins.options] header).
+	if strings.Contains(string(body), "\n[plugins.options]\n") {
+		t.Errorf("init must not emit an active [plugins.options] table\n--- got ---\n%s", body)
 	}
 }
 

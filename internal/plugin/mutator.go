@@ -9,122 +9,53 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/pelletier/go-toml/v2"
-
 	"github.com/sukekyo26/cocoon/internal/fsx"
 )
 
 // ErrPinLineEmptyID is returned by UpsertPinAndMethod when called with an empty id.
 var ErrPinLineEmptyID = errors.New("UpsertPinAndMethod: empty id")
 
-// ErrPinLineEmptyRef is returned by UpsertPinAndMethod when called with an empty ref.
-var ErrPinLineEmptyRef = errors.New("UpsertPinAndMethod: empty ref")
+// ErrPinLineEmptyRef is returned by UpsertPinAndMethod when called with an empty spec.
+var ErrPinLineEmptyRef = errors.New("UpsertPinAndMethod: empty spec")
 
 // sectionHeaderRE matches a TOML table header: `[name.space]` with optional
 // surrounding whitespace and a trailing comment.
 var sectionHeaderRE = regexp.MustCompile(`^\s*\[([A-Za-z0-9_.-]+)\]\s*(#.*)?$`)
 
-// ErrLegacyPinSubsection is returned when workspace.toml carries a legacy
-// `[plugins.versions.<id>]` subsection block. cocoon emits inline tables under
-// a single `[plugins.versions]` section; mixing the two forms would produce
-// duplicate-key TOML, so the mutator refuses until the user converts.
-var ErrLegacyPinSubsection = errors.New(
-	"workspace.toml has legacy `[plugins.versions.<id>]` subsection block(s); " +
-		"cocoon now emits inline tables under a single `[plugins.versions]` section. " +
-		"Convert each block to `<id> = { pin = \"...\" }` under `[plugins.versions]` " +
-		"before invoking --write")
+// rxEnableLine matches the start of the `[plugins].enable` array assignment.
+var rxEnableLine = regexp.MustCompile(`^\s*enable\s*=\s*\[`)
 
-func upsertPinLineBytes(input []byte, id, ref, amd64Sum, arm64Sum string) ([]byte, error) {
-	hadTrailingNewline := bytes.HasSuffix(input, []byte("\n"))
-	lines := splitToLines(input)
-	if hasLegacySubsection(lines) {
-		return nil, ErrLegacyPinSubsection
-	}
-	// pin / checksum_* are rewritten from the dedicated arguments; any other
-	// inline-table keys the user already had (declared by the plugin via
-	// [install.extra_versions]) are carried through so --write does not
-	// drop them. Formatting is not preserved byte-for-byte: extras are
-	// re-emitted by FormatPinLineWithExtras in sorted key order with
-	// %q-quoted values, which normalises spacing and quoting style.
-	extras := extractExistingPinExtras(lines, "plugins.versions", id)
-	newLine := strings.TrimSuffix(FormatPinLineWithExtras(id, ref, amd64Sum, arm64Sum, extras), "\n")
-	updated := upsertIDLineInSection(lines, "plugins.versions", id, newLine)
-	return renderLines(updated, hadTrailingNewline)
-}
+// rxQuotedElem matches a TOML basic-string array element so the enable array's
+// entries can be extracted regardless of single- or multi-line layout.
+var rxQuotedElem = regexp.MustCompile(`"([^"]*)"`)
 
-// extractExistingPinExtras parses the existing inline-table line for id
-// in the named section and returns the keys that are not pin /
-// checksum_amd64 / checksum_arm64. Returns nil when no existing line is
-// present, the inline table is malformed, or no extras are found.
-func extractExistingPinExtras(lines []string, section, id string) map[string]string {
-	sectionStart, sectionEnd := findSection(lines, section)
-	if sectionStart < 0 {
-		return nil
-	}
-	idAssignRE := regexp.MustCompile(`^\s*` + regexp.QuoteMeta(id) + `\s*=\s*(.*)$`)
-	for i := sectionStart + 1; i < sectionEnd; i++ {
-		m := idAssignRE.FindStringSubmatch(lines[i])
-		if m == nil {
-			continue
-		}
-		return parseInlineTableExtras(m[1])
-	}
-	return nil
-}
+// ErrLegacyPluginVersions is returned when workspace.toml still carries a
+// `[plugins.versions]` section. cocoon now pins versions inline in the enable
+// array, so the mutator refuses rather than leave a stale section cocoon gen
+// would reject.
+var ErrLegacyPluginVersions = errors.New(
+	"workspace.toml has a [plugins.versions] section; cocoon now pins versions in the enable array " +
+		`(enable = [ "go=1.23.4" ]) and puts extra knobs in [plugins.options]. ` +
+		"Migrate it before invoking --write")
 
-// parseInlineTableExtras decodes a single inline-table value (e.g.
-// `{ pin = "1.2.3", api_level = "35" }`) and returns its non-reserved
-// string keys. Decoding errors are swallowed: the existing line is
-// either valid TOML (the decoder will succeed) or it was already broken
-// before --write ran, in which case losing extras is not a new
-// regression and we still want to emit a syntactically clean line.
-func parseInlineTableExtras(value string) map[string]string {
-	var tmp struct {
-		V map[string]any `toml:"v"`
-	}
-	if err := toml.Unmarshal([]byte("v = "+value+"\n"), &tmp); err != nil {
-		return nil
-	}
-	out := make(map[string]string, len(tmp.V))
-	for k, v := range tmp.V {
-		if k == "pin" || k == "checksum_amd64" || k == "checksum_arm64" {
-			continue
-		}
-		s, ok := v.(string)
-		if !ok {
-			continue
-		}
-		out[k] = s
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
-}
-
-func upsertMethodLineBytes(input []byte, id, method string) ([]byte, error) {
-	hadTrailingNewline := bytes.HasSuffix(input, []byte("\n"))
-	lines := splitToLines(input)
-	newLine := strings.TrimSuffix(FormatMethodLine(id, method), "\n")
-	updated := upsertIDLineInSection(lines, "plugins.methods", id, newLine)
-	return renderLines(updated, hadTrailingNewline)
-}
-
-// UpsertPinAndMethod atomically upserts the [plugins.versions] inline-table
-// pin line for id, and (when method != "") the [plugins.methods]
-// `<id> = "<method>"` line. Both upserts share a single read-modify-write
-// cycle so a transient I/O failure cannot leave workspace.toml in a half-
-// updated state (writing the pin and method in two separate passes would
-// be non-transactional: a failure between them would persist the pin without
-// the matching method). Pass method = "" to upsert the pin alone.
+// UpsertPinAndMethod atomically upserts id's [plugins].enable entry
+// (`<id>=<version>` or `<id>=latest`) and, when method != "", the
+// [plugins.methods] `<id> = "<method>"` line. Both upserts share a single
+// read-modify-write cycle so a transient I/O failure cannot leave
+// workspace.toml half-updated (writing the version and method in two separate
+// passes would be non-transactional). Pass method = "" to upsert the version
+// alone.
 //
-// Returns ErrLegacyPinSubsection when the file carries the legacy
-// [plugins.versions.<id>] shape; the file is not modified in that case.
-func UpsertPinAndMethod(path, id, ref, amd64Sum, arm64Sum, method string) error {
+// spec is the normalised version constraint ("=<version>" or "latest").
+// Returns ErrLegacyPluginVersions when the file carries the removed
+// [plugins.versions] section; the file is not modified in that case. The
+// enable array is re-emitted in cocoon's canonical multi-line style, so inline
+// comments inside the array are not preserved.
+func UpsertPinAndMethod(path, id, spec, method string) error {
 	if id == "" {
 		return ErrPinLineEmptyID
 	}
-	if ref == "" {
+	if spec == "" {
 		return ErrPinLineEmptyRef
 	}
 	// method == "" is the "pin only" path; do not reject it.
@@ -136,7 +67,7 @@ func UpsertPinAndMethod(path, id, ref, amd64Sum, arm64Sum, method string) error 
 	if err != nil {
 		return fmt.Errorf("read %s: %w", path, err)
 	}
-	out, err := upsertPinLineBytes(body, id, ref, amd64Sum, arm64Sum)
+	out, err := upsertEnableEntry(body, id, FormatEnableEntry(id, spec))
 	if err != nil {
 		return err
 	}
@@ -150,6 +81,123 @@ func UpsertPinAndMethod(path, id, ref, amd64Sum, arm64Sum, method string) error 
 		return fmt.Errorf("write %s: %w", path, err)
 	}
 	return nil
+}
+
+// upsertEnableEntry inserts or replaces the enable-array element for id (the
+// pre-formatted `<id>` / `<id>=<spec>` string) inside [plugins].enable.
+func upsertEnableEntry(input []byte, id, entry string) ([]byte, error) {
+	hadTrailingNewline := bytes.HasSuffix(input, []byte("\n"))
+	lines := splitToLines(input)
+	if hasLegacyVersionsSection(lines) {
+		return nil, ErrLegacyPluginVersions
+	}
+	secStart, secEnd := findSection(lines, "plugins")
+	if secStart < 0 {
+		return renderLines(appendEnableSection(lines, entry), hadTrailingNewline)
+	}
+	arrStart, arrEnd, elems, ok := enableArrayIn(lines, secStart, secEnd)
+	if !ok {
+		// [plugins] exists without an enable array: insert one after the header.
+		inserted := insertLinesAt(lines, secStart+1, formatEnableArray([]string{entry}))
+		return renderLines(inserted, hadTrailingNewline)
+	}
+	elems = upsertElem(elems, id, entry)
+	out := replaceLineRange(lines, arrStart, arrEnd, formatEnableArray(elems))
+	return renderLines(out, hadTrailingNewline)
+}
+
+// enableArrayIn locates the `enable = [ … ]` array inside the [secStart,
+// secEnd) [plugins] section. It returns the [arrStart, arrEnd] line span and
+// the parsed string elements; ok is false when the section has no enable key.
+func enableArrayIn(lines []string, secStart, secEnd int) (arrStart, arrEnd int, elems []string, ok bool) {
+	for i := secStart + 1; i < secEnd; i++ {
+		if !rxEnableLine.MatchString(lines[i]) {
+			continue
+		}
+		arrStart = i
+		arrEnd = i
+		for arrEnd+1 < secEnd && !strings.Contains(lines[arrEnd], "]") {
+			arrEnd++
+		}
+		span := strings.Join(lines[arrStart:arrEnd+1], "\n")
+		for _, m := range rxQuotedElem.FindAllStringSubmatch(span, -1) {
+			elems = append(elems, m[1])
+		}
+		return arrStart, arrEnd, elems, true
+	}
+	return 0, 0, nil, false
+}
+
+// upsertElem replaces the element whose id (text before the first "=") matches
+// id, or appends entry when no element matches.
+func upsertElem(elems []string, id, entry string) []string {
+	for i, e := range elems {
+		if enableEntryID(e) == id {
+			elems[i] = entry
+			return elems
+		}
+	}
+	return append(elems, entry)
+}
+
+// enableEntryID returns the plugin id of one enable-array element (everything
+// before the first "=").
+func enableEntryID(e string) string {
+	e = strings.TrimSpace(e)
+	if i := strings.IndexByte(e, '='); i >= 0 {
+		return strings.TrimSpace(e[:i])
+	}
+	return e
+}
+
+// formatEnableArray renders the canonical multi-line enable array; an empty
+// element list collapses to `enable = []`.
+func formatEnableArray(elems []string) []string {
+	if len(elems) == 0 {
+		return []string{"enable = []"}
+	}
+	out := make([]string, 0, len(elems)+2)
+	out = append(out, "enable = [")
+	for _, e := range elems {
+		out = append(out, fmt.Sprintf("    %q,", e))
+	}
+	out = append(out, "]")
+	return out
+}
+
+// appendEnableSection appends a fresh `[plugins]` section with a one-element
+// enable array at end-of-file, guaranteeing at least one blank line of
+// separation from the previous non-blank line.
+func appendEnableSection(lines []string, entry string) []string {
+	if len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) != "" {
+		lines = append(lines, "")
+	}
+	lines = append(lines, "[plugins]")
+	return append(lines, formatEnableArray([]string{entry})...)
+}
+
+// hasLegacyVersionsSection detects a `[plugins.versions]` header (or a
+// `[plugins.versions.<id>]` subsection), the removed format cocoon emitted
+// before folding versions into the enable array.
+func hasLegacyVersionsSection(lines []string) bool {
+	for _, ln := range lines {
+		m := sectionHeaderRE.FindStringSubmatch(ln)
+		if m == nil {
+			continue
+		}
+		if m[1] == "plugins.versions" || strings.HasPrefix(m[1], "plugins.versions.") {
+			return true
+		}
+	}
+	return false
+}
+
+func upsertMethodLineBytes(input []byte, id, method string) ([]byte, error) {
+	hadTrailingNewline := bytes.HasSuffix(input, []byte("\n"))
+	lines := splitToLines(input)
+	newLine := strings.TrimSuffix(FormatMethodLine(id, method), "\n")
+	updated := upsertIDLineInSection(lines, "plugins.methods", id, newLine)
+	return renderLines(updated, hadTrailingNewline)
 }
 
 // splitToLines splits input on newlines and treats a single empty trailing
@@ -185,27 +233,26 @@ func upsertIDLineInSection(lines []string, section, id, newLine string) []string
 	for insertAt > sectionStart+1 && strings.TrimSpace(lines[insertAt-1]) == "" {
 		insertAt--
 	}
-	out := make([]string, 0, len(lines)+1)
-	out = append(out, lines[:insertAt]...)
-	out = append(out, newLine)
-	out = append(out, lines[insertAt:]...)
+	return insertLinesAt(lines, insertAt, []string{newLine})
+}
+
+// insertLinesAt returns lines with ins spliced in at index at.
+func insertLinesAt(lines []string, at int, ins []string) []string {
+	out := make([]string, 0, len(lines)+len(ins))
+	out = append(out, lines[:at]...)
+	out = append(out, ins...)
+	out = append(out, lines[at:]...)
 	return out
 }
 
-// hasLegacySubsection detects `[plugins.versions.<id>]` blocks, the format
-// cocoon emitted before switching to inline tables.
-func hasLegacySubsection(lines []string) bool {
-	const versionsPrefix = "plugins.versions."
-	for _, ln := range lines {
-		m := sectionHeaderRE.FindStringSubmatch(ln)
-		if m == nil {
-			continue
-		}
-		if strings.HasPrefix(m[1], versionsPrefix) {
-			return true
-		}
-	}
-	return false
+// replaceLineRange returns lines with the inclusive [start, end] span replaced
+// by repl.
+func replaceLineRange(lines []string, start, end int, repl []string) []string {
+	out := make([]string, 0, len(lines)-(end-start+1)+len(repl))
+	out = append(out, lines[:start]...)
+	out = append(out, repl...)
+	out = append(out, lines[end+1:]...)
+	return out
 }
 
 // findSection returns the [start, end) line indices of the named TOML

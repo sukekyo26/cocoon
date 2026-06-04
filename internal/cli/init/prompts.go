@@ -189,8 +189,8 @@ func promptPluginSelection(ans *initAnswers, cat *i18n.Catalog, plugins map[stri
 	}
 	ans.PluginMethodsSet = true
 	// Allocate the map even if the prompt produces no picks; an empty map
-	// is equivalent to nil in writePluginVersions (both hit the len==0
-	// fallback that emits the commented-out template).
+	// behaves like nil when building the enable array (every entry is written
+	// bare, i.e. unpinned/LATEST).
 	if ans.PluginVersions == nil {
 		ans.PluginVersions = make(map[string]string)
 	}

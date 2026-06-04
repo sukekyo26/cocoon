@@ -1,31 +1,25 @@
-cocoon plugin pin — emit pin lines for [plugins.versions] (and optionally [plugins.methods])
+cocoon plugin pin — emit an enable entry for [plugins].enable (and optionally [plugins.methods])
 
-By default a `<id> = { pin = "<ref>" }` line is printed to stdout for you
-to paste under the [plugins.versions] section in workspace.toml. With
---write the line is upserted in place (inserted, or the existing
-<id> = { ... } line is replaced); comments and blank lines outside the
-target line are preserved verbatim.
+By default a `"<id>=<ref>"` array element is printed to stdout for
+you to add to the [plugins].enable array in workspace.toml. A bare version
+(1.23.4) is written as an exact pin (<id>=1.23.4); pass "latest" to track
+the newest release. With --write the entry is upserted in place (added, or
+the existing <id> element is replaced); the rest of the file is preserved
+verbatim.
 
-Use the --amd64-checksum / --arm64-checksum flags when the upstream
-release ships per-arch SHA256 sums you want the install script to
-verify. Plugins that declare verify = "pgp" in plugin.toml verify
-downloads against a bundled signature instead; passing checksum flags
-to those plugins is rejected.
+Versions are frozen to concrete releases — and per-arch SHA256 checksums
+recorded — by `cocoon lock` into the lock file; checksums no longer
+live in workspace.toml.
 
 Pass --method <name> for plugins that declare two or more entries under
 [install.methods] in their plugin.toml — the pin then writes (or prints)
-both lines together: `<id> = "<method>"` for [plugins.methods] and
-the inline-table line for [plugins.versions]. Checksums are workspace-
-scoped (not per-method); when switching methods, refresh
---amd64-checksum / --arm64-checksum so the install script's SHA256
-verification still matches the new artifact.
+both: the `"<id>=<ref>"` enable entry and a
+`<id> = "<method>"` line for [plugins.methods].
 
 Usage:
   cocoon plugin pin <id> <ref> [flags]
 
 Flags:
-      --amd64-checksum string   sha256 of the amd64 artifact (optional)
-      --arm64-checksum string   sha256 of the arm64 artifact (optional)
-  -h, --help                    help for pin
-      --method string           install method name; only meaningful for plugins that declare [install.methods]. When set, the command pins both [plugins.methods] and [plugins.versions] in a single workspace.toml read-write. When omitted, only [plugins.versions] is updated (the existing [plugins.methods] entry — or the plugin's default_method — stays in effect).
-      --write                   upsert the inline-table line in workspace.toml (auto-discovered from cwd)
+  -h, --help            help for pin
+      --method string   install method name; only meaningful for plugins that declare [install.methods]. When set, the command pins both [plugins.methods] and the [plugins].enable entry in a single workspace.toml read-write. When omitted, only the enable entry is updated (the existing [plugins.methods] entry — or the plugin's default_method — stays in effect).
+      --write           upsert the enable entry in workspace.toml (auto-discovered from cwd)

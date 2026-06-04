@@ -51,7 +51,7 @@ curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-erro
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/shellcheck.tar.xz" | sha256sum -c -
 else
-  printf '%sWARNING: SHA256 verification skipped for ShellCheck (no checksum for shellcheck in [plugins.versions])%s\n' "$C_YEL" "$C_RST" >&2
+  printf '%sWARNING: SHA256 verification skipped for ShellCheck (no upstream checksum; set checksum_amd64/arm64 in [plugins.options].shellcheck)%s\n' "$C_YEL" "$C_RST" >&2
 fi
 
 # The tarball ships `shellcheck-v<ver>/shellcheck`; --strip-components=1 +

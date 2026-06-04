@@ -31,6 +31,8 @@ flowchart LR
 
 `cocoon init` がユーザーを対話フォームで誘導して `workspace.toml` を書き出し、`cocoon gen` がそれを Docker / VS Code どちらでも使える `.devcontainer/` ディレクトリに変換します。
 
+再現性のため、両者の間に任意の `cocoon lock` ステップが入ります。有効化された `version_capable` プラグインのバージョン制約（`[plugins].enable` 配列にインライン指定）を、**ネットワーク越しに** 具体的なバージョンと arch ごとの checksum へ解決し、`cocoon.lock` を workspace ルートに書き出します。`cocoon gen` はその lock を **オフラインで** 消費するため、同じ `workspace.toml` + `cocoon.lock` は常に同じ `.devcontainer/` を生成します。パイプラインの中でネットワークに触れるのはこの lock だけで、生成自体は hermetic に保たれます。ファイル形式とフラグは [`commands.ja.md` の `cocoon lock`](commands.ja.md) を参照してください。
+
 ## 構成要素
 
 | コンポーネント | パス | 役割 |
