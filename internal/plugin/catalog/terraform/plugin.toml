@@ -20,3 +20,15 @@ description = "Single terraform binary extracted from a releases.hashicorp.com z
 [version]
 version_capable = true
 verify = "pgp"
+
+[version.source.latest]
+type = "json-field"
+url = "https://checkpoint-api.hashicorp.com/v1/check/terraform"
+field = "current_version"
+
+[version.source.checksum]
+type = "none"
+
+[version.source.arch]
+amd64 = "amd64"
+arm64 = "arm64"

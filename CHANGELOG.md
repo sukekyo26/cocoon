@@ -6,6 +6,57 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-06-04
+
+### Added
+
+- `cocoon lock` resolves each enabled `version_capable` plugin's version
+  constraint to a concrete version (and per-arch SHA256 checksums) over the
+  network and writes `cocoon.lock` at the workspace root, so `cocoon gen`
+  produces a reproducible workspace. A `"latest"` constraint is frozen to the
+  newest release; `"=x.y.z"` pins gain recorded checksums. `--check` verifies
+  the lock matches `workspace.toml` without resolving (for CI); `--upgrade`
+  re-resolves `"latest"` constraints. Plugins whose upstream exposes no
+  machine-readable version (`aws-cli`, `android-sdk`, `flutter`) must be pinned
+  to an exact version.
+- `cocoon gen` now consumes `cocoon.lock` (when present) to bake each locked
+  plugin's resolved version and checksums into the generated Dockerfile —
+  offline and reproducibly. `cocoon gen --locked` fails if any enabled plugin
+  uses `"latest"` without a lock entry (for reproducible CI); without it, such
+  plugins warn and fall back to resolving the latest version at build time.
+- `[plugins.options].<id>` accepts manual `checksum_amd64` / `checksum_arm64`
+  values (64 lowercase hex chars) for the few plugins whose upstream publishes
+  no machine-readable checksum (`codex`, `shellcheck`, `shfmt`, `aws-sam-cli`),
+  so those can still be built with SHA256 verification. `cocoon gen` rejects a
+  manual checksum for any plugin whose checksum `cocoon lock` resolves
+  automatically (the lock value would win) or for a `verify = "pgp"` plugin.
+- `[lockfile].name` in `workspace.toml` overrides the lock file's basename
+  (default `cocoon.lock`); both `cocoon lock` (write) and `cocoon gen` (read)
+  honor it. The name must be a single safe filename and is not part of the
+  lock's `inputs_hash`.
+
+### Changed
+
+- **BREAKING**: Plugin versions are now pinned inline in the `[plugins].enable`
+  array (uv/pip-style), so each plugin is named once. An element is `"<id>"`
+  (enabled, unpinned), `"<id>=1.23.4"` (an exact pin, version spelled bare), or
+  `"<id>=latest"`. Array order is the install order. Plugins with extra version
+  inputs (e.g. android-sdk's `api_level` / `build_tools`) declare them in a new
+  `[plugins.options]` table — the main version stays in `enable`. Range
+  operators (`>=`, `^`, `~`, …) are not supported.
+- **BREAKING**: `cocoon plugin pin <id> <ref>` now emits (or, with `--write`,
+  upserts) a `[plugins].enable` array element — `"<id>=<ref>"`, or
+  `"<id>=latest"` — instead of a `[plugins.versions]` line, and no longer
+  accepts `--amd64-checksum` / `--arm64-checksum`.
+
+### Removed
+
+- **BREAKING**: The `[plugins.versions]` table was removed from `workspace.toml`
+  (including its `checksum_amd64` / `checksum_arm64` keys). Versions move to the
+  `[plugins].enable` array, extra knobs to `[plugins.options]`, and per-arch
+  checksums are recorded in `cocoon.lock`. cocoon rejects a `workspace.toml`
+  that still carries `[plugins.versions]`, with a migration hint.
+
 ## [0.13.0] - 2026-06-03
 
 ### Added
@@ -580,7 +631,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Add `COMPOSE_PROJECT_NAME` derivation from the project directory basename so docker compose namespacing matches the host directory.
 - Add i18n catalog (English / Japanese) covering every CLI prompt, error message, and inline `workspace.toml` comment, switched via `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG`.
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/sukekyo26/cocoon/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/sukekyo26/cocoon/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/sukekyo26/cocoon/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/sukekyo26/cocoon/compare/v0.10.2...v0.11.0

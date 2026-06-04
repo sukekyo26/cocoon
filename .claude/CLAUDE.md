@@ -30,10 +30,10 @@ cocoon は純粋なジェネレータ。`workspace.toml` → `.devcontainer/`（
 
 **プラグイン契約**（詳細は [`docs/plugins.md`](../docs/plugins.md) と `plugin-authoring` スキル）:
 - `install.<category>.sh`（`installer` / `binary` / `apt` / `archive`）+ 任意の `install_user.sh`。Dockerfile に `bash <<'COCOON_PLUGIN_EOF' … COCOON_PLUGIN_EOF` で verbatim 埋め込み、ホスト側キャッシュは作らない。
-- `version_capable = true` のプラグインは `$PIN` と（`binary` / `archive` で）`$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` を同一 `RUN` で受け取る。値は `[plugins.versions]` のインラインテーブル行から供給。
+- `version_capable = true` のプラグインは `$PIN` と（`binary` / `archive` で）`$CHECKSUM_AMD64` / `$CHECKSUM_ARM64` を同一 `RUN` で受け取る。値は `[plugins].enable` のインライン pin（`"go=1.23.4"`）と `cocoon.lock`（`cocoon lock` が解決した version + checksum）から供給。
 - バージョン選択は LATEST + フリーテキストのみ（ホワイトリスト非保持）。
 
-**CLI**: `cmd/cocoon/main.go` がエントリ。exit code は `ErrCanceled → 130`、`ErrUsage → 2`、その他 → 1。cobra は `SilenceErrors=true` なのでエラー出力は `main.go` の責務。サブコマンド: `init` / `gen` / `plugin {list,show,pin,scaffold}` / `self-update` / `version` / `completion`。
+**CLI**: `cmd/cocoon/main.go` がエントリ。exit code は `ErrCanceled → 130`、`ErrUsage → 2`、その他 → 1。cobra は `SilenceErrors=true` なのでエラー出力は `main.go` の責務。サブコマンド: `init` / `gen` / `lock` / `plugin {list,show,pin,scaffold}` / `self-update` / `version` / `completion`。
 
 **リリース**: `VERSION` ファイル変更を含む `main` への PR がマージされるとタグ・クロスコンパイル・`SHA256SUMS`・`gh release` が走る（`.github/workflows/release.yml`）。
 
@@ -41,7 +41,7 @@ cocoon は純粋なジェネレータ。`workspace.toml` → `.devcontainer/`（
 
 `~/.claude/CLAUDE.md` と `.claude/rules/{testing,defensive-coding,refactor-discipline}.md`（自動ロード）を補完する。
 
-- `[plugins.versions]` はインラインテーブル（`go = { pin = "..." }`）。`[plugins.versions.go]` サブセクションは禁止（`cocoon plugin pin --write` が usage error で停止する）。
+- バージョン pin は `[plugins].enable` のインライン形式（`"go=1.23.4"` / `"go=latest"` / pin 無し `"docker-cli"`）。追加ノブ（subcomponent 選択・手動 checksum）は `[plugins.options]` の inline table（`go = { ... }`）。`[plugins.versions]` テーブルは廃止。再現可能ビルドは `cocoon lock`（→ `cocoon.lock`）→ `cocoon gen` の二段。
 - Sentinel error は `var ErrXxx = errors.New(...)` で export し、`%w` でラップする（err113 lint）。wrap は呼び出し連鎖で 1 回のみ — helper は生の sentinel を返し caller が context を付ける。
 - `docs/<topic>.md` と `docs/<topic>.ja.md` は常に同期。
 - ドキュメントに件数（プラグイン数等）をハードコードしない。ドリフトしたら修正ではなく数字自体を削除。

@@ -13,3 +13,11 @@ description = "Download and checksum-verify the AWS SAM CLI zip, then run sam-in
 
 [version]
 version_capable = true
+
+[version.source.latest]
+type = "github-release"
+repo = "aws/aws-sam-cli"
+strip_prefix = "v"
+
+[version.source.checksum]
+type = "none"

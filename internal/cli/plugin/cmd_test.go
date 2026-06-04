@@ -84,11 +84,11 @@ func TestPluginShow_PrintsResolvedManifest(t *testing.T) {
 }
 
 //nolint:paralleltest // t.Setenv on HOME forbids t.Parallel.
-func TestPluginPin_PrintsInlineLine(t *testing.T) {
+func TestPluginPin_PrintsConstraintLine(t *testing.T) {
 	withIsolatedHome(t)
 	var stdout, stderr bytes.Buffer
 	cmd := plugincli.NewCommand(&stdout, &stderr)
-	cmd.SetArgs([]string{"pin", "uv", "0.5.7", "--amd64-checksum", "abc123"})
+	cmd.SetArgs([]string{"pin", "uv", "0.5.7"})
 	cmd.SetOut(&stdout)
 	cmd.SetErr(&stderr)
 	if err := cmd.Execute(); err != nil {
@@ -96,8 +96,8 @@ func TestPluginPin_PrintsInlineLine(t *testing.T) {
 	}
 	out := stdout.String()
 	for _, w := range []string{
-		"[plugins.versions]",
-		`uv = { pin = "0.5.7", checksum_amd64 = "abc123" }`,
+		"[plugins].enable",
+		`"uv=0.5.7"`,
 	} {
 		if !strings.Contains(out, w) {
 			t.Errorf("missing %q in:\n%s", w, out)

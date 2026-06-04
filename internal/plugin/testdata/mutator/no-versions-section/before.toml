@@ -1,6 +1,0 @@
-# cocoon workspace
-[base]
-distro = "debian"
-
-[plugins]
-enable = ["go"]

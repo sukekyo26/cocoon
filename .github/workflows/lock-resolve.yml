@@ -1,0 +1,117 @@
+name: Lock Resolve
+
+# Runs `cocoon lock` against the real upstreams for every version_capable
+# plugin that declares a [version.source], proving each plugin's resolver
+# declaration (latest discovery + per-arch checksum fetch) actually works.
+# This is the only place the resolver (internal/plugin/resolve) is exercised
+# end-to-end — its unit tests inject a fake Fetcher. plugin-e2e.yml's
+# PIN_MODE=latest verifies the *install script's* build-time fetch, a separate
+# code path that never touches the resolver.
+#
+# Resolution is arch-independent (one runner resolves the checksums for every
+# arch), so this is amd64-only with no matrix. It is NOT a required check:
+# upstream / rate-limit hiccups make network resolution intermittently flaky,
+# so a red run is a signal to investigate, not a merge blocker.
+#
+# Triggers:
+#   - pull_request (paths-gated): only when resolver / lock / [version.source]
+#     code changes, so unrelated PRs pay nothing.
+#   - schedule (weekly): the upstream-drift canary — a moved URL or a removed
+#     checksum manifest turns this red before users hit it.
+#   - workflow_dispatch: one plugin (inputs.plugin) or all sourced (empty).
+
+on:
+  pull_request:
+    paths:
+      - "internal/plugin/catalog/**/plugin.toml"
+      - "internal/plugin/resolve/**"
+      - "internal/plugin/manifest.go"
+      - "internal/plugin/validate.go"
+      - "internal/lockfile/**"
+      - "internal/cli/lock/**"
+      - ".github/workflows/lock-resolve.yml"
+  schedule:
+    # Mon 06:00 UTC — aligned with plugin-e2e.yml / install-sh-e2e.yml so the
+    # weekly upstream-drift signal lands in one window.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      plugin:
+        description: "Single catalog plugin id to lock (empty = all sourced)"
+        type: string
+        default: ""
+
+concurrency:
+  # PR runs cancel a superseded push (keyed by PR number); schedule and
+  # dispatch are keyed by run_id so they never cancel each other or a PR run.
+  group: lock-resolve-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  lock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: taiki-e/install-action@b1fb785e72add1aaabe1e13115c2292ca8925d3f # v2.75.27 (just)
+      - name: Build cocoon binary
+        run: just build
+      - name: Resolve each sourced plugin with `cocoon lock`
+        env:
+          # The resolver fetcher reads GITHUB_TOKEN to lift the api.github.com
+          # rate limit (internal/plugin/resolve/fetcher.go).
+          GITHUB_TOKEN: ${{ github.token }}
+          DISPATCH_PLUGIN: ${{ inputs.plugin }}
+        run: |
+          set -euo pipefail
+          cocoon="$GITHUB_WORKSPACE/bin/cocoon"
+          catalog=internal/plugin/catalog
+
+          # The resolvable set: version_capable AND declaring a [version.source]
+          # (sub-tables counted). Exact-only plugins (no source) have no latest
+          # to resolve, so they are skipped.
+          sourced() {
+            local f id
+            for f in "$catalog"/*/plugin.toml; do
+              id=$(basename "$(dirname "$f")")
+              if grep -q 'version_capable[[:space:]]*=[[:space:]]*true' "$f" \
+                && grep -q '^\[version\.source' "$f"; then
+                echo "$id"
+              fi
+            done
+          }
+
+          plugins=()
+          if [ -n "${DISPATCH_PLUGIN}" ]; then
+            plugins=("${DISPATCH_PLUGIN}")
+          else
+            mapfile -t plugins < <(sourced)
+          fi
+          echo "Resolving ${#plugins[@]} sourced plugin(s) with cocoon lock"
+
+          fails=()
+          for p in "${plugins[@]}"; do
+            echo "::group::cocoon lock ${p}"
+            dir="$(mktemp -d)"
+            printf '[container]\nservice_name = "dev"\nusername = "dev"\nimage = "ubuntu"\nimage_version = "24.04"\n\n[plugins]\nenable = ["%s=latest"]\n' "$p" >"$dir/workspace.toml"
+            if (cd "$dir" && "$cocoon" lock); then
+              echo "ok: ${p}"
+            else
+              fails+=("$p")
+              echo "::error::cocoon lock failed to resolve ${p}"
+            fi
+            echo "::endgroup::"
+          done
+
+          if [ "${#fails[@]}" -gt 0 ]; then
+            echo "lock-resolve: ${#fails[@]} plugin(s) failed to resolve: ${fails[*]}" >&2
+            exit 1
+          fi
+          echo "lock-resolve: all ${#plugins[@]} plugin(s) resolved"

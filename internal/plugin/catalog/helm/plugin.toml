@@ -13,3 +13,17 @@ description = "Single helm binary extracted from a get.helm.sh tarball"
 
 [version]
 version_capable = true
+
+[version.source.latest]
+type = "github-release"
+repo = "helm/helm"
+strip_prefix = "v"
+
+[version.source.checksum]
+type = "sidecar"
+asset_url = "https://get.helm.sh/helm-v${version}-linux-${arch}.tar.gz"
+suffix = ".sha256sum"
+
+[version.source.arch]
+amd64 = "amd64"
+arm64 = "arm64"

@@ -736,58 +736,75 @@ func TestBuildInstallEnvPairs_VerifyGatesChecksum(t *testing.T) {
 	}
 }
 
-// TestValidateVersionOverrides_ChecksumRejectedForPGP pins that setting
-// checksum_amd64 / checksum_arm64 for a pgp-verified plugin is a hard
-// ErrInvalidVersionOverride: the checksum vocabulary does not apply.
-func TestValidateVersionOverrides_ChecksumRejectedForPGP(t *testing.T) {
+// TestValidateManualChecksums pins the [plugins.options] manual-checksum gate:
+// a hand-typed checksum is rejected for a pgp plugin (the checksum vocabulary
+// does not apply) and for an auto-resolvable plugin (cocoon lock owns the
+// checksum), but allowed for a plugin whose upstream publishes none (or that
+// declares no source at all).
+func TestValidateManualChecksums(t *testing.T) {
 	t.Parallel()
 	csum := "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+	mkPlugin := func(verify string, src *plugin.VersionSource) *plugin.Plugin {
+		return &plugin.Plugin{
+			Metadata: plugin.Metadata{Name: "x", URL: "https://example.com/x"},
+			Install:  plugin.Install{},
+			Version:  plugin.Version{VersionCapable: true, Verify: verify, Source: src},
+		}
+	}
+	sidecar := &plugin.VersionSource{Checksum: plugin.ChecksumSpec{Type: plugin.ChecksumSidecar}}
+	noneSrc := &plugin.VersionSource{Checksum: plugin.ChecksumSpec{Type: plugin.ChecksumNone}}
 	cases := []struct {
-		name     string
-		override config.PluginVersionOverride
+		name    string
+		plug    *plugin.Plugin
+		wantErr bool
 	}{
-		{"amd64_only", config.PluginVersionOverride{Pin: "2.0.0", ChecksumAmd64: &csum}},
-		{"arm64_only", config.PluginVersionOverride{Pin: "2.0.0", ChecksumArm64: &csum}},
+		{"pgp_rejected", mkPlugin(plugin.VerifyPGP, nil), true},
+		{"auto_resolvable_rejected", mkPlugin(plugin.VerifyChecksum, sidecar), true},
+		{"none_type_allowed", mkPlugin(plugin.VerifyChecksum, noneSrc), false},
+		{"no_source_allowed", mkPlugin(plugin.VerifyChecksum, nil), false},
 	}
 	for _, tc := range cases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			plugins := map[string]*plugin.Plugin{
-				"awscli": {
-					Metadata: plugin.Metadata{Name: "aws-cli", URL: "https://example.com/x"},
-					Install:  plugin.Install{},
-					Version:  plugin.Version{VersionCapable: true, Verify: plugin.VerifyPGP},
-				},
-			}
-			err := validateVersionOverrides(
-				plugins,
-				map[string]config.PluginVersionOverride{"awscli": tc.override},
-				&bytes.Buffer{},
+			err := validateManualChecksums(
+				map[string]*plugin.Plugin{"x": tc.plug},
+				map[string]config.PluginVersionOverride{"x": {Pin: "2.0.0", ChecksumAmd64: &csum}},
 			)
-			if !errors.Is(err, ErrInvalidVersionOverride) {
-				t.Fatalf("err = %v, want errors.Is(.., ErrInvalidVersionOverride)", err)
+			if tc.wantErr {
+				if !errors.Is(err, ErrInvalidVersionOverride) {
+					t.Fatalf("err = %v, want errors.Is(.., ErrInvalidVersionOverride)", err)
+				}
+				return
 			}
-			if !strings.Contains(err.Error(), "remove checksum_amd64/checksum_arm64") {
-				t.Errorf("error must tell the user what to do: %v", err)
+			if err != nil {
+				t.Errorf("manual checksum must be allowed here, got: %v", err)
 			}
 		})
 	}
 }
 
-// TestValidateVersionOverrides_PinWithoutChecksumWarning pins that the
-// missing-checksum WARNING fires for a checksum plugin pinned without a
-// checksum, but is suppressed for a pgp plugin (which is fully verified
-// in-script regardless of checksum fields).
+// TestValidateVersionOverrides_PinWithoutChecksumWarning pins the
+// missing-checksum WARNING contract: it is suppressed for a pgp plugin (fully
+// verified in-script), and its wording tracks whether the source can
+// auto-resolve a checksum — an auto-resolvable plugin still verifies and points
+// at `cocoon lock`, while a none/no-source plugin warns that the install runs
+// WITHOUT verification and points at [plugins.options].
 func TestValidateVersionOverrides_PinWithoutChecksumWarning(t *testing.T) {
 	t.Parallel()
+	sidecar := &plugin.VersionSource{Checksum: plugin.ChecksumSpec{Type: plugin.ChecksumSidecar}} //nolint:exhaustruct // only the kind matters here
+	noneSrc := &plugin.VersionSource{Checksum: plugin.ChecksumSpec{Type: plugin.ChecksumNone}}    //nolint:exhaustruct // only the kind matters here
 	cases := []struct {
-		name     string
-		verify   string
-		wantWarn bool
+		name         string
+		verify       string
+		src          *plugin.VersionSource
+		wantWarn     bool
+		wantContains string
 	}{
-		{"checksum_plugin_warns", plugin.VerifyChecksum, true},
-		{"pgp_plugin_silent", plugin.VerifyPGP, false},
+		{"auto_resolvable_points_at_lock", plugin.VerifyChecksum, sidecar, true, "cocoon lock"},
+		{"none_type_warns_unverified", plugin.VerifyChecksum, noneSrc, true, "WITHOUT verification"},
+		{"no_source_warns_unverified", plugin.VerifyChecksum, nil, true, "WITHOUT verification"},
+		{"pgp_plugin_silent", plugin.VerifyPGP, nil, false, ""},
 	}
 	for _, tc := range cases {
 		tc := tc
@@ -797,7 +814,7 @@ func TestValidateVersionOverrides_PinWithoutChecksumWarning(t *testing.T) {
 				"p": {
 					Metadata: plugin.Metadata{Name: "p", URL: "https://example.com/x"},
 					Install:  plugin.Install{},
-					Version:  plugin.Version{VersionCapable: true, Verify: tc.verify},
+					Version:  plugin.Version{VersionCapable: true, Verify: tc.verify, Source: tc.src},
 				},
 			}
 			var warnings bytes.Buffer
@@ -811,6 +828,9 @@ func TestValidateVersionOverrides_PinWithoutChecksumWarning(t *testing.T) {
 			}
 			if gotWarn := strings.Contains(warnings.String(), "WARNING"); gotWarn != tc.wantWarn {
 				t.Errorf("warning emitted = %v, want %v\n%s", gotWarn, tc.wantWarn, warnings.String())
+			}
+			if tc.wantContains != "" && !strings.Contains(warnings.String(), tc.wantContains) {
+				t.Errorf("warning %q does not contain %q", warnings.String(), tc.wantContains)
 			}
 		})
 	}
@@ -912,9 +932,9 @@ func TestBuildInstallEnvPairs_ExtraVersions(t *testing.T) {
 }
 
 // TestValidateVersionOverrides_UnknownExtraKey pins that
-// [plugins.versions].<id> setting a key outside pin / checksum_* is
-// rejected with ErrUnknownExtraVersion unless the plugin declares it
-// under [install.extra_versions]. This is the typo-detection path.
+// [plugins.options].<id> setting a key the plugin does not declare under
+// [install.extra_versions] is rejected with ErrUnknownExtraVersion. This is
+// the typo-detection path.
 func TestValidateVersionOverrides_UnknownExtraKey(t *testing.T) {
 	t.Parallel()
 	p := &plugin.Plugin{

@@ -27,6 +27,7 @@ var helpGoldenCases = []struct {
 	{"init", []string{"init", "--help"}},
 	{"gen", []string{"gen", "--help"}},
 	{"gen_workspace", []string{"gen", "workspace", "--help"}},
+	{"lock", []string{"lock", "--help"}},
 	{"plugin", []string{"plugin", "--help"}},
 	{"plugin_list", []string{"plugin", "list", "--help"}},
 	{"plugin_show", []string{"plugin", "show", "--help"}},

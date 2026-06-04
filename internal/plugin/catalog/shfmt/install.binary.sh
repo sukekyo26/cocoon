@@ -44,7 +44,7 @@ curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-erro
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/shfmt" | sha256sum -c -
 else
-  printf '%sWARNING: SHA256 verification skipped for shfmt (no checksum for shfmt in [plugins.versions])%s\n' "$C_YEL" "$C_RST" >&2
+  printf '%sWARNING: SHA256 verification skipped for shfmt (no upstream checksum; set checksum_amd64/arm64 in [plugins.options].shfmt)%s\n' "$C_YEL" "$C_RST" >&2
 fi
 
 install -o root -g root -m 0755 /tmp/shfmt /usr/local/bin/shfmt

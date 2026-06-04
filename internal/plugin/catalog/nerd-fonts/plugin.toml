@@ -17,3 +17,13 @@ description = "Multi-file font archive from the GitHub Release"
 
 [version]
 version_capable = true
+
+[version.source.latest]
+type = "github-release"
+repo = "ryanoasis/nerd-fonts"
+strip_prefix = "v"
+
+[version.source.checksum]
+type = "shasums-file"
+manifest_url = "https://github.com/ryanoasis/nerd-fonts/releases/download/v${version}/SHA-256.txt"
+asset_name = "Meslo.tar.xz"

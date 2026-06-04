@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"net"
@@ -15,7 +16,6 @@ var (
 	rxUsername     = regexp.MustCompile(`^[a-z_][a-z0-9_-]*$`)
 	rxPluginID     = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
 	rxPluginMethod = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
-	rxSha256       = regexp.MustCompile(`^[a-f0-9]{64}$`)
 	rxEnvKey       = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 	rxShellEnvKey  = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`)
 	rxAliasKey     = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_-]*$`)
@@ -73,6 +73,10 @@ var (
 	// that contract so tags like `_internal` or `2.7.14` are accepted and
 	// `.hidden` / `-foo` / `library/node` / `node:24` are rejected.
 	rxImageVersion = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._-]*$`)
+	// rxSha256 bounds a manual [plugins.options] checksum to exactly 64
+	// lowercase hex characters (a raw sha256 digest), matching the form
+	// cocoon.lock records and sha256sum -c expects.
+	rxSha256 = regexp.MustCompile(`^[a-f0-9]{64}$`)
 	// rxWorkspaceDir validates [workspace].dir: one or more portable filename
 	// segments joined by `/`. Each segment uses the same POSIX portable
 	// charset rxHomeFilesSegment uses so the value can flow into Dockerfile
@@ -228,6 +232,30 @@ func (w *Workspace) runValidate(a *Accumulator) {
 	w.validateServices(a)
 	if w.CodeWorkspace != nil {
 		w.CodeWorkspace.validate(a.At("code_workspace"))
+	}
+	if w.Lockfile != nil {
+		w.Lockfile.validate(a.At("lockfile"))
+	}
+}
+
+// validate checks [lockfile].name is a single safe basename. An unset or empty
+// name defaults to DefaultLockFileName (matching [workspace].dir's "empty =
+// default" policy), so only a non-empty value is checked. The charset reuses
+// rxCodeWorkspaceName (no slash, so the lock always lands beside workspace.toml
+// and cannot traverse out); "." / ".." and "workspace.toml" are rejected
+// explicitly — the latter would overwrite the user's own config.
+func (l *LockFileSpec) validate(a *Accumulator) {
+	if l.Name == nil || *l.Name == "" {
+		return
+	}
+	name := *l.Name
+	switch {
+	case !rxCodeWorkspaceName.MatchString(name):
+		a.Add(`name must be a single filename of [A-Za-z0-9._-] (no "/")`, "name")
+	case name == "." || name == "..":
+		a.Add(`name must not be "." or ".."`, "name")
+	case name == "workspace.toml":
+		a.Add(`name must not be "workspace.toml" (it would overwrite your config)`, "name")
 	}
 }
 
@@ -601,7 +629,7 @@ func containsWhitespaceOrCtrl(s string) bool {
 //
 // Both the plugin-author-side default (plugin.toml's
 // [install.extra_versions].<key>.default) and the user-side override
-// (workspace.toml's [plugins.versions].<id>.<key>) are checked through
+// (workspace.toml's [plugins.options].<id>.<key>) are checked through
 // this helper so the failure surfaces at decode/validate time, not at
 // docker build.
 func UnsafeExtraVersionRune(s string) (bool, rune) {
@@ -775,26 +803,78 @@ func (s *ContainerShellSpec) validate(a *Accumulator) {
 	CheckMapValues(a.At("env"), s.Env, "\n\r", shellValueHazard)
 }
 
-func (p *PluginsSpec) validate(a *Accumulator) {
-	for i, id := range p.Enable {
-		if !rxPluginID.MatchString(id) {
-			a.Add("plugin id does not match "+rxPluginID.String(), "enable", fmt.Sprintf("%d", i))
+// VersionSpecLatest is the canonical floating enable-array version constraint.
+// "*" is accepted as a synonym on input and normalised to this value.
+const VersionSpecLatest = "latest"
+
+// Version-spec sentinels. ParseVersionSpec wraps these with the offending
+// input so callers (cocoon plugin pin, the workspace loader) can classify a
+// bad version constraint via errors.Is.
+var (
+	// ErrVersionSpecEmpty is returned for an empty constraint string.
+	ErrVersionSpecEmpty = errors.New("version constraint must not be empty")
+	// ErrVersionSpecRange is returned for a range operator (>=, <=, >, <, ^,
+	// ~, !=); cocoon supports only exact "=<version>" pins and "latest".
+	ErrVersionSpecRange = errors.New("version constraint ranges are not supported")
+	// ErrVersionSpecBare is returned for a bare version with no leading "=".
+	ErrVersionSpecBare = errors.New(`exact version must be prefixed with "="`)
+	// ErrVersionSpecCharset is returned when the version after "=" falls
+	// outside the accepted tag charset (rxImageVersion).
+	ErrVersionSpecCharset = errors.New("version contains unsupported characters")
+)
+
+// ParseVersionSpec parses one enable-array version constraint into a
+// PluginVersionOverride (Spec plus the derived Pin; Extra and checksums are
+// left zero for the caller to fill). Accepted forms: "=<version>" (an exact
+// pin) and "latest"/"*" (floating, frozen by `cocoon lock`). Range
+// operators and bare versions are rejected with a wrapped sentinel so
+// callers can teach the two supported forms. On success Pin holds the exact
+// version for an "=<version>" spec and "" for "latest".
+func ParseVersionSpec(s string) (PluginVersionOverride, error) {
+	t := strings.TrimSpace(s)
+	switch {
+	case t == "":
+		return PluginVersionOverride{}, ErrVersionSpecEmpty //nolint:exhaustruct // error path
+	case t == VersionSpecLatest || t == "*":
+		return PluginVersionOverride{Spec: VersionSpecLatest}, nil //nolint:exhaustruct // latest leaves Pin/Extra zero
+	case hasRangeOperator(t):
+		return PluginVersionOverride{}, fmt.Errorf("%q: %w", s, ErrVersionSpecRange) //nolint:exhaustruct // error path
+	case t[0] == '=':
+		v := t[1:]
+		if !rxImageVersion.MatchString(v) {
+			return PluginVersionOverride{}, fmt.Errorf("%q: %w", s, ErrVersionSpecCharset) //nolint:exhaustruct // error path
 		}
+		return PluginVersionOverride{Spec: "=" + v, Pin: v}, nil //nolint:exhaustruct // checksums/extra filled by caller
+	default:
+		return PluginVersionOverride{}, fmt.Errorf("%q: %w", s, ErrVersionSpecBare) //nolint:exhaustruct // error path
 	}
+}
+
+// hasRangeOperator reports whether t begins with a version-range operator
+// cocoon deliberately does not support (only "=<version>" / "latest" are).
+func hasRangeOperator(t string) bool {
+	if t == "" {
+		return false // t[0] below would panic on ""; callers already exclude it
+	}
+	if strings.HasPrefix(t, "!=") {
+		return true
+	}
+	switch t[0] {
+	case '>', '<', '^', '~':
+		return true
+	default:
+		return false
+	}
+}
+
+func (p *PluginsSpec) validate(a *Accumulator) {
 	if HasDuplicates(p.Enable) {
 		a.Add("plugins.enable contains duplicate entries", "enable")
 	}
-	for name, ov := range p.Versions {
-		if ov.Pin == "" {
-			a.Add("pin must not be empty", "versions", name, "pin")
-		}
-		if ov.ChecksumAmd64 != nil && !rxSha256.MatchString(*ov.ChecksumAmd64) {
-			a.Add("checksum_amd64 must be 64 lowercase hex chars", "versions", name, "checksum_amd64")
-		}
-		if ov.ChecksumArm64 != nil && !rxSha256.MatchString(*ov.ChecksumArm64) {
-			a.Add("checksum_arm64 must be 64 lowercase hex chars", "versions", name, "checksum_arm64")
-		}
-	}
+	// Enable entries (id + optional "=<version>"/"latest" constraint) and the
+	// [plugins.options] table are parsed and validated in materializePlugins
+	// before validate runs; by the time we get here Enable holds clean ids and
+	// checksums live in cocoon.lock, not workspace.toml.
 	// Sort plugin ids so ValidationError.Error()'s "first error"
 	// summary stays stable across runs (map iteration is randomised).
 	methodIDs := slices.Sorted(maps.Keys(p.Methods))

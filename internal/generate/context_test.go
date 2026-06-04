@@ -8,9 +8,24 @@ import (
 
 	"github.com/sukekyo26/cocoon/internal/config"
 	"github.com/sukekyo26/cocoon/internal/generate"
+	"github.com/sukekyo26/cocoon/internal/lockfile"
+	"github.com/sukekyo26/cocoon/internal/plugin"
 )
 
 func ptr[T any](v T) *T { return &v }
+
+// TestPluginVersionOverrides_NeverNil pins the documented "never returns nil"
+// contract on the nil-WS path and the nil-Versions-map path (a Workspace built
+// without config.LoadWorkspace leaves Plugins.Versions nil).
+func TestPluginVersionOverrides_NeverNil(t *testing.T) {
+	t.Parallel()
+	if got := (&generate.WorkspaceContext{}).PluginVersionOverrides(); got == nil {
+		t.Error("nil WS: PluginVersionOverrides returned nil, want non-nil")
+	}
+	if got := (&generate.WorkspaceContext{WS: &config.Workspace{}}).PluginVersionOverrides(); got == nil {
+		t.Error("nil Versions map: PluginVersionOverrides returned nil, want non-nil")
+	}
+}
 
 func TestWorkspaceContext_NilSafe(t *testing.T) {
 	t.Parallel()
@@ -453,5 +468,154 @@ func TestWorkspaceContext_DevicesIPCGpus(t *testing.T) {
 	}
 	if empty.IPC() != "" || empty.Gpus() != "" {
 		t.Errorf("IPC/Gpus should be empty when unset")
+	}
+}
+
+// TestEffectivePluginVersions_OverlaysLock pins that a cocoon.lock entry
+// overlays the workspace constraint: the resolved version + checksum bake into
+// the override even when the workspace asked for "latest".
+func TestEffectivePluginVersions_OverlaysLock(t *testing.T) {
+	t.Parallel()
+	c := &generate.WorkspaceContext{ //nolint:exhaustruct // partial fixture
+		WS: &config.Workspace{Plugins: config.PluginsSpec{ //nolint:exhaustruct // partial fixture
+			Enable:   []string{"go"},
+			Versions: map[string]config.PluginVersionOverride{"go": {Spec: "latest"}}, //nolint:exhaustruct // latest
+		}},
+		Lock: &lockfile.Lock{Plugins: []lockfile.LockPlugin{ //nolint:exhaustruct // partial fixture
+			{ID: "go", Requested: "latest", Version: "1.23.4", ChecksumAMD64: "a1b2"}, //nolint:exhaustruct // no arm/extra
+		}},
+	}
+	eff := c.EffectivePluginVersions()
+	if eff["go"].Pin != "1.23.4" {
+		t.Errorf("Pin = %q, want 1.23.4 (lock overlay)", eff["go"].Pin)
+	}
+	if eff["go"].ChecksumAmd64 == nil || *eff["go"].ChecksumAmd64 != "a1b2" {
+		t.Errorf("ChecksumAmd64 = %v, want a1b2", eff["go"].ChecksumAmd64)
+	}
+}
+
+// TestEffectivePluginVersions_LockEmptyChecksumKeepsManual pins the none-type
+// escape hatch: a manual [plugins.options] checksum on the base override
+// survives a lock entry whose own checksums are empty (the lock resolved the
+// version but the upstream publishes no checksum). The overlay replaces a
+// checksum only when the lock actually carries one.
+func TestEffectivePluginVersions_LockEmptyChecksumKeepsManual(t *testing.T) {
+	t.Parallel()
+	manual := "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+	c := &generate.WorkspaceContext{ //nolint:exhaustruct // partial fixture
+		WS: &config.Workspace{Plugins: config.PluginsSpec{ //nolint:exhaustruct // partial fixture
+			Enable: []string{"codex"},
+			Versions: map[string]config.PluginVersionOverride{ //nolint:exhaustruct // no arm/extra
+				"codex": {Spec: "=0.5.0", Pin: "0.5.0", ChecksumAmd64: &manual},
+			},
+		}},
+		Lock: &lockfile.Lock{Plugins: []lockfile.LockPlugin{ //nolint:exhaustruct // partial fixture
+			{ID: "codex", Requested: "=0.5.0", Version: "0.5.0"}, // empty checksums
+		}},
+	}
+	eff := c.EffectivePluginVersions()
+	if eff["codex"].ChecksumAmd64 == nil || *eff["codex"].ChecksumAmd64 != manual {
+		t.Errorf("manual checksum was wiped by an empty lock checksum: %v", eff["codex"].ChecksumAmd64)
+	}
+}
+
+// TestEffectivePluginVersions_LockExtraIsAuthoritative pins that the lock entry
+// is authoritative for Extra: it overlays unconditionally, so a stale workspace
+// [plugins.options] knob does not leak through when the lock recorded none (and
+// the lock's own Extra wins when it has them).
+func TestEffectivePluginVersions_LockExtraIsAuthoritative(t *testing.T) {
+	t.Parallel()
+	// Lock recorded no Extra → the workspace knob must NOT leak through.
+	empty := &generate.WorkspaceContext{ //nolint:exhaustruct // partial fixture
+		WS: &config.Workspace{Plugins: config.PluginsSpec{ //nolint:exhaustruct // partial fixture
+			Enable: []string{"android-sdk"},
+			Versions: map[string]config.PluginVersionOverride{ //nolint:exhaustruct // no checksum
+				"android-sdk": {Spec: "=11076708", Pin: "11076708", Extra: map[string]string{"build_tools": "35.0.0"}},
+			},
+		}},
+		Lock: &lockfile.Lock{Plugins: []lockfile.LockPlugin{ //nolint:exhaustruct // partial fixture
+			{ID: "android-sdk", Requested: "=11076708", Version: "11076708"}, // no Extra recorded
+		}},
+	}
+	if got := empty.EffectivePluginVersions()["android-sdk"].Extra; len(got) != 0 {
+		t.Errorf("stale workspace Extra leaked past an empty lock entry: %v", got)
+	}
+
+	// Lock recorded Extra → those values win.
+	locked := &generate.WorkspaceContext{ //nolint:exhaustruct // partial fixture
+		WS: &config.Workspace{Plugins: config.PluginsSpec{ //nolint:exhaustruct // partial fixture
+			Enable: []string{"android-sdk"},
+			Versions: map[string]config.PluginVersionOverride{ //nolint:exhaustruct // no checksum
+				"android-sdk": {Spec: "=11076708", Pin: "11076708", Extra: map[string]string{"build_tools": "35.0.0"}},
+			},
+		}},
+		Lock: &lockfile.Lock{Plugins: []lockfile.LockPlugin{ //nolint:exhaustruct // partial fixture
+			{ID: "android-sdk", Requested: "=11076708", Version: "11076708", Extra: map[string]string{"build_tools": "34.0.0"}},
+		}},
+	}
+	if got := locked.EffectivePluginVersions()["android-sdk"].Extra["build_tools"]; got != "34.0.0" {
+		t.Errorf("lock Extra should win, got build_tools=%q", got)
+	}
+}
+
+// TestEffectivePluginVersions_IgnoresStaleLockEntry pins that a cocoon.lock
+// entry for a plugin no longer in [plugins].enable is dropped from the effective
+// overrides, so a stale lock does not trip the generator's "not enabled" guard
+// (the user need not re-run `cocoon lock` after disabling a plugin to gen).
+func TestEffectivePluginVersions_IgnoresStaleLockEntry(t *testing.T) {
+	t.Parallel()
+	c := &generate.WorkspaceContext{ //nolint:exhaustruct // partial fixture
+		WS: &config.Workspace{Plugins: config.PluginsSpec{ //nolint:exhaustruct // partial fixture
+			Enable:   []string{"go"},                                                  // "node" was removed from enable but lingers in the lock
+			Versions: map[string]config.PluginVersionOverride{"go": {Spec: "latest"}}, //nolint:exhaustruct // latest
+		}},
+		Lock: &lockfile.Lock{Plugins: []lockfile.LockPlugin{ //nolint:exhaustruct // partial fixture
+			{ID: "go", Requested: "latest", Version: "1.23.4"},
+			{ID: "node", Requested: "latest", Version: "22.0.0"}, // stale: not enabled
+		}},
+	}
+	eff := c.EffectivePluginVersions()
+	if _, ok := eff["node"]; ok {
+		t.Errorf("stale lock entry for a non-enabled plugin must not appear in effective overrides: %v", eff["node"])
+	}
+	if eff["go"].Pin != "1.23.4" {
+		t.Errorf("an enabled plugin must still receive its lock overlay; Pin=%q", eff["go"].Pin)
+	}
+}
+
+// TestEffectivePluginVersions_NoLockEqualsBase pins that without a lock the
+// effective overrides equal the workspace overrides unchanged.
+func TestEffectivePluginVersions_NoLockEqualsBase(t *testing.T) {
+	t.Parallel()
+	c := &generate.WorkspaceContext{ //nolint:exhaustruct // partial fixture
+		WS: &config.Workspace{Plugins: config.PluginsSpec{ //nolint:exhaustruct // partial fixture
+			Versions: map[string]config.PluginVersionOverride{"go": {Spec: "=1.22.0", Pin: "1.22.0"}}, //nolint:exhaustruct // no checksum
+		}},
+	}
+	if c.EffectivePluginVersions()["go"].Pin != "1.22.0" {
+		t.Errorf("no-lock effective overrides should equal the base override")
+	}
+}
+
+// TestUnlockedLatestPlugins pins the gen reproducibility gate: only enabled
+// version_capable plugins on "latest" with no lock entry are reported. Exact
+// pins and non-version_capable plugins are excluded; a locked latest is too.
+func TestUnlockedLatestPlugins(t *testing.T) {
+	t.Parallel()
+	vc := &plugin.Plugin{Version: plugin.Version{VersionCapable: true}}     //nolint:exhaustruct // partial fixture
+	nonVC := &plugin.Plugin{Version: plugin.Version{VersionCapable: false}} //nolint:exhaustruct // partial fixture
+	c := &generate.WorkspaceContext{                                        //nolint:exhaustruct // partial fixture
+		WS: &config.Workspace{Plugins: config.PluginsSpec{ //nolint:exhaustruct // partial fixture
+			Enable:   []string{"go", "node", "exact", "novc"},
+			Versions: map[string]config.PluginVersionOverride{"exact": {Spec: "=1.0.0", Pin: "1.0.0"}}, //nolint:exhaustruct // no checksum
+		}},
+		Plugins: map[string]*plugin.Plugin{"go": vc, "node": vc, "exact": vc, "novc": nonVC},
+		Lock: &lockfile.Lock{Plugins: []lockfile.LockPlugin{ //nolint:exhaustruct // partial fixture
+			{ID: "go", Requested: "latest", Version: "1.23.4"}, //nolint:exhaustruct // no checksum
+		}},
+	}
+	got := c.UnlockedLatestPlugins()
+	if len(got) != 1 || got[0] != "node" {
+		t.Errorf("UnlockedLatestPlugins = %v, want [node]", got)
 	}
 }

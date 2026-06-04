@@ -14,3 +14,17 @@ description = "Single starship binary extracted from a GitHub Release tarball"
 
 [version]
 version_capable = true
+
+[version.source.latest]
+type = "github-release"
+repo = "starship/starship"
+strip_prefix = "v"
+
+[version.source.checksum]
+type = "sidecar"
+asset_url = "https://github.com/starship/starship/releases/download/v${version}/starship-${arch}-unknown-linux-musl.tar.gz"
+suffix = ".sha256"
+
+[version.source.arch]
+amd64 = "x86_64"
+arm64 = "aarch64"

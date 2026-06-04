@@ -18,3 +18,11 @@ PATH = "/home/${USERNAME}/.local/bin:$PATH"
 
 [version]
 version_capable = true
+
+[version.source.latest]
+type = "github-release"
+repo = "jdx/mise"
+strip_prefix = "v"
+
+[version.source.checksum]
+type = "none"

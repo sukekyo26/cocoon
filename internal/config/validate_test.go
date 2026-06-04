@@ -1143,13 +1143,74 @@ func TestValidate_PluginsBadIDChar(t *testing.T) {
 	require.Contains(t, err.Error(), "plugin id does not match")
 }
 
-func TestValidate_PluginVersionPinEmpty(t *testing.T) {
+// TestValidate_PluginVersionEmptyConstraint pins that a trailing "=" with no
+// version ("go=") is rejected (the user almost certainly meant a bare "go" or
+// "go=latest"), not silently treated as "no pin".
+func TestValidate_PluginVersionEmptyConstraint(t *testing.T) {
 	t.Parallel()
-	body := minimalWorkspace() +
-		"\n[plugins.versions.go]\npin = \"\"\n"
+	body := strings.ReplaceAll(minimalWorkspace(), "enable = []", `enable = ["go="]`)
 	err := loadWS(t, body)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "pin must not be empty")
+	require.Contains(t, err.Error(), "must not be empty")
+}
+
+// TestParseVersionSpec covers the constraint grammar by category: exact pins,
+// latest (and its "*" synonym), and every reject class (range operators, bare
+// versions, empty, bad charset) classified by sentinel via errors.Is.
+func TestParseVersionSpec(t *testing.T) {
+	t.Parallel()
+	t.Run("accepted", func(t *testing.T) {
+		t.Parallel()
+		cases := []struct {
+			name, in, wantSpec, wantPin string
+		}{
+			{"exact", "=1.23.4", "=1.23.4", "1.23.4"},
+			{"exact_v_prefix", "=v1.2.3", "=v1.2.3", "v1.2.3"},
+			{"exact_padded", "  =1.2.3  ", "=1.2.3", "1.2.3"},
+			{"latest", "latest", "latest", ""},
+			{"star_synonym", "*", "latest", ""},
+		}
+		for _, tc := range cases {
+			tc := tc
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+				ov, err := config.ParseVersionSpec(tc.in)
+				require.NoError(t, err)
+				require.Equal(t, tc.wantSpec, ov.Spec)
+				require.Equal(t, tc.wantPin, ov.Pin)
+				require.Equal(t, tc.wantSpec == config.VersionSpecLatest, ov.IsLatest())
+			})
+		}
+	})
+	t.Run("rejected", func(t *testing.T) {
+		t.Parallel()
+		cases := []struct {
+			name, in string
+			want     error
+		}{
+			{"empty", "", config.ErrVersionSpecEmpty},
+			{"whitespace", "   ", config.ErrVersionSpecEmpty},
+			{"range_gte", ">=1.20", config.ErrVersionSpecRange},
+			{"range_gt", ">1.0", config.ErrVersionSpecRange},
+			{"range_lte", "<=2.0", config.ErrVersionSpecRange},
+			{"range_lt", "<2.0", config.ErrVersionSpecRange},
+			{"range_caret", "^1.2.3", config.ErrVersionSpecRange},
+			{"range_tilde", "~1.2", config.ErrVersionSpecRange},
+			{"range_neq", "!=1.0", config.ErrVersionSpecRange},
+			{"bare", "1.23.4", config.ErrVersionSpecBare},
+			{"charset_space", "=1.0 0", config.ErrVersionSpecCharset},
+			{"charset_dollar", "=$(x)", config.ErrVersionSpecCharset},
+			{"charset_empty_after_eq", "=", config.ErrVersionSpecCharset},
+		}
+		for _, tc := range cases {
+			tc := tc
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+				_, err := config.ParseVersionSpec(tc.in)
+				require.ErrorIs(t, err, tc.want)
+			})
+		}
+	})
 }
 
 // TestValidate_PluginsMethodsAccepted pins the happy path: a
@@ -1195,13 +1256,47 @@ func TestValidate_PluginsMethodsEmptyValueRejected(t *testing.T) {
 	require.Contains(t, err.Error(), "method name does not match")
 }
 
-func TestValidate_PluginVersionBadChecksum(t *testing.T) {
+// TestLockFileSpec_NameOrDefault pins the nil-safe accessor: a nil receiver,
+// a nil Name, and an empty string all fall back to DefaultLockFileName; a set
+// value is returned verbatim.
+func TestLockFileSpec_NameOrDefault(t *testing.T) {
 	t.Parallel()
-	body := minimalWorkspace() +
-		"\n[plugins.versions.go]\npin = \"1.23.4\"\nchecksum_amd64 = \"NOT-A-HEX\"\n"
-	err := loadWS(t, body)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "checksum_amd64")
+	var nilSpec *config.LockFileSpec
+	require.Equal(t, config.DefaultLockFileName, nilSpec.NameOrDefault())
+	empty := ""
+	require.Equal(t, config.DefaultLockFileName, (&config.LockFileSpec{Name: &empty}).NameOrDefault())
+	custom := "my.lock"
+	require.Equal(t, "my.lock", (&config.LockFileSpec{Name: &custom}).NameOrDefault())
+}
+
+// TestValidate_LockFileName pins the [lockfile].name guard by category: a
+// plain basename is accepted; a slash, "." / "..", or "workspace.toml" are
+// rejected (the last would overwrite the user's own config).
+func TestValidate_LockFileName(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name, value string
+		wantErr     bool
+	}{
+		{"plain", "custom.lock", false},
+		{"slash", "sub/custom.lock", true},
+		{"dot", ".", true},
+		{"dotdot", "..", true},
+		{"workspace_collision", "workspace.toml", true},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			body := minimalWorkspace() + "\n[lockfile]\nname = \"" + tc.value + "\"\n"
+			err := loadWS(t, body)
+			if tc.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
 }
 
 func TestValidate_PortsOutOfRange(t *testing.T) {

@@ -11,9 +11,9 @@ import (
 // promptPluginVersionsForCapable shows a LATEST + free-text picker per
 // version_capable plugin. Plugins already pinned via --plugin-versions
 // are skipped so flag values win in non-interactive flows. "LATEST" is
-// encoded as absence from pins (writePluginVersions then omits the line).
-// Upstream-existence is not verified; the format validator only enforces
-// a TOML-safe charset.
+// encoded as absence from pins (the enable entry is then written bare, with
+// no "=<version>" suffix). Upstream-existence is not verified; the format
+// validator only enforces a TOML-safe charset.
 func promptPluginVersionsForCapable(
 	cat *i18n.Catalog,
 	plugins map[string]*plugin.Plugin,
@@ -40,7 +40,7 @@ func promptPluginVersionsForCapable(
 }
 
 // pluginVersionLatestSentinel labels the "no pin" row. Picking it leaves
-// the plugin absent from pins, which writePluginVersions treats as LATEST.
+// the plugin absent from pins, so its enable entry is written bare (LATEST).
 const pluginVersionLatestSentinel = "LATEST"
 
 // promptOnePluginVersion returns "" when the user kept LATEST. A non-empty

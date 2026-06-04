@@ -34,3 +34,11 @@ PATH = "$PROTO_HOME/shims:$PROTO_HOME/bin:$PATH"
 
 [version]
 version_capable = true
+
+[version.source.latest]
+type = "github-release"
+repo = "moonrepo/proto"
+strip_prefix = "v"
+
+[version.source.checksum]
+type = "none"

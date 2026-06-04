@@ -13,3 +13,15 @@ description = "Single shfmt binary direct from the GitHub Release"
 
 [version]
 version_capable = true
+
+[version.source.latest]
+type = "github-release"
+repo = "mvdan/sh"
+strip_prefix = "v"
+
+[version.source.checksum]
+type = "none"
+
+[version.source.arch]
+amd64 = "amd64"
+arm64 = "arm64"

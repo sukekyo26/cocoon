@@ -113,7 +113,7 @@ no_new_privileges = true
 default = "bash"
 
 # [plugins] — enable cocoon plugins (run `cocoon plugin list` for the catalog).
-#   Pin versions in [plugins.versions] when you need reproducible builds.
+#   Pin a version inline in the enable array (e.g. "go=1.23.4", "node=latest") for reproducible builds; run `cocoon lock` to freeze latest.
 [plugins]
 enable = []
 
@@ -123,11 +123,13 @@ enable = []
 # [plugins.methods]
 # <plugin-id> = "<method-name>"
 
-# [plugins.versions] — pin specific versions for version_capable plugins.
-#   For verify = "checksum" plugins, checksum_amd64 / checksum_arm64 (64 lowercase hex chars) verify downloads.
-# [plugins.versions]
-# go = { pin = "1.22.5" }
-# uv = { pin = "0.5.7", checksum_amd64 = "<sha256>" }
+# [plugins.options] — extra per-plugin knobs for the enabled plugins above.
+#   Pin versions inline in the enable array (e.g. "go=1.22.5", "starship=latest");
+#   run `cocoon lock` to freeze "latest" and record checksums in cocoon.lock.
+#   Use this table only for [install.extra_versions] knobs (e.g. android-sdk's
+#   api_level / build_tools).
+# [plugins.options]
+# android-sdk = { api_level = "35", build_tools = "35.0.0" }
 
 # [apt] — extra apt packages installed on top of cocoon's minimal base + selected categories.
 #   Re-run `cocoon init --force` to change category checkboxes, or edit this list directly.

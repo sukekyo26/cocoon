@@ -21,10 +21,8 @@ import (
 func newPinCmd(stdout, stderr io.Writer) *cobra.Command {
 	cat := i18n.New(i18n.Detect())
 	var (
-		amd64Checksum string
-		arm64Checksum string
-		method        string
-		write         bool
+		method string
+		write  bool
 	)
 	cmd := &cobra.Command{
 		Use:           "pin <id> <ref>",
@@ -34,20 +32,29 @@ func newPinCmd(stdout, stderr io.Writer) *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(_ *cobra.Command, args []string) error {
-			return runPin(stdout, stderr, args[0], args[1], amd64Checksum, arm64Checksum, method, write)
+			return runPin(stdout, stderr, args[0], args[1], method, write)
 		},
 	}
-	cmd.Flags().StringVar(&amd64Checksum, "amd64-checksum", "", cat.Msg("flag_plugin_pin_amd64_checksum_usage"))
-	cmd.Flags().StringVar(&arm64Checksum, "arm64-checksum", "", cat.Msg("flag_plugin_pin_arm64_checksum_usage"))
 	cmd.Flags().StringVar(&method, "method", "", cat.Msg("flag_plugin_pin_method_usage"))
 	cmd.Flags().BoolVar(&write, "write", false, cat.Msg("flag_plugin_pin_write_usage"))
 	return cmd
 }
 
-func runPin(stdout, stderr io.Writer, id, ref, amd64sum, arm64sum, method string, write bool) error {
+func runPin(stdout, stderr io.Writer, id, ref, method string, write bool) error {
 	if id == "" || ref == "" {
 		return fmt.Errorf("%w: both <id> and <ref> are required", clihelpers.ErrUsage)
 	}
+	// Normalise the version constraint up front so the CLI rejects ranges
+	// (">=1.0") with the same message the workspace loader uses and writes the
+	// canonical "=<version>" / "latest" form. A bare version is accepted and
+	// gets the "=" prepended for the user.
+	override, specErr := normalizePinSpec(ref)
+	if specErr != nil {
+		return fmt.Errorf(
+			`%w: invalid version for %q: %w — write a bare version (1.23.4) or "latest"`,
+			clihelpers.ErrUsage, id, specErr)
+	}
+	spec := override.Spec
 	layered, err := resolveLayered()
 	if err != nil {
 		return err
@@ -60,39 +67,53 @@ func runPin(stdout, stderr io.Writer, id, ref, amd64sum, arm64sum, method string
 		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, lErr)
 	}
 	// A pin only means something for a version_capable plugin: cocoon gen
-	// hard-rejects a [plugins.versions] entry for any other plugin. Fail fast
-	// here so `plugin pin` never emits a config that cannot generate.
+	// hard-rejects a pinned enable entry for any other plugin. Fail fast here
+	// so `plugin pin` never emits a config that cannot generate.
 	if !p.Version.VersionCapable {
 		return fmt.Errorf(
 			"%w: plugin %q is not version_capable; it cannot be pinned "+
-				"([plugins.versions] entries for it are rejected by cocoon gen)",
-			clihelpers.ErrUsage, id)
+				"(a \"%s=<version>\" enable entry is rejected by cocoon gen)",
+			clihelpers.ErrUsage, id, id)
 	}
 	if method != "" {
 		if mErr := validateMethodForPin(p, id, method); mErr != nil {
 			return mErr
 		}
 	}
-	if (amd64sum != "" || arm64sum != "") && !p.Version.VerifiesByChecksum() {
-		return fmt.Errorf(
-			"%w: plugin %q declares verify = %q in plugin.toml; it verifies downloads "+
-				"in-script and takes no per-workspace checksum — drop --amd64-checksum / "+
-				"--arm64-checksum and pin the version only",
-			clihelpers.ErrUsage, id, p.Version.Verify)
-	}
 	if write {
-		return runPinWrite(stdout, stderr, id, ref, amd64sum, arm64sum, method)
+		return runPinWrite(stdout, stderr, id, spec, method)
 	}
-	fmt.Fprint(stdout, renderPinSnippet(id, ref, amd64sum, arm64sum, method))
+	fmt.Fprint(stdout, renderPinSnippet(id, spec, method))
 	return nil
 }
 
-// runPinWrite discovers workspace.toml and upserts both the pin line
+// normalizePinSpec turns the CLI's <ref> argument into a validated
+// PluginVersionOverride. For ergonomics a bare version ("1.23.4") gets the
+// "=" prepended; "latest"/"*" and any operator-led string (=, >, <, ^, ~, !)
+// are passed to config.ParseVersionSpec verbatim so ranges are classified
+// and rejected precisely rather than mangled into a charset error.
+func normalizePinSpec(ref string) (config.PluginVersionOverride, error) {
+	t := strings.TrimSpace(ref)
+	candidate := t
+	if t != "" && t != config.VersionSpecLatest && t != "*" && isVersionStart(t[0]) {
+		candidate = "=" + t
+	}
+	//nolint:wrapcheck // runPin wraps the returned spec error into clihelpers.ErrUsage.
+	return config.ParseVersionSpec(candidate)
+}
+
+// isVersionStart reports whether b can begin a bare version token (so the
+// CLI knows to prepend "="). Operators and "latest" are handled separately.
+func isVersionStart(b byte) bool {
+	return (b >= '0' && b <= '9') || (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || b == '_'
+}
+
+// runPinWrite discovers workspace.toml and upserts both the constraint line
 // (always) and the method line (when method != "") in a single
 // read-modify-write cycle via plugin.UpsertPinAndMethod. The single-write
 // path means a transient I/O failure cannot persist the pin without the
 // matching method or vice-versa — either both land or neither does.
-func runPinWrite(stdout, stderr io.Writer, id, ref, amd64sum, arm64sum, method string) error {
+func runPinWrite(stdout, stderr io.Writer, id, spec, method string) error {
 	cwd, cwdErr := os.Getwd()
 	if cwdErr != nil {
 		return fmt.Errorf("%w: getwd: %w", clihelpers.ErrFailure, cwdErr)
@@ -106,14 +127,14 @@ func runPinWrite(stdout, stderr io.Writer, id, ref, amd64sum, arm64sum, method s
 			"%w: --write needs a discoverable workspace.toml (run inside a cocoon project)",
 			clihelpers.ErrUsage)
 	}
-	if uErr := plugin.UpsertPinAndMethod(wsPath, id, ref, amd64sum, arm64sum, method); uErr != nil {
-		if errors.Is(uErr, plugin.ErrLegacyPinSubsection) {
+	if uErr := plugin.UpsertPinAndMethod(wsPath, id, spec, method); uErr != nil {
+		if errors.Is(uErr, plugin.ErrLegacyPluginVersions) {
 			return fmt.Errorf("%w: %w (in %s)", clihelpers.ErrUsage, uErr, wsPath)
 		}
 		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, uErr)
 	}
 	log := logx.New(stdout, stderr)
-	log.Successf("Updated %s: [plugins.versions] %s", wsPath, id)
+	log.Successf("Updated %s: [plugins].enable %q", wsPath, plugin.FormatEnableEntry(id, spec))
 	if method != "" {
 		log.Successf("Updated %s: [plugins.methods] %s = %q", wsPath, id, method)
 	}
@@ -121,24 +142,25 @@ func runPinWrite(stdout, stderr io.Writer, id, ref, amd64sum, arm64sum, method s
 }
 
 // renderPinSnippet returns the stdout block the user pastes into
-// workspace.toml when --write is absent. Empty method emits the
-// legacy single-section shape; a non-empty method prepends a
-// [plugins.methods] snippet so the user sees both halves of the pick.
-func renderPinSnippet(id, ref, amd64sum, arm64sum, method string) string {
+// workspace.toml when --write is absent. Empty method emits the enable-array
+// entry alone; a non-empty method appends a [plugins.methods] snippet so the
+// user sees both halves of the pick.
+func renderPinSnippet(id, spec, method string) string {
 	var b strings.Builder
+	entry := plugin.FormatEnableEntry(id, spec)
 	if method == "" {
-		fmt.Fprintln(&b, "# Add the following line under [plugins.versions] in workspace.toml:")
+		fmt.Fprintln(&b, "# Add (or update) this entry in the [plugins].enable array in workspace.toml:")
 		fmt.Fprintln(&b)
-		b.WriteString(plugin.FormatPinLine(id, ref, amd64sum, arm64sum))
+		fmt.Fprintf(&b, "%q\n", entry)
 		return b.String()
 	}
-	fmt.Fprintln(&b, "# Add the following lines to workspace.toml:")
+	fmt.Fprintln(&b, "# Add the following to workspace.toml:")
+	fmt.Fprintln(&b)
+	fmt.Fprintln(&b, "# In the [plugins].enable array:")
+	fmt.Fprintf(&b, "%q\n", entry)
 	fmt.Fprintln(&b)
 	fmt.Fprintln(&b, "# Under [plugins.methods]:")
 	b.WriteString(plugin.FormatMethodLine(id, method))
-	fmt.Fprintln(&b)
-	fmt.Fprintln(&b, "# Under [plugins.versions]:")
-	b.WriteString(plugin.FormatPinLine(id, ref, amd64sum, arm64sum))
 	return b.String()
 }
 

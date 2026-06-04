@@ -4,7 +4,7 @@
 //
 //	list       list every plugin available in the layered view
 //	show       print the resolved manifest for one plugin id
-//	pin        emit (or write in-place) a [plugins.versions.<id>] block
+//	pin        emit (or write in-place) a [plugins].enable entry for one plugin
 //	scaffold   create a new <id>/ directory under .cocoon/plugins from a template
 //
 // To use an embedded plugin, add its id to [plugins].enable in

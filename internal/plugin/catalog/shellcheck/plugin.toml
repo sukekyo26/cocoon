@@ -16,3 +16,15 @@ description = "Single shellcheck binary extracted from a GitHub Release tarball"
 
 [version]
 version_capable = true
+
+[version.source.latest]
+type = "github-release"
+repo = "koalaman/shellcheck"
+strip_prefix = "v"
+
+[version.source.checksum]
+type = "none"
+
+[version.source.arch]
+amd64 = "x86_64"
+arm64 = "aarch64"

@@ -1,0 +1,18 @@
+cocoon lock — 有効な version_capable プラグインの制約を、ネットワーク越しに
+具体バージョン（と arch ごとの SHA256 checksum）へ解決し、workspace ルートに
+lock ファイル（既定 cocoon.lock、[lockfile].name で上書き可）を書き出します。`cocoon gen` はこの lock をオフラインで消費し、
+生成される .devcontainer/ を再現可能にします。
+
+"latest" 制約は最新リリースへ凍結され、"=x.y.z" pin はバージョンを保ったまま
+checksum を記録します。[version.source] を持たないプラグイン（例: aws-cli）は
+exact バージョンへの pin が必要です。再実行はべき等で、既にロック済みのエントリは
+--upgrade を付けない限りネットワークアクセスなしで再利用されます。
+
+使い方:
+  cocoon lock [flags]
+
+フラグ:
+      --check              解決せずに lock ファイルが workspace.toml と一致するか検証（ドリフト時は非ゼロ終了・CI 用）
+  -h, --help               lock のヘルプを表示
+      --upgrade            既にロック済みでも "latest" 制約を再解決（exact pin は不変）
+      --workspace string   workspace.toml のパス（既定: cwd から探索）

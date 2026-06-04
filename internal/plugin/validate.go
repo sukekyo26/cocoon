@@ -5,27 +5,29 @@ import (
 	"maps"
 	"regexp"
 	"slices"
+	"strings"
 
 	"github.com/sukekyo26/cocoon/internal/config"
 )
 
 var (
-	rxEnvKey          = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
-	rxBuildArg        = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`)
-	rxPluginVolume    = regexp.MustCompile(`^/home/\$\{USERNAME\}/[^/]+$`)
-	rxPluginURL       = regexp.MustCompile(`^https://[^\s]+$`)
-	rxMethodName      = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
-	rxExtraVersionKey = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+	rxEnvKey              = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+	rxBuildArg            = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`)
+	rxPluginVolume        = regexp.MustCompile(`^/home/\$\{USERNAME\}/[^/]+$`)
+	rxPluginURL           = regexp.MustCompile(`^https://[^\s]+$`)
+	rxMethodName          = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
+	rxExtraVersionKey     = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+	rxTemplatePlaceholder = regexp.MustCompile(`\$\{[^}]*\}`)
 )
 
-// reservedExtraVersionKeys lists the [plugins.versions].<id> keys that
-// the workspace loader consumes into dedicated PluginVersionOverride
-// fields (Pin / ChecksumAmd64 / ChecksumArm64). A plugin declaring one
-// of these names under [install.extra_versions] would be a silent no-op:
-// the user can never override the value via [plugins.versions] because
-// the loader routes the matching key into the reserved field, never
-// into Extra. Reject the declaration up front so the plugin author sees
-// the conflict instead of debugging a "default that never moves".
+// reservedExtraVersionKeys lists the [plugins.options].<id> keys that the
+// workspace loader treats specially (pin is removed; checksum_amd64 /
+// checksum_arm64 feed the dedicated PluginVersionOverride checksum fields). A
+// plugin declaring one of these names under [install.extra_versions] would be
+// a silent no-op: the user could never override the value via
+// [plugins.options] because the loader never routes a reserved key into Extra.
+// Reject the declaration up front so the plugin author sees the conflict
+// instead of debugging a "default that never moves".
 //
 //nolint:gochecknoglobals // pin-down table for validation.
 var reservedExtraVersionKeys = map[string]struct{}{
@@ -91,6 +93,100 @@ func (v *Version) validate(a *config.Accumulator) {
 	}
 	if v.Verify != "" && !v.VersionCapable {
 		a.Add("verify requires version_capable = true", "verify")
+	}
+	if v.Source != nil {
+		if !v.VersionCapable {
+			a.Add("[version.source] requires version_capable = true", "source")
+		}
+		v.Source.validate(a.At("source"), v.Verify)
+	}
+}
+
+func (s *VersionSource) validate(a *config.Accumulator, verify string) {
+	s.Latest.validate(a.At("latest"))
+	s.Checksum.validate(a.At("checksum"), verify)
+	if s.usesArch() && len(s.Arch) == 0 {
+		a.Add(`arch map is required when a url or asset_name uses ${arch}`, "arch")
+	}
+}
+
+func (s *VersionSource) usesArch() bool {
+	return strings.Contains(s.Latest.URL, "${arch}") ||
+		strings.Contains(s.Checksum.AssetURL, "${arch}") ||
+		strings.Contains(s.Checksum.ManifestURL, "${arch}") ||
+		strings.Contains(s.Checksum.AssetName, "${arch}")
+}
+
+func (l *LatestSpec) validate(a *config.Accumulator) {
+	switch l.Type {
+	case LatestGitHubRelease:
+		if l.Repo == "" {
+			a.Add(`repo is required for latest.type = "github-release"`, "repo")
+		}
+	case LatestText, LatestTab:
+		validateSourceURL(a, l.URL, "url")
+	case LatestJSONField:
+		validateSourceURL(a, l.URL, "url")
+		if l.Field == "" {
+			a.Add(`field is required for latest.type = "json-field"`, "field")
+		}
+	case "":
+		a.Add("latest.type must be set", "type")
+	default:
+		a.Add(fmt.Sprintf("latest.type %q is not one of %q, %q, %q, %q",
+			l.Type, LatestGitHubRelease, LatestText, LatestJSONField, LatestTab), "type")
+	}
+}
+
+func (c *ChecksumSpec) validate(a *config.Accumulator, verify string) {
+	switch c.Type {
+	case ChecksumNone:
+	case ChecksumSidecar:
+		validateSourceURL(a, c.AssetURL, "asset_url")
+	case ChecksumShasumsFile:
+		validateSourceURL(a, c.ManifestURL, "manifest_url")
+		if c.AssetName == "" {
+			a.Add(`asset_name is required for checksum.type = "shasums-file"`, "asset_name")
+		} else {
+			// asset_name is template-expanded by the resolver (matched against
+			// the SHASUMS manifest), so a typo'd placeholder must fail here too.
+			validateTemplatePlaceholders(a, c.AssetName, "asset_name")
+		}
+	case "":
+		a.Add("checksum.type must be set", "type")
+	default:
+		a.Add(fmt.Sprintf("checksum.type %q is not one of %q, %q, %q",
+			c.Type, ChecksumNone, ChecksumSidecar, ChecksumShasumsFile), "type")
+	}
+	if c.Type != "" && c.Type != ChecksumNone && verify == VerifyPGP {
+		a.Add(`checksum.type must be "none" when verify = "pgp"`, "type")
+	}
+}
+
+// validateTemplatePlaceholders rejects any ${...} the resolver does not expand
+// (only ${version} / ${arch}) in a template-expanded field, so a typo fails at
+// plugin.toml load instead of with a confusing lock-time fetch / not-found.
+func validateTemplatePlaceholders(a *config.Accumulator, raw, field string) {
+	for _, ph := range rxTemplatePlaceholder.FindAllString(raw, -1) {
+		if ph != "${version}" && ph != "${arch}" {
+			a.Add(fmt.Sprintf("%s has unknown placeholder %s (only ${version} and ${arch} are expanded)", field, ph), field)
+		}
+	}
+}
+
+// validateSourceURL checks a source URL: every ${...} placeholder must be one
+// the resolver expands (${version} / ${arch}), and after stripping them the
+// https-only / no-whitespace contract must hold for the literal parts a
+// third-party plugin.toml supplies. Untrusted-input gate per defensive-coding §5.
+func validateSourceURL(a *config.Accumulator, raw, field string) {
+	if raw == "" {
+		a.Add(field+" must not be empty", field)
+		return
+	}
+	validateTemplatePlaceholders(a, raw, field)
+	stripped := rxTemplatePlaceholder.ReplaceAllString(raw, "x")
+	if !rxPluginURL.MatchString(stripped) {
+		a.Add(field+" must start with https:// and contain no whitespace", field)
 	}
 }
 
@@ -193,9 +289,8 @@ func validateOneExtraVersion(
 	seenEnv map[string]string,
 ) {
 	if _, reserved := reservedExtraVersionKeys[k]; reserved {
-		a.Add(fmt.Sprintf("extra_versions key %q is reserved by [plugins.versions] "+
-			"(consumed as the dedicated %s field, never as an extra) — pick a different key",
-			k, k), "extra_versions", k)
+		a.Add(fmt.Sprintf("extra_versions key %q is reserved under [plugins.options] "+
+			"(never routed as an extra) — pick a different key", k), "extra_versions", k)
 		return
 	}
 	if !rxExtraVersionKey.MatchString(k) {
