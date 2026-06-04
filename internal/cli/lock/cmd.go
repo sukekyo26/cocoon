@@ -74,11 +74,11 @@ func runLock(ctx context.Context, stdout, stderr io.Writer, opts lockOptions) er
 	}
 	requested := requestedSpecs(wctx)
 	lockPath := lockfile.PathFor(wsPath, wctx.WS)
-	existing, err := loadExistingLock(lockPath)
+	log := logx.New(stdout, stderr)
+	existing, err := loadExistingLock(lockPath, opts.check, log)
 	if err != nil {
 		return err
 	}
-	log := logx.New(stdout, stderr)
 	if opts.check {
 		return checkLock(log, lockPath, existing, requested)
 	}
@@ -111,15 +111,25 @@ func loadContext(wsPath string, stderr io.Writer) (*generate.WorkspaceContext, e
 	return generatecli.LoadContext(wsPath, layered, "", stderr)
 }
 
-func loadExistingLock(path string) (*lockfile.Lock, error) {
+// loadExistingLock returns the current lock for reuse, with "no lock yet" as a
+// nil, non-error state. A malformed existing lock is fatal for --check (the lock
+// is broken and CI must catch it) but recoverable for a write: `cocoon lock`
+// owns and fully rewrites the file, so it warns and regenerates from scratch
+// (nil) rather than refusing to run over a corrupt file.
+func loadExistingLock(path string, check bool, log *logx.Logger) (*lockfile.Lock, error) {
 	l, err := lockfile.Load(path)
-	if err != nil {
-		if lockfile.IsNotExist(err) {
-			return nil, nil //nolint:nilnil // "no lock yet" is a valid, non-error state.
-		}
-		return nil, fmt.Errorf("%w: %w", clihelpers.ErrUsage, err)
+	switch {
+	case err == nil:
+		return l, nil
+	case lockfile.IsNotExist(err):
+		return nil, nil //nolint:nilnil // "no lock yet" is a valid, non-error state.
+	case check:
+		return nil, fmt.Errorf("%w: %s is malformed (%w); run `cocoon lock` to regenerate it",
+			clihelpers.ErrUsage, path, err)
+	default:
+		log.Warn(fmt.Sprintf("ignoring malformed %s (%v); regenerating from scratch", path, err))
+		return nil, nil //nolint:nilnil // malformed-and-regenerating is a valid write-path state.
 	}
-	return l, nil
 }
 
 func resolveWorkspace(flag string) (string, error) {

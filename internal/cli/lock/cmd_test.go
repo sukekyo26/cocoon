@@ -260,6 +260,36 @@ func TestLock_CheckUpToDateAndDrift(t *testing.T) {
 	require.ErrorIs(t, err, clihelpers.ErrUsage)
 }
 
+// TestLock_MalformedExistingLock pins the recovery contract: `cocoon lock`
+// (write) regenerates over a corrupt existing lock instead of refusing, while
+// `cocoon lock --check` reports it as a usage error CI can gate on.
+//
+//nolint:paralleltest // mutates defaultFetcher global + cwd/HOME.
+func TestLock_MalformedExistingLock(t *testing.T) {
+	lockPath := seedProject(t, `"demo"`, map[string]string{"demo": demoPluginTOML})
+	swapFetcher(t, demoFetcher())
+
+	// A lock with lock_version omitted (decoded as 0) is malformed.
+	//nolint:gosec // test path under t.TempDir
+	require.NoError(t, os.WriteFile(lockPath, []byte("inputs_hash = \"x\"\n"), 0o600))
+
+	// --check: malformed is a usage error (not silently treated as up to date).
+	out, err := runLockCmd(t, "--check")
+	require.ErrorIs(t, err, clihelpers.ErrUsage, "out=%s", out)
+	require.Contains(t, errOrOut(err, out), "malformed")
+
+	// write: regenerates from scratch (warns, succeeds) and replaces the file.
+	out, err = runLockCmd(t)
+	require.NoError(t, err, "out=%s", out)
+	require.Contains(t, out, "malformed")
+	l, lerr := lockfile.Load(lockPath)
+	require.NoError(t, lerr, "the regenerated lock must be valid")
+	_, ok := l.Find("demo")
+	require.True(t, ok)
+	_, err = runLockCmd(t, "--check")
+	require.NoError(t, err, "after regeneration --check passes")
+}
+
 //nolint:paralleltest // mutates defaultFetcher global + cwd/HOME.
 func TestLock_LatestUnsupportedIsUsageError(t *testing.T) {
 	seedProject(t, `"nosrc"`, map[string]string{"nosrc": noSourcePluginTOML})
