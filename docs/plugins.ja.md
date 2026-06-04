@@ -291,7 +291,8 @@ versioned プラグインは次の契約を守る:
     checksum を一切公開しておらず（例: `shfmt` / `shellcheck`）、その場合は
     checksum 未記録の限り **明示的に WARNING を出力** して続行する（無言で
     スキップは決してしない）。検証付きの再現可能なインストールには
-    `cocoon lock` を実行して `checksum_amd64` / `checksum_arm64` を記録すること。
+    `[plugins.options]` に手動で `checksum_amd64` / `checksum_arm64` を記録する
+    こと（上流が公開しないため `cocoon lock` では記録できない）。
     この取得 checksum 経路は CDN/mirror の破損や
     取り違えを防ぐが、それ単体では上流が完全に侵害された場合の証明には
     ならない — それが必要なら `cocoon lock` で checksum を記録するか

@@ -50,7 +50,9 @@ func specHashInput(specs []pluginSpec) map[string]string {
 
 // checkLock verifies (offline) that the lock matches workspace.toml: present,
 // inputs_hash current, and an entry for every enabled plugin whose requested
-// spec and [plugins.options] settings still match. Any drift is a usage error
+// spec and [plugins.options] extras still match. (A manual [plugins.options]
+// checksum is not compared: it is never recorded in the lock and gen bakes it
+// live from the workspace, so it cannot go stale.) Any drift is a usage error
 // so CI can gate on it. A workspace with no version-capable plugins needs no
 // lock, so --check passes there even when the file is absent.
 func checkLock(log *logx.Logger, lockPath string, existing *lockfile.Lock, specs []pluginSpec) error {

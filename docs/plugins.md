@@ -309,8 +309,9 @@ A versioned plugin agrees to:
     as the artifact. A few upstreams publish no per-release checksum at
     all (e.g. `shfmt`, `shellcheck`): those scripts **warn loudly** and
     proceed whenever no checksum is recorded (they never silently skip), so
-    run `cocoon lock` to record `checksum_amd64` / `checksum_arm64` for a
-    verified build.
+    set `checksum_amd64` / `checksum_arm64` **by hand in `[plugins.options]`**
+    for a verified build — `cocoon lock` cannot record one, since the upstream
+    publishes none.
     The fetched-checksum path defends against CDN/mirror corruption and
     accidental swaps; on its own it is not proof against a fully
     compromised upstream — record a checksum with `cocoon lock`, or prefer
