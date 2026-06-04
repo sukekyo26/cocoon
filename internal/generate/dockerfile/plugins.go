@@ -601,7 +601,7 @@ func validateVersionOverrides(
 		// The missing-checksum warning applies only to checksum-verified
 		// plugins; a pgp plugin pinned without a checksum is fully verified.
 		if override.Pin != "" && p.Version.VerifiesByChecksum() {
-			warnMissingChecksum(warnings, id, override)
+			warnMissingChecksum(warnings, id, override, p.Version.Source)
 		}
 	}
 	return nil
@@ -671,24 +671,36 @@ func checkExtraOverrideKeys(
 		ErrUnknownExtraVersion, id, unknown, id)
 }
 
-// warnMissingChecksum emits the "pin without recorded checksum" advisory for
-// a checksum-verified plugin whose effective override carries no checksum
-// (the common case until `cocoon lock` records one). No-op when warnings is
-// nil or both checksums are present. The install step still verifies the
-// download against the upstream-published checksum, so this is a
-// reproducibility / supply-chain notice, not an integrity gap.
-func warnMissingChecksum(warnings io.Writer, id string, override config.PluginVersionOverride) {
+// warnMissingChecksum emits the "pin without recorded checksum" advisory for a
+// checksum-verified plugin whose effective override carries no checksum. No-op
+// when warnings is nil or both checksums are present. The message depends on
+// whether the source can auto-resolve a checksum: an auto-resolvable plugin's
+// install step still verifies the download against the upstream-published
+// checksum (so running `cocoon lock` records it), whereas a plugin whose
+// upstream publishes none downloads WITHOUT verification until the user records
+// a manual checksum in [plugins.options].
+func warnMissingChecksum(
+	warnings io.Writer, id string, override config.PluginVersionOverride, src *plugin.VersionSource,
+) {
 	if warnings == nil {
 		return
 	}
 	if override.ChecksumAmd64 != nil && override.ChecksumArm64 != nil {
 		return
 	}
+	if autoResolvesChecksum(src) {
+		fmt.Fprintf(warnings,
+			"WARNING: '%s' is pinned to %q without a recorded checksum; the install step still "+
+				"verifies the download against the upstream-published checksum. "+
+				"Run `cocoon lock` to record it for reproducible builds.\n",
+			id, override.Pin)
+		return
+	}
 	fmt.Fprintf(warnings,
-		"WARNING: '%s' is pinned to %q without a recorded checksum; "+
-			"the install step verifies the download against the upstream-published "+
-			"checksum (trust-on-first-use). Run `cocoon lock` to record it.\n",
-		id, override.Pin)
+		"WARNING: '%s' is pinned to %q but its upstream publishes no checksum, so the install step "+
+			"downloads it WITHOUT verification. Set checksum_amd64/checksum_arm64 in "+
+			"[plugins.options].%s to verify.\n",
+		id, override.Pin, id)
 }
 
 // userDirsBlockTmpl omits the trailing `USER ${USERNAME}`: the caller

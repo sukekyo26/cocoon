@@ -784,19 +784,27 @@ func TestValidateManualChecksums(t *testing.T) {
 	}
 }
 
-// TestValidateVersionOverrides_PinWithoutChecksumWarning pins that the
-// missing-checksum WARNING fires for a checksum plugin pinned without a
-// checksum, but is suppressed for a pgp plugin (which is fully verified
-// in-script regardless of checksum fields).
+// TestValidateVersionOverrides_PinWithoutChecksumWarning pins the
+// missing-checksum WARNING contract: it is suppressed for a pgp plugin (fully
+// verified in-script), and its wording tracks whether the source can
+// auto-resolve a checksum — an auto-resolvable plugin still verifies and points
+// at `cocoon lock`, while a none/no-source plugin warns that the install runs
+// WITHOUT verification and points at [plugins.options].
 func TestValidateVersionOverrides_PinWithoutChecksumWarning(t *testing.T) {
 	t.Parallel()
+	sidecar := &plugin.VersionSource{Checksum: plugin.ChecksumSpec{Type: plugin.ChecksumSidecar}} //nolint:exhaustruct // only the kind matters here
+	noneSrc := &plugin.VersionSource{Checksum: plugin.ChecksumSpec{Type: plugin.ChecksumNone}}    //nolint:exhaustruct // only the kind matters here
 	cases := []struct {
-		name     string
-		verify   string
-		wantWarn bool
+		name         string
+		verify       string
+		src          *plugin.VersionSource
+		wantWarn     bool
+		wantContains string
 	}{
-		{"checksum_plugin_warns", plugin.VerifyChecksum, true},
-		{"pgp_plugin_silent", plugin.VerifyPGP, false},
+		{"auto_resolvable_points_at_lock", plugin.VerifyChecksum, sidecar, true, "cocoon lock"},
+		{"none_type_warns_unverified", plugin.VerifyChecksum, noneSrc, true, "WITHOUT verification"},
+		{"no_source_warns_unverified", plugin.VerifyChecksum, nil, true, "WITHOUT verification"},
+		{"pgp_plugin_silent", plugin.VerifyPGP, nil, false, ""},
 	}
 	for _, tc := range cases {
 		tc := tc
@@ -806,7 +814,7 @@ func TestValidateVersionOverrides_PinWithoutChecksumWarning(t *testing.T) {
 				"p": {
 					Metadata: plugin.Metadata{Name: "p", URL: "https://example.com/x"},
 					Install:  plugin.Install{},
-					Version:  plugin.Version{VersionCapable: true, Verify: tc.verify},
+					Version:  plugin.Version{VersionCapable: true, Verify: tc.verify, Source: tc.src},
 				},
 			}
 			var warnings bytes.Buffer
@@ -820,6 +828,9 @@ func TestValidateVersionOverrides_PinWithoutChecksumWarning(t *testing.T) {
 			}
 			if gotWarn := strings.Contains(warnings.String(), "WARNING"); gotWarn != tc.wantWarn {
 				t.Errorf("warning emitted = %v, want %v\n%s", gotWarn, tc.wantWarn, warnings.String())
+			}
+			if tc.wantContains != "" && !strings.Contains(warnings.String(), tc.wantContains) {
+				t.Errorf("warning %q does not contain %q", warnings.String(), tc.wantContains)
 			}
 		})
 	}
