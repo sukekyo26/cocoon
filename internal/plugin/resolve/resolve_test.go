@@ -151,6 +151,33 @@ func TestResolve_ExactPinFetchesChecksum(t *testing.T) {
 	require.Equal(t, ptr(shaA), got.ChecksumAMD64)
 }
 
+// TestResolve_ExactPinStripsPrefix pins the Request.Version contract: an exact
+// pin carrying the source's prefix ("v1.30.0") is normalized exactly like a
+// discovered "latest", so the checksum URL gets a single prefix ("v1.30.0")
+// rather than the double-prefix ("vv1.30.0") a verbatim substitution produces.
+func TestResolve_ExactPinStripsPrefix(t *testing.T) {
+	t.Parallel()
+	src := &plugin.VersionSource{
+		Latest:   plugin.LatestSpec{Type: plugin.LatestText, URL: "https://example.test/VERSION", StripPrefix: "v"},                                           //nolint:exhaustruct // optional fields
+		Checksum: plugin.ChecksumSpec{Type: plugin.ChecksumSidecar, AssetURL: "https://dl.k8s.io/release/v${version}/bin/${arch}/kubectl", Suffix: ".sha256"}, //nolint:exhaustruct // optional
+		Arch:     map[string]string{"amd64": "amd64"},
+	}
+	// Only the single-prefix URL is stubbed: a double-prefix "vv1.30.0" request
+	// would miss and fail, so a passing test proves the prefix was stripped.
+	f := mapFetcher{
+		bodies: map[string]string{
+			"https://dl.k8s.io/release/v1.30.0/bin/amd64/kubectl.sha256": shaA,
+		},
+		errs: nil,
+	}
+	got, err := resolve.New(f).Resolve(context.Background(), resolve.Request{
+		ID: "kubectl", Source: src, IsLatest: false, Version: "v1.30.0", Arches: []string{"amd64"},
+	})
+	require.NoError(t, err)
+	require.Equal(t, "1.30.0", got.Version) // recorded clean, no leading "v"
+	require.Equal(t, ptr(shaA), got.ChecksumAMD64)
+}
+
 func TestResolve_NoSourceLatestUnsupported(t *testing.T) {
 	t.Parallel()
 	_, err := resolve.New(mapFetcher{bodies: nil, errs: nil}).Resolve(context.Background(), resolve.Request{

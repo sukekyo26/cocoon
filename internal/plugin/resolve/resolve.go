@@ -47,8 +47,10 @@ type Resolved struct {
 }
 
 // Request is one plugin's resolution ask. When IsLatest is false, Version is
-// used verbatim (no leading "="); the checksum is still fetched for that
-// exact version when the source declares one.
+// the exact pin: its source strip_prefix is applied (so "v1.2.3" and "1.2.3"
+// resolve identically and never double up against a "v${version}" template),
+// and the checksum is still fetched for that version when the source declares
+// one.
 type Request struct {
 	ID       string
 	Source   *plugin.VersionSource
@@ -92,6 +94,11 @@ func (r *Resolver) Resolve(ctx context.Context, req Request) (Resolved, error) {
 			return Resolved{}, fmt.Errorf("%s: %w", req.ID, err) //nolint:exhaustruct // error path
 		}
 		version = v
+	} else if req.Source != nil {
+		// Normalize an exact pin the same way a discovered "latest" is, so a
+		// user-supplied prefix (e.g. "v1.2.3") does not double up against a
+		// template that already encodes it ("v${version}").
+		version = stripPrefix(req.Version, req.Source.Latest.StripPrefix)
 	}
 	res := Resolved{Version: version} //nolint:exhaustruct // checksums filled below
 	if req.Source == nil || req.Source.Checksum.Type == "" || req.Source.Checksum.Type == plugin.ChecksumNone {
