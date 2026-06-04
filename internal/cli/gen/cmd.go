@@ -252,10 +252,6 @@ func printNextSteps(log *logx.Logger, cat *i18n.Catalog, devcontainer bool) {
 	log.Info(cat.Msg("gen_next_step_manage"))
 }
 
-// warnDockerCLIWithoutSocket flags the docker-cli-without-docker_socket
-// combination: the in-container docker client has no daemon socket to reach,
-// so `docker ...` fails at runtime. Only a warning — using docker-cli against
-// a remote DOCKER_HOST is a legitimate socket-less setup.
 // enforceLocked applies the cocoon.lock reproducibility policy: any enabled
 // plugin whose "latest" constraint has no lock entry resolves
 // non-reproducibly at build time. Without --locked each is a warning; with
@@ -277,6 +273,10 @@ func enforceLocked(ctx *generate.WorkspaceContext, locked bool, log *logx.Logger
 	return nil
 }
 
+// warnDockerCLIWithoutSocket flags the docker-cli-without-docker_socket
+// combination: the in-container docker client has no daemon socket to reach,
+// so `docker ...` fails at runtime. Only a warning — using docker-cli against
+// a remote DOCKER_HOST is a legitimate socket-less setup.
 func warnDockerCLIWithoutSocket(ctx *generate.WorkspaceContext, log *logx.Logger, cat *i18n.Catalog) {
 	if slices.Contains(ctx.EnabledPlugins(), dockerCLIPluginID) &&
 		!ctx.WS.Container.DockerSocketEnabled() {
