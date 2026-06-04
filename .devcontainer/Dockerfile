@@ -109,12 +109,12 @@ RUN echo 'autoload -Uz compinit && compinit' >> "$HOME/.zshrc" && \
 
 # Prepare volume mount directories with correct ownership
 USER root
-RUN mkdir -p /home/${USERNAME}/.claude /home/${USERNAME}/.config /home/${USERNAME}/.copilot /home/${USERNAME}/.npm /home/${USERNAME}/.npm-global /home/${USERNAME}/go && \
-    chown ${USERNAME}:${USERNAME} /home/${USERNAME}/.claude /home/${USERNAME}/.config /home/${USERNAME}/.copilot /home/${USERNAME}/.npm /home/${USERNAME}/.npm-global /home/${USERNAME}/go
+RUN mkdir -p /home/${USERNAME}/.claude /home/${USERNAME}/.codex /home/${USERNAME}/.config /home/${USERNAME}/.copilot /home/${USERNAME}/.npm /home/${USERNAME}/.npm-global /home/${USERNAME}/go && \
+    chown ${USERNAME}:${USERNAME} /home/${USERNAME}/.claude /home/${USERNAME}/.codex /home/${USERNAME}/.config /home/${USERNAME}/.copilot /home/${USERNAME}/.npm /home/${USERNAME}/.npm-global /home/${USERNAME}/go
 # Install cocoon
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" COCOON_INSTALL_METHOD="binary" PIN="" CHECKSUM_AMD64="" CHECKSUM_ARM64="" bash <<'COCOON_PLUGIN_EOF'
+    RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" COCOON_INSTALL_METHOD="binary" PIN="0.14.0" CHECKSUM_AMD64="92e5e2c628653a548f06bbccdf4caf92b7f0a5449fedf08971d27c1ef8b1bf29" CHECKSUM_ARM64="190b374510612b69833bdf8a8235ec9514e36fae6156bcc3ae8a4d703ba7943a" bash <<'COCOON_PLUGIN_EOF'
 #!/usr/bin/env bash
 # Install the cocoon binary from its GitHub Pages mirror rather than the
 # GitHub Releases CDN. Pages-only by design — no fallback to the
@@ -189,10 +189,84 @@ fi
 install -m 0755 /tmp/cocoon /usr/local/bin/cocoon
 rm /tmp/cocoon
 COCOON_PLUGIN_EOF
+# Install OpenAI Codex CLI
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" COCOON_INSTALL_METHOD="binary" PIN="0.137.0" CHECKSUM_AMD64="d96e88313b95597e9cbb8704f6db16dbb81c07142b08cfb628479ab433696931" CHECKSUM_ARM64="1b9cae96e27f5da2752054a5bba9204d486939ea60c65df4ba4a638458734bda" bash <<'COCOON_PLUGIN_EOF'
+#!/usr/bin/env bash
+# Install OpenAI Codex CLI (https://github.com/openai/codex)
+#
+# Inputs (env):
+#   PIN              : Codex version without the "rust-v" tag prefix (e.g. "0.135.0"); empty = latest
+#   CHECKSUM_AMD64   : sha256 of the x86_64 tarball; empty to skip verification
+#   CHECKSUM_ARM64   : sha256 of the aarch64 tarball; empty to skip verification
+set -euo pipefail
+
+# Yellow WARNING when stderr is a TTY (and NO_COLOR is unset) or
+# FORCE_COLOR is set. NO_COLOR wins per no-color.org.
+if [ -n "${NO_COLOR:-}" ]; then
+  C_YEL=''
+  C_RST=''
+elif [ -n "${FORCE_COLOR:-}" ] || [ -t 2 ]; then
+  C_YEL=$'\033[33m'
+  C_RST=$'\033[0m'
+else
+  C_YEL=''
+  C_RST=''
+fi
+
+ARCH="$(dpkg --print-architecture)"
+case "$ARCH" in
+  amd64)
+    DOWNLOAD_ARCH="x86_64"
+    CHECKSUM="$CHECKSUM_AMD64"
+    ;;
+  arm64)
+    DOWNLOAD_ARCH="aarch64"
+    CHECKSUM="$CHECKSUM_ARM64"
+    ;;
+  *)
+    DOWNLOAD_ARCH="x86_64"
+    CHECKSUM="$CHECKSUM_AMD64"
+    ;;
+esac
+
+if [ -n "$PIN" ]; then
+  VERSION="$PIN"
+else
+  # openai/codex tags releases as rust-v<semver>; /releases/latest redirects
+  # to .../tag/rust-v<semver>.
+  VERSION=$(curl -fsSLI --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+    -o /dev/null -w '%{url_effective}' https://github.com/openai/codex/releases/latest |
+    sed 's|.*/tag/rust-v||')
+fi
+
+triple="${DOWNLOAD_ARCH}-unknown-linux-musl"
+TARBALL="codex-${triple}.tar.gz"
+curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+  "https://github.com/openai/codex/releases/download/rust-v${VERSION}/${TARBALL}" \
+  -o "/tmp/${TARBALL}"
+
+if [ -n "$CHECKSUM" ]; then
+  echo "${CHECKSUM}  /tmp/${TARBALL}" | sha256sum -c -
+else
+  # openai/codex publishes no SHA256SUMS manifest or .sha256 sidecar (only
+  # per-asset digests in the GitHub API + Sigstore bundles), so an unpinned
+  # build can fetch no upstream checksum. Warn loudly and proceed, matching
+  # shfmt / shellcheck. Set checksum_amd64 / checksum_arm64 in [plugins.options].codex for a verified build.
+  printf '%sWARNING: SHA256 verification skipped for OpenAI Codex CLI (no upstream checksum; set checksum_amd64/arm64 in [plugins.options].codex)%s\n' "$C_YEL" "$C_RST" >&2
+fi
+
+# The tarball holds one entry named with the full target triple
+# (codex-<triple>, no leading directory); land it as /usr/local/bin/codex.
+tar -xzf "/tmp/${TARBALL}" -C /tmp "codex-${triple}"
+install -o root -g root -m 0755 "/tmp/codex-${triple}" /usr/local/bin/codex
+rm "/tmp/${TARBALL}" "/tmp/codex-${triple}"
+COCOON_PLUGIN_EOF
 # Install Docker Buildx
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" COCOON_INSTALL_METHOD="binary" PIN="" CHECKSUM_AMD64="" CHECKSUM_ARM64="" bash <<'COCOON_PLUGIN_EOF'
+    RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" COCOON_INSTALL_METHOD="binary" PIN="0.34.1" CHECKSUM_AMD64="f1332ddb9010bd0b72628266c3a906d9a6979848033df4c8d9bd2cd113bae12b" CHECKSUM_ARM64="c34e32dd6ea2653d960d6c099c9f09b9077e4a37504d2d31e5066eccc3904231" bash <<'COCOON_PLUGIN_EOF'
 #!/usr/bin/env bash
 # Install Docker Buildx (https://github.com/docker/buildx)
 #
@@ -324,7 +398,7 @@ COCOON_PLUGIN_EOF
 # Install gitleaks
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" COCOON_INSTALL_METHOD="binary" PIN="" CHECKSUM_AMD64="" CHECKSUM_ARM64="" bash <<'COCOON_PLUGIN_EOF'
+    RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" COCOON_INSTALL_METHOD="binary" PIN="8.30.1" CHECKSUM_AMD64="551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb" CHECKSUM_ARM64="e4a487ee7ccd7d3a7f7ec08657610aa3606637dab924210b3aee62570fb4b080" bash <<'COCOON_PLUGIN_EOF'
 #!/usr/bin/env bash
 # Install gitleaks (https://github.com/gitleaks/gitleaks)
 #
@@ -391,7 +465,7 @@ COCOON_PLUGIN_EOF
 # Install just
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" COCOON_INSTALL_METHOD="binary" PIN="" CHECKSUM_AMD64="" CHECKSUM_ARM64="" bash <<'COCOON_PLUGIN_EOF'
+    RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" COCOON_INSTALL_METHOD="binary" PIN="1.51.0" CHECKSUM_AMD64="c8f085ca3e885723c341d06243fc291b5abfdc8bbe3b2c076b117de490387b59" CHECKSUM_ARM64="ed7ec466b77709198fd4afed253dba0270203ba5eb1c006bee2b0139090284f5" bash <<'COCOON_PLUGIN_EOF'
 #!/usr/bin/env bash
 # Install just (https://github.com/casey/just)
 #
@@ -459,7 +533,7 @@ COCOON_PLUGIN_EOF
 # Install Node.js
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" COCOON_INSTALL_METHOD="archive" PIN="24.16.0" CHECKSUM_AMD64="" CHECKSUM_ARM64="" bash <<'COCOON_PLUGIN_EOF'
+    RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" COCOON_INSTALL_METHOD="archive" PIN="24.16.0" CHECKSUM_AMD64="d804845d34eddc21dc1092b519d643ef40b1f58ec5dec5c22b1f4bd8fabde6c9" CHECKSUM_ARM64="524659219d6a207a7400f2bde15d19ba060ffbe0d32a8643319ad67e3bb64c78" bash <<'COCOON_PLUGIN_EOF'
 #!/usr/bin/env bash
 # Install Node.js (https://github.com/nodejs/node)
 #
@@ -539,7 +613,7 @@ ENV PATH="/usr/local/node/bin:/home/${USERNAME}/.npm-global/bin:$PATH"
 # Install ShellCheck
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" COCOON_INSTALL_METHOD="binary" PIN="" CHECKSUM_AMD64="" CHECKSUM_ARM64="" bash <<'COCOON_PLUGIN_EOF'
+    RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" COCOON_INSTALL_METHOD="binary" PIN="0.11.0" CHECKSUM_AMD64="8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198" CHECKSUM_ARM64="12b331c1d2db6b9eb13cfca64306b1b157a86eb69db83023e261eaa7e7c14588" bash <<'COCOON_PLUGIN_EOF'
 #!/usr/bin/env bash
 # Install ShellCheck (https://github.com/koalaman/shellcheck)
 #
@@ -606,7 +680,7 @@ COCOON_PLUGIN_EOF
 # Install shfmt
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" COCOON_INSTALL_METHOD="binary" PIN="" CHECKSUM_AMD64="" CHECKSUM_ARM64="" bash <<'COCOON_PLUGIN_EOF'
+    RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" COCOON_INSTALL_METHOD="binary" PIN="3.13.1" CHECKSUM_AMD64="fb096c5d1ac6beabbdbaa2874d025badb03ee07929f0c9ff67563ce8c75398b1" CHECKSUM_ARM64="32d92acaa5cd8abb29fc49dac123dc412442d5713967819d8af2c29f1b3857c7" bash <<'COCOON_PLUGIN_EOF'
 #!/usr/bin/env bash
 # Install shfmt (https://github.com/mvdan/sh)
 #
@@ -662,7 +736,7 @@ COCOON_PLUGIN_EOF
 # Install Starship
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" COCOON_INSTALL_METHOD="binary" PIN="" CHECKSUM_AMD64="" CHECKSUM_ARM64="" bash <<'COCOON_PLUGIN_EOF'
+    RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" COCOON_INSTALL_METHOD="binary" PIN="1.25.1" CHECKSUM_AMD64="c6ddd3ecb9c0071a2ad38d98cee748160066b7c4f197421268058f4a5d6f8504" CHECKSUM_ARM64="01517aab398959ea9ea73bdb4f032ea4dbb51dff5c8e5eb05b4a1b9b7ab872b8" bash <<'COCOON_PLUGIN_EOF'
 #!/usr/bin/env bash
 # Install Starship (https://github.com/starship/starship)
 #
@@ -737,7 +811,7 @@ ENV PATH="/home/${USERNAME}/.local/bin:$PATH"
 # Install GitHub Copilot CLI
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" COCOON_INSTALL_METHOD="binary" PIN="" CHECKSUM_AMD64="" CHECKSUM_ARM64="" bash <<'COCOON_PLUGIN_EOF'
+    RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" COCOON_INSTALL_METHOD="binary" PIN="1.0.59" CHECKSUM_AMD64="44c1f29b2ab2b51ee9d6fab8b930919186ba908bb760e02da3fe3065408bf625" CHECKSUM_ARM64="409d93d289e220e4d156696f9052eba313fe1c423da38bedd34a52ad9fd2efa1" bash <<'COCOON_PLUGIN_EOF'
 #!/usr/bin/env bash
 # Install GitHub Copilot CLI from the GitHub Releases binary tarball
 # (https://github.com/github/copilot-cli/releases). Picked when gh.io is
@@ -825,7 +899,7 @@ ENV PATH="/home/${USERNAME}/.local/bin:$PATH"
 # Install uv
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" COCOON_INSTALL_METHOD="installer" PIN="" CHECKSUM_AMD64="" CHECKSUM_ARM64="" bash <<'COCOON_PLUGIN_EOF'
+    RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" COCOON_INSTALL_METHOD="installer" PIN="0.11.19" CHECKSUM_AMD64="" CHECKSUM_ARM64="" bash <<'COCOON_PLUGIN_EOF'
 #!/usr/bin/env bash
 # Install uv (fast Python package and project manager) (https://github.com/astral-sh/uv)
 #
@@ -855,7 +929,7 @@ ENV PATH="/home/${USERNAME}/.local/bin:$PATH"
 # Configure Starship (user)
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" COCOON_INSTALL_METHOD="binary" PIN="" CHECKSUM_AMD64="" CHECKSUM_ARM64="" bash <<'COCOON_PLUGIN_EOF'
+    RC_FILE="$HOME/.zshrc" RC_SYNTAX="posix" LOGIN_SHELL="zsh" COCOON_INSTALL_METHOD="binary" PIN="1.25.1" CHECKSUM_AMD64="c6ddd3ecb9c0071a2ad38d98cee748160066b7c4f197421268058f4a5d6f8504" CHECKSUM_ARM64="01517aab398959ea9ea73bdb4f032ea4dbb51dff5c8e5eb05b4a1b9b7ab872b8" bash <<'COCOON_PLUGIN_EOF'
 #!/usr/bin/env bash
 # Configure Starship for the user's login shell.
 #
