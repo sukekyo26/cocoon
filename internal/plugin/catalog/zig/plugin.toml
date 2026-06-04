@@ -17,14 +17,9 @@ description = "Multi-file Zig toolchain tarball from ziglang.org index.json"
 [version]
 version_capable = true
 
-[version.source.latest]
-type = "json-field"
-url = "https://ziglang.org/download/index.json"
-field = "master.version"
-
-[version.source.checksum]
-type = "none"
-
-[version.source.arch]
-amd64 = "x86_64"
-arm64 = "aarch64"
+# No [version.source]: install.archive.sh treats $PIN as an index.json *key*
+# ("master" or a tagged version like "0.14.0"), but the only machine-readable
+# "latest" in index.json is master.version — a rolling dev string (e.g.
+# "0.15.0-dev.123+abc") that is not an index.json key and is non-reproducible
+# anyway. So zig is exact-only: pin a tagged version (zig=0.14.0); `cocoon lock`
+# rejects "latest". See exactOnlyPlugins in version_source_contract_test.go.

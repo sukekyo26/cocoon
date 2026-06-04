@@ -24,6 +24,10 @@ var exactOnlyPlugins = map[string]bool{
 	// flutter's releases manifest keys the stable release by commit hash, not
 	// a resolvable version field — see flutter/plugin.toml.
 	"flutter": true,
+	// zig's index.json "latest" is master.version (a rolling, non-reproducible
+	// dev string) and install.archive.sh consumes $PIN as an index.json key, not
+	// that version string — so zig is exact-only. See zig/plugin.toml.
+	"zig": true,
 }
 
 // TestCatalog_VersionSourceCoverage asserts that every version_capable catalog
