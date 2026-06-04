@@ -13,7 +13,8 @@ ldflags    := "-s -w -X github.com/sukekyo26/cocoon/internal/version.Version=" +
 default:
     @just --list
 
-# Installs into `$(go env GOPATH)/bin`; `go` and `just` must already be present.
+# Installs into `$(go env GOBIN)`, or the first GOPATH entry's bin when GOBIN is
+# unset; `go` and `just` must already be present.
 # Tool versions are pinned to match CI — keep them in sync with the workflow
 # files noted inline. shellcheck has no `go install` path; install it from your
 # OS package manager (the recipe warns if it is missing).
@@ -21,7 +22,12 @@ default:
 setup:
     #!/usr/bin/env bash
     set -euo pipefail
-    bindir="$(go env GOPATH)/bin"
+    # Mirror where `go install` lands so all three tools share one directory
+    # and the printed path is accurate: $GOBIN if set, else the first GOPATH
+    # entry's bin (golangci-lint's `-b` then targets the same dir).
+    bindir="$(go env GOBIN)"
+    [ -n "${bindir}" ] || bindir="$(go env GOPATH | cut -d: -f1)/bin"
+    mkdir -p "${bindir}"
     echo "Installing dev tools into ${bindir} ..."
     # govulncheck — keep in sync with .github/workflows/go-ci.yml
     go install golang.org/x/vuln/cmd/govulncheck@v1.3.0
