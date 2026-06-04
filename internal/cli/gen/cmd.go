@@ -110,9 +110,9 @@ func loadGenContext(stderr io.Writer, workspaceFlag, outputFlag string) (
 		// would double the "failure:" prefix (defensive-coding §3).
 		return "", nil, err //nolint:wrapcheck // ErrFailure already attached by generatecli
 	}
-	// gen consumes cocoon.lock (when present) for reproducible PIN/CHECKSUM_*;
+	// gen consumes the lock file (when present) for reproducible PIN/CHECKSUM_*;
 	// a malformed lock is a hard failure here (unlike `cocoon lock`, which
-	// overwrites it).
+	// overwrites it). The basename is configurable via [lockfile].name.
 	lock, lockErr := lockfile.Load(lockfile.PathFor(wsPath, ctx.WS))
 	if lockErr != nil && !lockfile.IsNotExist(lockErr) {
 		return "", nil, fmt.Errorf("%w: %w", clihelpers.ErrFailure, lockErr)
@@ -265,13 +265,14 @@ func enforceLocked(ctx *generate.WorkspaceContext, locked bool, log *logx.Logger
 	if len(unlocked) == 0 {
 		return nil
 	}
+	lockName := ctx.WS.Lockfile.NameOrDefault()
 	if locked {
 		return fmt.Errorf(
-			`%w: plugins use "latest" without a cocoon.lock entry: %s; run `+"`cocoon lock`"+` (or drop --locked)`,
-			clihelpers.ErrUsage, strings.Join(unlocked, ", "))
+			`%w: plugins use "latest" without a %s entry: %s; run `+"`cocoon lock`"+` (or drop --locked)`,
+			clihelpers.ErrUsage, lockName, strings.Join(unlocked, ", "))
 	}
 	for _, id := range unlocked {
-		log.Warn(cat.Msg("gen_unlocked_latest_warning", id))
+		log.Warn(cat.Msg("gen_unlocked_latest_warning", id, lockName))
 	}
 	return nil
 }
