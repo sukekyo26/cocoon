@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 
 	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
 	"github.com/sukekyo26/cocoon/internal/config"
@@ -48,10 +49,10 @@ func specHashInput(specs []pluginSpec) map[string]string {
 }
 
 // checkLock verifies (offline) that the lock matches workspace.toml: present,
-// inputs_hash current, and an entry for every enabled plugin with a matching
-// requested spec. Any drift is a usage error so CI can gate on it. A workspace
-// with no version-capable plugins needs no lock, so --check passes there even
-// when the file is absent.
+// inputs_hash current, and an entry for every enabled plugin whose requested
+// spec and [plugins.options] settings still match. Any drift is a usage error
+// so CI can gate on it. A workspace with no version-capable plugins needs no
+// lock, so --check passes there even when the file is absent.
 func checkLock(log *logx.Logger, lockPath string, existing *lockfile.Lock, specs []pluginSpec) error {
 	if len(specs) == 0 {
 		log.Success("no version-capable plugins enabled; nothing to lock")
@@ -73,6 +74,10 @@ func checkLock(log *logx.Logger, lockPath string, existing *lockfile.Lock, specs
 			return fmt.Errorf("%w: %s entry for %q requests %q but workspace.toml asks %q; run `cocoon lock`",
 				clihelpers.ErrUsage, lockPath, s.id, entry.Requested, s.requested)
 		}
+		if !maps.Equal(entry.Extra, s.override.Extra) {
+			return fmt.Errorf("%w: %s entry for %q has stale [plugins.options] settings; run `cocoon lock`",
+				clihelpers.ErrUsage, lockPath, s.id)
+		}
 	}
 	log.Successf("%s is up to date (%d plugin(s))", lockPath, len(specs))
 	return nil
@@ -92,6 +97,11 @@ func buildLock(
 	entries := make([]lockfile.LockPlugin, 0, len(specs))
 	for _, s := range specs {
 		if reused, ok := reuseEntry(existing, s, upgrade); ok {
+			// The pinned version + checksums are still valid, but the
+			// [plugins.options] knobs (Extra) are not network-resolved — refresh
+			// them from the current workspace so a changed option is reflected in
+			// the output lock without forcing a re-resolution.
+			reused.Extra = s.override.Extra
 			entries = append(entries, reused)
 			log.Successf("Reused %s %s", s.id, reused.Version)
 			continue

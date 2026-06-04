@@ -104,6 +104,14 @@ description = "binary download"
 version_capable = true
 `
 
+// extraSourcePluginTOML is demoPluginTOML plus a declared [install.extra_versions]
+// knob, so a workspace can set [plugins.options].demo.build_tools and have it
+// carried into the lock entry's Extra.
+const extraSourcePluginTOML = demoPluginTOML + `
+[install.extra_versions]
+build_tools = { env = "DEMO_BUILD_TOOLS", default = "35.0.0" }
+`
+
 // seedProject writes an isolated HOME, a workspace.toml enabling the named
 // plugins, and a project-overlay plugin per (id → plugin.toml) entry. It
 // chdirs into the project so config.Discover finds the workspace. Returns the
@@ -291,4 +299,59 @@ func TestLock_ExactPinSkipsLatestFetch(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, "2.0.0", entry.Version)
 	require.Empty(t, entry.ChecksumAMD64)
+}
+
+// TestLock_ExtraDriftRelocksWithoutNetwork pins two coupled contracts: --check
+// flags a changed [plugins.options] knob even though the version spec (and thus
+// inputs_hash) is unchanged, and re-locking refreshes the reused entry's Extra
+// from the current workspace without re-resolving (no new network calls).
+//
+//nolint:paralleltest // mutates defaultFetcher global + cwd/HOME.
+func TestLock_ExtraDriftRelocksWithoutNetwork(t *testing.T) {
+	opt := func(v string) string {
+		return "\n[plugins.options]\ndemo = { build_tools = \"" + v + "\" }\n"
+	}
+	proj := seedProjectExtra(t, `"demo=1.2.3"`, opt("34.0.0"),
+		map[string]string{"demo": extraSourcePluginTOML})
+	lockPath := filepath.Join(proj, lockfile.FileName)
+	f := demoFetcher()
+	swapFetcher(t, f)
+
+	// Initial lock records the [plugins.options] knob in Extra; --check passes.
+	_, err := runLockCmd(t)
+	require.NoError(t, err)
+	firstCalls := f.calls
+	require.Positive(t, firstCalls)
+	l, err := lockfile.Load(lockPath)
+	require.NoError(t, err)
+	entry, ok := l.Find("demo")
+	require.True(t, ok)
+	require.Equal(t, "34.0.0", entry.Extra["build_tools"])
+	_, err = runLockCmd(t, "--check")
+	require.NoError(t, err)
+
+	// Change only the knob (version spec unchanged → inputs_hash unaffected):
+	// --check must still flag the drift.
+	wsPath := filepath.Join(proj, "workspace.toml")
+	body, rerr := os.ReadFile(wsPath) //nolint:gosec // test path under t.TempDir
+	require.NoError(t, rerr)
+	mutated := bytes.Replace(body, []byte(`"34.0.0"`), []byte(`"35.0.0"`), 1)
+	require.NotEqual(t, string(body), string(mutated), "options rewrite must change the file")
+	//nolint:gosec // test path under t.TempDir
+	require.NoError(t, os.WriteFile(wsPath, mutated, 0o600))
+	_, err = runLockCmd(t, "--check")
+	require.ErrorIs(t, err, clihelpers.ErrUsage)
+
+	// Re-locking reuses the resolved version + checksums (no new network) but
+	// refreshes Extra from the current workspace; --check then passes again.
+	_, err = runLockCmd(t)
+	require.NoError(t, err)
+	require.Equal(t, firstCalls, f.calls, "Extra-only drift must not trigger re-resolution")
+	l, err = lockfile.Load(lockPath)
+	require.NoError(t, err)
+	entry, ok = l.Find("demo")
+	require.True(t, ok)
+	require.Equal(t, "35.0.0", entry.Extra["build_tools"])
+	_, err = runLockCmd(t, "--check")
+	require.NoError(t, err)
 }
