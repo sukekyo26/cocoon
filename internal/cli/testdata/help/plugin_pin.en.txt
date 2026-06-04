@@ -8,7 +8,7 @@ the existing <id> element is replaced); the rest of the file is preserved
 verbatim.
 
 Versions are frozen to concrete releases — and per-arch SHA256 checksums
-recorded — by `cocoon lock` into cocoon.lock; checksums no longer
+recorded — by `cocoon lock` into the lock file; checksums no longer
 live in workspace.toml.
 
 Pass --method <name> for plugins that declare two or more entries under
