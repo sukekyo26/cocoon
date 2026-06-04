@@ -558,6 +558,31 @@ func TestEffectivePluginVersions_LockExtraIsAuthoritative(t *testing.T) {
 	}
 }
 
+// TestEffectivePluginVersions_IgnoresStaleLockEntry pins that a cocoon.lock
+// entry for a plugin no longer in [plugins].enable is dropped from the effective
+// overrides, so a stale lock does not trip the generator's "not enabled" guard
+// (the user need not re-run `cocoon lock` after disabling a plugin to gen).
+func TestEffectivePluginVersions_IgnoresStaleLockEntry(t *testing.T) {
+	t.Parallel()
+	c := &generate.WorkspaceContext{ //nolint:exhaustruct // partial fixture
+		WS: &config.Workspace{Plugins: config.PluginsSpec{ //nolint:exhaustruct // partial fixture
+			Enable:   []string{"go"},                                                  // "node" was removed from enable but lingers in the lock
+			Versions: map[string]config.PluginVersionOverride{"go": {Spec: "latest"}}, //nolint:exhaustruct // latest
+		}},
+		Lock: &lockfile.Lock{Plugins: []lockfile.LockPlugin{ //nolint:exhaustruct // partial fixture
+			{ID: "go", Requested: "latest", Version: "1.23.4"},
+			{ID: "node", Requested: "latest", Version: "22.0.0"}, // stale: not enabled
+		}},
+	}
+	eff := c.EffectivePluginVersions()
+	if _, ok := eff["node"]; ok {
+		t.Errorf("stale lock entry for a non-enabled plugin must not appear in effective overrides: %v", eff["node"])
+	}
+	if eff["go"].Pin != "1.23.4" {
+		t.Errorf("an enabled plugin must still receive its lock overlay; Pin=%q", eff["go"].Pin)
+	}
+}
+
 // TestEffectivePluginVersions_NoLockEqualsBase pins that without a lock the
 // effective overrides equal the workspace overrides unchanged.
 func TestEffectivePluginVersions_NoLockEqualsBase(t *testing.T) {

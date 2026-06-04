@@ -556,18 +556,30 @@ func (c *WorkspaceContext) PluginVersionOverrides() map[string]config.PluginVers
 // generated Dockerfile's PIN / CHECKSUM_* env, with any cocoon.lock entry
 // overlaid on the workspace constraint: a locked plugin contributes its
 // resolved version and per-arch checksums, so even a "latest" constraint
-// bakes a concrete, verified version. Without a lock this equals
-// PluginVersionOverrides. Never returns nil.
+// bakes a concrete, verified version. Lock entries for plugins no longer in
+// [plugins].enable are ignored (a stale lock is harmless). Without a lock this
+// equals PluginVersionOverrides. Never returns nil.
 func (c *WorkspaceContext) EffectivePluginVersions() map[string]config.PluginVersionOverride {
 	base := c.PluginVersionOverrides()
 	if c.Lock == nil {
 		return base
+	}
+	enabledList := c.EnabledPlugins()
+	enabled := make(map[string]bool, len(enabledList))
+	for _, id := range enabledList {
+		enabled[id] = true
 	}
 	out := make(map[string]config.PluginVersionOverride, len(base)+len(c.Lock.Plugins))
 	for id, ov := range base {
 		out[id] = ov
 	}
 	for _, lp := range c.Lock.Plugins {
+		// A lock entry for a plugin no longer in [plugins].enable is stale and
+		// harmless — skip it so it cannot trip the generator's "not enabled"
+		// override guard (no need to re-run `cocoon lock` just to `cocoon gen`).
+		if !enabled[lp.ID] {
+			continue
+		}
 		ov := out[lp.ID]
 		ov.Pin = lp.Version
 		// Lock checksums are authoritative when present, but a none-type
