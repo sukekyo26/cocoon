@@ -13,6 +13,35 @@ ldflags    := "-s -w -X github.com/sukekyo26/cocoon/internal/version.Version=" +
 default:
     @just --list
 
+# Installs into `$(go env GOBIN)`, or the first GOPATH entry's bin when GOBIN is
+# unset; `go` and `just` must already be present.
+# Tool versions are pinned to match CI — keep them in sync with the workflow
+# files noted inline. shellcheck has no `go install` path; install it from your
+# OS package manager (the recipe warns if it is missing).
+# Install the pinned dev tools `just ci` needs (govulncheck, shfmt, golangci-lint).
+setup:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # Mirror where `go install` lands so all three tools share one directory
+    # and the printed path is accurate: $GOBIN if set, else the first GOPATH
+    # entry's bin (golangci-lint's `-b` then targets the same dir).
+    bindir="$(go env GOBIN)"
+    [ -n "${bindir}" ] || bindir="$(go env GOPATH | cut -d: -f1)/bin"
+    mkdir -p "${bindir}"
+    echo "Installing dev tools into ${bindir} ..."
+    # govulncheck — keep in sync with .github/workflows/go-ci.yml
+    go install golang.org/x/vuln/cmd/govulncheck@v1.3.0
+    # shfmt — keep in sync with SHFMT_VERSION in .github/workflows/shfmt.yml
+    go install mvdan.cc/sh/v3/cmd/shfmt@v3.10.0
+    # golangci-lint — keep in sync with .github/workflows/go-ci.yml; the pinned
+    # install.sh SHA256-verifies the downloaded binary.
+    curl -sSfL --proto '=https' --tlsv1.2 \
+        https://raw.githubusercontent.com/golangci/golangci-lint/8f3b0c7ed018e57905fbd873c697e0b1ede605a5/install.sh \
+        | sh -s -- -b "${bindir}" v2.11.4
+    command -v shellcheck >/dev/null 2>&1 \
+        || echo >&2 "NOTE: shellcheck not found — install via 'apt-get install shellcheck' or 'brew install shellcheck'"
+    echo "Done. Ensure ${bindir} is on your PATH, then run 'just ci'."
+
 # Format Go source with gofumpt + goimports (via golangci-lint formatters)
 fmt:
     golangci-lint fmt {{pkgs}}
