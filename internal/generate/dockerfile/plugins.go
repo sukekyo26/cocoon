@@ -3,7 +3,6 @@ package dockerfile
 import (
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"maps"
 	"path"
@@ -14,6 +13,7 @@ import (
 	"github.com/sukekyo26/cocoon/internal/config"
 	"github.com/sukekyo26/cocoon/internal/generate/tmplx"
 	"github.com/sukekyo26/cocoon/internal/plugin"
+	"github.com/sukekyo26/cocoon/internal/warn"
 )
 
 // installHeredocDelim must match the literal in installRunTmpl. A plugin
@@ -381,7 +381,7 @@ func generatePluginInstalls(
 	extraUserDirs []string,
 	overrides map[string]config.PluginVersionOverride,
 	methods map[string]string,
-	warnings io.Writer,
+	warnings *warn.Sink,
 	sh shellEnv,
 ) (string, error) {
 	// Fail fast when any enabled plugin loaded but the caller forgot to
@@ -580,7 +580,7 @@ func validateVersionOverrides(
 	plugins map[string]*plugin.Plugin,
 	overrides map[string]config.PluginVersionOverride,
 	methods map[string]string,
-	warnings io.Writer,
+	warnings *warn.Sink,
 ) error {
 	ids := slices.Sorted(maps.Keys(overrides))
 
@@ -713,27 +713,16 @@ func checkExtraOverrideKeys(
 // upstream publishes none downloads WITHOUT verification until the user records
 // a manual checksum in [plugins.options].
 func warnMissingChecksum(
-	warnings io.Writer, id string, override config.PluginVersionOverride, src *plugin.VersionSource,
+	warnings *warn.Sink, id string, override config.PluginVersionOverride, src *plugin.VersionSource,
 ) {
-	if warnings == nil {
-		return
-	}
 	if override.ChecksumAmd64 != nil && override.ChecksumArm64 != nil {
 		return
 	}
 	if autoResolvesChecksum(src) {
-		fmt.Fprintf(warnings,
-			"WARNING: '%s' is pinned to %q without a recorded checksum; the install step still "+
-				"verifies the download against the upstream-published checksum. "+
-				"Run `cocoon lock` to record it for reproducible builds.\n",
-			id, override.Pin)
+		warnings.Warn(warn.PinNoChecksum, id, override.Pin)
 		return
 	}
-	fmt.Fprintf(warnings,
-		"WARNING: '%s' is pinned to %q but its upstream publishes no checksum, so the install step "+
-			"downloads it WITHOUT verification. Set checksum_amd64/checksum_arm64 in "+
-			"[plugins.options].%s to verify.\n",
-		id, override.Pin, id)
+	warnings.Warn(warn.PinNoVerify, id, override.Pin, id)
 }
 
 // userDirsBlockTmpl omits the trailing `USER ${USERNAME}`: the caller

@@ -31,6 +31,7 @@ import (
 	"github.com/sukekyo26/cocoon/internal/lockfile"
 	"github.com/sukekyo26/cocoon/internal/logx"
 	"github.com/sukekyo26/cocoon/internal/plugin"
+	"github.com/sukekyo26/cocoon/internal/warn"
 )
 
 var errCertsPathNotDirectory = errors.New("cocoon certs path exists but is not a directory")
@@ -72,7 +73,7 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 // (embedded < user < project), and returns a loaded WorkspaceContext.
 // Shared by `cocoon gen` and `cocoon gen workspace` so the discovery
 // rules stay in lockstep.
-func loadGenContext(stderr io.Writer, workspaceFlag, outputFlag string) (
+func loadGenContext(workspaceFlag, outputFlag string) (
 	outDir string,
 	ctx *generate.WorkspaceContext,
 	err error,
@@ -102,9 +103,10 @@ func loadGenContext(stderr io.Writer, workspaceFlag, outputFlag string) (
 	}
 	projectPluginDir := filepath.Join(filepath.Dir(wsPath), ".cocoon", "plugins")
 	layered := plugin.NewLayeredFS(catalog, userPluginDir, projectPluginDir)
-	layered.LogOverrides(stderr)
+	sink := warn.New()
+	layered.LogOverrides(sink)
 
-	ctx, err = generatecli.LoadContext(wsPath, layered, "", stderr)
+	ctx, err = generatecli.LoadContext(wsPath, layered, "", sink)
 	if err != nil {
 		// Returned as-is: generatecli attaches ErrFailure, so re-wrapping
 		// would double the "failure:" prefix (defensive-coding §3).
@@ -124,17 +126,21 @@ func loadGenContext(stderr io.Writer, workspaceFlag, outputFlag string) (
 func runGen(stdout, stderr io.Writer, workspaceFlag, outputFlag string, locked bool) error {
 	cat := i18n.New(i18n.Detect())
 	log := logx.New(stdout, stderr)
-	outDir, ctx, err := loadGenContext(stderr, workspaceFlag, outputFlag)
+	outDir, ctx, err := loadGenContext(workspaceFlag, outputFlag)
 	if err != nil {
 		return err
 	}
 	if lockErr := enforceLocked(ctx, locked, log, cat); lockErr != nil {
 		return lockErr
 	}
-	arts, err := generatecli.BuildArtifacts(ctx, stderr)
+	arts, err := generatecli.BuildArtifacts(ctx)
 	if err != nil {
 		return err //nolint:wrapcheck // ErrFailure already attached by generatecli
 	}
+	// Surface collected generator diagnostics (volume dedup, verbatim
+	// Dockerfile hooks, plugin overrides, …) before the success lines, matching
+	// the order they appeared in when written inline.
+	clihelpers.DrainWarnings(log, cat, ctx.Warnings)
 	if err := generatecli.WriteArtifacts(arts, outDir); err != nil {
 		return err //nolint:wrapcheck // ErrFailure already attached by generatecli
 	}

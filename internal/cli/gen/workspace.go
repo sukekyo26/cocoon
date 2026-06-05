@@ -55,10 +55,11 @@ func runGenWorkspace(
 ) error {
 	cat := i18n.New(i18n.Detect())
 	log := logx.New(stdout, stderr)
-	outDir, ctx, err := loadGenContext(stderr, workspaceFlag, outputFlag)
+	outDir, ctx, err := loadGenContext(workspaceFlag, outputFlag)
 	if err != nil {
 		return err
 	}
+	clihelpers.DrainWarnings(log, cat, ctx.Warnings)
 	name, err := resolveWorkspaceName(nameFlag, ctx.WS.CodeWorkspace, ctx.ProjectDir, cat)
 	if err != nil {
 		return err

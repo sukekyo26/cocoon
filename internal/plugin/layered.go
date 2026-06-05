@@ -10,6 +10,8 @@ import (
 	"slices"
 	"sort"
 	"time"
+
+	"github.com/sukekyo26/cocoon/internal/warn"
 )
 
 // errIsDirectory is the sentinel returned by [LayeredFS]'s synthetic root
@@ -91,13 +93,10 @@ func (l *LayeredFS) Sources() map[string]string {
 	return out
 }
 
-// LogOverrides emits one "INFO: plugin <id> overridden by <source>" line to w
-// for every id whose winning layer is not the embedded catalog. w may be nil
-// (no-op). Lines are emitted in stable id order.
-func (l *LayeredFS) LogOverrides(w io.Writer) {
-	if w == nil {
-		return
-	}
+// LogOverrides records one "plugin <id> overridden by <source>" note in sink
+// for every id whose winning layer is not the embedded catalog. sink may be
+// nil (no-op). Notes are recorded in stable id order.
+func (l *LayeredFS) LogOverrides(sink *warn.Sink) {
 	overridden := make([]string, 0, len(l.sources))
 	for id, src := range l.sources {
 		if src == SourceEmbedded {
@@ -107,7 +106,7 @@ func (l *LayeredFS) LogOverrides(w io.Writer) {
 	}
 	sort.Strings(overridden)
 	for _, id := range overridden {
-		fmt.Fprintf(w, "INFO: plugin %s overridden by %s\n", id, l.sources[id])
+		sink.Info(warn.PluginOverridden, id, l.sources[id])
 	}
 }
 

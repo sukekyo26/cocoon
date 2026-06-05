@@ -3,7 +3,6 @@ package generate
 import (
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"maps"
 	"slices"
@@ -12,6 +11,7 @@ import (
 	"github.com/sukekyo26/cocoon/internal/config"
 	"github.com/sukekyo26/cocoon/internal/lockfile"
 	"github.com/sukekyo26/cocoon/internal/plugin"
+	"github.com/sukekyo26/cocoon/internal/warn"
 )
 
 // ErrInvalidLocale is returned (wrapped) by LocaleSedScript when a locale
@@ -39,8 +39,9 @@ type WorkspaceContext struct {
 	// EffectivePluginVersions overlays it so a locked plugin bakes its
 	// resolved version + checksums into the Dockerfile.
 	Lock *lockfile.Lock
-	// Warnings receives non-fatal messages (e.g. TZ override). Nil drops them.
-	Warnings io.Writer
+	// Warnings collects non-fatal diagnostics (e.g. TZ override) as structured
+	// codes for the CLI boundary to localize. Nil drops them.
+	Warnings *warn.Sink
 }
 
 // EnabledPlugins returns the enable list, never nil.
@@ -396,10 +397,8 @@ func (c *WorkspaceContext) BuildEnvironment() []string {
 		v := envMap[k]
 		if k == "TZ" {
 			if tz != "" {
-				if v != tz && c.Warnings != nil {
-					fmt.Fprintf(c.Warnings,
-						"WARNING: [env].TZ='%s' is overridden by [locale].timezone='%s'.\n",
-						v, tz)
+				if v != tz {
+					c.Warnings.Warn(warn.TZOverride, v, tz)
 				}
 				out = append(out, "TZ="+tz)
 			} else {

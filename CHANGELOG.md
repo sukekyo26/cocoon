@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- `cocoon gen` (and `cocoon lock`) now localize their generator diagnostics —
+  volume-path collisions, `[apt]`/base-package overlap, verbatim `[dockerfile]`
+  hooks, pin-without-checksum, `[env].TZ` override, skipped `forwardPorts`, and
+  plugin override / missing-plugin notices — to the active language. A Japanese
+  environment no longer sees these warnings in English while the rest of the
+  output is Japanese.
+
 ## [0.14.1] - 2026-06-05
 
 ### Fixed

@@ -22,6 +22,7 @@ import (
 	"github.com/sukekyo26/cocoon/internal/logx"
 	"github.com/sukekyo26/cocoon/internal/plugin"
 	"github.com/sukekyo26/cocoon/internal/plugin/resolve"
+	"github.com/sukekyo26/cocoon/internal/warn"
 )
 
 // defaultFetcher is the network Fetcher `cocoon lock` resolves through. Tests
@@ -68,13 +69,14 @@ func runLock(ctx context.Context, stdout, stderr io.Writer, opts lockOptions) er
 	if err != nil {
 		return err
 	}
-	wctx, err := loadContext(wsPath, stderr)
+	wctx, err := loadContext(wsPath)
 	if err != nil {
 		return err
 	}
 	requested := requestedSpecs(wctx)
 	lockPath := lockfile.PathFor(wsPath, wctx.WS)
 	log := logx.New(stdout, stderr)
+	clihelpers.DrainWarnings(log, i18n.New(i18n.Detect()), wctx.Warnings)
 	existing, err := loadExistingLock(lockPath, opts.check, log)
 	if err != nil {
 		return err
@@ -96,7 +98,7 @@ func runLock(ctx context.Context, stdout, stderr io.Writer, opts lockOptions) er
 // loadContext builds the layered plugin FS and loads workspace + plugins,
 // reusing the generation pipeline's loader so plugin conflict checks and
 // overlay resolution match `cocoon gen` exactly.
-func loadContext(wsPath string, stderr io.Writer) (*generate.WorkspaceContext, error) {
+func loadContext(wsPath string) (*generate.WorkspaceContext, error) {
 	embedded, err := plugin.CatalogFS()
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
@@ -108,7 +110,7 @@ func loadContext(wsPath string, stderr io.Writer) (*generate.WorkspaceContext, e
 	projectDir := filepath.Join(filepath.Dir(wsPath), ".cocoon", "plugins")
 	layered := plugin.NewLayeredFS(embedded, userDir, projectDir)
 	//nolint:wrapcheck // LoadContext already wraps failures in clihelpers.ErrFailure.
-	return generatecli.LoadContext(wsPath, layered, "", stderr)
+	return generatecli.LoadContext(wsPath, layered, "", warn.New())
 }
 
 // loadExistingLock returns the current lock for reuse, with "no lock yet" as a

@@ -3,13 +3,14 @@ package config
 import (
 	"errors"
 	"fmt"
-	"io"
 	"maps"
 	"net"
 	"regexp"
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/sukekyo26/cocoon/internal/warn"
 )
 
 // ErrPortShortForm marks every rejection from ValidateShortForm so callers
@@ -97,10 +98,10 @@ func ComposePortEntries(forward []any) []ComposePort {
 // entry. devcontainer.json's forwardPorts lists ports inside the container
 // (where the app listens), which VS Code forwards to the local machine — not
 // the published host port. Entries that cannot reduce to a single TCP integer
-// (container-side port ranges, mode=host, protocol=udp) are skipped; if warn
-// is non-nil each skip is announced so the user can reconcile
+// (container-side port ranges, mode=host, protocol=udp) are skipped; each skip
+// is recorded in sink (nil drops them) so the user can reconcile
 // docker-compose-only ports with devcontainer output.
-func DevcontainerPortEntries(forward []any, warn io.Writer) []int {
+func DevcontainerPortEntries(forward []any, sink *warn.Sink) []int {
 	if len(forward) == 0 {
 		return nil
 	}
@@ -108,11 +109,7 @@ func DevcontainerPortEntries(forward []any, warn io.Writer) []int {
 	for i, raw := range forward {
 		port, ok, reason := devcontainerPort(raw)
 		if !ok {
-			if warn != nil {
-				fmt.Fprintf(warn,
-					"WARNING: ports.forward[%d] %s; skipping for devcontainer.json forwardPorts.\n",
-					i, reason)
-			}
+			sink.Warn(warn.PortSkip, i, reason)
 			continue
 		}
 		out = append(out, port)
@@ -120,66 +117,67 @@ func DevcontainerPortEntries(forward []any, warn io.Writer) []int {
 	return out
 }
 
-// devcontainerPort returns (container port, true, "") on success or
+// devcontainerPort returns (container port, true, zero Ref) on success or
 // (0, false, reason) when the entry cannot be expressed as a single integer.
-func devcontainerPort(raw any) (int, bool, string) {
+// The reason is a warn.Ref so the drain site localizes it.
+func devcontainerPort(raw any) (int, bool, warn.Ref) {
 	switch v := raw.(type) {
 	case string:
 		return shortFormContainerPort(v)
 	case map[string]any:
 		return longFormContainerPort(v)
 	default:
-		return 0, false, fmt.Sprintf("has unsupported type %T", raw)
+		return 0, false, warn.Reason(warn.PortReasonType, fmt.Sprintf("%T", raw))
 	}
 }
 
-func shortFormContainerPort(s string) (int, bool, string) {
+func shortFormContainerPort(s string) (int, bool, warn.Ref) {
 	m := rxPortShortForm.FindStringSubmatch(s)
 	if m == nil {
-		return 0, false, fmt.Sprintf("= %q is not a valid short-form port", s)
+		return 0, false, warn.Reason(warn.PortReasonShortInvalid, s)
 	}
 	// devcontainer.json's forwardPorts is TCP-only — VS Code's port
 	// tunnel does not carry UDP, so a UDP entry registered here would
 	// show up in the Ports panel but silently fail to forward.
 	if proto := m[rxPortShortForm.SubexpIndex("proto")]; proto == "udp" {
-		return 0, false, fmt.Sprintf("= %q uses protocol = \"udp\"", s)
+		return 0, false, warn.Reason(warn.PortReasonShortUDP, s)
 	}
 	// forwardPorts lists the port inside the container (where the app
 	// listens), not the published host port — for "30002:3000" VS Code
 	// forwards container port 3000, not 30002.
 	container := m[rxPortShortForm.SubexpIndex("container")]
 	if strings.Contains(container, "-") {
-		return 0, false, fmt.Sprintf("= %q uses a port range", s)
+		return 0, false, warn.Reason(warn.PortReasonRange, s)
 	}
 	n, err := strconv.Atoi(container)
 	if err != nil {
-		return 0, false, fmt.Sprintf("= %q has unparseable port", s)
+		return 0, false, warn.Reason(warn.PortReasonUnparseable, s)
 	}
-	return n, true, ""
+	return n, true, warn.Reason("")
 }
 
-func longFormContainerPort(m map[string]any) (int, bool, string) {
+func longFormContainerPort(m map[string]any) (int, bool, warn.Ref) {
 	if mode, ok := stringField(m, "mode"); ok && mode == "host" {
-		return 0, false, "uses mode = \"host\""
+		return 0, false, warn.Reason(warn.PortReasonHostMode)
 	}
 	// Symmetric with the short-form check above: devcontainer.json's
 	// forwardPorts cannot carry UDP, so a long-form entry with
 	// protocol = "udp" is skipped with the same warning class.
 	if proto, ok := stringField(m, "protocol"); ok && proto == "udp" {
-		return 0, false, "uses protocol = \"udp\""
+		return 0, false, warn.Reason(warn.PortReasonLongUDP)
 	}
 	// `target` is the container-side port that VS Code forwards; `published`
 	// is the host port and is irrelevant to forwardPorts (see
 	// shortFormContainerPort).
 	v, ok := m["target"]
 	if !ok {
-		return 0, false, "is missing target"
+		return 0, false, warn.Reason(warn.PortReasonMissingTarget)
 	}
 	n, ok := intField(v)
 	if !ok {
-		return 0, false, fmt.Sprintf("has a non-integer target %v", v)
+		return 0, false, warn.Reason(warn.PortReasonNonIntegerTarget, v)
 	}
-	return n, true, ""
+	return n, true, warn.Reason("")
 }
 
 // normalizeLongForm keeps only allowed keys. `target` is always int;

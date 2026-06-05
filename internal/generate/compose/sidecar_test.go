@@ -1,7 +1,6 @@
 package compose_test
 
 import (
-	"bytes"
 	"strings"
 	"testing"
 
@@ -9,6 +8,7 @@ import (
 	"github.com/sukekyo26/cocoon/internal/generate"
 	"github.com/sukekyo26/cocoon/internal/generate/compose"
 	"github.com/sukekyo26/cocoon/internal/plugin"
+	"github.com/sukekyo26/cocoon/internal/warn"
 )
 
 // TestGenerate_WithSidecars exercises buildSidecar / buildSidecarVolumes which
@@ -42,12 +42,11 @@ func TestGenerate_WithSidecars(t *testing.T) {
 		},
 	}
 
-	var warns bytes.Buffer
 	ctx := &generate.WorkspaceContext{
-		WS: ws, PluginsFS: nil, Plugins: map[string]*plugin.Plugin{}, Warnings: &warns,
+		WS: ws, PluginsFS: nil, Plugins: map[string]*plugin.Plugin{}, Warnings: warn.New(),
 	}
 	got, err := compose.Generate(ctx, compose.Options{
-		Plugins: map[string]*plugin.Plugin{}, Warnings: &warns,
+		Plugins: map[string]*plugin.Plugin{}, Warnings: warn.New(),
 	})
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
@@ -89,9 +88,8 @@ func TestGenerate_WithResources(t *testing.T) {
 		},
 		Plugins: config.PluginsSpec{Enable: []string{}},
 	}
-	var warns bytes.Buffer
-	ctx := &generate.WorkspaceContext{WS: ws, Plugins: map[string]*plugin.Plugin{}, Warnings: &warns}
-	got, err := compose.Generate(ctx, compose.Options{Plugins: map[string]*plugin.Plugin{}, Warnings: &warns})
+	ctx := &generate.WorkspaceContext{WS: ws, Plugins: map[string]*plugin.Plugin{}, Warnings: warn.New()}
+	got, err := compose.Generate(ctx, compose.Options{Plugins: map[string]*plugin.Plugin{}, Warnings: warn.New()})
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}

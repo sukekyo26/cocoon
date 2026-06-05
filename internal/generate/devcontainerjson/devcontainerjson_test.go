@@ -4,12 +4,14 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/sukekyo26/cocoon/internal/config"
 	"github.com/sukekyo26/cocoon/internal/generate"
 	"github.com/sukekyo26/cocoon/internal/generate/devcontainerjson"
+	"github.com/sukekyo26/cocoon/internal/warn"
 )
 
 // updateGolden, when set with `go test -update-golden`, rewrites the
@@ -278,9 +280,9 @@ func TestGenerateForwardPortsUnion(t *testing.T) {
 // still flow through.
 func TestGenerateForwardPortsSkipsNonInt(t *testing.T) {
 	t.Parallel()
-	var warn strings.Builder
+	sink := warn.New()
 	ctx := &generate.WorkspaceContext{
-		Warnings: &warn,
+		Warnings: sink,
 		WS: &config.Workspace{
 			Ports: &config.PortsSpec{Forward: []any{
 				"3000:3000",
@@ -299,12 +301,30 @@ func TestGenerateForwardPortsSkipsNonInt(t *testing.T) {
 	if !strings.Contains(got, "\"forwardPorts\": [\n\t\t3000,\n\t\t5432\n\t]") {
 		t.Errorf("forwardPorts should be [3000, 5432], got:\n%s", got)
 	}
-	if !strings.Contains(warn.String(), "uses a port range") {
-		t.Errorf("expected range warning, got %q", warn.String())
+	reasons := skipReasonCodes(t, sink)
+	if !slices.Contains(reasons, warn.PortReasonRange) {
+		t.Errorf("expected range skip reason, got %v", reasons)
 	}
-	if !strings.Contains(warn.String(), `uses mode = "host"`) {
-		t.Errorf("expected host-mode warning, got %q", warn.String())
+	if !slices.Contains(reasons, warn.PortReasonHostMode) {
+		t.Errorf("expected host-mode skip reason, got %v", reasons)
 	}
+}
+
+// skipReasonCodes returns the reason code of each PortSkip diagnostic in sink.
+func skipReasonCodes(t *testing.T, sink *warn.Sink) []string {
+	t.Helper()
+	var out []string
+	for _, w := range sink.All() {
+		if w.Code != warn.PortSkip {
+			continue
+		}
+		ref, ok := w.Args[len(w.Args)-1].(warn.Ref)
+		if !ok {
+			t.Fatalf("PortSkip reason arg is %T, want warn.Ref", w.Args[len(w.Args)-1])
+		}
+		out = append(out, ref.Code)
+	}
+	return out
 }
 
 func TestGenerateDeepMergeReplacesScalarsAndLists(t *testing.T) {

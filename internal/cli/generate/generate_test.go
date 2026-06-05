@@ -1,26 +1,25 @@
 package generatecli_test
 
 import (
-	"bytes"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	generatecli "github.com/sukekyo26/cocoon/internal/cli/generate"
+	"github.com/sukekyo26/cocoon/internal/warn"
 )
 
 // runPipeline drives the LoadContext → BuildArtifacts → WriteArtifacts
 // sequence the same way `cocoon gen` does, used by every test below in
 // place of the long-gone `cocoon generate-all` cobra command.
-func runPipeline(t *testing.T, wsPath, pluginsDir, outDir string, stderr io.Writer) error {
+func runPipeline(t *testing.T, wsPath, pluginsDir, outDir string) error {
 	t.Helper()
-	ctx, err := generatecli.LoadContext(wsPath, os.DirFS(pluginsDir), pluginsDir, stderr)
+	ctx, err := generatecli.LoadContext(wsPath, os.DirFS(pluginsDir), pluginsDir, warn.New())
 	if err != nil {
 		return err
 	}
-	arts, err := generatecli.BuildArtifacts(ctx, stderr)
+	arts, err := generatecli.BuildArtifacts(ctx)
 	if err != nil {
 		return err
 	}
@@ -283,9 +282,8 @@ packages = []
 				}
 			}
 
-			var errOut bytes.Buffer
-			if err := runPipeline(t, wsPath, pdir, work, &errOut); err != nil {
-				t.Fatalf("Run: %v\nstderr:\n%s", err, errOut.String())
+			if err := runPipeline(t, wsPath, pdir, work); err != nil {
+				t.Fatalf("Run: %v", err)
 			}
 
 			for _, e := range c.assert {
@@ -363,9 +361,8 @@ enable = ["a", "b"]
 		t.Fatal(err)
 	}
 
-	var errOut bytes.Buffer
-	if err := runPipeline(t, wsPath, pluginsDir, work, &errOut); err == nil {
-		t.Fatalf("expected conflict error, stderr=%q", errOut.String())
+	if err := runPipeline(t, wsPath, pluginsDir, work); err == nil {
+		t.Fatal("expected conflict error, got nil")
 	}
 }
 
@@ -385,10 +382,9 @@ enable = []
 	if err := os.WriteFile(wsPath, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	var errOut bytes.Buffer
 	// Pluginsdir does not exist; LoadEnabledFromFS with empty enable list still
 	// succeeds, so this exercises the "no enabled plugins" no-op path.
-	if err := runPipeline(t, wsPath, filepath.Join(work, "no-such-plugins"), work, &errOut); err != nil {
+	if err := runPipeline(t, wsPath, filepath.Join(work, "no-such-plugins"), work); err != nil {
 		t.Fatalf("expected success with no enabled plugins, got %v", err)
 	}
 }
@@ -410,9 +406,8 @@ func TestRun_BadTOMLFailsBeforeWriting(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 
-	var errOut bytes.Buffer
-	if err := runPipeline(t, wsPath, pluginsDir, work, &errOut); err == nil {
-		t.Fatalf("expected error, got nil; stderr=%q", errOut.String())
+	if err := runPipeline(t, wsPath, pluginsDir, work); err == nil {
+		t.Fatal("expected error, got nil")
 	}
 
 	for _, name := range []string{"Dockerfile", "docker-compose.yml"} {

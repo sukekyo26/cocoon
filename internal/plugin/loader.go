@@ -3,7 +3,6 @@ package plugin
 import (
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"maps"
 	"os"
@@ -12,6 +11,7 @@ import (
 	"slices"
 
 	"github.com/sukekyo26/cocoon/internal/config"
+	"github.com/sukekyo26/cocoon/internal/warn"
 )
 
 // Load parses and validates a single plugin TOML file. The parameter is
@@ -134,7 +134,9 @@ var ErrNilPluginsFS = errors.New("plugin: source fs is nil")
 // LoadEnabledFromFS uses pathPrefix purely to decorate the missing-plugin
 // warning (pass "" for embedded sources). Returns ErrNilPluginsFS so a nil
 // src surfaces as a clear config bug rather than a fs.Stat panic.
-func LoadEnabledFromFS(src fs.FS, enabled []string, warnings io.Writer, pathPrefix string) (map[string]*Plugin, error) {
+func LoadEnabledFromFS(
+	src fs.FS, enabled []string, warnings *warn.Sink, pathPrefix string,
+) (map[string]*Plugin, error) {
 	if src == nil {
 		return nil, ErrNilPluginsFS
 	}
@@ -143,13 +145,11 @@ func LoadEnabledFromFS(src fs.FS, enabled []string, warnings io.Writer, pathPref
 		rel := path.Join(id, "plugin.toml")
 		if _, err := fs.Stat(src, rel); err != nil {
 			if errors.Is(err, fs.ErrNotExist) {
-				if warnings != nil {
-					where := rel
-					if pathPrefix != "" {
-						where = filepath.Join(pathPrefix, id, "plugin.toml")
-					}
-					fmt.Fprintf(warnings, "WARNING: Plugin '%s' not found at %s\n", id, where)
+				where := rel
+				if pathPrefix != "" {
+					where = filepath.Join(pathPrefix, id, "plugin.toml")
 				}
+				warnings.Warn(warn.PluginNotFound, id, where)
 				continue
 			}
 			return nil, fmt.Errorf("stat plugin %q: %w", id, err)

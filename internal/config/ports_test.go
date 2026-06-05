@@ -1,16 +1,39 @@
 package config_test
 
 import (
-	"bytes"
 	"errors"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/sukekyo26/cocoon/internal/config"
+	"github.com/sukekyo26/cocoon/internal/warn"
 )
+
+// portSkipReasons returns the reason code of each PortSkip diagnostic in sink,
+// so devcontainer port-skip tests assert on stable codes rather than English
+// warning text.
+func portSkipReasons(t *testing.T, sink *warn.Sink) []string {
+	t.Helper()
+	var out []string
+	for _, w := range sink.All() {
+		if w.Code != warn.PortSkip {
+			continue
+		}
+		if len(w.Args) < 2 {
+			t.Fatalf("PortSkip warning has %d args, want >=2", len(w.Args))
+		}
+		ref, ok := w.Args[1].(warn.Ref)
+		if !ok {
+			t.Fatalf("PortSkip reason arg is %T, want warn.Ref", w.Args[1])
+		}
+		out = append(out, ref.Code)
+	}
+	return out
+}
 
 // TestPortShortFormPattern guards the JSON Schema pattern against drift from
 // the Go validator. Both must accept and reject the same set of strings so
@@ -163,10 +186,10 @@ func TestComposePortEntries_LongForm(t *testing.T) {
 func TestDevcontainerPortEntries(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		name     string
-		in       []any
-		want     []int
-		wantWarn string // substring expected in warning output
+		name       string
+		in         []any
+		want       []int
+		wantReason string // warn.Ref code expected in a PortSkip diagnostic ("" = none)
 	}{
 		{
 			name: "container_only",
@@ -196,10 +219,10 @@ func TestDevcontainerPortEntries(t *testing.T) {
 			want: []int{8080},
 		},
 		{
-			name:     "range_skipped",
-			in:       []any{"3000-3005:3000-3005"},
-			want:     []int{},
-			wantWarn: "uses a port range",
+			name:       "range_skipped",
+			in:         []any{"3000-3005:3000-3005"},
+			want:       []int{},
+			wantReason: warn.PortReasonRange,
 		},
 		{
 			// Long form: forwardPorts takes `target` (container 5432), not
@@ -222,8 +245,8 @@ func TestDevcontainerPortEntries(t *testing.T) {
 			in: []any{
 				map[string]any{"target": int64(9090), "mode": "host"},
 			},
-			want:     []int{},
-			wantWarn: "uses mode = \"host\"",
+			want:       []int{},
+			wantReason: warn.PortReasonHostMode,
 		},
 		{
 			name: "long_form_published_string_single",
@@ -254,8 +277,8 @@ func TestDevcontainerPortEntries(t *testing.T) {
 			in: []any{
 				map[string]any{"published": int64(8080)},
 			},
-			want:     []int{},
-			wantWarn: "missing target",
+			want:       []int{},
+			wantReason: warn.PortReasonMissingTarget,
 		},
 		{
 			// `target` present but not a plain integer is reported as a
@@ -264,8 +287,8 @@ func TestDevcontainerPortEntries(t *testing.T) {
 			in: []any{
 				map[string]any{"target": "5432-5433"},
 			},
-			want:     []int{},
-			wantWarn: "non-integer target",
+			want:       []int{},
+			wantReason: warn.PortReasonNonIntegerTarget,
 		},
 		{
 			// UDP entries are TCP-incompatible for the devcontainer
@@ -280,14 +303,14 @@ func TestDevcontainerPortEntries(t *testing.T) {
 				"3000-3005:3000-3005",
 				"127.0.0.1:8080:8080/udp",
 			},
-			want:     []int{3000, 5432},
-			wantWarn: "uses a port range",
+			want:       []int{3000, 5432},
+			wantReason: warn.PortReasonRange,
 		},
 		{
-			name:     "short_form_udp_skipped",
-			in:       []any{"6060:6060/udp"},
-			want:     []int{},
-			wantWarn: "uses protocol = \"udp\"",
+			name:       "short_form_udp_skipped",
+			in:         []any{"6060:6060/udp"},
+			want:       []int{},
+			wantReason: warn.PortReasonShortUDP,
 		},
 		{
 			name: "long_form_udp_skipped",
@@ -298,26 +321,27 @@ func TestDevcontainerPortEntries(t *testing.T) {
 					"protocol":  "udp",
 				},
 			},
-			want:     []int{},
-			wantWarn: "uses protocol = \"udp\"",
+			want:       []int{},
+			wantReason: warn.PortReasonLongUDP,
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			var warn bytes.Buffer
-			got := config.DevcontainerPortEntries(tc.in, &warn)
+			sink := warn.New()
+			got := config.DevcontainerPortEntries(tc.in, sink)
 			if got == nil {
 				got = []int{}
 			}
 			if diff := cmp.Diff(tc.want, got); diff != "" {
 				t.Errorf("ports mismatch (-want +got):\n%s", diff)
 			}
-			if tc.wantWarn != "" && !strings.Contains(warn.String(), tc.wantWarn) {
-				t.Errorf("warn = %q, want to contain %q", warn.String(), tc.wantWarn)
+			reasons := portSkipReasons(t, sink)
+			if tc.wantReason != "" && !slices.Contains(reasons, tc.wantReason) {
+				t.Errorf("skip reasons = %v, want to contain %q", reasons, tc.wantReason)
 			}
-			if tc.wantWarn == "" && warn.Len() != 0 {
-				t.Errorf("unexpected warn = %q", warn.String())
+			if tc.wantReason == "" && len(reasons) != 0 {
+				t.Errorf("unexpected skip reasons = %v", reasons)
 			}
 		})
 	}
