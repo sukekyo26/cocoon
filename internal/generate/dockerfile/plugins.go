@@ -638,19 +638,19 @@ func validateManualChecksums(
 			continue // not-enabled is reported by validateVersionOverrides
 		}
 		if method, err := plugin.ResolveMethod(p, id, methods); err == nil && !methodVerifiesByChecksum(method) {
-			return fmt.Errorf("%w: [plugins.options.%s] sets a checksum, but '%s's install method %q does not"+
+			return fmt.Errorf("%w: [plugins.options.%s] sets a checksum, but the %q install method does not"+
 				" consume a per-arch checksum (only binary / archive methods do); remove it from [plugins.options]",
-				ErrInvalidVersionOverride, id, id, method)
+				ErrInvalidVersionOverride, id, method)
 		}
 		if !p.Version.VerifiesByChecksum() {
-			return fmt.Errorf("%w: [plugins.options.%s] sets a checksum, but '%s' declares verify = %q and"+
+			return fmt.Errorf("%w: [plugins.options.%s] sets a checksum, but the plugin declares verify = %q and"+
 				" verifies downloads in-script (not against a per-arch checksum); remove the checksum",
-				ErrInvalidVersionOverride, id, id, p.Version.Verify)
+				ErrInvalidVersionOverride, id, p.Version.Verify)
 		}
 		if autoResolvesChecksum(p.Version.Source) {
-			return fmt.Errorf("%w: [plugins.options.%s] sets a manual checksum, but `cocoon lock` resolves"+
-				" '%s's checksum automatically; remove it from [plugins.options] and run `cocoon lock`",
-				ErrInvalidVersionOverride, id, id)
+			return fmt.Errorf("%w: [plugins.options.%s] sets a manual checksum, but `cocoon lock` resolves the"+
+				" checksum automatically; remove it from [plugins.options] and run `cocoon lock`",
+				ErrInvalidVersionOverride, id)
 		}
 	}
 	return nil
