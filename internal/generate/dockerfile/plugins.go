@@ -396,7 +396,7 @@ func generatePluginInstalls(
 	}
 
 	if len(overrides) > 0 {
-		if err := validateVersionOverrides(plugins, overrides, warnings); err != nil {
+		if err := validateVersionOverrides(plugins, overrides, methods, warnings); err != nil {
 			return "", err
 		}
 	}
@@ -521,9 +521,10 @@ func buildInstallEnvPairs(
 			pin = override.Pin
 		}
 		pairs = append(pairs, fmt.Sprintf(`PIN="%s"`, pin))
-		// CHECKSUM_* is injected only for checksum-verified plugins.
-		// pgp plugins verify in-script and take no per-workspace checksum.
-		if checksumVerify {
+		// CHECKSUM_* is injected only for checksum-verified plugins whose
+		// install method consumes it (binary / archive). pgp plugins verify
+		// in-script, and installer / apt methods ignore $CHECKSUM_* entirely.
+		if checksumVerify && methodVerifiesByChecksum(method) {
 			amd64 := ""
 			arm64 := ""
 			if hasOverride {
@@ -578,6 +579,7 @@ func appendExtraVersionPairs(
 func validateVersionOverrides(
 	plugins map[string]*plugin.Plugin,
 	overrides map[string]config.PluginVersionOverride,
+	methods map[string]string,
 	warnings io.Writer,
 ) error {
 	ids := slices.Sorted(maps.Keys(overrides))
@@ -599,9 +601,14 @@ func validateVersionOverrides(
 			return err
 		}
 		// The missing-checksum warning applies only to checksum-verified
-		// plugins; a pgp plugin pinned without a checksum is fully verified.
+		// plugins whose install method consumes a per-arch checksum. A pgp
+		// plugin is verified in-script, and an installer / apt method ignores
+		// $CHECKSUM_* entirely, so neither should be nagged.
 		if override.Pin != "" && p.Version.VerifiesByChecksum() {
-			warnMissingChecksum(warnings, id, override, p.Version.Source)
+			method, err := plugin.ResolveMethod(p, id, methods)
+			if err == nil && methodVerifiesByChecksum(method) {
+				warnMissingChecksum(warnings, id, override, p.Version.Source)
+			}
 		}
 	}
 	return nil
@@ -610,11 +617,17 @@ func validateVersionOverrides(
 // validateManualChecksums gates the [plugins.options] manual checksum escape
 // hatch. It runs on the BASE (workspace-sourced) overrides — before the lock
 // overlay — so a present checksum is necessarily one the user typed by hand. A
-// manual checksum is only meaningful for a plugin whose upstream publishes
-// none (so `cocoon lock` cannot record one): for a pgp plugin the checksum
-// vocabulary does not apply, and for an auto-resolvable plugin `cocoon lock`
-// would silently override the hand-typed value, so both are rejected.
-func validateManualChecksums(plugins map[string]*plugin.Plugin, base map[string]config.PluginVersionOverride) error {
+// manual checksum is only meaningful for a plugin whose selected install method
+// consumes a per-arch checksum (binary / archive) AND whose upstream publishes
+// none (so `cocoon lock` cannot record one). It is rejected when: the install
+// method is installer / apt (which ignore $CHECKSUM_*), the plugin is pgp
+// (verified in-script), or the checksum is auto-resolvable (`cocoon lock` would
+// silently override the hand-typed value).
+func validateManualChecksums(
+	plugins map[string]*plugin.Plugin,
+	base map[string]config.PluginVersionOverride,
+	methods map[string]string,
+) error {
 	for _, id := range slices.Sorted(maps.Keys(base)) {
 		ov := base[id]
 		if ov.ChecksumAmd64 == nil && ov.ChecksumArm64 == nil {
@@ -624,15 +637,20 @@ func validateManualChecksums(plugins map[string]*plugin.Plugin, base map[string]
 		if !ok {
 			continue // not-enabled is reported by validateVersionOverrides
 		}
+		if method, err := plugin.ResolveMethod(p, id, methods); err == nil && !methodVerifiesByChecksum(method) {
+			return fmt.Errorf("%w: [plugins.options.%s] sets a checksum, but the %q install method does not"+
+				" consume a per-arch checksum (only binary / archive methods do); remove it from [plugins.options]",
+				ErrInvalidVersionOverride, id, method)
+		}
 		if !p.Version.VerifiesByChecksum() {
-			return fmt.Errorf("%w: [plugins.options.%s] sets a checksum, but '%s' declares verify = %q and"+
+			return fmt.Errorf("%w: [plugins.options.%s] sets a checksum, but the plugin declares verify = %q and"+
 				" verifies downloads in-script (not against a per-arch checksum); remove the checksum",
-				ErrInvalidVersionOverride, id, id, p.Version.Verify)
+				ErrInvalidVersionOverride, id, p.Version.Verify)
 		}
 		if autoResolvesChecksum(p.Version.Source) {
-			return fmt.Errorf("%w: [plugins.options.%s] sets a manual checksum, but `cocoon lock` resolves"+
-				" '%s's checksum automatically; remove it from [plugins.options] and run `cocoon lock`",
-				ErrInvalidVersionOverride, id, id)
+			return fmt.Errorf("%w: [plugins.options.%s] sets a manual checksum, but `cocoon lock` resolves the"+
+				" checksum automatically; remove it from [plugins.options] and run `cocoon lock`",
+				ErrInvalidVersionOverride, id)
 		}
 	}
 	return nil
@@ -643,6 +661,21 @@ func validateManualChecksums(plugins map[string]*plugin.Plugin, base map[string]
 // "none" checksum kind means it cannot, so a manual checksum is permitted.
 func autoResolvesChecksum(src *plugin.VersionSource) bool {
 	return src != nil && src.Checksum.Type != "" && src.Checksum.Type != plugin.ChecksumNone
+}
+
+// methodVerifiesByChecksum reports whether the selected install method category
+// consumes the $CHECKSUM_AMD64 / $CHECKSUM_ARM64 env pair. Only binary and
+// archive download a discrete asset and run `sha256sum -c`; installer (pipes an
+// upstream installer script) and apt (apt-get) verify by other means and ignore
+// the variables. An empty method (legacy single-install.sh plugin) or any custom
+// category is treated as checksum-capable to preserve existing behavior.
+func methodVerifiesByChecksum(method string) bool {
+	switch method {
+	case "installer", "apt":
+		return false
+	default:
+		return true
+	}
 }
 
 // checkExtraOverrideKeys rejects [plugins.options].<id>.<key> entries that
