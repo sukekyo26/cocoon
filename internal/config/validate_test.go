@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/sukekyo26/cocoon/internal/config"
+	"github.com/sukekyo26/cocoon/internal/i18n"
 )
 
 // tomlQuote returns s as a TOML basic-string literal (`"..."`) suitable
@@ -52,7 +53,7 @@ func TestValidate_ContainerInvalidServiceName(t *testing.T) {
 	require.Error(t, err)
 	var v *config.ValidationError
 	require.ErrorAs(t, err, &v)
-	require.Contains(t, v.Errors[0].Message, "service_name does not match")
+	require.Contains(t, v.Errors[0].Localize(i18n.English()), "service_name does not match")
 }
 
 // TestValidate_LegacyOsRejected pins the migration error message so the
@@ -87,7 +88,7 @@ os_version = "24.04"`,
 		`image = "ubuntu"`,
 		`image_version = "24.04"`,
 	} {
-		require.Containsf(t, got.Message, want, "migration error must contain %q", want)
+		require.Containsf(t, got.Localize(i18n.English()), want, "migration error must contain %q", want)
 	}
 }
 
@@ -115,11 +116,11 @@ os_version = "24.04"`,
 			continue
 		}
 		last := loc[len(loc)-1]
-		if last == "image" && !strings.Contains(v.Errors[i].Message, "no longer supported") {
-			t.Errorf("validateImage error must be suppressed while os/os_version is set, got %v: %q", loc, v.Errors[i].Message)
+		if last == "image" && !strings.Contains(v.Errors[i].Localize(i18n.English()), "no longer supported") {
+			t.Errorf("validateImage error must be suppressed while os/os_version is set, got %v: %q", loc, v.Errors[i].Localize(i18n.English()))
 		}
 		if last == "image_version" {
-			t.Errorf("validateImage error must be suppressed while os/os_version is set, got %v: %q", loc, v.Errors[i].Message)
+			t.Errorf("validateImage error must be suppressed while os/os_version is set, got %v: %q", loc, v.Errors[i].Localize(i18n.English()))
 		}
 	}
 }
@@ -1557,7 +1558,7 @@ func TestValidate_SudoMode(t *testing.T) {
 			require.Error(t, err)
 			var v *config.ValidationError
 			require.ErrorAs(t, err, &v)
-			require.Contains(t, v.Errors[0].Message, "mode must be")
+			require.Contains(t, v.Errors[0].Localize(i18n.English()), "mode must be")
 		})
 	}
 }
@@ -1578,7 +1579,7 @@ func TestValidate_PasswordSudoVsNoNewPrivileges(t *testing.T) {
 	for i := range v.Errors {
 		loc := v.Errors[i].Loc
 		if len(loc) > 0 && loc[len(loc)-1] == "mode" &&
-			strings.Contains(v.Errors[i].Message, "cannot be combined") {
+			strings.Contains(v.Errors[i].Localize(i18n.English()), "cannot be combined") {
 			found = true
 		}
 	}

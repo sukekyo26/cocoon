@@ -40,8 +40,8 @@ func runList(stdout, _ io.Writer, sourceFilter string) error {
 		sourceFilter != plugin.SourceEmbedded &&
 		sourceFilter != plugin.SourceUser &&
 		sourceFilter != plugin.SourceProject {
-		return fmt.Errorf("%w: --source must be one of %q / %q / %q",
-			clihelpers.ErrUsage, plugin.SourceEmbedded, plugin.SourceUser, plugin.SourceProject)
+		return clihelpers.UsageErr("err_pluginlist_invalid_source",
+			plugin.SourceEmbedded, plugin.SourceUser, plugin.SourceProject)
 	}
 
 	layered, err := resolveLayered()

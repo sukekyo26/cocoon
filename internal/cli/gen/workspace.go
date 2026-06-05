@@ -2,7 +2,6 @@ package gencli
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -42,7 +41,7 @@ func newWorkspaceCmd(stdout, stderr io.Writer) *cobra.Command {
 	cmd.Flags().StringVar(&nameFlag, "name", "", cat.Msg("flag_gen_workspace_name_usage"))
 	cmd.Flags().StringArrayVar(&folderFlags, "folder", nil, cat.Msg("flag_gen_workspace_folder_usage"))
 	cmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
-		return fmt.Errorf("%w: %w", clihelpers.ErrUsage, err)
+		return clihelpers.UsageWrap(err, "")
 	})
 	clihelpers.AttachHelpAlias(cmd)
 	return cmd
@@ -70,7 +69,7 @@ func runGenWorkspace(
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return fmt.Errorf("%w: resolve home dir: %w", clihelpers.ErrFailure, err)
+		return clihelpers.FailureWrap(err, "err_genws_resolve_home")
 	}
 	target := filepath.Join(outDir, name+".code-workspace")
 	// The .code-workspace file resolves relative paths from its own
@@ -85,10 +84,10 @@ func runGenWorkspace(
 		return mapWorkspaceErr(err, cat)
 	}
 	if mkErr := os.MkdirAll(filepath.Dir(target), 0o755); mkErr != nil {
-		return fmt.Errorf("%w: mkdir %s: %w", clihelpers.ErrFailure, target, mkErr)
+		return clihelpers.FailureWrap(mkErr, "err_genws_mkdir", target)
 	}
 	if wErr := fsx.AtomicWriteFile(target, []byte(body), 0o644); wErr != nil {
-		return fmt.Errorf("%w: write %s: %w", clihelpers.ErrFailure, target, wErr)
+		return clihelpers.FailureWrap(wErr, "err_genws_write", target)
 	}
 
 	cwd, _ := os.Getwd() //nolint:errcheck // cwd is best-effort for pretty-printing only.
@@ -114,7 +113,7 @@ func resolveWorkspaceName(
 ) (string, error) {
 	if flag != "" {
 		if !config.IsValidCodeWorkspaceName(flag) {
-			return "", fmt.Errorf("%w: %s", clihelpers.ErrUsage, cat.Msg("gen_workspace_invalid_name", flag))
+			return "", clihelpers.UsageErr("err_genws_invalid_name", cat.Msg("gen_workspace_invalid_name", flag))
 		}
 		return flag, nil
 	}
@@ -139,11 +138,11 @@ func parseFolderFlags(flags []string) ([]config.CodeWorkspaceFolder, error) {
 	out := make([]config.CodeWorkspaceFolder, 0, len(flags))
 	for _, raw := range flags {
 		if raw == "" {
-			return nil, fmt.Errorf("%w: --folder value must not be empty", clihelpers.ErrUsage)
+			return nil, clihelpers.UsageErr("err_genws_folder_empty")
 		}
 		path, name, _ := strings.Cut(raw, "=")
 		if path == "" {
-			return nil, fmt.Errorf("%w: --folder %q has empty path before \"=\"", clihelpers.ErrUsage, raw)
+			return nil, clihelpers.UsageErr("err_genws_folder_empty_path", raw)
 		}
 		out = append(out, config.CodeWorkspaceFolder{Path: path, Name: name})
 	}
@@ -156,12 +155,12 @@ func parseFolderFlags(flags []string) ([]config.CodeWorkspaceFolder, error) {
 func mapWorkspaceErr(err error, cat *i18n.Catalog) error {
 	switch {
 	case errors.Is(err, codeworkspace.ErrNoFolders):
-		return fmt.Errorf("%w: %s", clihelpers.ErrUsage, cat.Msg("gen_workspace_no_folders"))
+		return clihelpers.UsageErr("err_genws_no_folders", cat.Msg("gen_workspace_no_folders"))
 	case errors.Is(err, codeworkspace.ErrInvalidFolderPath):
-		return fmt.Errorf("%w: %w", clihelpers.ErrUsage, err)
+		return clihelpers.UsageWrap(err, "")
 	case errors.Is(err, codeworkspace.ErrMissingHomeDir):
-		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+		return clihelpers.FailureWrap(err, "")
 	default:
-		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+		return clihelpers.FailureWrap(err, "")
 	}
 }

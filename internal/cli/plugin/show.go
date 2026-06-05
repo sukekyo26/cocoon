@@ -39,11 +39,11 @@ func runShow(stdout, stderr io.Writer, id string) error {
 	}
 	src := layered.Source(id)
 	if src == "" {
-		return fmt.Errorf("%w: plugin %q not found in any layer", clihelpers.ErrUsage, id)
+		return clihelpers.UsageErr("err_pluginshow_not_found", id)
 	}
 	p, err := loadPluginFromLayer(layered, id)
 	if err != nil {
-		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+		return clihelpers.FailureWrap(err, "")
 	}
 
 	log := logx.New(stdout, stderr)

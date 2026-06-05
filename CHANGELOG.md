@@ -18,6 +18,10 @@ adheres to [Semantic Versioning](https://semver.org/).
   and the `cocoon init` screen-reader prompts now print their runtime output
   (progress, success, table headers, paste-in snippets) in the active language
   instead of always in English.
+- Error messages are now localized to the active language: usage/failure errors
+  across all subcommands and `workspace.toml` validation messages render in
+  Japanese under a Japanese locale. Error text cocoon wraps verbatim from the Go
+  standard library (filesystem, TOML parser, network) stays in English.
 
 ## [0.14.1] - 2026-06-05
 

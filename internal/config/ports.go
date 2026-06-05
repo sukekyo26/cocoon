@@ -228,13 +228,13 @@ func validatePortsForward(a *Accumulator, forward []any) {
 		case map[string]any:
 			validateLongForm(a, v, idx)
 		case int, int64, float64:
-			a.Add(
-				"int form was removed; use a string (\"3000:3000\") "+
-					"or table ({ target = 3000 })",
+			a.AddCode(
+				"err_portfld_int_form_removed",
+				nil,
 				"forward", idx,
 			)
 		default:
-			a.Add(fmt.Sprintf("must be string or table (got %T)", raw),
+			a.AddCode("err_portfld_must_be_string_or_table", []any{raw},
 				"forward", idx)
 		}
 	}
@@ -287,7 +287,7 @@ func validateLongForm(a *Accumulator, m map[string]any, idx string) {
 		return
 	}
 	if _, present := m["target"]; !present {
-		a.Add("target is required", "forward", idx, "target")
+		a.AddCode("err_portfld_target_required", nil, "forward", idx, "target")
 	}
 	validateLongFormPortFields(a, m, idx)
 	validateLongFormStringField(a, m, idx, "host_ip", validateHostIP)
@@ -298,9 +298,8 @@ func validateLongForm(a *Accumulator, m map[string]any, idx string) {
 func rejectUnknownLongFormKeys(a *Accumulator, m map[string]any, idx string) bool {
 	for k := range m {
 		if _, ok := allowedLongFormKeys[k]; !ok {
-			a.Add(fmt.Sprintf(
-				"unknown key %q (allowed: %s)",
-				k, strings.Join(longFormKeyOrder, ", ")),
+			a.AddCode("err_portfld_unknown_key",
+				[]any{k, strings.Join(longFormKeyOrder, ", ")},
 				"forward", idx)
 			return true
 		}
@@ -320,11 +319,11 @@ func validateLongFormPortFields(a *Accumulator, m map[string]any, idx string) {
 func validateIntPortField(a *Accumulator, v any, idx, key string) {
 	n, parsed := intField(v)
 	if !parsed {
-		a.Add(fmt.Sprintf("%s must be an integer", key), "forward", idx, key)
+		a.AddCode("err_portfld_must_be_integer", []any{key}, "forward", idx, key)
 		return
 	}
 	if n < portMin || n > portMax {
-		a.Add(fmt.Sprintf("%s must be in [%d,%d]", key, portMin, portMax),
+		a.AddCode("err_portfld_must_be_in_range", []any{key, portMin, portMax},
 			"forward", idx, key)
 	}
 }
@@ -339,20 +338,20 @@ func validateLongFormPublished(a *Accumulator, v any, idx string) {
 	}
 	s, ok := v.(string)
 	if !ok {
-		a.Add("published must be an integer or a string", "forward", idx, "published")
+		a.AddCode("err_portfld_published_int_or_string", nil, "forward", idx, "published")
 		return
 	}
 	if !rxLongFormPublishedString.MatchString(s) {
-		a.Add(fmt.Sprintf(
-			"published string %q must be a port or numeric range like \"8000-8010\"", s),
+		a.AddCode("err_portfld_published_string_form",
+			[]any{s},
 			"forward", idx, "published")
 		return
 	}
 	for _, part := range strings.Split(s, "-") {
 		n, err := strconv.Atoi(part)
 		if err != nil || n < portMin || n > portMax {
-			a.Add(fmt.Sprintf("published port must be in [%d,%d] (got %q)",
-				portMin, portMax, part),
+			a.AddCode("err_portfld_published_port_range",
+				[]any{portMin, portMax, part},
 				"forward", idx, "published")
 			return
 		}

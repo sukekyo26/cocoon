@@ -89,13 +89,13 @@ func runSelfUpdate(ctx context.Context, stdout, stderr io.Writer, checkOnly, for
 		var err error
 		selfPath, err = executablePath()
 		if err != nil {
-			return fmt.Errorf("%w: locate self: %w", clihelpers.ErrFailure, err)
+			return clihelpers.FailureWrap(err, "err_selfupdate_locate_self")
 		}
 		if err = checkInstallDirWritable(selfPath); err != nil {
 			if errors.Is(err, ErrInstallDirReadOnly) {
-				return fmt.Errorf("%w: %w\n%s", clihelpers.ErrFailure, err, installDirHint(selfPath))
+				return clihelpers.FailureWrap(err, "err_selfupdate_install_dir_readonly", installDirHint(selfPath))
 			}
-			return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+			return clihelpers.FailureWrap(err, "")
 		}
 	}
 
@@ -103,7 +103,7 @@ func runSelfUpdate(ctx context.Context, stdout, stderr io.Writer, checkOnly, for
 	defer cancel()
 	rel, err := fetchLatest(tctx)
 	if err != nil {
-		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+		return clihelpers.FailureWrap(err, "")
 	}
 	latest := strings.TrimPrefix(rel.TagName, "v")
 
@@ -129,15 +129,15 @@ func runSelfUpdate(ctx context.Context, stdout, stderr io.Writer, checkOnly, for
 	assetURL := rel.AssetURL(assetName)
 	sumsURL := rel.AssetURL("SHA256SUMS")
 	if assetURL == "" {
-		return fmt.Errorf("%w: release asset %q not found in %s", clihelpers.ErrFailure, assetName, rel.TagName)
+		return clihelpers.FailureErr("err_selfupdate_asset_not_found", assetName, rel.TagName)
 	}
 	if sumsURL == "" {
-		return fmt.Errorf("%w: SHA256SUMS not found in %s", clihelpers.ErrFailure, rel.TagName)
+		return clihelpers.FailureErr("err_selfupdate_sums_not_found", rel.TagName)
 	}
 
 	tmp, err := os.MkdirTemp("", "cocoon-update-")
 	if err != nil {
-		return fmt.Errorf("%w: mktemp: %w", clihelpers.ErrFailure, err)
+		return clihelpers.FailureWrap(err, "err_selfupdate_mktemp")
 	}
 	defer func() { _ = os.RemoveAll(tmp) }()
 
@@ -147,26 +147,26 @@ func runSelfUpdate(ctx context.Context, stdout, stderr io.Writer, checkOnly, for
 	// scripts see only the stable version / success output.
 	log.Progress(cat.Msg("selfupdate_downloading", assetName))
 	if err = downloadFile(ctx, assetURL, binPath); err != nil {
-		return fmt.Errorf("%w: download %s: %w", clihelpers.ErrFailure, assetName, err)
+		return clihelpers.FailureWrap(err, "err_selfupdate_download_asset", assetName)
 	}
 	if err = downloadFile(ctx, sumsURL, sumsPath); err != nil {
-		return fmt.Errorf("%w: download SHA256SUMS: %w", clihelpers.ErrFailure, err)
+		return clihelpers.FailureWrap(err, "err_selfupdate_download_sums")
 	}
 
 	expected, err := readChecksum(sumsPath, assetName)
 	if err != nil {
-		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+		return clihelpers.FailureWrap(err, "")
 	}
 	actual, err := sha256File(binPath)
 	if err != nil {
-		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+		return clihelpers.FailureWrap(err, "")
 	}
 	if !strings.EqualFold(actual, expected) {
-		return fmt.Errorf("%w: checksum mismatch (got %s, want %s)", clihelpers.ErrFailure, actual, expected)
+		return clihelpers.FailureErr("err_selfupdate_checksum_mismatch", actual, expected)
 	}
 
 	if err = os.Chmod(binPath, 0o755); err != nil {
-		return fmt.Errorf("%w: chmod: %w", clihelpers.ErrFailure, err)
+		return clihelpers.FailureWrap(err, "err_selfupdate_chmod")
 	}
 
 	if err = atomicReplace(binPath, selfPath); err != nil {
@@ -175,9 +175,9 @@ func runSelfUpdate(ctx context.Context, stdout, stderr io.Writer, checkOnly, for
 		// preflight↔rename race) by reusing the same hint so the user
 		// still sees actionable remediation rather than a raw syscall error.
 		if errors.Is(err, fs.ErrPermission) {
-			return fmt.Errorf("%w: replace %s: %w\n%s", clihelpers.ErrFailure, selfPath, err, installDirHint(selfPath))
+			return clihelpers.FailureWrap(err, "err_selfupdate_replace_perm", selfPath, installDirHint(selfPath))
 		}
-		return fmt.Errorf("%w: replace %s: %w", clihelpers.ErrFailure, selfPath, err)
+		return clihelpers.FailureWrap(err, "err_selfupdate_replace", selfPath)
 	}
 
 	log.Success(cat.Msg("selfupdate_updated", latest, selfPath))

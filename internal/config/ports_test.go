@@ -10,6 +10,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/sukekyo26/cocoon/internal/config"
+	"github.com/sukekyo26/cocoon/internal/i18n"
 	"github.com/sukekyo26/cocoon/internal/warn"
 )
 
@@ -422,7 +423,7 @@ func TestPortsSpec_Validate_TypeMismatches(t *testing.T) {
 			}
 			joined := ""
 			for _, fe := range ve.Errors {
-				joined += fe.Message + "\n"
+				joined += fe.Localize(i18n.English()) + "\n"
 			}
 			if !strings.Contains(joined, tc.wantMsg) {
 				t.Errorf("error messages do not contain %q:\n%s", tc.wantMsg, joined)
@@ -610,7 +611,7 @@ func TestPortsSpec_Validate(t *testing.T) {
 			}
 			joined := ""
 			for _, fe := range ve.Errors {
-				joined += fe.Message + "\n"
+				joined += fe.Localize(i18n.English()) + "\n"
 			}
 			if !strings.Contains(joined, tc.wantMsg) {
 				t.Errorf("error messages do not contain %q:\n%s", tc.wantMsg, joined)

@@ -43,7 +43,7 @@ func newPinCmd(stdout, stderr io.Writer) *cobra.Command {
 func runPin(stdout, stderr io.Writer, id, ref, method string, write bool) error {
 	cat := i18n.New(i18n.Detect())
 	if id == "" || ref == "" {
-		return fmt.Errorf("%w: both <id> and <ref> are required", clihelpers.ErrUsage)
+		return clihelpers.UsageErr("err_pin_both_required")
 	}
 	// Normalise the version constraint up front so the CLI rejects ranges
 	// (">=1.0") with the same message the workspace loader uses and writes the
@@ -51,9 +51,7 @@ func runPin(stdout, stderr io.Writer, id, ref, method string, write bool) error 
 	// gets the "=" prepended for the user.
 	override, specErr := normalizePinSpec(ref)
 	if specErr != nil {
-		return fmt.Errorf(
-			`%w: invalid version for %q: %w — write a bare version (1.23.4) or "latest"`,
-			clihelpers.ErrUsage, id, specErr)
+		return clihelpers.UsageErr("err_pin_invalid_version", id, specErr)
 	}
 	spec := override.Spec
 	layered, err := resolveLayered()
@@ -61,20 +59,17 @@ func runPin(stdout, stderr io.Writer, id, ref, method string, write bool) error 
 		return err
 	}
 	if layered.Source(id) == "" {
-		return fmt.Errorf("%w: plugin %q is not in any layer (cocoon plugin list)", clihelpers.ErrUsage, id)
+		return clihelpers.UsageErr("err_pin_not_in_layer", id)
 	}
 	p, lErr := loadPluginFromLayer(layered, id)
 	if lErr != nil {
-		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, lErr)
+		return clihelpers.FailureWrap(lErr, "")
 	}
 	// A pin only means something for a version_capable plugin: cocoon gen
 	// hard-rejects a pinned enable entry for any other plugin. Fail fast here
 	// so `plugin pin` never emits a config that cannot generate.
 	if !p.Version.VersionCapable {
-		return fmt.Errorf(
-			"%w: plugin %q is not version_capable; it cannot be pinned "+
-				"(a \"%s=<version>\" enable entry is rejected by cocoon gen)",
-			clihelpers.ErrUsage, id, id)
+		return clihelpers.UsageErr("err_pin_not_version_capable", id, id)
 	}
 	if method != "" {
 		if mErr := validateMethodForPin(p, id, method); mErr != nil {
@@ -117,22 +112,20 @@ func isVersionStart(b byte) bool {
 func runPinWrite(stdout, stderr io.Writer, cat *i18n.Catalog, id, spec, method string) error {
 	cwd, cwdErr := os.Getwd()
 	if cwdErr != nil {
-		return fmt.Errorf("%w: getwd: %w", clihelpers.ErrFailure, cwdErr)
+		return clihelpers.FailureWrap(cwdErr, "err_pin_getwd")
 	}
 	wsPath, dErr := config.Discover(cwd)
 	if dErr != nil {
-		return fmt.Errorf("%w: discover workspace.toml: %w", clihelpers.ErrFailure, dErr)
+		return clihelpers.FailureWrap(dErr, "err_pin_discover")
 	}
 	if wsPath == "" {
-		return fmt.Errorf(
-			"%w: --write needs a discoverable workspace.toml (run inside a cocoon project)",
-			clihelpers.ErrUsage)
+		return clihelpers.UsageErr("err_pin_write_needs_workspace")
 	}
 	if uErr := plugin.UpsertPinAndMethod(wsPath, id, spec, method); uErr != nil {
 		if errors.Is(uErr, plugin.ErrLegacyPluginVersions) {
-			return fmt.Errorf("%w: %w (in %s)", clihelpers.ErrUsage, uErr, wsPath)
+			return clihelpers.UsageErr("err_pin_legacy_versions", uErr, wsPath)
 		}
-		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, uErr)
+		return clihelpers.FailureWrap(uErr, "")
 	}
 	log := logx.New(stdout, stderr)
 	log.Success(cat.Msg("plugin_pin_updated_enable", wsPath, plugin.FormatEnableEntry(id, spec)))
@@ -177,17 +170,11 @@ func renderPinSnippet(cat *i18n.Catalog, id, spec, method string) string {
 // would surface an empty declared list and obscure the real fix.
 func validateMethodForPin(p *plugin.Plugin, id, method string) error {
 	if len(p.Install.Methods) == 0 {
-		return fmt.Errorf(
-			"%w: plugin %q declares no [install.methods] in plugin.toml; "+
-				"--method is only meaningful when the plugin offers two or more "+
-				"install variants — drop --method to pin only the version",
-			clihelpers.ErrUsage, id)
+		return clihelpers.UsageErr("err_pin_no_methods", id)
 	}
 	if _, ok := p.Install.Methods[method]; !ok {
 		declared := slices.Sorted(maps.Keys(p.Install.Methods))
-		return fmt.Errorf(
-			"%w: plugin %q has no method %q in [install.methods] (declared: %s)",
-			clihelpers.ErrUsage, id, method, strings.Join(declared, ", "))
+		return clihelpers.UsageErr("err_pin_method_not_declared", id, method, strings.Join(declared, ", "))
 	}
 	return nil
 }

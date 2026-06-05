@@ -144,6 +144,13 @@ linters:
         - errors.Join(
         - .Wrap(
         - .Wrapf(
+        # First-party localized-error constructors (internal/cli/clihelpers).
+        # They build cocoon's own *LocError, so returning their result is not an
+        # unwrapped third-party error.
+        - .UsageErr(
+        - .FailureErr(
+        - .UsageWrap(
+        - .FailureWrap(
     sloglint:
       no-mixed-args: true
       kv-only: false
@@ -189,10 +196,13 @@ linters:
       - path: internal/setup/.*
         linters:
           - exhaustruct
-      # i18n catalog tables intentionally hold long literal hint strings.
+      # i18n catalog tables intentionally hold long literal hint strings, and
+      # the parallel en/ja maps share an identical key set by design (parity is
+      # enforced by keys_test), which dupl would otherwise flag.
       - path: internal/i18n/.*
         linters:
           - lll
+          - dupl
       # Package-doc-only files have no executable code.
       - path: doc\.go
         linters:

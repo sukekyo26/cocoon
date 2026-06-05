@@ -264,6 +264,8 @@ func toValidationError(path string, err error) error {
 			Path: path,
 			Errors: []FieldError{{
 				Loc:     nil,
+				Code:    "",
+				Args:    nil,
 				Message: msg,
 			}},
 		}
@@ -275,6 +277,8 @@ func toValidationError(path string, err error) error {
 			Path: path,
 			Errors: []FieldError{{
 				Loc:     nil,
+				Code:    "",
+				Args:    nil,
 				Message: fmt.Sprintf("toml decode error at %d:%d: %s", row, col, decErr.Error()),
 			}},
 		}
@@ -283,6 +287,8 @@ func toValidationError(path string, err error) error {
 		Path: path,
 		Errors: []FieldError{{
 			Loc:     nil,
+			Code:    "",
+			Args:    nil,
 			Message: "toml decode error: " + err.Error(),
 		}},
 	}

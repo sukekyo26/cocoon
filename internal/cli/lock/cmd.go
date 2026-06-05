@@ -90,7 +90,7 @@ func runLock(ctx context.Context, stdout, stderr io.Writer, opts lockOptions) er
 		return err
 	}
 	if saveErr := lockfile.Save(lockPath, lock); saveErr != nil {
-		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, saveErr)
+		return clihelpers.FailureWrap(saveErr, "")
 	}
 	log.Success(cat.Msg("lock_wrote", lockPath, len(lock.Plugins)))
 	return nil
@@ -102,11 +102,11 @@ func runLock(ctx context.Context, stdout, stderr io.Writer, opts lockOptions) er
 func loadContext(wsPath string) (*generate.WorkspaceContext, error) {
 	embedded, err := plugin.CatalogFS()
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+		return nil, clihelpers.FailureWrap(err, "")
 	}
 	userDir, err := userPluginsDir()
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+		return nil, clihelpers.FailureWrap(err, "")
 	}
 	projectDir := filepath.Join(filepath.Dir(wsPath), ".cocoon", "plugins")
 	layered := plugin.NewLayeredFS(embedded, userDir, projectDir)
@@ -127,8 +127,7 @@ func loadExistingLock(path string, check bool, log *logx.Logger, cat *i18n.Catal
 	case lockfile.IsNotExist(err):
 		return nil, nil //nolint:nilnil // "no lock yet" is a valid, non-error state.
 	case check:
-		return nil, fmt.Errorf("%w: %s is malformed (%w); run `cocoon lock` to regenerate it",
-			clihelpers.ErrUsage, path, err)
+		return nil, clihelpers.UsageErr("err_lockcmd_malformed_check", path, err)
 	default:
 		log.Warn(cat.Msg("lock_ignoring_malformed", path, err))
 		return nil, nil //nolint:nilnil // malformed-and-regenerating is a valid write-path state.
@@ -139,25 +138,23 @@ func resolveWorkspace(flag string) (string, error) {
 	if flag != "" {
 		abs, err := filepath.Abs(flag)
 		if err != nil {
-			return "", fmt.Errorf("%w: resolve --workspace: %w", clihelpers.ErrUsage, err)
+			return "", clihelpers.UsageWrap(err, "err_lockcmd_resolve_workspace")
 		}
 		if _, statErr := os.Stat(abs); statErr != nil {
-			return "", fmt.Errorf("%w: --workspace %s: %w", clihelpers.ErrUsage, abs, statErr)
+			return "", clihelpers.UsageWrap(statErr, "err_lockcmd_workspace_stat", abs)
 		}
 		return abs, nil
 	}
 	cwd, err := os.Getwd()
 	if err != nil {
-		return "", fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+		return "", clihelpers.FailureWrap(err, "")
 	}
 	found, err := config.Discover(cwd)
 	if err != nil {
-		return "", fmt.Errorf("%w: discover workspace.toml: %w", clihelpers.ErrFailure, err)
+		return "", clihelpers.FailureWrap(err, "err_lockcmd_discover")
 	}
 	if found == "" {
-		return "", fmt.Errorf(
-			"%w: workspace.toml not found in %s or any parent (try `cocoon init`)",
-			clihelpers.ErrUsage, cwd)
+		return "", clihelpers.UsageErr("err_lockcmd_workspace_not_found", cwd)
 	}
 	return found, nil
 }

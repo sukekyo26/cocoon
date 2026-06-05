@@ -3,7 +3,6 @@ package lockcli
 import (
 	"context"
 	"errors"
-	"fmt"
 	"maps"
 
 	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
@@ -64,24 +63,21 @@ func checkLock(
 		return nil
 	}
 	if existing == nil {
-		return fmt.Errorf("%w: %s is missing; run `cocoon lock`", clihelpers.ErrUsage, lockPath)
+		return clihelpers.UsageErr("err_lock_lock_missing", lockPath)
 	}
 	if existing.InputsHash != lockfile.ComputeInputsHash(specHashInput(specs)) {
-		return fmt.Errorf("%w: %s is out of date (workspace.toml changed); run `cocoon lock`",
-			clihelpers.ErrUsage, lockPath)
+		return clihelpers.UsageErr("err_lock_out_of_date", lockPath)
 	}
 	for _, s := range specs {
 		entry, ok := existing.Find(s.id)
 		if !ok {
-			return fmt.Errorf("%w: %s has no entry for %q; run `cocoon lock`", clihelpers.ErrUsage, lockPath, s.id)
+			return clihelpers.UsageErr("err_lock_no_entry", lockPath, s.id)
 		}
 		if entry.Requested != s.requested {
-			return fmt.Errorf("%w: %s entry for %q requests %q but workspace.toml asks %q; run `cocoon lock`",
-				clihelpers.ErrUsage, lockPath, s.id, entry.Requested, s.requested)
+			return clihelpers.UsageErr("err_lock_requested_mismatch", lockPath, s.id, entry.Requested, s.requested)
 		}
 		if !maps.Equal(entry.Extra, s.override.Extra) {
-			return fmt.Errorf("%w: %s entry for %q has stale [plugins.options] settings; run `cocoon lock`",
-				clihelpers.ErrUsage, lockPath, s.id)
+			return clihelpers.UsageErr("err_lock_stale_options", lockPath, s.id)
 		}
 	}
 	log.Success(cat.Msg("lock_up_to_date", lockPath, len(specs)))
@@ -121,11 +117,9 @@ func buildLock(
 		})
 		if err != nil {
 			if errors.Is(err, resolve.ErrLatestUnsupported) {
-				return nil, fmt.Errorf(
-					`%w: plugin %q cannot resolve 'latest'; pin an exact version in [plugins].enable: "%s=<version>"`,
-					clihelpers.ErrUsage, s.id, s.id)
+				return nil, clihelpers.UsageErr("err_lock_latest_unsupported", s.id, s.id)
 			}
-			return nil, fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+			return nil, clihelpers.FailureWrap(err, "")
 		}
 		entries = append(entries, toLockPlugin(s, res))
 		log.Success(cat.Msg("lock_locked", s.id, res.Version))

@@ -7,7 +7,6 @@
 package generatecli
 
 import (
-	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -43,14 +42,14 @@ func LoadContext(
 ) (*generate.WorkspaceContext, error) {
 	ws, err := config.LoadWorkspace(wsPath)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+		return nil, clihelpers.FailureWrap(err, "")
 	}
 	plugins, err := plugin.LoadEnabledFromFS(pluginsFS, ws.Plugins.Enable, sink, pluginsPathHint)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+		return nil, clihelpers.FailureWrap(err, "")
 	}
 	if cerr := plugin.CheckConflicts(plugins); cerr != nil {
-		return nil, fmt.Errorf("%w: %w", clihelpers.ErrFailure, cerr)
+		return nil, clihelpers.FailureWrap(cerr, "")
 	}
 	// Lock is left nil here so callers that overwrite cocoon.lock (e.g.
 	// `cocoon lock`) are not blocked by a malformed existing lock; `cocoon gen`
@@ -74,7 +73,7 @@ func BuildArtifacts(ctx *generate.WorkspaceContext) ([]Artifact, error) {
 
 	body, err := compose.Generate(ctx, compose.Options{Plugins: ctx.Plugins, Warnings: ctx.Warnings})
 	if err != nil {
-		return nil, fmt.Errorf("%w: compose: %w", clihelpers.ErrFailure, err)
+		return nil, clihelpers.FailureWrap(err, "err_generate_compose")
 	}
 	arts = append(arts, Artifact{Rel: ".devcontainer/docker-compose.yml", Body: body, Mode: 0})
 
@@ -85,14 +84,14 @@ func BuildArtifacts(ctx *generate.WorkspaceContext) ([]Artifact, error) {
 		Warnings:      ctx.Warnings,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("%w: dockerfile: %w", clihelpers.ErrFailure, err)
+		return nil, clihelpers.FailureWrap(err, "err_generate_dockerfile")
 	}
 	arts = append(arts, Artifact{Rel: ".devcontainer/Dockerfile", Body: body, Mode: 0})
 
 	if ctx.WS.Workspace.DevContainerOrDefault() {
 		body, err = devcontainerjson.Generate(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("%w: devcontainer.json: %w", clihelpers.ErrFailure, err)
+			return nil, clihelpers.FailureWrap(err, "err_generate_devcontainerjson")
 		}
 		arts = append(arts, Artifact{Rel: ".devcontainer/devcontainer.json", Body: body, Mode: 0})
 	}
@@ -111,7 +110,7 @@ func BuildArtifacts(ctx *generate.WorkspaceContext) ([]Artifact, error) {
 
 	envBody, err := envfile.Generate(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("%w: envfile: %w", clihelpers.ErrFailure, err)
+		return nil, clihelpers.FailureWrap(err, "err_generate_envfile")
 	}
 	arts = append(arts, Artifact{Rel: ".devcontainer/.env", Body: envBody, Mode: 0o600})
 	// NB: in password sudo mode .devcontainer/.gitignore is NOT a generated
@@ -127,14 +126,14 @@ func WriteArtifacts(arts []Artifact, outDir string) error {
 	for _, a := range arts {
 		target := filepath.Join(outDir, a.Rel)
 		if mkErr := os.MkdirAll(filepath.Dir(target), 0o755); mkErr != nil {
-			return fmt.Errorf("%w: mkdir %s: %w", clihelpers.ErrFailure, target, mkErr)
+			return clihelpers.FailureWrap(mkErr, "err_generate_mkdir", target)
 		}
 		mode := a.Mode
 		if mode == 0 {
 			mode = 0o644
 		}
 		if wErr := fsx.AtomicWriteFile(target, []byte(a.Body), mode); wErr != nil {
-			return fmt.Errorf("%w: write %s: %w", clihelpers.ErrFailure, target, wErr)
+			return clihelpers.FailureWrap(wErr, "err_generate_write", target)
 		}
 	}
 	return nil

@@ -19,9 +19,10 @@ type FieldError struct {
 	Message string // pre-formatted English fallback (legacy Add path)
 }
 
-// localize renders the field message in cat's language: via the catalog when a
-// Code is set, otherwise the pre-formatted English Message.
-func (e FieldError) localize(cat *i18n.Catalog) string {
+// Localize renders the field message in cat's language: via the catalog when a
+// Code is set, otherwise the pre-formatted English Message. Pass
+// i18n.English() for the English form.
+func (e FieldError) Localize(cat *i18n.Catalog) string {
 	if e.Code != "" {
 		return cat.Msg(e.Code, e.Args...)
 	}
@@ -62,7 +63,7 @@ func (e *ValidationError) Localize(cat *i18n.Catalog) string {
 		return cat.Msg("err_validation_failed", e.Path)
 	}
 	first := e.Errors[0]
-	base := e.Path + ": " + first.LocString() + ": " + first.localize(cat)
+	base := e.Path + ": " + first.LocString() + ": " + first.Localize(cat)
 	if len(e.Errors) == 1 {
 		return base
 	}
