@@ -170,12 +170,27 @@ func (a *Accumulator) At(seg ...string) *Accumulator {
 	return &Accumulator{base: out, errs: a.errs}
 }
 
+// Add records a pre-formatted English message (legacy path). Prefer AddCode so
+// the message localizes at the CLI boundary.
 func (a *Accumulator) Add(msg string, seg ...string) {
 	a.ensure()
+	*a.errs = append(*a.errs, FieldError{Loc: a.loc(seg), Code: "", Args: nil, Message: msg})
+}
+
+// AddCode records a localizable validation failure: an i18n catalog key plus
+// render-time args, located at base+seg. The message is rendered in the active
+// language at the CLI boundary (config.ValidationError.Localize).
+func (a *Accumulator) AddCode(code string, args []any, seg ...string) {
+	a.ensure()
+	*a.errs = append(*a.errs, FieldError{Loc: a.loc(seg), Code: code, Args: args, Message: ""})
+}
+
+// loc builds the absolute location path base+seg.
+func (a *Accumulator) loc(seg []string) []string {
 	loc := make([]string, 0, len(a.base)+len(seg))
 	loc = append(loc, a.base...)
 	loc = append(loc, seg...)
-	*a.errs = append(*a.errs, FieldError{Loc: loc, Message: msg})
+	return loc
 }
 
 // Errors returns the FieldError rows collected so far across this

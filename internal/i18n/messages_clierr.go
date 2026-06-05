@@ -11,6 +11,14 @@ func init() {
 	register(LangJA, cliErrJA)
 }
 
-var cliErrEN = map[string]string{}
+var cliErrEN = map[string]string{
+	// workspace.toml validation summary (config.ValidationError).
+	"err_validation_failed": "validation failed: %s",
+	"err_validation_more":   "(and %d more)",
+}
 
-var cliErrJA = map[string]string{}
+var cliErrJA = map[string]string{
+	// workspace.toml validation summary (config.ValidationError).
+	"err_validation_failed": "検証に失敗しました: %s",
+	"err_validation_more":   "(他 %d 件)",
+}
