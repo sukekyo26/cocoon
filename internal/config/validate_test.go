@@ -1511,7 +1511,7 @@ func TestValidate_ContainerGpusRejectsNonAll(t *testing.T) {
 }
 
 // TestAccumulator_ZeroValueUsable pins the documented contract that the
-// exported Accumulator works without NewAccumulator: At/Add lazily
+// exported Accumulator works without NewAccumulator: At/AddCode lazily
 // allocate the shared slice instead of nil-panicking, and an error
 // recorded through a child created by At surfaces on the parent.
 func TestAccumulator_ZeroValueUsable(t *testing.T) {
@@ -1520,12 +1520,12 @@ func TestAccumulator_ZeroValueUsable(t *testing.T) {
 	var a config.Accumulator
 	require.Nil(t, a.Errors(), "fresh zero-value Errors() should be nil")
 
-	a.At("container").Add("bad", "service_name")
-	a.Add("top-level problem")
+	a.At("container").AddCode("err_field_must_not_be_empty", nil, "service_name")
+	a.AddCode("err_field_duplicate_entries", nil)
 
 	errs := a.Errors()
 	require.Len(t, errs, 2, "child (via At) and parent writes must share one slice")
-	require.Equal(t, "bad", errs[0].Message)
+	require.Equal(t, "err_field_must_not_be_empty", errs[0].Code)
 	require.Equal(t, []string{"container", "service_name"}, errs[0].Loc)
 }
 

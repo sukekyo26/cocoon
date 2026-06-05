@@ -169,15 +169,6 @@ func (a *Accumulator) At(seg ...string) *Accumulator {
 	return &Accumulator{base: out, errs: a.errs}
 }
 
-// Add records a pre-formatted English message. workspace.toml validation now
-// routes through AddCode (localized at the CLI boundary); Add remains for the
-// plugin.toml validator (internal/plugin), whose author-facing messages are not
-// localized. Prefer AddCode for any new localizable message.
-func (a *Accumulator) Add(msg string, seg ...string) {
-	a.ensure()
-	*a.errs = append(*a.errs, FieldError{Loc: a.loc(seg), Code: "", Args: nil, Message: msg})
-}
-
 // AddCode records a localizable validation failure: an i18n catalog key plus
 // render-time args, located at base+seg. The message is rendered in the active
 // language at the CLI boundary (config.ValidationError.Localize).
@@ -634,19 +625,6 @@ func UnsafeExtraVersionRune(s string) (bool, rune) {
 		}
 	}
 	return false, 0
-}
-
-// UnsafeExtraVersionMessage builds the rejection message for a value that
-// UnsafeExtraVersionRune flagged. label names the offending field so the
-// same explanation of the Dockerfile RUN-prefix shell-quoting hazard is
-// shared by every caller (workspace pin/override values and plugin.toml
-// extra_versions defaults all flow into the same `<name>="..."` env pair —
-// `PIN="..."` for a pin, `<ENV>="..."` for an extra version).
-func UnsafeExtraVersionMessage(label string, r rune) string {
-	return fmt.Sprintf("%s contains unsafe character %q "+
-		`(the value flows into the Dockerfile RUN prefix as a <name>="..." env pair; `+
-		"a bare \", \\, \\n, \\r, $, or backtick would break the shell quoting "+
-		"or trigger parameter/command substitution)", label, r)
 }
 
 func (s *SecurityOptSpec) validate(a *Accumulator) {

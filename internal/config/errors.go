@@ -8,15 +8,16 @@ import (
 )
 
 // FieldError represents a single field-level validation failure: a dotted
-// location path (e.g. "container.username"). The message is carried either as
-// a localizable i18n Code (+ Args), set via Accumulator.AddCode, or as a
-// pre-formatted English Message, set via the legacy Accumulator.Add. The empty
-// Loc is rendered as "(root)".
+// location path (e.g. "container.username"). Validation failures carry a
+// localizable i18n Code (+ Args) set via Accumulator.AddCode. Message holds a
+// pre-formatted string only for the TOML-decoder passthrough path
+// (toValidationError), where the go-toml error text is inherently English and
+// cocoon cannot translate it. The empty Loc is rendered as "(root)".
 type FieldError struct {
 	Loc     []string
 	Code    string // i18n catalog key; when set, takes precedence over Message
 	Args    []any  // render-time args for Code
-	Message string // pre-formatted English fallback (legacy Add path)
+	Message string // pre-formatted text; TOML-decoder passthrough only
 }
 
 // Localize renders the field message in cat's language: via the catalog when a

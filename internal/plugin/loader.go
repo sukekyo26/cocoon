@@ -76,10 +76,7 @@ func parsePluginTOML(label string, data []byte) (*Plugin, error) {
 func validateMethodScripts(label string, p *Plugin, fsys fs.FS, scriptDir string) error {
 	a := config.NewAccumulator()
 	if len(p.Install.Methods) == 0 {
-		a.Add("[install.methods] must declare at least one entry "+
-			"(category convention: binary / installer / apt / archive — see docs/plugins.md). "+
-			"Single-method plugins still need one entry; pick the category that matches your script.",
-			"install", "methods")
+		a.AddCode("err_pval_methods_required", nil, "install", "methods")
 	}
 	// Sort method names so the accumulator's FieldError ordering is
 	// stable across runs — ValidationError.Error() summarises the first
@@ -91,14 +88,14 @@ func validateMethodScripts(label string, p *Plugin, fsys fs.FS, scriptDir string
 		st, statErr := fs.Stat(fsys, scriptPath)
 		switch {
 		case errors.Is(statErr, fs.ErrNotExist):
-			a.Add("install."+name+".sh does not exist", "install", "methods", name)
+			a.AddCode("err_pval_method_sh_missing", []any{name}, "install", "methods", name)
 		case statErr != nil:
 			// Permission / I/O failures surface as themselves so the
 			// author can fix the real cause; collapsing them into
 			// "does not exist" would send them on a wild-goose chase.
-			a.Add(fmt.Sprintf("install.%s.sh: %v", name, statErr), "install", "methods", name)
+			a.AddCode("err_pval_method_sh_stat", []any{name, statErr}, "install", "methods", name)
 		case st.IsDir():
-			a.Add("install."+name+".sh must be a regular file (got a directory)", "install", "methods", name)
+			a.AddCode("err_pval_method_sh_not_file", []any{name}, "install", "methods", name)
 		}
 	}
 	// A stat failure that is not fs.ErrNotExist (e.g. permission denied,
@@ -109,16 +106,9 @@ func validateMethodScripts(label string, p *Plugin, fsys fs.FS, scriptDir string
 	// validation failure.
 	switch _, err := fs.Stat(fsys, path.Join(scriptDir, "install.sh")); {
 	case err == nil:
-		a.Add("install.sh is no longer supported; rename it to install.<category>.sh "+
-			"(binary / installer / apt / archive) and declare a matching [install.methods.<category>] "+
-			"entry in plugin.toml. See docs/plugins.md for the category convention.",
-			"install")
+		a.AddCode("err_pval_install_sh_removed", nil, "install")
 	case !errors.Is(err, fs.ErrNotExist):
-		a.Add(fmt.Sprintf(
-			"install.sh: cannot rule out a legacy file (%v); "+
-				"resolve the stat failure before retrying — the loader rejects "+
-				"install.sh as a plugin script, so a missed check would let it run silently",
-			err), "install")
+		a.AddCode("err_pval_install_sh_stat", []any{err}, "install")
 	}
 	errs := a.Errors()
 	if len(errs) == 0 {
