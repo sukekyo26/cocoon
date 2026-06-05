@@ -699,10 +699,41 @@ func TestGeneratePluginInstalls_LegacyPluginNoMethodEnv(t *testing.T) {
 	}
 }
 
+// TestMethodVerifiesByChecksum pins which install method categories consume the
+// $CHECKSUM_AMD64 / $CHECKSUM_ARM64 env pair: only binary and archive download a
+// discrete asset and run sha256sum -c. installer and apt verify by other means;
+// an empty (legacy single-install.sh) or custom category defaults to
+// checksum-capable so existing plugins keep their warning + build args.
+func TestMethodVerifiesByChecksum(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name   string
+		method string
+		want   bool
+	}{
+		{"binary", "binary", true},
+		{"archive", "archive", true},
+		{"installer", "installer", false},
+		{"apt", "apt", false},
+		{"empty_legacy", "", true},
+		{"custom_category", "custom", true},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := methodVerifiesByChecksum(tc.method); got != tc.want {
+				t.Errorf("methodVerifiesByChecksum(%q) = %v, want %v", tc.method, got, tc.want)
+			}
+		})
+	}
+}
+
 // TestBuildInstallEnvPairs_VerifyGatesChecksum pins that CHECKSUM_AMD64 /
-// CHECKSUM_ARM64 are injected only for checksum-verified version_capable
-// plugins. A pgp plugin gets PIN but no CHECKSUM_* (it verifies in-script);
-// a non-version_capable plugin gets neither.
+// CHECKSUM_ARM64 are injected only for checksum-verified version_capable plugins
+// whose install method consumes them (binary / archive). A pgp plugin and an
+// installer / apt method plugin get PIN but no CHECKSUM_*; a non-version_capable
+// plugin gets neither.
 func TestBuildInstallEnvPairs_VerifyGatesChecksum(t *testing.T) {
 	t.Parallel()
 	csum := "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
@@ -712,18 +743,23 @@ func TestBuildInstallEnvPairs_VerifyGatesChecksum(t *testing.T) {
 		name           string
 		versionCapable bool
 		checksumVerify bool
+		method         string
 		wantPIN        bool
 		wantChecksum   bool
 	}{
-		{"checksum_plugin_gets_pin_and_checksum", true, true, true, true},
-		{"pgp_plugin_gets_pin_only", true, false, true, false},
-		{"not_version_capable_gets_neither", false, true, false, false},
+		{"binary_gets_pin_and_checksum", true, true, "binary", true, true},
+		{"archive_gets_pin_and_checksum", true, true, "archive", true, true},
+		{"legacy_empty_method_gets_pin_and_checksum", true, true, "", true, true},
+		{"pgp_plugin_gets_pin_only", true, false, "binary", true, false},
+		{"installer_method_gets_pin_only", true, true, "installer", true, false},
+		{"apt_method_gets_pin_only", true, true, "apt", true, false},
+		{"not_version_capable_gets_neither", false, true, "binary", false, false},
 	}
 	for _, tc := range cases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			pairs := buildInstallEnvPairs(tc.versionCapable, tc.checksumVerify, true, override, nil, nil, "", sh)
+			pairs := buildInstallEnvPairs(tc.versionCapable, tc.checksumVerify, true, override, nil, nil, tc.method, sh)
 			joined := strings.Join(pairs, " ")
 			if gotPIN := strings.Contains(joined, `PIN="1.2.3"`); gotPIN != tc.wantPIN {
 				t.Errorf("PIN present = %v, want %v\n%s", gotPIN, tc.wantPIN, joined)
@@ -737,17 +773,25 @@ func TestBuildInstallEnvPairs_VerifyGatesChecksum(t *testing.T) {
 }
 
 // TestValidateManualChecksums pins the [plugins.options] manual-checksum gate:
-// a hand-typed checksum is rejected for a pgp plugin (the checksum vocabulary
-// does not apply) and for an auto-resolvable plugin (cocoon lock owns the
-// checksum), but allowed for a plugin whose upstream publishes none (or that
-// declares no source at all).
+// a hand-typed checksum is rejected for an installer / apt method plugin (whose
+// install script ignores $CHECKSUM_*), for a pgp plugin (the checksum vocabulary
+// does not apply), and for an auto-resolvable plugin (cocoon lock owns the
+// checksum), but allowed for a binary / archive plugin whose upstream publishes
+// none (or that declares no source at all).
 func TestValidateManualChecksums(t *testing.T) {
 	t.Parallel()
 	csum := "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
-	mkPlugin := func(verify string, src *plugin.VersionSource) *plugin.Plugin {
+	mkPlugin := func(verify string, src *plugin.VersionSource, method string) *plugin.Plugin {
+		inst := plugin.Install{}
+		if method != "" {
+			inst = plugin.Install{
+				DefaultMethod: method,
+				Methods:       map[string]plugin.InstallMethod{method: {Description: "x"}},
+			}
+		}
 		return &plugin.Plugin{
 			Metadata: plugin.Metadata{Name: "x", URL: "https://example.com/x"},
-			Install:  plugin.Install{},
+			Install:  inst,
 			Version:  plugin.Version{VersionCapable: true, Verify: verify, Source: src},
 		}
 	}
@@ -758,10 +802,13 @@ func TestValidateManualChecksums(t *testing.T) {
 		plug    *plugin.Plugin
 		wantErr bool
 	}{
-		{"pgp_rejected", mkPlugin(plugin.VerifyPGP, nil), true},
-		{"auto_resolvable_rejected", mkPlugin(plugin.VerifyChecksum, sidecar), true},
-		{"none_type_allowed", mkPlugin(plugin.VerifyChecksum, noneSrc), false},
-		{"no_source_allowed", mkPlugin(plugin.VerifyChecksum, nil), false},
+		{"installer_method_rejected", mkPlugin(plugin.VerifyChecksum, noneSrc, "installer"), true},
+		{"apt_method_rejected", mkPlugin(plugin.VerifyChecksum, noneSrc, "apt"), true},
+		{"pgp_rejected", mkPlugin(plugin.VerifyPGP, nil, ""), true},
+		{"auto_resolvable_rejected", mkPlugin(plugin.VerifyChecksum, sidecar, ""), true},
+		{"none_type_allowed", mkPlugin(plugin.VerifyChecksum, noneSrc, ""), false},
+		{"binary_none_type_allowed", mkPlugin(plugin.VerifyChecksum, noneSrc, "binary"), false},
+		{"no_source_allowed", mkPlugin(plugin.VerifyChecksum, nil, ""), false},
 	}
 	for _, tc := range cases {
 		tc := tc
@@ -770,6 +817,7 @@ func TestValidateManualChecksums(t *testing.T) {
 			err := validateManualChecksums(
 				map[string]*plugin.Plugin{"x": tc.plug},
 				map[string]config.PluginVersionOverride{"x": {Pin: "2.0.0", ChecksumAmd64: &csum}},
+				nil,
 			)
 			if tc.wantErr {
 				if !errors.Is(err, ErrInvalidVersionOverride) {
@@ -786,7 +834,8 @@ func TestValidateManualChecksums(t *testing.T) {
 
 // TestValidateVersionOverrides_PinWithoutChecksumWarning pins the
 // missing-checksum WARNING contract: it is suppressed for a pgp plugin (fully
-// verified in-script), and its wording tracks whether the source can
+// verified in-script) and for an installer / apt method plugin (whose install
+// script ignores $CHECKSUM_*), and its wording tracks whether the source can
 // auto-resolve a checksum — an auto-resolvable plugin still verifies and points
 // at `cocoon lock`, while a none/no-source plugin warns that the install runs
 // WITHOUT verification and points at [plugins.options].
@@ -798,13 +847,16 @@ func TestValidateVersionOverrides_PinWithoutChecksumWarning(t *testing.T) {
 		name         string
 		verify       string
 		src          *plugin.VersionSource
+		method       string
 		wantWarn     bool
 		wantContains string
 	}{
-		{"auto_resolvable_points_at_lock", plugin.VerifyChecksum, sidecar, true, "cocoon lock"},
-		{"none_type_warns_unverified", plugin.VerifyChecksum, noneSrc, true, "WITHOUT verification"},
-		{"no_source_warns_unverified", plugin.VerifyChecksum, nil, true, "WITHOUT verification"},
-		{"pgp_plugin_silent", plugin.VerifyPGP, nil, false, ""},
+		{"auto_resolvable_points_at_lock", plugin.VerifyChecksum, sidecar, "binary", true, "cocoon lock"},
+		{"none_type_warns_unverified", plugin.VerifyChecksum, noneSrc, "binary", true, "WITHOUT verification"},
+		{"no_source_warns_unverified", plugin.VerifyChecksum, nil, "archive", true, "WITHOUT verification"},
+		{"installer_method_silent", plugin.VerifyChecksum, noneSrc, "installer", false, ""},
+		{"apt_method_silent", plugin.VerifyChecksum, noneSrc, "apt", false, ""},
+		{"pgp_plugin_silent", plugin.VerifyPGP, nil, "binary", false, ""},
 	}
 	for _, tc := range cases {
 		tc := tc
@@ -813,14 +865,18 @@ func TestValidateVersionOverrides_PinWithoutChecksumWarning(t *testing.T) {
 			plugins := map[string]*plugin.Plugin{
 				"p": {
 					Metadata: plugin.Metadata{Name: "p", URL: "https://example.com/x"},
-					Install:  plugin.Install{},
-					Version:  plugin.Version{VersionCapable: true, Verify: tc.verify, Source: tc.src},
+					Install: plugin.Install{
+						DefaultMethod: tc.method,
+						Methods:       map[string]plugin.InstallMethod{tc.method: {Description: "x"}},
+					},
+					Version: plugin.Version{VersionCapable: true, Verify: tc.verify, Source: tc.src},
 				},
 			}
 			var warnings bytes.Buffer
 			err := validateVersionOverrides(
 				plugins,
 				map[string]config.PluginVersionOverride{"p": {Pin: "1.0.0"}},
+				nil,
 				&warnings,
 			)
 			if err != nil {
@@ -955,7 +1011,7 @@ func TestValidateVersionOverrides_UnknownExtraKey(t *testing.T) {
 			Extra: map[string]string{"api_lvl": "35"}, // typo!
 		},
 	}
-	err := validateVersionOverrides(plugins, overrides, &bytes.Buffer{})
+	err := validateVersionOverrides(plugins, overrides, nil, &bytes.Buffer{})
 	if !errors.Is(err, ErrUnknownExtraVersion) {
 		t.Fatalf("err = %v, want errors.Is(.., ErrUnknownExtraVersion)", err)
 	}
@@ -988,7 +1044,7 @@ func TestValidateVersionOverrides_DeclaredExtraKeyOK(t *testing.T) {
 			Extra: map[string]string{"api_level": "36", "build_tools": "36.0.0"},
 		},
 	}
-	if err := validateVersionOverrides(plugins, overrides, &bytes.Buffer{}); err != nil {
+	if err := validateVersionOverrides(plugins, overrides, nil, &bytes.Buffer{}); err != nil {
 		t.Fatalf("validateVersionOverrides: %v", err)
 	}
 }

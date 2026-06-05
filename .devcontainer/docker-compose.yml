@@ -20,6 +20,7 @@ services:
       - "cocoon:/home/${USERNAME}/.cocoon"
       - "/var/run/docker.sock:/var/run/docker.sock"
       - "claude:/home/${USERNAME}/.claude"
+      - "codex:/home/${USERNAME}/.codex"
       - "copilot:/home/${USERNAME}/.copilot"
       - "config:/home/${USERNAME}/.config"
       - "npm:/home/${USERNAME}/.npm"
@@ -43,6 +44,8 @@ volumes:
     name: "${COMPOSE_PROJECT_NAME}_${CONTAINER_SERVICE_NAME}_cocoon"
   claude:
     name: "${COMPOSE_PROJECT_NAME}_${CONTAINER_SERVICE_NAME}_claude"
+  codex:
+    name: "${COMPOSE_PROJECT_NAME}_${CONTAINER_SERVICE_NAME}_codex"
   copilot:
     name: "${COMPOSE_PROJECT_NAME}_${CONTAINER_SERVICE_NAME}_copilot"
   config:

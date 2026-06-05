@@ -399,7 +399,9 @@ codex = { checksum_amd64 = "<64-hex>", checksum_arm64 = "<64-hex>" }
 A `checksum_*` value must be 64 lowercase hex characters. Setting one for a
 plugin whose checksum `cocoon lock` *can* resolve is rejected (the lock value
 would silently win), as is setting one for a `verify = "pgp"` plugin (which
-verifies a signature in-script). Override values follow the same character
+verifies a signature in-script) or for a plugin whose install method is
+`installer` / `apt` (which installs via an upstream script or apt-get and never
+consumes `$CHECKSUM_*`). Override values follow the same character
 rules as the inline version: no `"`, `\`, `\n`, `\r`, `$`, or backtick, since
 each flows into the Dockerfile RUN-prefix `KEY="..."` env pair. See the
 [plugin authoring guide](plugins.md) for how a plugin declares these.
