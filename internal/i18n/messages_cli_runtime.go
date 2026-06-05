@@ -2,7 +2,7 @@ package i18n
 
 // Runtime (non-help, non-error) output for the self-update / lock / plugin
 // subcommands and the init wizard's screen-reader fallback. Help text lives in
-// messages_cli_help.go; error text is localized at the CLI boundary.
+// messages_cli_help.go; error text is carried by its own keys elsewhere.
 
 func init() {
 	register(LangEN, cliRuntimeEN)
