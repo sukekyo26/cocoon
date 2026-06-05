@@ -93,7 +93,10 @@ func runSelfUpdate(ctx context.Context, stdout, stderr io.Writer, checkOnly, for
 		}
 		if err = checkInstallDirWritable(selfPath); err != nil {
 			if errors.Is(err, ErrInstallDirReadOnly) {
-				return clihelpers.FailureWrap(err, "err_selfupdate_install_dir_readonly", installDirHint(selfPath))
+				// hint first, then the failing dir + cause on its own line, so
+				// FailureWrap's appended cause never glues onto the "sudo …" line.
+				return clihelpers.FailureWrap(ErrInstallDirReadOnly, "err_selfupdate_install_dir_readonly",
+					clihelpers.L("err_selfupdate_dir_hint", selfPath, selfPath), filepath.Dir(selfPath))
 			}
 			return clihelpers.FailureWrap(err, "")
 		}
@@ -175,7 +178,8 @@ func runSelfUpdate(ctx context.Context, stdout, stderr io.Writer, checkOnly, for
 		// preflight↔rename race) by reusing the same hint so the user
 		// still sees actionable remediation rather than a raw syscall error.
 		if errors.Is(err, fs.ErrPermission) {
-			return clihelpers.FailureWrap(err, "err_selfupdate_replace_perm", selfPath, installDirHint(selfPath))
+			return clihelpers.FailureWrap(err, "err_selfupdate_replace_perm",
+				clihelpers.L("err_selfupdate_dir_hint", selfPath, selfPath), selfPath)
 		}
 		return clihelpers.FailureWrap(err, "err_selfupdate_replace", selfPath)
 	}
@@ -282,18 +286,6 @@ func checkInstallDirWritable(selfPath string) error {
 		return fmt.Errorf("preflight cleanup %s: %w", name, rerr)
 	}
 	return nil
-}
-
-// installDirHint returns a remediation message naming the binary's
-// location and the elevated invocation the user needs to retry. Kept
-// minimal (no alternative install paths) so the message stays focused
-// on the one action that always works.
-func installDirHint(selfPath string) string {
-	return fmt.Sprintf(
-		"  cocoon binary lives at %s. self-update needs write access to its parent dir.\n"+
-			"  rerun with elevated privileges: sudo %s self-update",
-		selfPath, selfPath,
-	)
 }
 
 // atomicReplace falls back to copy+chmod when src and dst are on

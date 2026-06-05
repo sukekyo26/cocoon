@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
+	"github.com/sukekyo26/cocoon/internal/i18n"
 	"github.com/sukekyo26/cocoon/internal/release"
 	"github.com/sukekyo26/cocoon/internal/version"
 )
@@ -790,5 +791,18 @@ func TestRunSelfUpdate_ReadOnlyInstallDirShortCircuits(t *testing.T) {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("err = %v, want substring %q", err, want)
 		}
+	}
+	// The remediation hint must follow the active locale: under ja the JA hint
+	// is rendered, not the English "binary lives at" wording.
+	var le *clihelpers.LocError
+	if !errors.As(err, &le) {
+		t.Fatalf("err = %v, want a *clihelpers.LocError carrying the localizable hint", err)
+	}
+	ja := le.Localize(i18n.New(i18n.LangJA))
+	if !strings.Contains(ja, "管理者権限") {
+		t.Errorf("ja render = %q, want the localized sudo hint", ja)
+	}
+	if strings.Contains(ja, "binary lives at") {
+		t.Errorf("ja render = %q still contains the English hint", ja)
 	}
 }

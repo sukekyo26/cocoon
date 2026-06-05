@@ -1,10 +1,9 @@
 package i18n
 
 // User-facing error text, localized at the CLI boundary via clihelpers.LocError
-// and config.ValidationError. err_* carry the cocoon-authored message; err_ctx_*
-// short technical labels; err_field_* are workspace.toml validation messages
-// keyed by the config Accumulator (AddCode). keep en/ja in lockstep
-// (keys_test enforces parity).
+// and config.ValidationError. err_* carry the cocoon-authored message;
+// err_field_* are workspace.toml validation messages keyed by the config
+// Accumulator (AddCode). keep en/ja in lockstep (keys_test enforces parity).
 
 func init() {
 	register(LangEN, cliErrEN)
@@ -184,8 +183,8 @@ var cliErrEN = map[string]string{
 	"err_pin_both_required":                        "both <id> and <ref> are required",
 	"err_pin_discover":                             "discover workspace.toml",
 	"err_pin_getwd":                                "getwd",
-	"err_pin_invalid_version":                      "invalid version for %q: %s — write a bare version (1.23.4) or \"latest\"",
-	"err_pin_legacy_versions":                      "%s (in %s)",
+	"err_pin_invalid_version":                      "invalid version for %q: %v — write a bare version (1.23.4) or \"latest\"",
+	"err_pin_legacy_versions":                      "%v (in %s)",
 	"err_pin_method_not_declared":                  "plugin %q has no method %q in [install.methods] (declared: %s)",
 	"err_pin_no_methods":                           "plugin %q declares no [install.methods] in plugin.toml; --method is only meaningful when the plugin offers two or more install variants — drop --method to pin only the version",
 	"err_pin_not_in_layer":                         "plugin %q is not in any layer (cocoon plugin list)",
@@ -208,13 +207,14 @@ var cliErrEN = map[string]string{
 	"err_selfupdate_asset_not_found":               "release asset %q not found in %s",
 	"err_selfupdate_checksum_mismatch":             "checksum mismatch (got %s, want %s)",
 	"err_selfupdate_chmod":                         "chmod",
+	"err_selfupdate_dir_hint":                      "  cocoon binary lives at %s. self-update needs write access to its parent dir.\n  rerun with elevated privileges: sudo %s self-update",
 	"err_selfupdate_download_asset":                "download %s",
 	"err_selfupdate_download_sums":                 "download SHA256SUMS",
-	"err_selfupdate_install_dir_readonly":          "%s",
+	"err_selfupdate_install_dir_readonly":          "%s\n%s",
 	"err_selfupdate_locate_self":                   "locate self",
 	"err_selfupdate_mktemp":                        "mktemp",
 	"err_selfupdate_replace":                       "replace %s",
-	"err_selfupdate_replace_perm":                  "replace %s\n%s",
+	"err_selfupdate_replace_perm":                  "%s\nreplace %s",
 	"err_selfupdate_sums_not_found":                "SHA256SUMS not found in %s",
 	"err_validation_failed":                        "validation failed: %s",
 	"err_validation_more":                          "(and %d more)",
@@ -393,8 +393,8 @@ var cliErrJA = map[string]string{
 	"err_pin_both_required":                        "<id> と <ref> の両方が必須です",
 	"err_pin_discover":                             "workspace.toml の探索",
 	"err_pin_getwd":                                "getwd",
-	"err_pin_invalid_version":                      "%q のバージョンが不正です: %s — 素のバージョン (1.23.4) または \"latest\" を指定してください",
-	"err_pin_legacy_versions":                      "%s (in %s)",
+	"err_pin_invalid_version":                      "%q のバージョンが不正です: %v — 素のバージョン (1.23.4) または \"latest\" を指定してください",
+	"err_pin_legacy_versions":                      "%v (in %s)",
 	"err_pin_method_not_declared":                  "プラグイン %q には [install.methods] に method %q がありません (宣言済み: %s)",
 	"err_pin_no_methods":                           "プラグイン %q は plugin.toml に [install.methods] を宣言していません。--method はプラグインが 2 つ以上のインストール方式を提供する場合にのみ意味を持ちます。バージョンだけを pin するには --method を外してください",
 	"err_pin_not_in_layer":                         "プラグイン %q はどのレイヤーにも存在しません (cocoon plugin list で確認してください)",
@@ -417,13 +417,14 @@ var cliErrJA = map[string]string{
 	"err_selfupdate_asset_not_found":               "リリースアセット %q が %s に見つかりませんでした",
 	"err_selfupdate_checksum_mismatch":             "チェックサムが一致しません (取得値 %s, 期待値 %s)",
 	"err_selfupdate_chmod":                         "実行権限の設定に失敗しました",
+	"err_selfupdate_dir_hint":                      "  cocoon バイナリは %s にあります。self-update には親ディレクトリへの書き込み権限が必要です。\n  管理者権限で再実行してください: sudo %s self-update",
 	"err_selfupdate_download_asset":                "%s のダウンロードに失敗しました",
 	"err_selfupdate_download_sums":                 "SHA256SUMS のダウンロードに失敗しました",
-	"err_selfupdate_install_dir_readonly":          "%s",
+	"err_selfupdate_install_dir_readonly":          "%s\n%s",
 	"err_selfupdate_locate_self":                   "自身のパスを特定できませんでした",
 	"err_selfupdate_mktemp":                        "一時ディレクトリを作成できませんでした",
 	"err_selfupdate_replace":                       "%s の置き換えに失敗しました",
-	"err_selfupdate_replace_perm":                  "%s の置き換えに失敗しました\n%s",
+	"err_selfupdate_replace_perm":                  "%s\n%s の置き換えに失敗しました",
 	"err_selfupdate_sums_not_found":                "SHA256SUMS が %s に見つかりませんでした",
 	"err_validation_failed":                        "検証に失敗しました: %s",
 	"err_validation_more":                          "(他 %d 件)",
