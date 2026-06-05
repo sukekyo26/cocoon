@@ -41,6 +41,7 @@ func newPinCmd(stdout, stderr io.Writer) *cobra.Command {
 }
 
 func runPin(stdout, stderr io.Writer, id, ref, method string, write bool) error {
+	cat := i18n.New(i18n.Detect())
 	if id == "" || ref == "" {
 		return fmt.Errorf("%w: both <id> and <ref> are required", clihelpers.ErrUsage)
 	}
@@ -81,9 +82,9 @@ func runPin(stdout, stderr io.Writer, id, ref, method string, write bool) error 
 		}
 	}
 	if write {
-		return runPinWrite(stdout, stderr, id, spec, method)
+		return runPinWrite(stdout, stderr, cat, id, spec, method)
 	}
-	fmt.Fprint(stdout, renderPinSnippet(id, spec, method))
+	fmt.Fprint(stdout, renderPinSnippet(cat, id, spec, method))
 	return nil
 }
 
@@ -113,7 +114,7 @@ func isVersionStart(b byte) bool {
 // read-modify-write cycle via plugin.UpsertPinAndMethod. The single-write
 // path means a transient I/O failure cannot persist the pin without the
 // matching method or vice-versa — either both land or neither does.
-func runPinWrite(stdout, stderr io.Writer, id, spec, method string) error {
+func runPinWrite(stdout, stderr io.Writer, cat *i18n.Catalog, id, spec, method string) error {
 	cwd, cwdErr := os.Getwd()
 	if cwdErr != nil {
 		return fmt.Errorf("%w: getwd: %w", clihelpers.ErrFailure, cwdErr)
@@ -134,9 +135,9 @@ func runPinWrite(stdout, stderr io.Writer, id, spec, method string) error {
 		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, uErr)
 	}
 	log := logx.New(stdout, stderr)
-	log.Successf("Updated %s: [plugins].enable %q", wsPath, plugin.FormatEnableEntry(id, spec))
+	log.Success(cat.Msg("plugin_pin_updated_enable", wsPath, plugin.FormatEnableEntry(id, spec)))
 	if method != "" {
-		log.Successf("Updated %s: [plugins.methods] %s = %q", wsPath, id, method)
+		log.Success(cat.Msg("plugin_pin_updated_method", wsPath, id, method))
 	}
 	return nil
 }
@@ -145,21 +146,21 @@ func runPinWrite(stdout, stderr io.Writer, id, spec, method string) error {
 // workspace.toml when --write is absent. Empty method emits the enable-array
 // entry alone; a non-empty method appends a [plugins.methods] snippet so the
 // user sees both halves of the pick.
-func renderPinSnippet(id, spec, method string) string {
+func renderPinSnippet(cat *i18n.Catalog, id, spec, method string) string {
 	var b strings.Builder
 	entry := plugin.FormatEnableEntry(id, spec)
 	if method == "" {
-		fmt.Fprintln(&b, "# Add (or update) this entry in the [plugins].enable array in workspace.toml:")
+		fmt.Fprintln(&b, cat.Msg("plugin_pin_snippet_enable_header"))
 		fmt.Fprintln(&b)
 		fmt.Fprintf(&b, "%q\n", entry)
 		return b.String()
 	}
-	fmt.Fprintln(&b, "# Add the following to workspace.toml:")
+	fmt.Fprintln(&b, cat.Msg("plugin_pin_snippet_header"))
 	fmt.Fprintln(&b)
-	fmt.Fprintln(&b, "# In the [plugins].enable array:")
+	fmt.Fprintln(&b, cat.Msg("plugin_pin_snippet_enable_section"))
 	fmt.Fprintf(&b, "%q\n", entry)
 	fmt.Fprintln(&b)
-	fmt.Fprintln(&b, "# Under [plugins.methods]:")
+	fmt.Fprintln(&b, cat.Msg("plugin_pin_snippet_methods_section"))
 	b.WriteString(plugin.FormatMethodLine(id, method))
 	return b.String()
 }

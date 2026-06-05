@@ -9,6 +9,7 @@ import (
 	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
 	"github.com/sukekyo26/cocoon/internal/config"
 	"github.com/sukekyo26/cocoon/internal/generate"
+	"github.com/sukekyo26/cocoon/internal/i18n"
 	"github.com/sukekyo26/cocoon/internal/lockfile"
 	"github.com/sukekyo26/cocoon/internal/logx"
 	"github.com/sukekyo26/cocoon/internal/plugin/resolve"
@@ -55,9 +56,11 @@ func specHashInput(specs []pluginSpec) map[string]string {
 // live from the workspace, so it cannot go stale.) Any drift is a usage error
 // so CI can gate on it. A workspace with no version-capable plugins needs no
 // lock, so --check passes there even when the file is absent.
-func checkLock(log *logx.Logger, lockPath string, existing *lockfile.Lock, specs []pluginSpec) error {
+func checkLock(
+	log *logx.Logger, cat *i18n.Catalog, lockPath string, existing *lockfile.Lock, specs []pluginSpec,
+) error {
 	if len(specs) == 0 {
-		log.Success("no version-capable plugins enabled; nothing to lock")
+		log.Success(cat.Msg("lock_nothing_to_lock"))
 		return nil
 	}
 	if existing == nil {
@@ -81,7 +84,7 @@ func checkLock(log *logx.Logger, lockPath string, existing *lockfile.Lock, specs
 				clihelpers.ErrUsage, lockPath, s.id)
 		}
 	}
-	log.Successf("%s is up to date (%d plugin(s))", lockPath, len(specs))
+	log.Success(cat.Msg("lock_up_to_date", lockPath, len(specs)))
 	return nil
 }
 
@@ -94,6 +97,7 @@ func buildLock(
 	existing *lockfile.Lock,
 	upgrade bool,
 	log *logx.Logger,
+	cat *i18n.Catalog,
 ) (*lockfile.Lock, error) {
 	resolver := resolve.New(defaultFetcher)
 	entries := make([]lockfile.LockPlugin, 0, len(specs))
@@ -105,7 +109,7 @@ func buildLock(
 			// the output lock without forcing a re-resolution.
 			reused.Extra = s.override.Extra
 			entries = append(entries, reused)
-			log.Successf("Reused %s %s", s.id, reused.Version)
+			log.Success(cat.Msg("lock_reused", s.id, reused.Version))
 			continue
 		}
 		res, err := resolver.Resolve(ctx, resolve.Request{
@@ -124,7 +128,7 @@ func buildLock(
 			return nil, fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
 		}
 		entries = append(entries, toLockPlugin(s, res))
-		log.Successf("Locked %s %s", s.id, res.Version)
+		log.Success(cat.Msg("lock_locked", s.id, res.Version))
 	}
 	return &lockfile.Lock{
 		LockVersion: lockfile.Version,

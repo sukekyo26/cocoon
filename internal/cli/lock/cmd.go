@@ -76,22 +76,23 @@ func runLock(ctx context.Context, stdout, stderr io.Writer, opts lockOptions) er
 	requested := requestedSpecs(wctx)
 	lockPath := lockfile.PathFor(wsPath, wctx.WS)
 	log := logx.New(stdout, stderr)
-	clihelpers.DrainWarnings(log, i18n.New(i18n.Detect()), wctx.Warnings)
-	existing, err := loadExistingLock(lockPath, opts.check, log)
+	cat := i18n.New(i18n.Detect())
+	clihelpers.DrainWarnings(log, cat, wctx.Warnings)
+	existing, err := loadExistingLock(lockPath, opts.check, log, cat)
 	if err != nil {
 		return err
 	}
 	if opts.check {
-		return checkLock(log, lockPath, existing, requested)
+		return checkLock(log, cat, lockPath, existing, requested)
 	}
-	lock, err := buildLock(ctx, wctx, requested, existing, opts.upgrade, log)
+	lock, err := buildLock(ctx, wctx, requested, existing, opts.upgrade, log, cat)
 	if err != nil {
 		return err
 	}
 	if saveErr := lockfile.Save(lockPath, lock); saveErr != nil {
 		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, saveErr)
 	}
-	log.Successf("Wrote %s (%d plugin(s))", lockPath, len(lock.Plugins))
+	log.Success(cat.Msg("lock_wrote", lockPath, len(lock.Plugins)))
 	return nil
 }
 
@@ -118,7 +119,7 @@ func loadContext(wsPath string) (*generate.WorkspaceContext, error) {
 // is broken and CI must catch it) but recoverable for a write: `cocoon lock`
 // owns and fully rewrites the file, so it warns and regenerates from scratch
 // (nil) rather than refusing to run over a corrupt file.
-func loadExistingLock(path string, check bool, log *logx.Logger) (*lockfile.Lock, error) {
+func loadExistingLock(path string, check bool, log *logx.Logger, cat *i18n.Catalog) (*lockfile.Lock, error) {
 	l, err := lockfile.Load(path)
 	switch {
 	case err == nil:
@@ -129,7 +130,7 @@ func loadExistingLock(path string, check bool, log *logx.Logger) (*lockfile.Lock
 		return nil, fmt.Errorf("%w: %s is malformed (%w); run `cocoon lock` to regenerate it",
 			clihelpers.ErrUsage, path, err)
 	default:
-		log.Warn(fmt.Sprintf("ignoring malformed %s (%v); regenerating from scratch", path, err))
+		log.Warn(cat.Msg("lock_ignoring_malformed", path, err))
 		return nil, nil //nolint:nilnil // malformed-and-regenerating is a valid write-path state.
 	}
 }

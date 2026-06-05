@@ -12,6 +12,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/sukekyo26/cocoon/internal/i18n"
 )
 
 // selectOrInputField is a custom huh.Field with curated suggestions plus
@@ -351,9 +353,10 @@ func (f *selectOrInputField) Run() error {
 // RunAccessible is the screen-reader fallback; users answer with the
 // number or type a verbatim tag.
 func (f *selectOrInputField) RunAccessible(w io.Writer, r io.Reader) error {
-	f.printAccessibleHeader(w)
+	cat := i18n.New(i18n.Detect())
+	f.printAccessibleHeader(w, cat)
 	for {
-		fmt.Fprint(w, "Choose by number or type a tag: ")
+		fmt.Fprint(w, cat.Msg("init_accessible_choose"))
 		var choice string
 		_, err := fmt.Fscanln(r, &choice)
 		// EOF would spin the empty-input retry forever. "unexpected newline"
@@ -364,7 +367,7 @@ func (f *selectOrInputField) RunAccessible(w io.Writer, r io.Reader) error {
 		}
 		choice = strings.TrimSpace(choice)
 		if choice == "" {
-			fmt.Fprintln(w, "empty input not accepted")
+			fmt.Fprintln(w, cat.Msg("init_accessible_empty"))
 			continue
 		}
 		if val, ok := f.tryIndex(choice); ok {
@@ -383,7 +386,7 @@ func (f *selectOrInputField) RunAccessible(w io.Writer, r io.Reader) error {
 	}
 }
 
-func (f *selectOrInputField) printAccessibleHeader(w io.Writer) {
+func (f *selectOrInputField) printAccessibleHeader(w io.Writer, cat *i18n.Catalog) {
 	if f.title != "" {
 		fmt.Fprintln(w, f.title)
 	}
@@ -397,7 +400,7 @@ func (f *selectOrInputField) printAccessibleHeader(w io.Writer) {
 	for i, s := range f.suggestions {
 		fmt.Fprintf(w, "%d. %s\n", i+1, s)
 	}
-	fmt.Fprintln(w, "Or type any tag directly.")
+	fmt.Fprintln(w, cat.Msg("init_accessible_type_tag"))
 }
 
 // tryIndex maps a 1- or 2-digit numeric answer to the matching suggestion.

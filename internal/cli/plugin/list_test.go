@@ -16,6 +16,9 @@ func withIsolatedHome(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
+	// Pin the locale so runtime-output assertions stay deterministic regardless
+	// of the dev's shell language (callers are non-parallel via t.Setenv).
+	t.Setenv("WORKSPACE_LANG", "en")
 	return dir
 }
 

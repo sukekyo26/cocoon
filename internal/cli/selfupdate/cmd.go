@@ -68,10 +68,11 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 //nolint:gocyclo,gocognit,funlen // self-update has many sequential phases; splitting hurts readability.
 func runSelfUpdate(ctx context.Context, stdout, stderr io.Writer, checkOnly, force bool) error {
 	log := logx.New(stdout, stderr)
+	cat := i18n.New(i18n.Detect())
 
 	current := strings.TrimSpace(version.Get())
 	if current == "" || current == "dev" {
-		log.Error("self-update: cannot self-update a dev build (no version baked in)")
+		log.Error(cat.Msg("selfupdate_dev_build"))
 		return clihelpers.ErrFailure
 	}
 	current = strings.TrimPrefix(current, "v")
@@ -106,18 +107,18 @@ func runSelfUpdate(ctx context.Context, stdout, stderr io.Writer, checkOnly, for
 	}
 	latest := strings.TrimPrefix(rel.TagName, "v")
 
-	log.Infof("%s %s", log.Bold("current version :"), current)
-	log.Infof("%s %s", log.Bold("latest release  :"), latest)
+	log.Infof("%s %s", log.Bold(cat.Msg("selfupdate_label_current")), current)
+	log.Infof("%s %s", log.Bold(cat.Msg("selfupdate_label_latest")), latest)
 
 	if !force && latest == current {
-		log.Success("already up to date")
+		log.Success(cat.Msg("selfupdate_up_to_date"))
 		return nil
 	}
 	if checkOnly {
 		// stdout: keeps the line on the same stream as the version labels
 		// so grep-on-stdout scripts keep working. Exit code 100 is still
 		// the canonical "newer available" signal.
-		log.Infof("newer release %s available; rerun without --check-only to install", latest)
+		log.Info(cat.Msg("selfupdate_newer_available", latest))
 		// Cancel before os.Exit (gocritic exitAfterDefer).
 		cancel()
 		osExit(ExitNewerAvailable) //nolint:gocritic // cancel() above runs the only pending defer.
@@ -144,7 +145,7 @@ func runSelfUpdate(ctx context.Context, stdout, stderr io.Writer, checkOnly, for
 	sumsPath := filepath.Join(tmp, "SHA256SUMS")
 	// Progressf writes to stderr (transient, not data) so stdout-grep
 	// scripts see only the stable version / success output.
-	log.Progressf("downloading %s...", assetName)
+	log.Progress(cat.Msg("selfupdate_downloading", assetName))
 	if err = downloadFile(ctx, assetURL, binPath); err != nil {
 		return fmt.Errorf("%w: download %s: %w", clihelpers.ErrFailure, assetName, err)
 	}
@@ -179,7 +180,7 @@ func runSelfUpdate(ctx context.Context, stdout, stderr io.Writer, checkOnly, for
 		return fmt.Errorf("%w: replace %s: %w", clihelpers.ErrFailure, selfPath, err)
 	}
 
-	log.Successf("updated cocoon to %s at %s", latest, selfPath)
+	log.Success(cat.Msg("selfupdate_updated", latest, selfPath))
 	return nil
 }
 

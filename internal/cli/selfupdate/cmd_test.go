@@ -224,6 +224,10 @@ func TestAtomicReplace(t *testing.T) {
 // package state.
 func withSelfUpdateSeams(t *testing.T) {
 	t.Helper()
+	// Pin the locale so runtime-output substring assertions stay deterministic
+	// regardless of the dev's shell language; safe because every caller is
+	// non-parallel (the seams are shared package state).
+	t.Setenv("WORKSPACE_LANG", "en")
 	origFL, origEP, origExit := fetchLatest, executablePath, osExit
 	t.Cleanup(func() {
 		fetchLatest, executablePath, osExit = origFL, origEP, origExit
