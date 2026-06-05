@@ -67,7 +67,8 @@ func materializeEnable(a *Accumulator, raw []string) ([]string, map[string]Plugi
 	for i, entry := range raw {
 		id, spec, hasSpec := splitEnableEntry(entry)
 		if !rxPluginID.MatchString(id) {
-			a.Add(enableIDMessage(entry, id, spec), "plugins", "enable", strconv.Itoa(i))
+			code, args := enableIDError(entry, id, spec)
+			a.AddCode(code, args, "plugins", "enable", strconv.Itoa(i))
 			continue
 		}
 		ids = append(ids, id)
@@ -76,7 +77,8 @@ func materializeEnable(a *Accumulator, raw []string) ([]string, map[string]Plugi
 		}
 		ov, err := parseEnableSpec(spec)
 		if err != nil {
-			a.Add(enableSpecMessage(err), "plugins", "enable", strconv.Itoa(i))
+			code, args := enableSpecError(spec, err)
+			a.AddCode(code, args, "plugins", "enable", strconv.Itoa(i))
 			continue
 		}
 		versions[id] = ov
@@ -111,23 +113,33 @@ func parseEnableSpec(raw string) (PluginVersionOverride, error) {
 	}
 }
 
-// enableSpecMessage augments a parseEnableSpec error with the supported
-// forms so the workspace.toml author sees the fix inline.
-func enableSpecMessage(err error) string {
-	return err.Error() + ` — write the version bare ("<id>=1.23.4"), "<id>=latest", or "<id>" to enable unpinned`
+// enableSpecError maps a parseEnableSpec failure to a localizable key; each
+// variant augments the version-constraint problem with the supported forms so
+// the workspace.toml author sees the fix inline.
+func enableSpecError(spec string, err error) (string, []any) {
+	switch {
+	case errors.Is(err, ErrVersionSpecEmpty):
+		return "err_field_enable_spec_empty", nil
+	case errors.Is(err, ErrVersionSpecRange):
+		return "err_field_enable_spec_range", []any{spec}
+	case errors.Is(err, ErrVersionSpecCharset):
+		return "err_field_enable_spec_charset", []any{spec}
+	default:
+		return "err_field_enable_spec_other", []any{err.Error()}
+	}
 }
 
-// enableIDMessage explains why an enable entry's id was rejected. An empty id
+// enableIDError explains why an enable entry's id was rejected. An empty id
 // (e.g. "=1.2.3" or a stray "=") names no plugin, so it points at the
 // "<id>=..." form; a non-empty id simply violates the id charset.
-func enableIDMessage(entry, id, spec string) string {
+func enableIDError(entry, id, spec string) (string, []any) {
 	if id != "" {
-		return "plugin id does not match " + rxPluginID.String()
+		return "err_field_enable_id_charset", []any{rxPluginID.String()}
 	}
 	if spec != "" {
-		return fmt.Sprintf("enable entry %q has no plugin id — write %q", entry, "<id>="+spec)
+		return "err_field_enable_no_id_spec", []any{entry, "<id>=" + spec}
 	}
-	return fmt.Sprintf("enable entry %q has no plugin id — write %q or %q", entry, "<id>=<version>", "<id>")
+	return "err_field_enable_no_id", []any{entry, "<id>=<version>", "<id>"}
 }
 
 // materializeOptions folds each [plugins.options].<id> inline table into the
@@ -144,8 +156,7 @@ func materializeOptions(a *Accumulator, raw map[string]any, versions map[string]
 	for _, id := range slices.Sorted(maps.Keys(raw)) {
 		tbl, ok := raw[id].(map[string]any)
 		if !ok {
-			a.Add(fmt.Sprintf("[plugins.options].%s must be an inline table "+
-				`(e.g. { api_level = "35" })`, id), "plugins", "options", id)
+			a.AddCode("err_field_options_not_table", []any{id}, "plugins", "options", id)
 			continue
 		}
 		ov := versions[id]
@@ -161,9 +172,10 @@ func materializeOptionEntry(a *Accumulator, id string, tbl map[string]any, ov *P
 	for _, k := range slices.Sorted(maps.Keys(tbl)) {
 		switch k {
 		case "version":
-			a.Add(optionsVersionKeyMessage(id, tbl[k]), "plugins", "options", id, k)
+			code, args := optionsVersionKeyError(id, tbl[k])
+			a.AddCode(code, args, "plugins", "options", id, k)
 		case "pin":
-			a.Add(optionsPinKeyMessage(id), "plugins", "options", id, k)
+			a.AddCode("err_field_options_pin_key", []any{id}, "plugins", "options", id, k)
 		case "checksum_amd64":
 			setOptionChecksum(a, id, k, tbl[k], &ov.ChecksumAmd64)
 		case "checksum_arm64":
@@ -171,12 +183,12 @@ func materializeOptionEntry(a *Accumulator, id string, tbl map[string]any, ov *P
 		default:
 			s, ok := tbl[k].(string)
 			if !ok {
-				a.Add(fmt.Sprintf("value for %q must be a string, got %T", k, tbl[k]),
-					"plugins", "options", id, k)
+				a.AddCode("err_field_options_value_not_string",
+					[]any{k, fmt.Sprintf("%T", tbl[k])}, "plugins", "options", id, k)
 				continue
 			}
 			if bad, r := UnsafeExtraVersionRune(s); bad {
-				a.Add(UnsafeExtraVersionMessage("value", r), "plugins", "options", id, k)
+				a.AddCode("err_field_extra_version_unsafe", []any{"value", r}, "plugins", "options", id, k)
 				continue
 			}
 			if ov.Extra == nil {
@@ -187,23 +199,14 @@ func materializeOptionEntry(a *Accumulator, id string, tbl map[string]any, ov *P
 	}
 }
 
-// optionsVersionKeyMessage points the author at the enable array, echoing
+// optionsVersionKeyError points the author at the enable array, echoing
 // the actual version value (no guessed default).
-func optionsVersionKeyMessage(id string, raw any) string {
+func optionsVersionKeyError(id string, raw any) (string, []any) {
 	ver := "<version>"
 	if v, ok := raw.(string); ok && v != "" {
 		ver = strings.TrimPrefix(v, "=")
 	}
-	return fmt.Sprintf(
-		`[plugins.options].%s must not set "version" — the version belongs in the enable array: `+
-			`enable = [ %q ]`, id, id+"="+ver)
-}
-
-// optionsPinKeyMessage points the author at the enable array for the removed
-// "pin" key.
-func optionsPinKeyMessage(id string) string {
-	return fmt.Sprintf(
-		`the "pin" key was removed — put the version in the enable array: enable = [ "%s=<version>" ]`, id)
+	return "err_field_options_version_key", []any{id, id + "=" + ver}
 }
 
 // setOptionChecksum validates a manual [plugins.options] checksum value (64
@@ -214,11 +217,12 @@ func optionsPinKeyMessage(id string) string {
 func setOptionChecksum(a *Accumulator, id, key string, raw any, dst **string) {
 	s, ok := raw.(string)
 	if !ok {
-		a.Add(fmt.Sprintf("value for %q must be a string, got %T", key, raw), "plugins", "options", id, key)
+		a.AddCode("err_field_options_value_not_string",
+			[]any{key, fmt.Sprintf("%T", raw)}, "plugins", "options", id, key)
 		return
 	}
 	if !rxSha256.MatchString(s) {
-		a.Add(fmt.Sprintf("%q must be 64 lowercase hex characters", key), "plugins", "options", id, key)
+		a.AddCode("err_field_options_checksum_hex", []any{key}, "plugins", "options", id, key)
 		return
 	}
 	v := s

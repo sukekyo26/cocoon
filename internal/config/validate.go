@@ -169,8 +169,10 @@ func (a *Accumulator) At(seg ...string) *Accumulator {
 	return &Accumulator{base: out, errs: a.errs}
 }
 
-// Add records a pre-formatted English message (legacy path). Prefer AddCode so
-// the message localizes at the CLI boundary.
+// Add records a pre-formatted English message. workspace.toml validation now
+// routes through AddCode (localized at the CLI boundary); Add remains for the
+// plugin.toml validator (internal/plugin), whose author-facing messages are not
+// localized. Prefer AddCode for any new localizable message.
 func (a *Accumulator) Add(msg string, seg ...string) {
 	a.ensure()
 	*a.errs = append(*a.errs, FieldError{Loc: a.loc(seg), Code: "", Args: nil, Message: msg})

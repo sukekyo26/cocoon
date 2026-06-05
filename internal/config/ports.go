@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/sukekyo26/cocoon/internal/i18n"
 	"github.com/sukekyo26/cocoon/internal/warn"
 )
 
@@ -222,8 +223,8 @@ func validatePortsForward(a *Accumulator, forward []any) {
 		idx := strconv.Itoa(i)
 		switch v := raw.(type) {
 		case string:
-			if msg, ok := shortFormReason(v); !ok {
-				a.Add(msg, "forward", idx)
+			if code, args, ok := shortFormReason(v); !ok {
+				a.AddCode(code, args, "forward", idx)
 			}
 		case map[string]any:
 			validateLongForm(a, v, idx)
@@ -244,21 +245,22 @@ func validatePortsForward(a *Accumulator, forward []any) {
 // and `cocoon init` prompt share this rule so a string init accepts cannot
 // be rejected later by gen.
 func ValidateShortForm(s string) error {
-	msg, ok := shortFormReason(s)
+	code, args, ok := shortFormReason(s)
 	if ok {
 		return nil
 	}
-	return fmt.Errorf("%w: %s", ErrPortShortForm, msg)
+	// init's prompt validates outside the CLI boundary, so render the reason in
+	// English here; the boundary path localizes via AddCode + the same key.
+	return fmt.Errorf("%w: %s", ErrPortShortForm, i18n.English().Msg(code, args...))
 }
 
-// shortFormReason returns ("", true) on accept and (reason, false) on
-// reject. Shared by ValidateShortForm and validatePortsForward.
-func shortFormReason(s string) (string, bool) {
+// shortFormReason returns ("", nil, true) on accept and (code, args, false) on
+// reject. Shared by ValidateShortForm and validatePortsForward so the same rule
+// drives both the localized validation error and the init prompt.
+func shortFormReason(s string) (code string, args []any, ok bool) {
 	m := rxPortShortForm.FindStringSubmatch(s)
 	if m == nil {
-		return fmt.Sprintf(
-			"%q does not match docker-compose short form "+
-				"[HOST_IP:][HOST:]CONTAINER[/PROTOCOL]", s), false
+		return "err_portfld_short_form_nomatch", []any{s}, false
 	}
 	for _, name := range []string{"host", "container"} {
 		raw := m[rxPortShortForm.SubexpIndex(name)]
@@ -268,18 +270,17 @@ func shortFormReason(s string) (string, bool) {
 		for _, part := range strings.Split(raw, "-") {
 			n, err := strconv.Atoi(part)
 			if err != nil || n < portMin || n > portMax {
-				return fmt.Sprintf("port must be in [%d,%d] (got %q)",
-					portMin, portMax, part), false
+				return "err_portfld_short_form_range", []any{portMin, portMax, part}, false
 			}
 		}
 	}
 	if ip := m[rxPortShortForm.SubexpIndex("ip")]; ip != "" {
 		bare := strings.TrimSuffix(strings.TrimPrefix(ip, "["), "]")
 		if net.ParseIP(bare) == nil {
-			return fmt.Sprintf("%q is not a valid IPv4/IPv6 address", ip), false
+			return "err_portfld_short_form_ip", []any{ip}, false
 		}
 	}
-	return "", true
+	return "", nil, true
 }
 
 func validateLongForm(a *Accumulator, m map[string]any, idx string) {
@@ -358,38 +359,39 @@ func validateLongFormPublished(a *Accumulator, v any, idx string) {
 	}
 }
 
-// validateLongFormStringField is a no-op when the key is absent. The
-// `check` callback returns the message to emit (or "" to accept).
+// validateLongFormStringField is a no-op when the key is absent. The `check`
+// callback returns ("", nil) to accept or (code, args) to emit a localized
+// failure.
 func validateLongFormStringField(
 	a *Accumulator,
 	m map[string]any,
 	idx, name string,
-	check func(string) string,
+	check func(string) (string, []any),
 ) {
 	if v, ok := stringField(m, name); ok {
-		if msg := check(v); msg != "" {
-			a.Add(msg, "forward", idx, name)
+		if code, args := check(v); code != "" {
+			a.AddCode(code, args, "forward", idx, name)
 		}
 		return
 	}
 	if _, present := m[name]; present {
-		a.Add(name+" must be a string", "forward", idx, name)
+		a.AddCode("err_portfld_long_form_value_string", []any{name}, "forward", idx, name)
 	}
 }
 
-func validateHostIP(v string) string {
+func validateHostIP(v string) (string, []any) {
 	if net.ParseIP(v) == nil {
-		return fmt.Sprintf("host_ip %q is not a valid IP address", v)
+		return "err_portfld_host_ip_invalid", []any{v}
 	}
-	return ""
+	return "", nil
 }
 
-func validateEnum(field string, allowed map[string]struct{}) func(string) string {
-	return func(v string) string {
+func validateEnum(field string, allowed map[string]struct{}) func(string) (string, []any) {
+	return func(v string) (string, []any) {
 		if _, ok := allowed[v]; ok {
-			return ""
+			return "", nil
 		}
-		return fmt.Sprintf("%s must be one of %s (got %q)", field, strings.Join(slices.Sorted(maps.Keys(allowed)), "/"), v)
+		return "err_portfld_enum", []any{field, strings.Join(slices.Sorted(maps.Keys(allowed)), "/"), v}
 	}
 }
 
