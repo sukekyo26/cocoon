@@ -283,7 +283,8 @@ func TestHuhPrompterRunEmptyGroups(t *testing.T) {
 }
 
 // TestRenderAndWrite_RenderError pins that a failing render triggers
-// cleanup and returns ErrFailure (so the caller aborts the scaffold).
+// cleanup, returns ErrFailure (so the caller aborts the scaffold), and
+// names the artifact so the failure stays diagnosable.
 func TestRenderAndWrite_RenderError(t *testing.T) {
 	t.Parallel()
 	var cleaned bool
@@ -293,6 +294,9 @@ func TestRenderAndWrite_RenderError(t *testing.T) {
 	if !errors.Is(err, clihelpers.ErrFailure) {
 		t.Fatalf("err = %v, want ErrFailure", err)
 	}
+	if !strings.Contains(err.Error(), "plugin.toml") {
+		t.Errorf("err should name the artifact: %v", err)
+	}
 	if !cleaned {
 		t.Error("cleanup was not called on render error")
 	}
@@ -300,7 +304,8 @@ func TestRenderAndWrite_RenderError(t *testing.T) {
 
 // TestRenderAndWrite_WriteError pins the write-failure branch: the target
 // directory does not exist, so the atomic write cannot create its temp
-// file. cleanup must still run and the error must be ErrFailure.
+// file. cleanup must still run, the error must be ErrFailure, and the
+// destination path must survive (fsx errors only name their temp file).
 func TestRenderAndWrite_WriteError(t *testing.T) {
 	t.Parallel()
 	var cleaned bool
@@ -310,6 +315,9 @@ func TestRenderAndWrite_WriteError(t *testing.T) {
 		func() { cleaned = true })
 	if !errors.Is(err, clihelpers.ErrFailure) {
 		t.Fatalf("err = %v, want ErrFailure", err)
+	}
+	if !strings.Contains(err.Error(), "plugin.toml") {
+		t.Errorf("err should name the destination path: %v", err)
 	}
 	if !cleaned {
 		t.Error("cleanup was not called on write error")

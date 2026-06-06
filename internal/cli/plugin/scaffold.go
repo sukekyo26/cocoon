@@ -268,12 +268,14 @@ func renderAndWrite(
 	body, err := render()
 	if err != nil {
 		cleanup()
-		return "", clihelpers.FailureWrap(err, "")
+		return "", clihelpers.FailureWrap(fmt.Errorf("render %s: %w", name, err), "")
 	}
 	path := filepath.Join(dir, name)
 	if writeErr := fsx.AtomicWriteFile(path, []byte(body), mode); writeErr != nil {
+		// fsx.AtomicWriteFile errors reference its internal temp file, not the
+		// destination — name the target so failures stay diagnosable.
 		cleanup()
-		return "", clihelpers.FailureWrap(writeErr, "")
+		return "", clihelpers.FailureWrap(fmt.Errorf("write %s: %w", path, writeErr), "")
 	}
 	return path, nil
 }
