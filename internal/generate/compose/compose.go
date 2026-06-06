@@ -128,7 +128,7 @@ func mergeVolumes(
 ) (mergedPlugin []plugin.Volume, mergedCustom []volPair, err error) {
 	pathToSrc := map[string]volSrc{}
 
-	mergedPlugin, err = mergePluginVolumes(pluginVols, pathToSrc, warnings)
+	mergedPlugin, err = mergePluginVolumes(pluginVols, pathToSrc)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -148,7 +148,6 @@ func mergeVolumes(
 func mergePluginVolumes(
 	pluginVols []plugin.Volume,
 	pathToSrc map[string]volSrc,
-	warnings *warn.Sink,
 ) ([]plugin.Volume, error) {
 	// nameToPlugin tracks the first plugin that claimed a derived volume
 	// name. DeriveVolumeName uses the path's basename, so two plugins with
@@ -169,8 +168,9 @@ func mergePluginVolumes(
 				"%w: plugin '%s' targets reserved mount path '%s'",
 				ErrVolumeNameConflict, pv.PluginName, pv.MountPath)
 		}
-		if existing, dup := pathToSrc[pv.MountPath]; dup {
-			warnings.Warn(warn.VolumeDupPlugin, pv.MountPath, existing.label, pv.PluginName, existing.volName)
+		if _, dup := pathToSrc[pv.MountPath]; dup {
+			// Two plugins sharing a mount path dedup to one volume. This is
+			// harmless and unactionable for built-in plugins, so do it silently.
 			continue
 		}
 		if firstOwner, dup := nameToPlugin[pv.VolumeName]; dup {

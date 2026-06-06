@@ -12,7 +12,6 @@ func init() {
 
 var warningsEN = map[string]string{
 	// Volume dedup.
-	"warn_volume_dup_plugin":    "WARNING: Volume path '%s' is defined by both %s and plugin '%s'. Using single volume '%s'.",
 	"warn_volume_dup_workspace": "WARNING: Volume path '%s' is defined by both %s and workspace.toml volume '%s'. Using single volume '%s'.",
 	"warn_vol_label_plugin":     "plugin '%s'",
 	"warn_vol_label_workspace":  "workspace.toml volume '%s'",
@@ -47,7 +46,6 @@ var warningsEN = map[string]string{
 
 var warningsJA = map[string]string{
 	// Volume dedup.
-	"warn_volume_dup_plugin":    "警告: ボリュームパス '%s' が %s とプラグイン '%s' の両方で定義されています。単一のボリューム '%s' を使用します。",
 	"warn_volume_dup_workspace": "警告: ボリュームパス '%s' が %s と workspace.toml の volume '%s' の両方で定義されています。単一のボリューム '%s' を使用します。",
 	"warn_vol_label_plugin":     "プラグイン '%s'",
 	"warn_vol_label_workspace":  "workspace.toml の volume '%s'",

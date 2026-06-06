@@ -6,7 +6,6 @@ package warn
 // nested [Ref] args, not as a top-level [Warning.Code].
 const (
 	// Volume dedup (internal/generate/compose).
-	VolumeDupPlugin = "warn_volume_dup_plugin"
 	//nolint:gosec // G101 false positive: i18n catalog key, not a credential.
 	VolumeDupWorkspace = "warn_volume_dup_workspace"
 	VolLabelPlugin     = "warn_vol_label_plugin"    // Ref
@@ -44,7 +43,7 @@ const (
 // parity test can assert each has a catalog entry in both languages.
 func Codes() []string {
 	return []string{
-		VolumeDupPlugin, VolumeDupWorkspace, VolLabelPlugin, VolLabelWorkspace,
+		VolumeDupWorkspace, VolLabelPlugin, VolLabelWorkspace,
 		AptRedundant, DockerfileVerbatim,
 		PinNoChecksum, PinNoVerify,
 		TZOverride,
