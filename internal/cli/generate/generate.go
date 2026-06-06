@@ -64,6 +64,28 @@ func LoadContext(
 	}, nil
 }
 
+// LoadWorkspaceContext assembles the layered plugin FS (embedded < user <
+// project) for the workspace at wsPath and loads it via LoadContext, so
+// `cocoon gen` and `cocoon lock` resolve plugins identically. The returned
+// context has a nil Lock; callers that consume cocoon.lock attach it.
+func LoadWorkspaceContext(wsPath string) (*generate.WorkspaceContext, error) {
+	embedded, err := plugin.CatalogFS()
+	if err != nil {
+		return nil, clihelpers.FailureWrap(err, "")
+	}
+	userDir, err := plugin.UserPluginsDir()
+	if err != nil {
+		return nil, clihelpers.FailureWrap(err, "")
+	}
+	layered := plugin.NewLayeredFS(embedded, userDir, plugin.ProjectPluginsDir(wsPath))
+	// Record "plugin overridden by <source>" notices into the same sink the
+	// loader fills, so DrainWarnings surfaces them.
+	sink := warn.New()
+	layered.LogOverrides(sink)
+	//nolint:wrapcheck // LoadContext already wraps failures in clihelpers.ErrFailure.
+	return LoadContext(wsPath, layered, "", sink)
+}
+
 // BuildArtifacts produces the in-memory list of generated files
 // (docker-compose.yml, Dockerfile, devcontainer.json when enabled,
 // docker-entrypoint.sh, manage.sh, .env) for the given loaded

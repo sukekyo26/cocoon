@@ -30,8 +30,6 @@ import (
 	"github.com/sukekyo26/cocoon/internal/i18n"
 	"github.com/sukekyo26/cocoon/internal/lockfile"
 	"github.com/sukekyo26/cocoon/internal/logx"
-	"github.com/sukekyo26/cocoon/internal/plugin"
-	"github.com/sukekyo26/cocoon/internal/warn"
 )
 
 var errCertsPathNotDirectory = errors.New("cocoon certs path exists but is not a directory")
@@ -93,20 +91,7 @@ func loadGenContext(workspaceFlag, outputFlag string) (
 	if err != nil {
 		return "", nil, clihelpers.UsageWrap(err, "err_gen_resolve_output")
 	}
-	catalog, err := plugin.CatalogFS()
-	if err != nil {
-		return "", nil, clihelpers.FailureWrap(err, "")
-	}
-	userPluginDir, err := userPluginsDir()
-	if err != nil {
-		return "", nil, clihelpers.FailureWrap(err, "")
-	}
-	projectPluginDir := filepath.Join(filepath.Dir(wsPath), ".cocoon", "plugins")
-	layered := plugin.NewLayeredFS(catalog, userPluginDir, projectPluginDir)
-	sink := warn.New()
-	layered.LogOverrides(sink)
-
-	ctx, err = generatecli.LoadContext(wsPath, layered, "", sink)
+	ctx, err = generatecli.LoadWorkspaceContext(wsPath)
 	if err != nil {
 		// Returned as-is: generatecli attaches ErrFailure, so re-wrapping
 		// would double the "failure:" prefix (defensive-coding §3).
@@ -210,15 +195,6 @@ func resolveWorkspace(flag string) (string, error) {
 		return "", clihelpers.UsageErr("err_gen_workspace_not_found", cwd)
 	}
 	return found, nil
-}
-
-// userPluginsDir is the LayeredFS user-layer root (~/.cocoon/plugins).
-func userPluginsDir() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("resolve home dir: %w", err)
-	}
-	return filepath.Join(home, ".cocoon", "plugins"), nil
 }
 
 // ensureUserCertsDir mkdirs ~/.cocoon/certs (0700) so additional_contexts

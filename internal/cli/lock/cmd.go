@@ -6,7 +6,6 @@ package lockcli
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -16,13 +15,10 @@ import (
 	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
 	generatecli "github.com/sukekyo26/cocoon/internal/cli/generate"
 	"github.com/sukekyo26/cocoon/internal/config"
-	"github.com/sukekyo26/cocoon/internal/generate"
 	"github.com/sukekyo26/cocoon/internal/i18n"
 	"github.com/sukekyo26/cocoon/internal/lockfile"
 	"github.com/sukekyo26/cocoon/internal/logx"
-	"github.com/sukekyo26/cocoon/internal/plugin"
 	"github.com/sukekyo26/cocoon/internal/plugin/resolve"
-	"github.com/sukekyo26/cocoon/internal/warn"
 )
 
 // defaultFetcher is the network Fetcher `cocoon lock` resolves through. Tests
@@ -69,9 +65,9 @@ func runLock(ctx context.Context, stdout, stderr io.Writer, opts lockOptions) er
 	if err != nil {
 		return err
 	}
-	wctx, err := loadContext(wsPath)
+	wctx, err := generatecli.LoadWorkspaceContext(wsPath)
 	if err != nil {
-		return err
+		return err //nolint:wrapcheck // ErrFailure already attached by generatecli
 	}
 	requested := requestedSpecs(wctx)
 	lockPath := lockfile.PathFor(wsPath, wctx.WS)
@@ -94,28 +90,6 @@ func runLock(ctx context.Context, stdout, stderr io.Writer, opts lockOptions) er
 	}
 	log.Success(cat.Msg("lock_wrote", lockPath, len(lock.Plugins)))
 	return nil
-}
-
-// loadContext builds the layered plugin FS and loads workspace + plugins,
-// reusing the generation pipeline's loader so plugin conflict checks and
-// overlay resolution match `cocoon gen` exactly.
-func loadContext(wsPath string) (*generate.WorkspaceContext, error) {
-	embedded, err := plugin.CatalogFS()
-	if err != nil {
-		return nil, clihelpers.FailureWrap(err, "")
-	}
-	userDir, err := userPluginsDir()
-	if err != nil {
-		return nil, clihelpers.FailureWrap(err, "")
-	}
-	projectDir := filepath.Join(filepath.Dir(wsPath), ".cocoon", "plugins")
-	layered := plugin.NewLayeredFS(embedded, userDir, projectDir)
-	// Record "plugin overridden by <source>" notices into the same sink the
-	// loader fills, so DrainWarnings surfaces them — matching `cocoon gen`.
-	sink := warn.New()
-	layered.LogOverrides(sink)
-	//nolint:wrapcheck // LoadContext already wraps failures in clihelpers.ErrFailure.
-	return generatecli.LoadContext(wsPath, layered, "", sink)
 }
 
 // loadExistingLock returns the current lock for reuse, with "no lock yet" as a
@@ -161,13 +135,4 @@ func resolveWorkspace(flag string) (string, error) {
 		return "", clihelpers.UsageErr("err_lockcmd_workspace_not_found", cwd)
 	}
 	return found, nil
-}
-
-// userPluginsDir is the LayeredFS user-layer root (~/.cocoon/plugins).
-func userPluginsDir() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("resolve home dir: %w", err)
-	}
-	return filepath.Join(home, ".cocoon", "plugins"), nil
 }
