@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"path/filepath"
 
 	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
 	"github.com/sukekyo26/cocoon/internal/config"
@@ -24,7 +23,7 @@ func resolveLayered() (*plugin.LayeredFS, error) {
 	if err != nil {
 		return nil, clihelpers.FailureWrap(err, "")
 	}
-	userDir, err := userPluginsDir()
+	userDir, err := plugin.UserPluginsDir()
 	if err != nil {
 		return nil, clihelpers.FailureWrap(err, "")
 	}
@@ -38,15 +37,6 @@ func resolveLayered() (*plugin.LayeredFS, error) {
 		return nil, clihelpers.FailureWrap(projErr, "err_pluginsrc_project_plugins_dir")
 	}
 	return plugin.NewLayeredFS(embedded, userDir, projectDir), nil
-}
-
-// userPluginsDir is the user-scope LayeredFS root (~/.cocoon/plugins).
-func userPluginsDir() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("resolve home dir: %w", err)
-	}
-	return filepath.Join(home, ".cocoon", "plugins"), nil
 }
 
 // projectPluginsDir returns ErrWorkspaceNotFound when discovery walks all
@@ -64,7 +54,7 @@ func projectPluginsDir() (string, error) {
 	if wsPath == "" {
 		return "", ErrWorkspaceNotFound
 	}
-	return filepath.Join(filepath.Dir(wsPath), ".cocoon", "plugins"), nil
+	return plugin.ProjectPluginsDir(wsPath), nil
 }
 
 // loadPluginFromLayer returns fs.ErrNotExist (wrapped) for unknown ids.
