@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- `cocoon gen` no longer warns when two plugins declare the same volume mount
+  path. The paths still deduplicate to a single volume; the notice was just
+  noise, and unactionable when the plugins are built in. A collision between a
+  `workspace.toml` volume and a plugin still warns, since renaming your own
+  volume resolves it.
+
 ### Fixed
 
 - `cocoon gen` (and `cocoon lock`) now localize their generator diagnostics —
