@@ -1,16 +1,17 @@
 package plugin_test
 
 import (
-	"bytes"
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/sukekyo26/cocoon/internal/plugin"
+	"github.com/sukekyo26/cocoon/internal/warn"
 )
 
 func TestLoad_Sample(t *testing.T) {
@@ -64,12 +65,15 @@ version_capable = false
 func TestLoadEnabledFromFS_WarnsOnMissingPlugin(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	var warnings bytes.Buffer
-	out, err := plugin.LoadEnabledFromFS(os.DirFS(dir), []string{"nonexistent"}, &warnings, dir)
+	sink := warn.New()
+	out, err := plugin.LoadEnabledFromFS(os.DirFS(dir), []string{"nonexistent"}, sink, dir)
 	require.NoError(t, err)
 	require.Empty(t, out)
-	if !strings.Contains(warnings.String(), "WARNING: Plugin 'nonexistent' not found") {
-		t.Errorf("expected warning: %q", warnings.String())
+	found := slices.ContainsFunc(sink.All(), func(w warn.Warning) bool {
+		return w.Code == warn.PluginNotFound && len(w.Args) > 0 && w.Args[0] == "nonexistent"
+	})
+	if !found {
+		t.Errorf("expected PluginNotFound warning for 'nonexistent', got %v", sink.All())
 	}
 }
 
@@ -93,7 +97,7 @@ func TestLoadEnabledFromFS_LoadsExistingPlugin(t *testing.T) {
 	//nolint:gosec // pluginDir is built from t.TempDir + literal "sample".
 	require.NoError(t, os.WriteFile(filepath.Join(pluginDir, "install.installer.sh"), scriptBody, 0o600))
 
-	out, err := plugin.LoadEnabledFromFS(os.DirFS(dir), []string{"sample", "ghost"}, &bytes.Buffer{}, dir)
+	out, err := plugin.LoadEnabledFromFS(os.DirFS(dir), []string{"sample", "ghost"}, warn.New(), dir)
 	require.NoError(t, err)
 	require.Len(t, out, 1)
 	require.Contains(t, out, "sample")

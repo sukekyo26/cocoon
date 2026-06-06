@@ -1,7 +1,6 @@
 package compose_test
 
 import (
-	"bytes"
 	"errors"
 	"testing"
 
@@ -9,6 +8,7 @@ import (
 	"github.com/sukekyo26/cocoon/internal/generate"
 	"github.com/sukekyo26/cocoon/internal/generate/compose"
 	"github.com/sukekyo26/cocoon/internal/plugin"
+	"github.com/sukekyo26/cocoon/internal/warn"
 )
 
 func TestGenerate_RejectsReservedCustomVolume(t *testing.T) {
@@ -26,8 +26,8 @@ func TestGenerate_RejectsReservedCustomVolume(t *testing.T) {
 			},
 		}
 		ctx := &generate.WorkspaceContext{WS: ws}
-		var warns bytes.Buffer
-		_, err := compose.Generate(ctx, compose.Options{Warnings: &warns})
+		warns := warn.New()
+		_, err := compose.Generate(ctx, compose.Options{Warnings: warns})
 		if !errors.Is(err, compose.ErrVolumeNameConflict) {
 			t.Errorf("custom volume %q: expected ErrVolumeNameConflict, got %v", name, err)
 		}
@@ -56,8 +56,8 @@ func TestGenerate_RejectsCustomVolumeOnReservedMountPath(t *testing.T) {
 			},
 		}
 		ctx := &generate.WorkspaceContext{WS: ws}
-		var warns bytes.Buffer
-		_, err := compose.Generate(ctx, compose.Options{Warnings: &warns})
+		warns := warn.New()
+		_, err := compose.Generate(ctx, compose.Options{Warnings: warns})
 		if !errors.Is(err, compose.ErrVolumeNameConflict) {
 			t.Errorf("custom volume target %q: expected ErrVolumeNameConflict, got %v", path, err)
 		}
@@ -91,8 +91,8 @@ func TestGenerate_RejectsPluginsWithCollidingDerivedVolumeNames(t *testing.T) {
 		},
 	}
 	ctx := &generate.WorkspaceContext{WS: ws, Plugins: plugins}
-	var warns bytes.Buffer
-	_, err := compose.Generate(ctx, compose.Options{Plugins: plugins, Warnings: &warns})
+	warns := warn.New()
+	_, err := compose.Generate(ctx, compose.Options{Plugins: plugins, Warnings: warns})
 	if !errors.Is(err, compose.ErrVolumeNameConflict) {
 		t.Errorf("expected ErrVolumeNameConflict for duplicate derived names, got %v", err)
 	}
@@ -123,8 +123,8 @@ func TestGenerate_RejectsPluginVolumeOnReservedMountPath(t *testing.T) {
 			},
 		}
 		ctx := &generate.WorkspaceContext{WS: ws, Plugins: plugins}
-		var warns bytes.Buffer
-		_, err := compose.Generate(ctx, compose.Options{Plugins: plugins, Warnings: &warns})
+		warns := warn.New()
+		_, err := compose.Generate(ctx, compose.Options{Plugins: plugins, Warnings: warns})
 		if !errors.Is(err, compose.ErrVolumeNameConflict) {
 			t.Errorf("plugin volume target %q: expected ErrVolumeNameConflict, got %v", path, err)
 		}

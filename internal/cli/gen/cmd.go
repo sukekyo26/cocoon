@@ -31,6 +31,7 @@ import (
 	"github.com/sukekyo26/cocoon/internal/lockfile"
 	"github.com/sukekyo26/cocoon/internal/logx"
 	"github.com/sukekyo26/cocoon/internal/plugin"
+	"github.com/sukekyo26/cocoon/internal/warn"
 )
 
 var errCertsPathNotDirectory = errors.New("cocoon certs path exists but is not a directory")
@@ -72,7 +73,7 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 // (embedded < user < project), and returns a loaded WorkspaceContext.
 // Shared by `cocoon gen` and `cocoon gen workspace` so the discovery
 // rules stay in lockstep.
-func loadGenContext(stderr io.Writer, workspaceFlag, outputFlag string) (
+func loadGenContext(workspaceFlag, outputFlag string) (
 	outDir string,
 	ctx *generate.WorkspaceContext,
 	err error,
@@ -90,21 +91,22 @@ func loadGenContext(stderr io.Writer, workspaceFlag, outputFlag string) (
 	// helpers stay deterministic regardless of cwd-at-print-time.
 	outDir, err = filepath.Abs(outDir)
 	if err != nil {
-		return "", nil, fmt.Errorf("%w: resolve --output: %w", clihelpers.ErrUsage, err)
+		return "", nil, clihelpers.UsageWrap(err, "err_gen_resolve_output")
 	}
 	catalog, err := plugin.CatalogFS()
 	if err != nil {
-		return "", nil, fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+		return "", nil, clihelpers.FailureWrap(err, "")
 	}
 	userPluginDir, err := userPluginsDir()
 	if err != nil {
-		return "", nil, fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+		return "", nil, clihelpers.FailureWrap(err, "")
 	}
 	projectPluginDir := filepath.Join(filepath.Dir(wsPath), ".cocoon", "plugins")
 	layered := plugin.NewLayeredFS(catalog, userPluginDir, projectPluginDir)
-	layered.LogOverrides(stderr)
+	sink := warn.New()
+	layered.LogOverrides(sink)
 
-	ctx, err = generatecli.LoadContext(wsPath, layered, "", stderr)
+	ctx, err = generatecli.LoadContext(wsPath, layered, "", sink)
 	if err != nil {
 		// Returned as-is: generatecli attaches ErrFailure, so re-wrapping
 		// would double the "failure:" prefix (defensive-coding §3).
@@ -115,7 +117,7 @@ func loadGenContext(stderr io.Writer, workspaceFlag, outputFlag string) (
 	// overwrites it). The basename is configurable via [lockfile].name.
 	lock, lockErr := lockfile.Load(lockfile.PathFor(wsPath, ctx.WS))
 	if lockErr != nil && !lockfile.IsNotExist(lockErr) {
-		return "", nil, fmt.Errorf("%w: %w", clihelpers.ErrFailure, lockErr)
+		return "", nil, clihelpers.FailureWrap(lockErr, "")
 	}
 	ctx.Lock = lock // nil when absent
 	return outDir, ctx, nil
@@ -124,32 +126,36 @@ func loadGenContext(stderr io.Writer, workspaceFlag, outputFlag string) (
 func runGen(stdout, stderr io.Writer, workspaceFlag, outputFlag string, locked bool) error {
 	cat := i18n.New(i18n.Detect())
 	log := logx.New(stdout, stderr)
-	outDir, ctx, err := loadGenContext(stderr, workspaceFlag, outputFlag)
+	outDir, ctx, err := loadGenContext(workspaceFlag, outputFlag)
 	if err != nil {
 		return err
 	}
 	if lockErr := enforceLocked(ctx, locked, log, cat); lockErr != nil {
 		return lockErr
 	}
-	arts, err := generatecli.BuildArtifacts(ctx, stderr)
+	arts, err := generatecli.BuildArtifacts(ctx)
 	if err != nil {
 		return err //nolint:wrapcheck // ErrFailure already attached by generatecli
 	}
+	// Surface collected generator diagnostics (volume dedup, verbatim
+	// Dockerfile hooks, plugin overrides, …) before the success lines, matching
+	// the order they appeared in when written inline.
+	clihelpers.DrainWarnings(log, cat, ctx.Warnings)
 	if err := generatecli.WriteArtifacts(arts, outDir); err != nil {
 		return err //nolint:wrapcheck // ErrFailure already attached by generatecli
 	}
 	if ctx.CertificatesEnabled() {
 		if err := ensureUserCertsDir(log, cat); err != nil {
-			return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+			return clihelpers.FailureWrap(err, "")
 		}
 	}
 	if ctx.HasHomeFiles() {
 		if err := ensureHomeFiles(ctx, log, cat); err != nil {
-			return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+			return clihelpers.FailureWrap(err, "")
 		}
 	}
 	if err := ensureSudoGitignore(ctx, outDir, log, cat); err != nil {
-		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+		return clihelpers.FailureWrap(err, "")
 	}
 
 	warnDockerCLIWithoutSocket(ctx, log, cat)
@@ -185,26 +191,23 @@ func resolveWorkspace(flag string) (string, error) {
 	if flag != "" {
 		abs, err := filepath.Abs(flag)
 		if err != nil {
-			return "", fmt.Errorf("%w: resolve --workspace: %w", clihelpers.ErrUsage, err)
+			return "", clihelpers.UsageWrap(err, "err_gen_resolve_workspace")
 		}
 		if _, statErr := os.Stat(abs); statErr != nil {
-			return "", fmt.Errorf("%w: --workspace %s: %w", clihelpers.ErrUsage, abs, statErr)
+			return "", clihelpers.UsageWrap(statErr, "err_gen_workspace_stat", abs)
 		}
 		return abs, nil
 	}
 	cwd, err := os.Getwd()
 	if err != nil {
-		return "", fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+		return "", clihelpers.FailureWrap(err, "")
 	}
 	found, err := config.Discover(cwd)
 	if err != nil {
-		return "", fmt.Errorf("%w: discover workspace.toml: %w", clihelpers.ErrFailure, err)
+		return "", clihelpers.FailureWrap(err, "err_gen_discover_workspace")
 	}
 	if found == "" {
-		return "", fmt.Errorf(
-			"%w: workspace.toml not found in %s or any parent (try `cocoon init`)",
-			clihelpers.ErrUsage, cwd,
-		)
+		return "", clihelpers.UsageErr("err_gen_workspace_not_found", cwd)
 	}
 	return found, nil
 }
@@ -263,9 +266,7 @@ func enforceLocked(ctx *generate.WorkspaceContext, locked bool, log *logx.Logger
 	}
 	lockName := ctx.WS.Lockfile.NameOrDefault()
 	if locked {
-		return fmt.Errorf(
-			`%w: plugins use "latest" without a %s entry: %s; run `+"`cocoon lock`"+` (or drop --locked)`,
-			clihelpers.ErrUsage, lockName, strings.Join(unlocked, ", "))
+		return clihelpers.UsageErr("err_gen_locked_unresolved", lockName, strings.Join(unlocked, ", "))
 	}
 	for _, id := range unlocked {
 		log.Warn(cat.Msg("gen_unlocked_latest_warning", id, lockName))

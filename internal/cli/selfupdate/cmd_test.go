@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
+	"github.com/sukekyo26/cocoon/internal/i18n"
 	"github.com/sukekyo26/cocoon/internal/release"
 	"github.com/sukekyo26/cocoon/internal/version"
 )
@@ -224,6 +225,10 @@ func TestAtomicReplace(t *testing.T) {
 // package state.
 func withSelfUpdateSeams(t *testing.T) {
 	t.Helper()
+	// Pin the locale so runtime-output substring assertions stay deterministic
+	// regardless of the dev's shell language; safe because every caller is
+	// non-parallel (the seams are shared package state).
+	t.Setenv("WORKSPACE_LANG", "en")
 	origFL, origEP, origExit := fetchLatest, executablePath, osExit
 	t.Cleanup(func() {
 		fetchLatest, executablePath, osExit = origFL, origEP, origExit
@@ -241,8 +246,10 @@ func withVersion(t *testing.T, v string) {
 }
 
 // TestRunSelfUpdate_DevBuildErrors covers the "no version baked in" guard:
-// version.Version == "dev" must short-circuit to ErrFailure before any
-// fetchLatest call is made.
+// version.Version == "dev" must short-circuit to a localized ErrFailure error
+// before any fetchLatest call is made. The message rides on the returned error
+// (rendered once at the boundary), so the function itself writes nothing to
+// stderr — logging here would double-print with the boundary's output.
 //
 //nolint:paralleltest // mutates the package-level version.Version
 func TestRunSelfUpdate_DevBuildErrors(t *testing.T) {
@@ -258,8 +265,11 @@ func TestRunSelfUpdate_DevBuildErrors(t *testing.T) {
 	if !errors.Is(err, clihelpers.ErrFailure) {
 		t.Fatalf("err = %v, want errors.Is ErrFailure", err)
 	}
-	if !strings.Contains(stderr.String(), "dev build") {
-		t.Errorf("stderr = %q, want substring %q", stderr.String(), "dev build")
+	if !strings.Contains(err.Error(), "dev build") {
+		t.Errorf("err = %q, want substring %q", err.Error(), "dev build")
+	}
+	if stderr.Len() != 0 {
+		t.Errorf("stderr = %q, want empty (message is carried by the error, not logged in-function)", stderr.String())
 	}
 }
 
@@ -786,5 +796,18 @@ func TestRunSelfUpdate_ReadOnlyInstallDirShortCircuits(t *testing.T) {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("err = %v, want substring %q", err, want)
 		}
+	}
+	// The remediation hint must follow the active locale: under ja the JA hint
+	// is rendered, not the English "binary lives at" wording.
+	var le *clihelpers.LocError
+	if !errors.As(err, &le) {
+		t.Fatalf("err = %v, want a *clihelpers.LocError carrying the localizable hint", err)
+	}
+	ja := le.Localize(i18n.New(i18n.LangJA))
+	if !strings.Contains(ja, "管理者権限") {
+		t.Errorf("ja render = %q, want the localized sudo hint", ja)
+	}
+	if strings.Contains(ja, "binary lives at") {
+		t.Errorf("ja render = %q still contains the English hint", ja)
 	}
 }

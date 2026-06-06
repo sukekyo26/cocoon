@@ -22,11 +22,11 @@ var ErrWorkspaceNotFound = errors.New("workspace.toml not found in tree")
 func resolveLayered() (*plugin.LayeredFS, error) {
 	embedded, err := plugin.CatalogFS()
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+		return nil, clihelpers.FailureWrap(err, "")
 	}
 	userDir, err := userPluginsDir()
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+		return nil, clihelpers.FailureWrap(err, "")
 	}
 	projectDir, projErr := projectPluginsDir()
 	switch {
@@ -35,7 +35,7 @@ func resolveLayered() (*plugin.LayeredFS, error) {
 	case projErr != nil:
 		// Surface system errors (Getwd / stat); don't pretend the layer
 		// is just absent.
-		return nil, fmt.Errorf("%w: project plugins dir: %w", clihelpers.ErrFailure, projErr)
+		return nil, clihelpers.FailureWrap(projErr, "err_pluginsrc_project_plugins_dir")
 	}
 	return plugin.NewLayeredFS(embedded, userDir, projectDir), nil
 }

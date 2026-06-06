@@ -257,6 +257,9 @@ android-sdk = { api_level = 36 }`)
 	_, err := config.LoadWorkspace(tmp)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "must be a string")
+	// %T must report the value's real type (int64 here), not the type of a
+	// pre-formatted string arg.
+	require.Contains(t, err.Error(), "got int64")
 }
 
 // TestLoadWorkspace_OptionsExtraUnsafeValue covers the rune classes

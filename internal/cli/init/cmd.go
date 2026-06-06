@@ -2,7 +2,6 @@ package initcli
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -65,28 +64,28 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 
 func runInit(cmd *cobra.Command, stdout, stderr io.Writer, flags *initFlags) error {
 	if flags.Devcontainer && flags.NoDevcontainer {
-		return fmt.Errorf("%w: --devcontainer and --no-devcontainer are mutually exclusive", clihelpers.ErrUsage)
+		return clihelpers.UsageErr("err_initcmd_devcontainer_conflict")
 	}
 	if flags.Certificates && flags.NoCertificates {
-		return fmt.Errorf("%w: --certificates and --no-certificates are mutually exclusive", clihelpers.ErrUsage)
+		return clihelpers.UsageErr("err_initcmd_certificates_conflict")
 	}
 	if flags.ImagePathFix && flags.NoImagePathFix {
-		return fmt.Errorf("%w: --image-path-fix and --no-image-path-fix are mutually exclusive", clihelpers.ErrUsage)
+		return clihelpers.UsageErr("err_initcmd_image_path_fix_conflict")
 	}
 	cat := i18n.New(i18n.Detect())
 
 	cwd, err := os.Getwd()
 	if err != nil {
-		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+		return clihelpers.FailureWrap(err, "")
 	}
 	target := filepath.Join(cwd, "workspace.toml")
 	if _, statErr := os.Stat(target); statErr == nil && !flags.Force {
-		return fmt.Errorf("%w: %s already exists; use --force to overwrite", clihelpers.ErrUsage, target)
+		return clihelpers.UsageErr("err_initcmd_workspace_exists", target)
 	}
 
 	plugins, err := loadEmbeddedPlugins()
 	if err != nil {
-		return fmt.Errorf("%w: %s", clihelpers.ErrFailure, cat.Msg("init_err_plugin_load_fmt", err))
+		return clihelpers.FailureErr("err_initcmd_plugin_load", cat.Msg("init_err_plugin_load_fmt", err))
 	}
 
 	ans, err := collectAnswers(flags, cat, plugins)
@@ -116,7 +115,7 @@ func runInit(cmd *cobra.Command, stdout, stderr io.Writer, flags *initFlags) err
 		Ports:          ans.Ports,
 	}, cat)
 	if err := os.WriteFile(target, []byte(content), 0o644); err != nil { //nolint:gosec // workspace.toml is user-readable.
-		return fmt.Errorf("%w: write %s: %w", clihelpers.ErrFailure, target, err)
+		return clihelpers.FailureWrap(err, "err_initcmd_write_workspace", target)
 	}
 
 	log := logx.New(stdout, stderr)
@@ -147,14 +146,14 @@ func seedSudoPasswordIfRequested(cwd string, ans initAnswers, log *logx.Logger, 
 func seedSudoPasswordEnvLocal(cwd, password string, log *logx.Logger, cat *i18n.Catalog) error {
 	devDir := filepath.Join(cwd, ".devcontainer")
 	if err := os.MkdirAll(devDir, 0o755); err != nil {
-		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+		return clihelpers.FailureWrap(err, "")
 	}
 	gitignore := filepath.Join(devDir, ".gitignore")
 	// Upsert rather than overwrite so an existing user-managed .gitignore keeps
 	// its rules (cocoon gen does the same host-side).
 	if _, err := fsx.EnsureGitignoreEntry(
 		gitignore, generate.SudoPasswordSecretFile, generate.SudoPasswordGitignoreComment); err != nil {
-		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+		return clihelpers.FailureWrap(err, "")
 	}
 	envLocal := filepath.Join(devDir, generate.SudoPasswordSecretFile)
 	f, err := os.OpenFile(envLocal, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
@@ -163,7 +162,7 @@ func seedSudoPasswordEnvLocal(cwd, password string, log *logx.Logger, cat *i18n.
 		return nil
 	}
 	if err != nil {
-		return fmt.Errorf("%w: create %s: %w", clihelpers.ErrFailure, envLocal, err)
+		return clihelpers.FailureWrap(err, "err_initcmd_create_env_local", envLocal)
 	}
 	_, writeErr := f.WriteString(generate.SudoPasswordEnvKey + "=" + password + "\n")
 	closeErr := f.Close()
@@ -175,9 +174,9 @@ func seedSudoPasswordEnvLocal(cwd, password string, log *logx.Logger, cat *i18n.
 		// the one worth surfacing.
 		_ = os.Remove(envLocal)
 		if writeErr != nil {
-			return fmt.Errorf("%w: write %s: %w", clihelpers.ErrFailure, envLocal, writeErr)
+			return clihelpers.FailureWrap(writeErr, "err_initcmd_write_env_local", envLocal)
 		}
-		return fmt.Errorf("%w: close %s: %w", clihelpers.ErrFailure, envLocal, closeErr)
+		return clihelpers.FailureWrap(closeErr, "err_initcmd_close_env_local", envLocal)
 	}
 	log.Success(cat.Msg("init_sudo_env_local_wrote", envLocal))
 	return nil

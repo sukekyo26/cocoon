@@ -32,8 +32,7 @@ func validatePluginConflicts(plugins map[string]*plugin.Plugin, enabled []string
 		}
 		for _, other := range p.Metadata.Conflicts {
 			if _, hit := enabledSet[other]; hit {
-				return fmt.Errorf("%w: %s conflicts with %s — pick one",
-					clihelpers.ErrUsage, id, other)
+				return clihelpers.UsageErr("err_initplugins_conflict", id, other)
 			}
 		}
 	}

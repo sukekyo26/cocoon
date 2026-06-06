@@ -2,7 +2,6 @@ package initcli
 
 import (
 	"errors"
-	"fmt"
 	"regexp"
 	"strings"
 
@@ -69,8 +68,7 @@ func parseAptCategories(raw string) ([]string, error) {
 			continue
 		}
 		if aptcategories.AptCategoryByID(id) == nil {
-			return nil, fmt.Errorf("%w: unknown apt category %q (run `cocoon init --help` for the list)",
-				clihelpers.ErrUsage, id)
+			return nil, clihelpers.UsageErr("err_initparse_unknown_apt_category", id)
 		}
 		ids = append(ids, id)
 	}
@@ -89,7 +87,7 @@ func parsePorts(raw string) ([]string, error) {
 			continue
 		}
 		if err := config.ValidateShortForm(p); err != nil {
-			return nil, fmt.Errorf("%w: --ports %w", clihelpers.ErrUsage, err)
+			return nil, clihelpers.UsageWrap(err, "err_initparse_ports")
 		}
 		ports = append(ports, p)
 	}
@@ -105,7 +103,7 @@ func parseAliasBundles(raw string) ([]string, error) {
 			continue
 		}
 		if aliasbundles.AliasBundleByID(id) == nil {
-			return nil, fmt.Errorf("%w: unknown alias bundle %q", clihelpers.ErrUsage, id)
+			return nil, clihelpers.UsageErr("err_initparse_unknown_alias_bundle", id)
 		}
 		ids = append(ids, id)
 	}
@@ -125,11 +123,10 @@ func parsePlugins(raw string, plugins map[string]*plugin.Plugin) ([]string, erro
 			continue
 		}
 		if _, ok := plugins[id]; !ok {
-			return nil, fmt.Errorf("%w: unknown plugin %q (run `cocoon plugin list` for the catalog)",
-				clihelpers.ErrUsage, id)
+			return nil, clihelpers.UsageErr("err_initparse_unknown_plugin", id)
 		}
 		if _, dup := seen[id]; dup {
-			return nil, fmt.Errorf("%w: --plugins: duplicate id %q", clihelpers.ErrUsage, id)
+			return nil, clihelpers.UsageErr("err_initparse_plugins_duplicate", id)
 		}
 		seen[id] = struct{}{}
 		ids = append(ids, id)
@@ -156,35 +153,26 @@ func parsePluginVersions(raw string, plugins map[string]*plugin.Plugin, enabled 
 		// Reject typos like "go==1.23" instead of silently using "=1.23"
 		// as the pin ref. Real pin refs never contain '='.
 		if strings.Count(token, "=") != 1 {
-			return nil, fmt.Errorf(
-				"%w: --plugin-versions token %q must be <id>=<ref>", clihelpers.ErrUsage, token)
+			return nil, clihelpers.UsageErr("err_initparse_plugin_versions_token", token)
 		}
 		eq := strings.IndexByte(token, '=')
 		id := strings.TrimSpace(token[:eq])
 		ref := strings.TrimSpace(token[eq+1:])
 		if id == "" || ref == "" {
-			return nil, fmt.Errorf(
-				"%w: --plugin-versions token %q must be <id>=<ref>", clihelpers.ErrUsage, token)
+			return nil, clihelpers.UsageErr("err_initparse_plugin_versions_token", token)
 		}
 		p, ok := plugins[id]
 		if !ok {
-			return nil, fmt.Errorf(
-				"%w: --plugin-versions: unknown plugin %q (run `cocoon plugin list`)",
-				clihelpers.ErrUsage, id)
+			return nil, clihelpers.UsageErr("err_initparse_plugin_versions_unknown_plugin", id)
 		}
 		if !p.Version.VersionCapable {
-			return nil, fmt.Errorf(
-				"%w: --plugin-versions: plugin %q is not version_capable",
-				clihelpers.ErrUsage, id)
+			return nil, clihelpers.UsageErr("err_initparse_plugin_versions_not_capable", id)
 		}
 		if _, on := enabledSet[id]; !on {
-			return nil, fmt.Errorf(
-				"%w: --plugin-versions: plugin %q must also appear in --plugins",
-				clihelpers.ErrUsage, id)
+			return nil, clihelpers.UsageErr("err_initparse_plugin_versions_not_enabled", id)
 		}
 		if _, dup := out[id]; dup {
-			return nil, fmt.Errorf(
-				"%w: --plugin-versions: duplicate id %q", clihelpers.ErrUsage, id)
+			return nil, clihelpers.UsageErr("err_initparse_plugin_versions_duplicate", id)
 		}
 		out[id] = ref
 	}
@@ -212,40 +200,29 @@ func parsePluginMethods(raw string, plugins map[string]*plugin.Plugin, enabled [
 			continue
 		}
 		if strings.Count(token, "=") != 1 {
-			return nil, fmt.Errorf(
-				"%w: --plugin-methods token %q must be <id>=<method>", clihelpers.ErrUsage, token)
+			return nil, clihelpers.UsageErr("err_initparse_plugin_methods_token", token)
 		}
 		eq := strings.IndexByte(token, '=')
 		id := strings.TrimSpace(token[:eq])
 		method := strings.TrimSpace(token[eq+1:])
 		if id == "" || method == "" {
-			return nil, fmt.Errorf(
-				"%w: --plugin-methods token %q must be <id>=<method>", clihelpers.ErrUsage, token)
+			return nil, clihelpers.UsageErr("err_initparse_plugin_methods_token", token)
 		}
 		p, ok := plugins[id]
 		if !ok {
-			return nil, fmt.Errorf(
-				"%w: --plugin-methods: unknown plugin %q (run `cocoon plugin list`)",
-				clihelpers.ErrUsage, id)
+			return nil, clihelpers.UsageErr("err_initparse_plugin_methods_unknown_plugin", id)
 		}
 		if _, on := enabledSet[id]; !on {
-			return nil, fmt.Errorf(
-				"%w: --plugin-methods: plugin %q must also appear in --plugins",
-				clihelpers.ErrUsage, id)
+			return nil, clihelpers.UsageErr("err_initparse_plugin_methods_not_enabled", id)
 		}
 		if len(p.Install.Methods) == 0 {
-			return nil, fmt.Errorf(
-				"%w: --plugin-methods: plugin %q has no [install.methods] — drop it from --plugin-methods",
-				clihelpers.ErrUsage, id)
+			return nil, clihelpers.UsageErr("err_initparse_plugin_methods_none", id)
 		}
 		if _, declared := p.Install.Methods[method]; !declared {
-			return nil, fmt.Errorf(
-				"%w: --plugin-methods: plugin %q has no method %q in [install.methods]",
-				clihelpers.ErrUsage, id, method)
+			return nil, clihelpers.UsageErr("err_initparse_plugin_methods_no_method", id, method)
 		}
 		if _, dup := out[id]; dup {
-			return nil, fmt.Errorf(
-				"%w: --plugin-methods: duplicate id %q", clihelpers.ErrUsage, id)
+			return nil, clihelpers.UsageErr("err_initparse_plugin_methods_duplicate", id)
 		}
 		out[id] = method
 	}

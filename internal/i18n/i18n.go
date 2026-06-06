@@ -43,10 +43,30 @@ func Detect() Lang {
 	return LangEN
 }
 
+// Localizer is implemented by error values that can render themselves in a
+// chosen language. The binary boundary (cmd/cocoon/main.go) renders any error
+// in the chain that implements it; everything else falls back to Error().
+type Localizer interface {
+	Localize(*Catalog) string
+}
+
 // Catalog renders messages for a single language.
 type Catalog struct {
 	lang Lang
 }
+
+// Lang reports the catalog's active language.
+func (c *Catalog) Lang() Lang { return c.lang }
+
+// enCatalog is the cached English catalog used as the always-readable fallback
+// (logs, %v, Error()). New(LangEN) only stores the language tag; the message
+// tables are read lazily at Msg time, so building it at package-init is safe.
+//
+//nolint:gochecknoglobals // immutable cached fallback catalog.
+var enCatalog = New(LangEN)
+
+// English returns the cached English catalog.
+func English() *Catalog { return enCatalog }
 
 // New returns a Catalog for the given language. Unknown languages fall
 // back to English.

@@ -1,7 +1,6 @@
 package plugincli
 
 import (
-	"fmt"
 	"io"
 
 	"github.com/spf13/cobra"
@@ -26,7 +25,7 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 	cmd.SetOut(stdout)
 	cmd.SetErr(stderr)
 	cmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
-		return fmt.Errorf("%w: %w", clihelpers.ErrUsage, err)
+		return clihelpers.UsageWrap(err, "")
 	})
 	cmd.AddCommand(
 		newListCmd(stdout, stderr),
@@ -49,7 +48,7 @@ func rejectUnknownSubcommand(_ *cobra.Command, args []string) error {
 	if len(args) == 0 {
 		return nil
 	}
-	return fmt.Errorf("%w: unknown subcommand %q", clihelpers.ErrUsage, args[0])
+	return clihelpers.UsageErr("err_plugincmd_unknown_subcommand", args[0])
 }
 
 func newScaffoldCmd(stdout, stderr io.Writer) *cobra.Command {
@@ -67,7 +66,7 @@ func newScaffoldCmd(stdout, stderr io.Writer) *cobra.Command {
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 1 {
-				return fmt.Errorf("%w: scaffold accepts at most one positional <id>, got %d", clihelpers.ErrUsage, len(args))
+				return clihelpers.UsageErr("err_plugincmd_scaffold_too_many_args", len(args))
 			}
 			if len(args) == 1 {
 				opts.id = args[0]
@@ -101,7 +100,7 @@ func newScaffoldCmd(stdout, stderr io.Writer) *cobra.Command {
 		cat.Msg("flag_plugin_scaffold_cmd_non_interactive_usage"))
 	cmd.Flags().BoolVar(&opts.force, "force", false, cat.Msg("flag_plugin_scaffold_cmd_force_usage"))
 	cmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
-		return fmt.Errorf("%w: %w", clihelpers.ErrUsage, err)
+		return clihelpers.UsageWrap(err, "")
 	})
 	return cmd
 }

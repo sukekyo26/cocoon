@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/sukekyo26/cocoon/internal/config"
+	"github.com/sukekyo26/cocoon/internal/i18n"
 )
 
 // tomlQuote returns s as a TOML basic-string literal (`"..."`) suitable
@@ -52,7 +53,7 @@ func TestValidate_ContainerInvalidServiceName(t *testing.T) {
 	require.Error(t, err)
 	var v *config.ValidationError
 	require.ErrorAs(t, err, &v)
-	require.Contains(t, v.Errors[0].Message, "service_name does not match")
+	require.Contains(t, v.Errors[0].Localize(i18n.English()), "service_name does not match")
 }
 
 // TestValidate_LegacyOsRejected pins the migration error message so the
@@ -87,7 +88,7 @@ os_version = "24.04"`,
 		`image = "ubuntu"`,
 		`image_version = "24.04"`,
 	} {
-		require.Containsf(t, got.Message, want, "migration error must contain %q", want)
+		require.Containsf(t, got.Localize(i18n.English()), want, "migration error must contain %q", want)
 	}
 }
 
@@ -115,11 +116,11 @@ os_version = "24.04"`,
 			continue
 		}
 		last := loc[len(loc)-1]
-		if last == "image" && !strings.Contains(v.Errors[i].Message, "no longer supported") {
-			t.Errorf("validateImage error must be suppressed while os/os_version is set, got %v: %q", loc, v.Errors[i].Message)
+		if last == "image" && !strings.Contains(v.Errors[i].Localize(i18n.English()), "no longer supported") {
+			t.Errorf("validateImage error must be suppressed while os/os_version is set, got %v: %q", loc, v.Errors[i].Localize(i18n.English()))
 		}
 		if last == "image_version" {
-			t.Errorf("validateImage error must be suppressed while os/os_version is set, got %v: %q", loc, v.Errors[i].Message)
+			t.Errorf("validateImage error must be suppressed while os/os_version is set, got %v: %q", loc, v.Errors[i].Localize(i18n.English()))
 		}
 	}
 }
@@ -1510,7 +1511,7 @@ func TestValidate_ContainerGpusRejectsNonAll(t *testing.T) {
 }
 
 // TestAccumulator_ZeroValueUsable pins the documented contract that the
-// exported Accumulator works without NewAccumulator: At/Add lazily
+// exported Accumulator works without NewAccumulator: At/AddCode lazily
 // allocate the shared slice instead of nil-panicking, and an error
 // recorded through a child created by At surfaces on the parent.
 func TestAccumulator_ZeroValueUsable(t *testing.T) {
@@ -1519,12 +1520,12 @@ func TestAccumulator_ZeroValueUsable(t *testing.T) {
 	var a config.Accumulator
 	require.Nil(t, a.Errors(), "fresh zero-value Errors() should be nil")
 
-	a.At("container").Add("bad", "service_name")
-	a.Add("top-level problem")
+	a.At("container").AddCode("err_field_must_not_be_empty", nil, "service_name")
+	a.AddCode("err_field_duplicate_entries", nil)
 
 	errs := a.Errors()
 	require.Len(t, errs, 2, "child (via At) and parent writes must share one slice")
-	require.Equal(t, "bad", errs[0].Message)
+	require.Equal(t, "err_field_must_not_be_empty", errs[0].Code)
 	require.Equal(t, []string{"container", "service_name"}, errs[0].Loc)
 }
 
@@ -1557,7 +1558,7 @@ func TestValidate_SudoMode(t *testing.T) {
 			require.Error(t, err)
 			var v *config.ValidationError
 			require.ErrorAs(t, err, &v)
-			require.Contains(t, v.Errors[0].Message, "mode must be")
+			require.Contains(t, v.Errors[0].Localize(i18n.English()), "mode must be")
 		})
 	}
 }
@@ -1578,7 +1579,7 @@ func TestValidate_PasswordSudoVsNoNewPrivileges(t *testing.T) {
 	for i := range v.Errors {
 		loc := v.Errors[i].Loc
 		if len(loc) > 0 && loc[len(loc)-1] == "mode" &&
-			strings.Contains(v.Errors[i].Message, "cannot be combined") {
+			strings.Contains(v.Errors[i].Localize(i18n.English()), "cannot be combined") {
 			found = true
 		}
 	}

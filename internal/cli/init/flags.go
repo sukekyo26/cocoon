@@ -1,7 +1,6 @@
 package initcli
 
 import (
-	"fmt"
 	"slices"
 	"strings"
 
@@ -100,10 +99,9 @@ func assertNoImagePluginConflict(ans initAnswers) error {
 	if !slices.Contains(ans.Plugins, conflict) {
 		return nil
 	}
-	return fmt.Errorf(
-		"%w: image=%q already provides %s; drop %q from --plugins, "+
-			"or pick --image=ubuntu/debian to pin a custom %s via the plugin",
-		clihelpers.ErrUsage, ans.Image, conflict, conflict, conflict,
+	return clihelpers.UsageErr(
+		"err_initflags_image_provides_plugin",
+		ans.Image, conflict, conflict, conflict,
 	)
 }
 
@@ -139,15 +137,15 @@ func applyFlags(flags *initFlags, plugins map[string]*plugin.Plugin) (initAnswer
 func applyIdentityFlags(flags *initFlags, ans *initAnswers) error {
 	if flags.ServiceName != "" {
 		if !rxServiceName.MatchString(flags.ServiceName) {
-			return fmt.Errorf("%w: --service-name %q does not match %s",
-				clihelpers.ErrUsage, flags.ServiceName, rxServiceName)
+			return clihelpers.UsageErr("err_initflags_service_name_mismatch",
+				flags.ServiceName, rxServiceName)
 		}
 		ans.ServiceName = flags.ServiceName
 	}
 	if flags.Username != "" {
 		if !rxUsername.MatchString(flags.Username) {
-			return fmt.Errorf("%w: --username %q does not match %s",
-				clihelpers.ErrUsage, flags.Username, rxUsername)
+			return clihelpers.UsageErr("err_initflags_username_mismatch",
+				flags.Username, rxUsername)
 		}
 		ans.Username = flags.Username
 	}
@@ -159,43 +157,42 @@ func applyIdentityFlags(flags *initFlags, ans *initAnswers) error {
 func applyImageFlags(flags *initFlags, ans *initAnswers) error {
 	if flags.Image != "" {
 		if _, ok := config.SupportedImageVersions[flags.Image]; !ok {
-			return fmt.Errorf("%w: --image %q not in %s",
-				clihelpers.ErrUsage, flags.Image, strings.Join(config.SupportedImages, ", "))
+			return clihelpers.UsageErr("err_initflags_image_unsupported",
+				flags.Image, strings.Join(config.SupportedImages, ", "))
 		}
 		ans.Image, ans.ImageSet = flags.Image, true
 	}
 	if flags.ImageVersion != "" {
 		if flags.Image == "" {
-			return fmt.Errorf(
-				"%w: --image-version %q requires --image (so the registry path is known)",
-				clihelpers.ErrUsage, flags.ImageVersion)
+			return clihelpers.UsageErr(
+				"err_initflags_image_version_requires_image",
+				flags.ImageVersion)
 		}
 		if !rxImageVersionInput.MatchString(flags.ImageVersion) {
-			return fmt.Errorf(
-				"%w: --image-version %q must match %s",
-				clihelpers.ErrUsage, flags.ImageVersion, rxImageVersionInput.String())
+			return clihelpers.UsageErr(
+				"err_initflags_image_version_mismatch",
+				flags.ImageVersion, rxImageVersionInput.String())
 		}
 		ans.ImageVersion, ans.ImageVersionSet = flags.ImageVersion, true
 	}
 	if flags.Shell != "" {
 		if !slices.Contains(config.SupportedShells, flags.Shell) {
-			return fmt.Errorf("%w: --shell %q not in %s",
-				clihelpers.ErrUsage, flags.Shell, strings.Join(config.SupportedShells, ", "))
+			return clihelpers.UsageErr("err_initflags_shell_unsupported",
+				flags.Shell, strings.Join(config.SupportedShells, ", "))
 		}
 		ans.Shell, ans.ShellSet = flags.Shell, true
 	}
 	if flags.MountRoot != "" {
 		if flags.MountRoot != "." && flags.MountRoot != ".." {
-			return fmt.Errorf(`%w: --mount-root must be "." or ".."`, clihelpers.ErrUsage)
+			return clihelpers.UsageErr("err_initflags_mount_root_invalid")
 		}
 		ans.MountRoot, ans.MountRootSet = flags.MountRoot, true
 	}
 	if flags.Dir != "" {
 		if !config.IsValidWorkspaceDir(flags.Dir) {
-			return fmt.Errorf(
-				`%w: --dir %q must be one or more path segments of [A-Za-z0-9._-] joined by "/" `+
-					`(no leading/trailing slash, no "." or ".." segments)`,
-				clihelpers.ErrUsage, flags.Dir)
+			return clihelpers.UsageErr(
+				"err_initflags_dir_invalid",
+				flags.Dir)
 		}
 		ans.Dir, ans.DirSet = flags.Dir, true
 	}
@@ -222,8 +219,8 @@ func applyToggleFlags(flags *initFlags, ans *initAnswers) error {
 	}
 	if flags.Sudo != "" {
 		if !slices.Contains(sudoChoices, flags.Sudo) {
-			return fmt.Errorf("%w: --sudo %q must be one of %s",
-				clihelpers.ErrUsage, flags.Sudo, strings.Join(sudoChoices, ", "))
+			return clihelpers.UsageErr("err_initflags_sudo_invalid",
+				flags.Sudo, strings.Join(sudoChoices, ", "))
 		}
 		ans.Sudo, ans.SudoSet = flags.Sudo, true
 	}
@@ -247,9 +244,9 @@ func applyImagePathFixFlags(flags *initFlags, ans *initAnswers) error {
 		flag = "--no-image-path-fix"
 	}
 	if !ans.ImageSet {
-		return fmt.Errorf(
-			"%w: %s requires --image (the fix is image-specific)",
-			clihelpers.ErrUsage, flag)
+		return clihelpers.UsageErr(
+			"err_initflags_image_path_fix_requires_image",
+			flag)
 	}
 	if !imagePathFixApplies(ans.Image) {
 		return imagePathFixFlagUsageErr(flag, ans.Image)
@@ -259,10 +256,9 @@ func applyImagePathFixFlags(flags *initFlags, ans *initAnswers) error {
 }
 
 func imagePathFixFlagUsageErr(flag, image string) error {
-	return fmt.Errorf(
-		"%w: %s only applies to language images "+
-			"(node, python, golang, rust, denoland/deno); --image=%q has no fix",
-		clihelpers.ErrUsage, flag, image)
+	return clihelpers.UsageErr(
+		"err_initflags_image_path_fix_no_fix",
+		flag, image)
 }
 
 // applyListFlags parses the comma-separated list flags: --apt-categories,
@@ -328,10 +324,10 @@ func applyPluginFlags(flags *initFlags, plugins map[string]*plugin.Plugin, ans *
 // clihelpers.ErrUsage so CI scripts know to pass the flags.
 func applyDefaults(ans initAnswers, plugins map[string]*plugin.Plugin) (initAnswers, error) {
 	if ans.ServiceName == "" {
-		return ans, fmt.Errorf("%w: --yes requires --service-name", clihelpers.ErrUsage)
+		return ans, clihelpers.UsageErr("err_initflags_yes_requires_service_name")
 	}
 	if ans.Username == "" {
-		return ans, fmt.Errorf("%w: --yes requires --username", clihelpers.ErrUsage)
+		return ans, clihelpers.UsageErr("err_initflags_yes_requires_username")
 	}
 	applyIdentityDefaults(&ans)
 	applyWorkspaceDefaults(&ans)

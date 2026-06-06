@@ -168,7 +168,8 @@ func TestLock_RespectsCustomLockFileName(t *testing.T) {
 //
 //nolint:paralleltest // mutates cwd/HOME via seedProject.
 func TestLock_CheckPassesWithNoVersionCapablePlugins(t *testing.T) {
-	seedProject(t, "", nil) // no plugins enabled → nothing to lock
+	t.Setenv("WORKSPACE_LANG", "en") // pin locale so the English assertion is deterministic
+	seedProject(t, "", nil)          // no plugins enabled → nothing to lock
 	out, err := runLockCmd(t, "--check")
 	require.NoError(t, err, "out=%s", out)
 	require.Contains(t, out, "nothing to lock")
@@ -266,6 +267,7 @@ func TestLock_CheckUpToDateAndDrift(t *testing.T) {
 //
 //nolint:paralleltest // mutates defaultFetcher global + cwd/HOME.
 func TestLock_MalformedExistingLock(t *testing.T) {
+	t.Setenv("WORKSPACE_LANG", "en") // pin locale so the English "malformed" assertions are deterministic
 	lockPath := seedProject(t, `"demo"`, map[string]string{"demo": demoPluginTOML})
 	swapFetcher(t, demoFetcher())
 

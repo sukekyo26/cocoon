@@ -5,7 +5,6 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
-	"io"
 	"maps"
 	"path/filepath"
 	"slices"
@@ -18,6 +17,7 @@ import (
 	"github.com/sukekyo26/cocoon/internal/generate/shellx"
 	"github.com/sukekyo26/cocoon/internal/generate/tmplx"
 	"github.com/sukekyo26/cocoon/internal/plugin"
+	"github.com/sukekyo26/cocoon/internal/warn"
 )
 
 // entrypointScript embeds docker-entrypoint.sh so cocoon ships as a single
@@ -48,7 +48,7 @@ type Options struct {
 	// checkout's directory name.
 	RepoDir  string
 	Plugins  map[string]*plugin.Plugin
-	Warnings io.Writer
+	Warnings *warn.Sink
 }
 
 type templateData struct {
@@ -401,16 +401,10 @@ RUN --mount=type=secret,id=%[3]s \
 // warnDuplicateAptExtras flags packages listed in workspace.toml [apt]
 // that cocoon already installs as a MinimalBasePackage. A nil warnings
 // sink silently drops the diagnostics, matching the rest of Generate.
-func warnDuplicateAptExtras(extras []string, basePkgNames map[string]struct{}, warnings io.Writer) {
-	if warnings == nil {
-		return
-	}
+func warnDuplicateAptExtras(extras []string, basePkgNames map[string]struct{}, warnings *warn.Sink) {
 	for _, pkg := range extras {
 		if _, dup := basePkgNames[pkg]; dup {
-			fmt.Fprintf(warnings,
-				"WARNING: [apt] packages contains '%s', which cocoon already installs "+
-					"as a base package. Remove it from [apt] packages in workspace.toml "+
-					"to avoid redundant installs.\n", pkg)
+			warnings.Warn(warn.AptRedundant, pkg)
 		}
 	}
 }
@@ -721,18 +715,13 @@ func buildSkelCopies(ctx *generate.WorkspaceContext) string {
 	return b.String()
 }
 
-func buildDockerfileHooks(ctx *generate.WorkspaceContext, warnings io.Writer) (preUser, postPlugins string) {
+func buildDockerfileHooks(ctx *generate.WorkspaceContext, warnings *warn.Sink) (preUser, postPlugins string) {
 	wrap := func(content, label string) string {
 		text := strings.TrimSpace(content)
 		if text == "" {
 			return ""
 		}
-		if warnings != nil {
-			fmt.Fprintf(warnings,
-				"WARNING: Custom Dockerfile instructions from [dockerfile].%s "+
-					"are being injected verbatim. You are responsible for their safety.\n",
-				label)
-		}
+		warnings.Warn(warn.DockerfileVerbatim, label)
 		return fmt.Sprintf("# === user-defined dockerfile.%s (from workspace.toml) ===\n%s\n# === end dockerfile.%s ===",
 			label, text, label)
 	}

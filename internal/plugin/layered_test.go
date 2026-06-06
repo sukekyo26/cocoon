@@ -1,18 +1,20 @@
 package plugin_test
 
 import (
-	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
 	"testing/fstest"
 
 	"github.com/sukekyo26/cocoon/internal/plugin"
+	"github.com/sukekyo26/cocoon/internal/warn"
 )
 
 // makeEmbedded fakes the embedded catalog with two plugins.
@@ -497,13 +499,22 @@ func TestLogOverrides_OnlyOverriddenIDs(t *testing.T) {
 	projectDir := writeProjectOverlay(t)
 	layered := plugin.NewLayeredFS(embedded, userDir, projectDir)
 
-	var buf bytes.Buffer
-	layered.LogOverrides(&buf)
+	sink := warn.New()
+	layered.LogOverrides(sink)
 
-	want := "INFO: plugin alpha overridden by project\n" +
-		"INFO: plugin bravo overridden by user\n" +
-		"INFO: plugin delta overridden by user\n"
-	if got := buf.String(); got != want {
-		t.Errorf("LogOverrides:\n--- got ---\n%s\n--- want ---\n%s", got, want)
+	got := make([]string, 0, len(sink.All()))
+	for _, w := range sink.All() {
+		if w.Level != warn.LevelInfo || w.Code != warn.PluginOverridden {
+			t.Fatalf("unexpected diagnostic: %+v", w)
+		}
+		got = append(got, fmt.Sprintf("%v overridden by %v", w.Args[0], w.Args[1]))
+	}
+	want := []string{
+		"alpha overridden by project",
+		"bravo overridden by user",
+		"delta overridden by user",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("LogOverrides = %v, want %v", got, want)
 	}
 }

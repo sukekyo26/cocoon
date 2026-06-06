@@ -6,6 +6,24 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+### 修正
+
+- `cocoon gen`（および `cocoon lock`）が、ジェネレータ由来の診断
+  （ボリュームパスの衝突、`[apt]` とベースパッケージの重複、verbatim な
+  `[dockerfile]` フック、checksum 無しの pin、`[env].TZ` の上書き、スキップされた
+  `forwardPorts`、プラグインの上書き・不在の通知）を実行環境の言語で出力するように
+  なりました。日本語環境でこれらの警告だけ英語で表示され、他の出力と言語が混在する
+  問題を解消します。
+- `cocoon self-update` / `cocoon lock` / `cocoon plugin pin` と `cocoon init` の
+  スクリーンリーダー用プロンプトが、実行時の出力（進捗・成功・貼り付け用スニペット）
+  を常に英語ではなく実行環境の言語で表示するようになりました。
+  （`cocoon plugin list` / `cocoon plugin show` の列ヘッダ・フィールドラベルは
+  `plugin.toml` のフィールド識別子に対応するため英語のままです。）
+- エラーメッセージが実行環境の言語で表示されるようになりました。全サブコマンドの
+  usage/failure エラーと workspace.toml / plugin.toml の検証メッセージが、日本語ロケール
+  では日本語になります。cocoon が Go 標準ライブラリ（ファイルシステム・TOML パーサ・
+  ネットワーク）からそのまま wrap するエラー文は英語のまま残ります。
+
 ## [0.14.1] - 2026-06-05
 
 ### 修正

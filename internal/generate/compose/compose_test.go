@@ -1,7 +1,6 @@
 package compose_test
 
 import (
-	"bytes"
 	"flag"
 	"os"
 	"path/filepath"
@@ -14,6 +13,7 @@ import (
 	"github.com/sukekyo26/cocoon/internal/generate"
 	"github.com/sukekyo26/cocoon/internal/generate/compose"
 	"github.com/sukekyo26/cocoon/internal/plugin"
+	"github.com/sukekyo26/cocoon/internal/warn"
 )
 
 // updateGolden, when set with `go test -update-golden`, rewrites the
@@ -35,9 +35,9 @@ func TestGenerate_EnvValueWithDoubleQuote(t *testing.T) {
 		Plugins: config.PluginsSpec{Enable: []string{}},
 		Env:     map[string]string{"FOO": `a"b`},
 	}
-	var warns bytes.Buffer
-	ctx := &generate.WorkspaceContext{WS: ws, Plugins: map[string]*plugin.Plugin{}, Warnings: &warns}
-	got, err := compose.Generate(ctx, compose.Options{Plugins: map[string]*plugin.Plugin{}, Warnings: &warns})
+	warns := warn.New()
+	ctx := &generate.WorkspaceContext{WS: ws, Plugins: map[string]*plugin.Plugin{}, Warnings: warns}
+	got, err := compose.Generate(ctx, compose.Options{Plugins: map[string]*plugin.Plugin{}, Warnings: warns})
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
@@ -99,8 +99,8 @@ func TestGenerate_Snapshot(t *testing.T) {
 				t.Fatalf("load workspace: %v", err)
 			}
 
-			var warns bytes.Buffer
-			plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, &warns, pluginsDir)
+			warns := warn.New()
+			plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, warns, pluginsDir)
 			if err != nil {
 				t.Fatalf("load plugins: %v", err)
 			}
@@ -109,9 +109,9 @@ func TestGenerate_Snapshot(t *testing.T) {
 			}
 
 			ctx := &generate.WorkspaceContext{
-				WS: ws, PluginsFS: os.DirFS(pluginsDir), Plugins: plugins, Warnings: &warns,
+				WS: ws, PluginsFS: os.DirFS(pluginsDir), Plugins: plugins, Warnings: warns,
 			}
-			got, err := compose.Generate(ctx, compose.Options{Plugins: plugins, Warnings: &warns})
+			got, err := compose.Generate(ctx, compose.Options{Plugins: plugins, Warnings: warns})
 			if err != nil {
 				t.Fatalf("generate: %v", err)
 			}
@@ -151,8 +151,8 @@ func TestGenerate_CertificatesDisabled_NoAdditionalContexts(t *testing.T) {
 	}
 	ws.Certificates = nil
 
-	var warns bytes.Buffer
-	plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, &warns, pluginsDir)
+	warns := warn.New()
+	plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, warns, pluginsDir)
 	if err != nil {
 		t.Fatalf("load plugins: %v", err)
 	}
@@ -161,9 +161,9 @@ func TestGenerate_CertificatesDisabled_NoAdditionalContexts(t *testing.T) {
 	}
 
 	ctx := &generate.WorkspaceContext{
-		WS: ws, PluginsFS: os.DirFS(pluginsDir), Plugins: plugins, Warnings: &warns,
+		WS: ws, PluginsFS: os.DirFS(pluginsDir), Plugins: plugins, Warnings: warns,
 	}
-	got, err := compose.Generate(ctx, compose.Options{Plugins: plugins, Warnings: &warns})
+	got, err := compose.Generate(ctx, compose.Options{Plugins: plugins, Warnings: warns})
 	if err != nil {
 		t.Fatalf("generate: %v", err)
 	}
