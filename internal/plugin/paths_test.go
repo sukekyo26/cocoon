@@ -7,8 +7,8 @@ import (
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
 
-// TestProjectPluginsDir pins the contract: ProjectPluginsDir resolves to the
-// <dir>/.cocoon/plugins sibling of the workspace.toml at wsPath.
+// TestProjectPluginsDir pins the contract: ProjectPluginsDir resolves to
+// filepath.Dir(wsPath)/.cocoon/plugins (nested under the workspace directory).
 func TestProjectPluginsDir(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
