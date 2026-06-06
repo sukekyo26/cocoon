@@ -143,7 +143,7 @@ func runSelfUpdate(ctx context.Context, stdout, stderr io.Writer, checkOnly, for
 
 	binPath := filepath.Join(tmp, assetName)
 	sumsPath := filepath.Join(tmp, "SHA256SUMS")
-	// Progressf writes to stderr (transient, not data) so stdout-grep
+	// Progress writes to stderr (transient, not data) so stdout-grep
 	// scripts see only the stable version / success output.
 	log.Progress(cat.Msg("selfupdate_downloading", assetName))
 	if err = downloadFile(ctx, assetURL, binPath); err != nil {
