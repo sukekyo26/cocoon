@@ -108,7 +108,7 @@ func newScaffoldCmd(stdout, stderr io.Writer) *cobra.Command {
 func runScaffoldFlow(opts *scaffoldOpts, stdout, stderr io.Writer) error {
 	cat := i18n.New(i18n.Detect())
 
-	if err := validateID(opts.id, cat, stderr); err != nil {
+	if err := validateID(opts.id); err != nil {
 		return err
 	}
 	if !opts.nonInteractive {
@@ -116,7 +116,7 @@ func runScaffoldFlow(opts *scaffoldOpts, stdout, stderr io.Writer) error {
 			return err
 		}
 	}
-	if err := finalizeOpts(opts, cat, stderr); err != nil {
+	if err := finalizeOpts(opts); err != nil {
 		return err
 	}
 	return runScaffold(*opts, cat, stdout, stderr)

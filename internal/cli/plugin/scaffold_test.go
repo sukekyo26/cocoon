@@ -108,9 +108,13 @@ func TestScaffoldRejectsInvalidID(t *testing.T) {
 	if !errors.Is(err, clihelpers.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage", err)
 	}
-	if !strings.Contains(stderr, "Invalid plugin id") &&
-		!strings.Contains(stderr, "プラグイン ID") {
-		t.Errorf("stderr does not mention id rule: %q", stderr)
+	if !strings.Contains(err.Error(), "Invalid plugin id") {
+		t.Errorf("err does not mention id rule: %v", err)
+	}
+	// Errors must flow through the returned value, not be written to stderr by
+	// scaffold itself — the binary boundary (main.go) prints them once.
+	if stderr != "" {
+		t.Errorf("scaffold must not write errors to stderr directly: %q", stderr)
 	}
 }
 
@@ -156,7 +160,7 @@ func TestScaffoldAutoDiscoversWorkspace(t *testing.T) {
 func TestScaffoldRequiresPluginsDirOrWorkspace(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	_, stderr, err := runCmd(t,
+	_, _, err := runCmd(t,
 		"scaffold", "demo",
 		"--non-interactive",
 		"--name", "Demo",
@@ -166,15 +170,15 @@ func TestScaffoldRequiresPluginsDirOrWorkspace(t *testing.T) {
 	if !errors.Is(err, clihelpers.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage", err)
 	}
-	if !strings.Contains(stderr, "--plugins-dir") {
-		t.Errorf("stderr should mention --plugins-dir: %q", stderr)
+	if !strings.Contains(err.Error(), "--plugins-dir") {
+		t.Errorf("err should mention --plugins-dir: %v", err)
 	}
 }
 
 func TestScaffoldRequiresIDArg(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	_, stderr, err := runCmd(t,
+	_, _, err := runCmd(t,
 		"scaffold",
 		"--plugins-dir", dir,
 		"--non-interactive",
@@ -182,8 +186,8 @@ func TestScaffoldRequiresIDArg(t *testing.T) {
 	if !errors.Is(err, clihelpers.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage", err)
 	}
-	if stderr == "" {
-		t.Errorf("expected non-empty stderr")
+	if err.Error() == "" {
+		t.Errorf("expected non-empty error message")
 	}
 }
 
@@ -193,7 +197,7 @@ func TestScaffoldRequiresForceOnExistingDir(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(dir, "demo"), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	_, stderr, err := runCmd(t,
+	_, _, err := runCmd(t,
 		"scaffold", "demo",
 		"--plugins-dir", dir,
 		"--non-interactive",
@@ -204,8 +208,8 @@ func TestScaffoldRequiresForceOnExistingDir(t *testing.T) {
 	if !errors.Is(err, clihelpers.ErrFailure) {
 		t.Fatalf("err = %v, want ErrFailure", err)
 	}
-	if !strings.Contains(stderr, "--force") {
-		t.Errorf("stderr should mention --force: %q", stderr)
+	if !strings.Contains(err.Error(), "--force") {
+		t.Errorf("err should mention --force: %v", err)
 	}
 }
 
@@ -241,7 +245,7 @@ func TestScaffoldOverwritesWithForce(t *testing.T) {
 func TestScaffoldRejectsBinaryWithoutVersionCapable(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	_, stderr, err := runCmd(t,
+	_, _, err := runCmd(t,
 		"scaffold", "demo",
 		"--plugins-dir", dir,
 		"--template", "binary",
@@ -253,8 +257,8 @@ func TestScaffoldRejectsBinaryWithoutVersionCapable(t *testing.T) {
 	if !errors.Is(err, clihelpers.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage", err)
 	}
-	if !strings.Contains(stderr, "binary") {
-		t.Errorf("stderr should mention binary: %q", stderr)
+	if !strings.Contains(err.Error(), "binary") {
+		t.Errorf("err should mention binary: %v", err)
 	}
 }
 
@@ -278,7 +282,7 @@ func TestScaffoldRejectsUnknownTemplate(t *testing.T) {
 func TestScaffoldRequiresName(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	_, stderr, err := runCmd(t,
+	_, _, err := runCmd(t,
 		"scaffold", "demo",
 		"--plugins-dir", dir,
 		"--non-interactive",
@@ -288,8 +292,8 @@ func TestScaffoldRequiresName(t *testing.T) {
 	if !errors.Is(err, clihelpers.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage", err)
 	}
-	if !strings.Contains(stderr, "name") {
-		t.Errorf("stderr should mention name flag: %q", stderr)
+	if !strings.Contains(err.Error(), "name") {
+		t.Errorf("err should mention name flag: %v", err)
 	}
 }
 
@@ -336,7 +340,7 @@ func TestScaffoldRejectsExistingFileTarget(t *testing.T) {
 	if err := os.WriteFile(conflict, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	_, stderr, err := runCmd(t,
+	_, _, err := runCmd(t,
 		"scaffold", "demo",
 		"--plugins-dir", dir,
 		"--non-interactive",
@@ -348,8 +352,8 @@ func TestScaffoldRejectsExistingFileTarget(t *testing.T) {
 	if !errors.Is(err, clihelpers.ErrFailure) {
 		t.Fatalf("err = %v, want ErrFailure", err)
 	}
-	if !strings.Contains(stderr, "demo") {
-		t.Errorf("expected stderr to mention path: %q", stderr)
+	if !strings.Contains(err.Error(), "demo") {
+		t.Errorf("expected err to mention path: %v", err)
 	}
 }
 
@@ -375,7 +379,7 @@ func TestScaffoldDescriptionMissing(t *testing.T) {
 func TestScaffoldNonInteractiveRejectsWhitespaceName(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	_, stderr, err := runCmd(t,
+	_, _, err := runCmd(t,
 		"scaffold", "demo",
 		"--plugins-dir", dir,
 		"--non-interactive",
@@ -386,8 +390,8 @@ func TestScaffoldNonInteractiveRejectsWhitespaceName(t *testing.T) {
 	if !errors.Is(err, clihelpers.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage", err)
 	}
-	if !strings.Contains(stderr, "--name") {
-		t.Errorf("stderr should mention --name: %q", stderr)
+	if !strings.Contains(err.Error(), "--name") {
+		t.Errorf("err should mention --name: %v", err)
 	}
 }
 
@@ -396,7 +400,7 @@ func TestScaffoldNonInteractiveRejectsWhitespaceName(t *testing.T) {
 func TestScaffoldNonInteractiveRejectsMissingURL(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	_, stderr, err := runCmd(t,
+	_, _, err := runCmd(t,
 		"scaffold", "demo",
 		"--plugins-dir", dir,
 		"--non-interactive",
@@ -407,8 +411,8 @@ func TestScaffoldNonInteractiveRejectsMissingURL(t *testing.T) {
 	if !errors.Is(err, clihelpers.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage", err)
 	}
-	if !strings.Contains(stderr, "--url") {
-		t.Errorf("stderr should mention --url: %q", stderr)
+	if !strings.Contains(err.Error(), "--url") {
+		t.Errorf("err should mention --url: %v", err)
 	}
 }
 
@@ -417,7 +421,7 @@ func TestScaffoldNonInteractiveRejectsMissingURL(t *testing.T) {
 func TestScaffoldNonInteractiveRejectsMalformedURL(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	_, stderr, err := runCmd(t,
+	_, _, err := runCmd(t,
 		"scaffold", "demo",
 		"--plugins-dir", dir,
 		"--non-interactive",
@@ -428,8 +432,8 @@ func TestScaffoldNonInteractiveRejectsMalformedURL(t *testing.T) {
 	if !errors.Is(err, clihelpers.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage", err)
 	}
-	if !strings.Contains(stderr, "--url") {
-		t.Errorf("stderr should mention --url: %q", stderr)
+	if !strings.Contains(err.Error(), "--url") {
+		t.Errorf("err should mention --url: %v", err)
 	}
 }
 
@@ -438,7 +442,7 @@ func TestScaffoldNonInteractiveRejectsMalformedURL(t *testing.T) {
 func TestScaffoldNonInteractiveRejectsWhitespaceDescription(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	_, stderr, err := runCmd(t,
+	_, _, err := runCmd(t,
 		"scaffold", "demo",
 		"--plugins-dir", dir,
 		"--non-interactive",
@@ -449,8 +453,8 @@ func TestScaffoldNonInteractiveRejectsWhitespaceDescription(t *testing.T) {
 	if !errors.Is(err, clihelpers.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage", err)
 	}
-	if !strings.Contains(stderr, "--description") {
-		t.Errorf("stderr should mention --description: %q", stderr)
+	if !strings.Contains(err.Error(), "--description") {
+		t.Errorf("err should mention --description: %v", err)
 	}
 }
 

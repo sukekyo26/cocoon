@@ -53,15 +53,12 @@ type scaffoldOpts struct {
 	setWithInstallUser bool
 }
 
-func validateID(id string, cat *i18n.Catalog, stderr io.Writer) error {
-	log := logx.New(io.Discard, stderr)
+func validateID(id string) error {
 	if id == "" {
-		log.Error("ERROR: " + cat.Msg("plugin_scaffold_missing_id"))
-		return clihelpers.ErrUsage
+		return clihelpers.UsageErr("plugin_scaffold_missing_id")
 	}
 	if !config.IsValidPluginID(id) {
-		log.Error("ERROR: " + cat.Msg("plugin_scaffold_invalid_id", id))
-		return clihelpers.ErrUsage
+		return clihelpers.UsageErr("plugin_scaffold_invalid_id", id)
 	}
 	return nil
 }
@@ -211,14 +208,12 @@ func promptMissing(opts *scaffoldOpts, cat *i18n.Catalog, p prompter) error {
 
 // finalizeOpts runs the cross-field rules shared by both interactive and
 // non-interactive modes (e.g. binary implies version_capable).
-func finalizeOpts(opts *scaffoldOpts, cat *i18n.Catalog, stderr io.Writer) error {
-	log := logx.New(io.Discard, stderr)
+func finalizeOpts(opts *scaffoldOpts) error {
 	switch opts.template {
 	case tmplInstaller, tmplBinary, tmplApt, tmplArchive:
 		// ok
 	default:
-		log.Error("ERROR: " + cat.Msg("plugin_scaffold_unknown_template", string(opts.template)))
-		return clihelpers.ErrUsage
+		return clihelpers.UsageErr("plugin_scaffold_unknown_template", string(opts.template))
 	}
 
 	if opts.nonInteractive {
@@ -226,38 +221,30 @@ func finalizeOpts(opts *scaffoldOpts, cat *i18n.Catalog, stderr io.Writer) error
 		// `plugin_scaffold_missing_flag` actionable message wins over the
 		// English sentinel for the "missing" case.
 		if opts.name == "" {
-			log.Error("ERROR: " + cat.Msg("plugin_scaffold_missing_flag", "name"))
-			return clihelpers.ErrUsage
+			return clihelpers.UsageErr("plugin_scaffold_missing_flag", "name")
 		}
 		if opts.description == "" {
-			log.Error("ERROR: " + cat.Msg("plugin_scaffold_missing_flag", "description"))
-			return clihelpers.ErrUsage
+			return clihelpers.UsageErr("plugin_scaffold_missing_flag", "description")
 		}
 		if opts.url == "" {
-			log.Error("ERROR: " + cat.Msg("plugin_scaffold_missing_flag", "url"))
-			return clihelpers.ErrUsage
+			return clihelpers.UsageErr("plugin_scaffold_missing_flag", "url")
 		}
 		if err := validateNameInput(opts.name); err != nil {
-			log.Error("ERROR: " + cat.Msg("plugin_scaffold_blank_name"))
-			return clihelpers.ErrUsage
+			return clihelpers.UsageErr("plugin_scaffold_blank_name")
 		}
 		if err := validateDescriptionInput(opts.description); err != nil {
-			log.Error("ERROR: " + cat.Msg("plugin_scaffold_blank_description"))
-			return clihelpers.ErrUsage
+			return clihelpers.UsageErr("plugin_scaffold_blank_description")
 		}
 		if err := validateURLInput(opts.url); err != nil {
 			if errors.Is(err, errInputRequired) {
-				log.Error("ERROR: " + cat.Msg("plugin_scaffold_blank_url"))
-			} else {
-				log.Error("ERROR: " + cat.Msg("plugin_scaffold_invalid_url"))
+				return clihelpers.UsageErr("plugin_scaffold_blank_url")
 			}
-			return clihelpers.ErrUsage
+			return clihelpers.UsageErr("plugin_scaffold_invalid_url")
 		}
 	}
 
 	if opts.template == tmplBinary && !opts.versionCapable {
-		log.Error("ERROR: " + cat.Msg("plugin_scaffold_binary_needs_ver"))
-		return clihelpers.ErrUsage
+		return clihelpers.UsageErr("plugin_scaffold_binary_needs_ver")
 	}
 	return nil
 }
@@ -276,19 +263,17 @@ func resolvePluginsDir(opts scaffoldOpts) (string, error) {
 func renderAndWrite(
 	dir, name string, mode os.FileMode,
 	render func() (string, error),
-	log *logx.Logger, cleanup func(),
+	cleanup func(),
 ) (string, error) {
 	body, err := render()
 	if err != nil {
 		cleanup()
-		log.Errorf("ERROR: render %s: %s", name, err)
-		return "", clihelpers.ErrFailure
+		return "", clihelpers.FailureWrap(err, "")
 	}
 	path := filepath.Join(dir, name)
 	if writeErr := fsx.AtomicWriteFile(path, []byte(body), mode); writeErr != nil {
 		cleanup()
-		log.Errorf("ERROR: write %s: %s", path, writeErr)
-		return "", clihelpers.ErrFailure
+		return "", clihelpers.FailureWrap(writeErr, "")
 	}
 	return path, nil
 }
@@ -298,26 +283,21 @@ func runScaffold(opts scaffoldOpts, cat *i18n.Catalog, stdout, stderr io.Writer)
 	pluginsDir, err := resolvePluginsDir(opts)
 	switch {
 	case errors.Is(err, ErrWorkspaceNotFound):
-		log.Error("ERROR: " + cat.Msg("plugin_scaffold_no_plugins_dir"))
-		return clihelpers.ErrUsage
+		return clihelpers.UsageErr("plugin_scaffold_no_plugins_dir")
 	case err != nil:
-		log.Errorf("ERROR: resolve plugins dir: %s", err)
-		return clihelpers.ErrFailure
+		return clihelpers.FailureWrap(err, "")
 	}
 	opts.pluginsDir = pluginsDir
 	dir := filepath.Join(opts.pluginsDir, opts.id)
 	dirExisted, err := dirExists(dir)
 	if err != nil {
-		log.Errorf("ERROR: %s: %s", dir, err)
-		return clihelpers.ErrFailure
+		return clihelpers.FailureWrap(err, "")
 	}
 	if dirExisted && !opts.force {
-		log.Error("ERROR: " + cat.Msg("plugin_scaffold_dir_exists", dir))
-		return clihelpers.ErrFailure
+		return clihelpers.FailureErr("plugin_scaffold_dir_exists", dir)
 	}
 	if mkErr := os.MkdirAll(dir, 0o755); mkErr != nil {
-		log.Errorf("ERROR: mkdir %s: %s", dir, mkErr)
-		return clihelpers.ErrFailure
+		return clihelpers.FailureWrap(mkErr, "")
 	}
 
 	data := scaffoldData{
@@ -344,14 +324,14 @@ func runScaffold(opts scaffoldOpts, cat *i18n.Catalog, stdout, stderr io.Writer)
 
 	written := make([]string, 0, 3)
 	tomlPath, terr := renderAndWrite(dir, "plugin.toml", 0o644,
-		func() (string, error) { return renderPluginTOML(data) }, log, cleanup)
+		func() (string, error) { return renderPluginTOML(data) }, cleanup)
 	if terr != nil {
 		return terr
 	}
 	written = append(written, tomlPath)
 
 	installPath, ierr := renderAndWrite(dir, installScriptName(opts.template), 0o755,
-		func() (string, error) { return renderInstallSh(data) }, log, cleanup)
+		func() (string, error) { return renderInstallSh(data) }, cleanup)
 	if ierr != nil {
 		return ierr
 	}
@@ -359,7 +339,7 @@ func runScaffold(opts scaffoldOpts, cat *i18n.Catalog, stdout, stderr io.Writer)
 
 	if opts.withInstallUser {
 		userPath, uerr := renderAndWrite(dir, "install_user.sh", 0o755,
-			func() (string, error) { return renderInstallUserSh(data) }, log, cleanup)
+			func() (string, error) { return renderInstallUserSh(data) }, cleanup)
 		if uerr != nil {
 			return uerr
 		}
@@ -369,9 +349,7 @@ func runScaffold(opts scaffoldOpts, cat *i18n.Catalog, stdout, stderr io.Writer)
 	// Re-load the freshly written plugin.toml to confirm strict validation.
 	if _, err := plugin.Load(tomlPath); err != nil {
 		cleanup()
-		log.Error("ERROR: " + cat.Msg("plugin_scaffold_validation_failed"))
-		log.Errorf("  %s", err)
-		return clihelpers.ErrFailure
+		return clihelpers.FailureWrap(err, "plugin_scaffold_validation_failed")
 	}
 
 	log.Info(cat.Msg("plugin_scaffold_done", dir, len(written)))

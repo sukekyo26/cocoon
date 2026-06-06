@@ -3,7 +3,6 @@ package plugincli
 
 import (
 	"errors"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,7 +12,6 @@ import (
 
 	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
 	"github.com/sukekyo26/cocoon/internal/i18n"
-	"github.com/sukekyo26/cocoon/internal/logx"
 )
 
 func TestValidateNameInput(t *testing.T) {
@@ -289,10 +287,9 @@ func TestHuhPrompterRunEmptyGroups(t *testing.T) {
 func TestRenderAndWrite_RenderError(t *testing.T) {
 	t.Parallel()
 	var cleaned bool
-	log := logx.New(io.Discard, io.Discard)
 	_, err := renderAndWrite(t.TempDir(), "plugin.toml", 0o644,
 		func() (string, error) { return "", errors.New("boom") },
-		log, func() { cleaned = true })
+		func() { cleaned = true })
 	if !errors.Is(err, clihelpers.ErrFailure) {
 		t.Fatalf("err = %v, want ErrFailure", err)
 	}
@@ -307,11 +304,10 @@ func TestRenderAndWrite_RenderError(t *testing.T) {
 func TestRenderAndWrite_WriteError(t *testing.T) {
 	t.Parallel()
 	var cleaned bool
-	log := logx.New(io.Discard, io.Discard)
 	missingDir := filepath.Join(t.TempDir(), "does-not-exist")
 	_, err := renderAndWrite(missingDir, "plugin.toml", 0o644,
 		func() (string, error) { return "body", nil },
-		log, func() { cleaned = true })
+		func() { cleaned = true })
 	if !errors.Is(err, clihelpers.ErrFailure) {
 		t.Fatalf("err = %v, want ErrFailure", err)
 	}
