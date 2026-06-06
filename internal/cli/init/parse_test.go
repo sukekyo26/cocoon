@@ -275,9 +275,9 @@ func TestParsePorts(t *testing.T) {
 }
 
 // TestPortsInputValidator pins the i18n behavior of the interactive prompt
-// validator: rejection messages come from the catalog (EN / JA), not from
-// config.ValidateShortForm's English text. Accept paths return nil so huh
-// advances to the next group.
+// validator: rejection messages come from the prompt's own catalog key (EN /
+// JA), not delegated to config.ValidateShortForm's reason. Accept paths return
+// nil so huh advances to the next group.
 func TestPortsInputValidator(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
