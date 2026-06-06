@@ -241,18 +241,31 @@ func validatePortsForward(a *Accumulator, forward []any) {
 	}
 }
 
-// ValidateShortForm wraps ErrPortShortForm on reject. The schema validator
-// and `cocoon init` prompt share this rule so a string init accepts cannot
-// be rejected later by gen.
+// ValidateShortForm reports a rejection as a localizable error on reject (nil
+// on accept). The schema validator and `cocoon init` prompt share this rule so
+// a string init accepts cannot be rejected later by gen. The returned error
+// wraps ErrPortShortForm for errors.Is and renders the reason in the active
+// language at the CLI boundary (the `--ports` flag path), not frozen to English.
 func ValidateShortForm(s string) error {
 	code, args, ok := shortFormReason(s)
 	if ok {
 		return nil
 	}
-	// init's prompt validates outside the CLI boundary, so render the reason in
-	// English here; the boundary path localizes via AddCode + the same key.
-	return fmt.Errorf("%w: %s", ErrPortShortForm, i18n.English().Msg(code, args...))
+	return &portShortFormError{code: code, args: args}
 }
+
+// portShortFormError is ValidateShortForm's localizable rejection: it wraps
+// ErrPortShortForm so callers classify via errors.Is, and carries the reason as
+// a catalog (code, args) pair so the boundary renders it in the active language
+// (i18n.Localizer). Error() renders English for logs / non-boundary callers.
+type portShortFormError struct {
+	code string
+	args []any
+}
+
+func (e *portShortFormError) Error() string                   { return i18n.English().Msg(e.code, e.args...) }
+func (e *portShortFormError) Localize(c *i18n.Catalog) string { return c.Msg(e.code, e.args...) }
+func (*portShortFormError) Unwrap() error                     { return ErrPortShortForm }
 
 // shortFormReason returns ("", nil, true) on accept and (code, args, false) on
 // reject. Shared by ValidateShortForm and validatePortsForward so the same rule

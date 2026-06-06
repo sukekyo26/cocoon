@@ -133,6 +133,36 @@ func TestValidateShortForm(t *testing.T) {
 	}
 }
 
+// TestValidateShortForm_Localizable pins that a rejection carries the reason as
+// a localizable error (i18n.Localizer): the `--ports` flag path renders it in
+// the active language at the CLI boundary rather than freezing English. The
+// classification sentinel must still be reachable via errors.Is.
+func TestValidateShortForm_Localizable(t *testing.T) {
+	t.Parallel()
+	err := config.ValidateShortForm("abc")
+	if err == nil {
+		t.Fatal("ValidateShortForm(\"abc\") = nil, want error")
+	}
+	if !errors.Is(err, config.ErrPortShortForm) {
+		t.Fatalf("err = %v, want errors.Is ErrPortShortForm", err)
+	}
+	var loc i18n.Localizer
+	if !errors.As(err, &loc) {
+		t.Fatalf("err = %v, want it to satisfy i18n.Localizer", err)
+	}
+	en := loc.Localize(i18n.New(i18n.LangEN))
+	ja := loc.Localize(i18n.New(i18n.LangJA))
+	if en == ja {
+		t.Fatalf("Localize(en) == Localize(ja) = %q, want language-specific reasons", en)
+	}
+	if !strings.Contains(en, "does not match docker-compose short form") {
+		t.Errorf("Localize(en) = %q, want English short-form reason", en)
+	}
+	if !strings.Contains(ja, "短縮形式") {
+		t.Errorf("Localize(ja) = %q, want Japanese short-form reason", ja)
+	}
+}
+
 func TestComposePortEntries_Strings(t *testing.T) {
 	t.Parallel()
 	in := []any{
