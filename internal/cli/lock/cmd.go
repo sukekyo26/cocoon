@@ -110,8 +110,12 @@ func loadContext(wsPath string) (*generate.WorkspaceContext, error) {
 	}
 	projectDir := filepath.Join(filepath.Dir(wsPath), ".cocoon", "plugins")
 	layered := plugin.NewLayeredFS(embedded, userDir, projectDir)
+	// Record "plugin overridden by <source>" notices into the same sink the
+	// loader fills, so DrainWarnings surfaces them — matching `cocoon gen`.
+	sink := warn.New()
+	layered.LogOverrides(sink)
 	//nolint:wrapcheck // LoadContext already wraps failures in clihelpers.ErrFailure.
-	return generatecli.LoadContext(wsPath, layered, "", warn.New())
+	return generatecli.LoadContext(wsPath, layered, "", sink)
 }
 
 // loadExistingLock returns the current lock for reuse, with "no lock yet" as a
