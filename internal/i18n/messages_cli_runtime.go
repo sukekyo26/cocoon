@@ -27,12 +27,6 @@ var cliRuntimeEN = map[string]string{
 	"lock_wrote":              "Wrote %s (%d plugin(s))",
 	"lock_ignoring_malformed": "ignoring malformed %s (%v); regenerating from scratch",
 
-	// plugin list.
-	"plugin_list_header":      "ID\tSOURCE\tDEFAULT\tDESCRIPTION\tURL",
-	"plugin_list_load_failed": "<load failed: %v>",
-	"plugin_list_yes":         "yes",
-	"plugin_list_no":          "no",
-
 	// plugin pin.
 	"plugin_pin_updated_enable":          "Updated %s: [plugins].enable %q",
 	"plugin_pin_updated_method":          "Updated %s: [plugins.methods] %s = %q",
@@ -64,12 +58,6 @@ var cliRuntimeJA = map[string]string{
 	"lock_locked":             "ロックしました %s %s",
 	"lock_wrote":              "%s を書き出しました (%d 個のプラグイン)",
 	"lock_ignoring_malformed": "破損した %s を無視します (%v)。最初から再生成します",
-
-	// plugin list.
-	"plugin_list_header":      "ID\tソース\tデフォルト\t説明\tURL",
-	"plugin_list_load_failed": "<読み込み失敗: %v>",
-	"plugin_list_yes":         "はい",
-	"plugin_list_no":          "いいえ",
 
 	// plugin pin.
 	"plugin_pin_updated_enable":          "%s を更新しました: [plugins].enable %q",

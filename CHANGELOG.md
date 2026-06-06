@@ -14,10 +14,11 @@ adheres to [Semantic Versioning](https://semver.org/).
   plugin override / missing-plugin notices — to the active language. A Japanese
   environment no longer sees these warnings in English while the rest of the
   output is Japanese.
-- `cocoon self-update`, `cocoon lock`, `cocoon plugin list`, `cocoon plugin pin`,
-  and the `cocoon init` screen-reader prompts now print their runtime output
-  (progress, success, table headers, paste-in snippets) in the active language
-  instead of always in English.
+- `cocoon self-update`, `cocoon lock`, `cocoon plugin pin`, and the `cocoon init`
+  screen-reader prompts now print their runtime output (progress, success,
+  paste-in snippets) in the active language instead of always in English.
+  (`cocoon plugin list` / `cocoon plugin show` keep their column headers and
+  field labels in English — they mirror `plugin.toml` field identifiers.)
 - Error messages are now localized to the active language: usage/failure errors
   across all subcommands and `workspace.toml` / `plugin.toml` validation messages
   render in Japanese under a Japanese locale. Error text cocoon wraps verbatim

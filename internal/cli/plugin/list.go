@@ -35,7 +35,6 @@ func newListCmd(stdout, stderr io.Writer) *cobra.Command {
 }
 
 func runList(stdout, _ io.Writer, sourceFilter string) error {
-	cat := i18n.New(i18n.Detect())
 	if sourceFilter != "" &&
 		sourceFilter != plugin.SourceEmbedded &&
 		sourceFilter != plugin.SourceUser &&
@@ -52,7 +51,9 @@ func runList(stdout, _ io.Writer, sourceFilter string) error {
 	ids := slices.Sorted(maps.Keys(sources))
 
 	tw := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, cat.Msg("plugin_list_header"))
+	// Column headers and the yes/no flag are plugin.toml field identifiers, kept
+	// in English (stable across locales) to match `cocoon plugin show`.
+	fmt.Fprintln(tw, "ID\tSOURCE\tDEFAULT\tDESCRIPTION\tURL")
 	for _, id := range ids {
 		src := sources[id]
 		if sourceFilter != "" && src != sourceFilter {
@@ -60,12 +61,12 @@ func runList(stdout, _ io.Writer, sourceFilter string) error {
 		}
 		p, lerr := loadPluginFromLayer(layered, id)
 		if lerr != nil {
-			fmt.Fprintf(tw, "%s\t%s\t?\t%s\t\n", id, src, cat.Msg("plugin_list_load_failed", lerr))
+			fmt.Fprintf(tw, "%s\t%s\t?\t<load failed: %v>\t\n", id, src, lerr)
 			continue
 		}
-		def := cat.Msg("plugin_list_no")
+		def := "no"
 		if p.Metadata.Default {
-			def = cat.Msg("plugin_list_yes")
+			def = "yes"
 		}
 		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", id, src, def, p.Metadata.Description, p.Metadata.URL)
 	}
