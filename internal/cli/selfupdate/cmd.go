@@ -72,8 +72,10 @@ func runSelfUpdate(ctx context.Context, stdout, stderr io.Writer, checkOnly, for
 
 	current := strings.TrimSpace(version.Get())
 	if current == "" || current == "dev" {
-		log.Error(cat.Msg("selfupdate_dev_build"))
-		return clihelpers.ErrFailure
+		// Carry the message on the error so the boundary renders it once in the
+		// active language; logging here + returning the bare sentinel would also
+		// print "cocoon: failure" (English) from the boundary.
+		return clihelpers.FailureErr("selfupdate_dev_build")
 	}
 	current = strings.TrimPrefix(current, "v")
 

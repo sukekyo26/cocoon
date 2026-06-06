@@ -246,8 +246,10 @@ func withVersion(t *testing.T, v string) {
 }
 
 // TestRunSelfUpdate_DevBuildErrors covers the "no version baked in" guard:
-// version.Version == "dev" must short-circuit to ErrFailure before any
-// fetchLatest call is made.
+// version.Version == "dev" must short-circuit to a localized ErrFailure error
+// before any fetchLatest call is made. The message rides on the returned error
+// (rendered once at the boundary), so the function itself writes nothing to
+// stderr — logging here would double-print with the boundary's output.
 //
 //nolint:paralleltest // mutates the package-level version.Version
 func TestRunSelfUpdate_DevBuildErrors(t *testing.T) {
@@ -263,8 +265,11 @@ func TestRunSelfUpdate_DevBuildErrors(t *testing.T) {
 	if !errors.Is(err, clihelpers.ErrFailure) {
 		t.Fatalf("err = %v, want errors.Is ErrFailure", err)
 	}
-	if !strings.Contains(stderr.String(), "dev build") {
-		t.Errorf("stderr = %q, want substring %q", stderr.String(), "dev build")
+	if !strings.Contains(err.Error(), "dev build") {
+		t.Errorf("err = %q, want substring %q", err.Error(), "dev build")
+	}
+	if stderr.Len() != 0 {
+		t.Errorf("stderr = %q, want empty (message is carried by the error, not logged in-function)", stderr.String())
 	}
 }
 
