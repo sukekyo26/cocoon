@@ -184,7 +184,7 @@ func materializeOptionEntry(a *Accumulator, id string, tbl map[string]any, ov *P
 			s, ok := tbl[k].(string)
 			if !ok {
 				a.AddCode("err_field_options_value_not_string",
-					[]any{k, fmt.Sprintf("%T", tbl[k])}, "plugins", "options", id, k)
+					[]any{k, tbl[k]}, "plugins", "options", id, k)
 				continue
 			}
 			if bad, r := UnsafeExtraVersionRune(s); bad {
@@ -218,7 +218,7 @@ func setOptionChecksum(a *Accumulator, id, key string, raw any, dst **string) {
 	s, ok := raw.(string)
 	if !ok {
 		a.AddCode("err_field_options_value_not_string",
-			[]any{key, fmt.Sprintf("%T", raw)}, "plugins", "options", id, key)
+			[]any{key, raw}, "plugins", "options", id, key)
 		return
 	}
 	if !rxSha256.MatchString(s) {
