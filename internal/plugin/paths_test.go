@@ -30,8 +30,9 @@ func TestProjectPluginsDir(t *testing.T) {
 	}
 }
 
-// TestUserPluginsDir pins the contract: UserPluginsDir returns the absolute
-// ~/.cocoon/plugins root under the resolved home directory.
+// TestUserPluginsDir pins the contract: UserPluginsDir returns the
+// ~/.cocoon/plugins root under the resolved home directory. It does not
+// normalize, so the result tracks whatever os.UserHomeDir() yields.
 //
 //nolint:paralleltest // t.Setenv pins HOME process-wide; cannot run in parallel.
 func TestUserPluginsDir(t *testing.T) {
@@ -44,8 +45,5 @@ func TestUserPluginsDir(t *testing.T) {
 	want := filepath.Join(home, ".cocoon", "plugins")
 	if got != want {
 		t.Errorf("UserPluginsDir() = %q, want %q", got, want)
-	}
-	if !filepath.IsAbs(got) {
-		t.Errorf("UserPluginsDir() = %q, want absolute path", got)
 	}
 }
