@@ -320,6 +320,34 @@ func TestSelectOrInputField_HandleNav(t *testing.T) {
 	}
 }
 
+// TestSelectOrInputField_InputRowAcceptsNavRunes pins that while the cursor
+// sits on the input row, the vim-nav runes j/k/g/G are typed into the
+// textinput verbatim instead of being stolen as list navigation. Arrow keys
+// still navigate off the row (covered by HandleNav's up_from_input_row).
+func TestSelectOrInputField_InputRowAcceptsNavRunes(t *testing.T) {
+	t.Parallel()
+	for _, r := range []string{"j", "k", "g", "G"} {
+		r := r
+		t.Run(r, func(t *testing.T) {
+			t.Parallel()
+			var target string
+			f := newTestField([]string{"A", "B"}, &target)
+			f.cursor = len(f.suggestions) // park on the input row
+			f.input.Focus()
+			f, _ = sendKey(t, f, runeKey(r))
+			if f.cursor != len(f.suggestions) {
+				t.Errorf("cursor = %d, want %d (must stay on input row)", f.cursor, len(f.suggestions))
+			}
+			if !f.input.Focused() {
+				t.Error("input lost focus; want it to stay focused while typing")
+			}
+			if got := f.input.Value(); got != r {
+				t.Errorf("input value = %q, want %q (rune should be typed, not navigated)", got, r)
+			}
+		})
+	}
+}
+
 // TestSelectOrInputField_HandleSubmit covers the submit keys: Next and
 // Submit commit the value, Prev hands control back to huh.
 func TestSelectOrInputField_HandleSubmit(t *testing.T) {

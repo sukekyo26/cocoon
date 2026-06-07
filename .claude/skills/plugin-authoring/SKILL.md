@@ -88,8 +88,10 @@ cocoon plugin scaffold my-tool \
 が「最新バージョンの発見」と「arch ごとの checksum の取得」をネットワーク越しに
 行えるようになる（解決結果は workspace ルートの `cocoon.lock` に記録され、`cocoon gen`
 はそれをオフラインで消費する）。`[version.source]` を **書かない** プラグインは
-**exact-only** — `cocoon lock` で `"latest"` を解決できず、`[plugins].enable` 配列に
-インライン（例: `"aws-cli=2.34.48"`）で厳密バージョンを pin する必要がある。
+**source なし** — `cocoon lock` は `"latest"` を解決できないためスキップし（lock エントリを
+書かず）、`cocoon gen` がビルド時に最新を導入する（非再現。`--locked` で失敗）。そのため
+install スクリプトは空 `$PIN` で最新を解決できること。再現可能にするには `[plugins].enable`
+配列にインライン（例: `"aws-cli=2.34.48"`）で厳密バージョンを pin する。
 
 `[version.source.latest]`（最新の探し方）と `[version.source.checksum]`（hash の取り方）の
 2 ブロックで構成し、URL / asset 名に `${arch}` を使うときだけ `[version.source.arch]`
@@ -188,10 +190,12 @@ repo = "astral-sh/uv"
 type = "none"
 ```
 
-exact-only（`[version.source]` を持てない上流）の参考: `aws-cli`（バージョン無し
+source なし（`[version.source]` を持てない上流）の参考: `aws-cli`（バージョン無し
 ダウンロード alias）/ `android-sdk`（HTML スクレイプのビルド番号）/ `flutter`
-（コミットハッシュをキーとするリリース）。これらは `[plugins].enable` 配列に
-インライン（例: `"aws-cli=2.34.48"`）で必ず厳密 pin する。
+（コミットハッシュをキーとするリリース）/ `zig`（`master` のみ）。これらは `cocoon lock`
+で `"latest"` がスキップされ（gen で installer が最新を解決、非再現）、install スクリプトは
+空 `$PIN` で最新を解決すること。再現可能にしたいなら `[plugins].enable` 配列にインライン
+（例: `"aws-cli=2.34.48"`）で厳密 pin する。
 
 ## ステップ 3: 既存プラグインを参考にする
 

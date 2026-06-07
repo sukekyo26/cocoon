@@ -6,6 +6,24 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+## [0.15.3] - 2026-06-08
+
+### 変更
+
+- `[version.source]` を持たない `version_capable` プラグイン（`aws-cli` /
+  `android-sdk` / `flutter` / `zig`）を `"latest"`（または未 pin）で有効化しても、
+  `cocoon lock` がエラーにならなくなりました。これらは **スキップ** され（lock
+  エントリは書かれず）、`cocoon gen` がビルド時に最新を導入します。このビルドは
+  再現性がありません（`cocoon gen` は警告し、`cocoon gen --locked` は失敗します）
+  ので、再現性が必要なら厳密バージョンを pin してください（例: `"aws-cli=2.34.48"`）。
+  `zig` の `"latest"` は `master` 開発ビルドに解決されます。
+
+### 修正
+
+- `cocoon init`: バージョンプロンプトのマニュアル入力行で値を入力する際、
+  `j` / `k` / `g` / `G` キーがリスト操作（上下移動・先頭・末尾）として横取り
+  されず、テキストとして入力されるようになりました。
+
 ## [0.15.2] - 2026-06-07
 
 ### 修正
@@ -696,7 +714,8 @@ cocoon の主要な変更を記録します。フォーマットは
 - `COMPOSE_PROJECT_NAME` をプロジェクトディレクトリの basename から導出するように変更。docker compose の namespace がホストディレクトリと一致する。
 - 国際化 (英語 / 日本語) カタログを追加。CLI プロンプト・エラーメッセージ・`workspace.toml` インラインコメントすべてを `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` で切替可能。
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.15.2...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.15.3...HEAD
+[0.15.3]: https://github.com/sukekyo26/cocoon/compare/v0.15.2...v0.15.3
 [0.15.2]: https://github.com/sukekyo26/cocoon/compare/v0.15.1...v0.15.2
 [0.15.1]: https://github.com/sukekyo26/cocoon/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/sukekyo26/cocoon/compare/v0.14.2...v0.15.0

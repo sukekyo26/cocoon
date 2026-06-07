@@ -86,7 +86,8 @@ arm64 = "arm64"
 `
 
 // noSourcePluginTOML is version_capable but declares no [version.source], so a
-// "latest" request cannot be resolved (the exact-only degradation case).
+// "latest" request cannot be resolved to a reproducible version and is skipped
+// by `cocoon lock` (the sourceless degradation case).
 const noSourcePluginTOML = `[metadata]
 name = "nosrc"
 description = "no source fixture"
@@ -292,14 +293,48 @@ func TestLock_MalformedExistingLock(t *testing.T) {
 	require.NoError(t, err, "after regeneration --check passes")
 }
 
+// TestLock_SourcelessLatestIsSkipped pins that a sourceless version_capable
+// plugin requesting "latest" is skipped (not a usage error): the lock is
+// written with no entry for it and a skip notice is logged.
+//
 //nolint:paralleltest // mutates defaultFetcher global + cwd/HOME.
-func TestLock_LatestUnsupportedIsUsageError(t *testing.T) {
-	seedProject(t, `"nosrc"`, map[string]string{"nosrc": noSourcePluginTOML})
+func TestLock_SourcelessLatestIsSkipped(t *testing.T) {
+	t.Setenv("WORKSPACE_LANG", "en") // pin locale for the English "cannot be locked" assertion
+	lockPath := seedProject(t, `"nosrc"`, map[string]string{"nosrc": noSourcePluginTOML})
 	swapFetcher(t, demoFetcher())
 
 	out, err := runLockCmd(t)
-	require.ErrorIs(t, err, clihelpers.ErrUsage)
-	require.Contains(t, errOrOut(err, out), "cannot resolve 'latest'")
+	require.NoError(t, err, "out=%s", out)
+	require.Contains(t, out, "cannot be locked")
+	require.Contains(t, out, "nosrc=<version>") // actionable pin hint
+	l, lerr := lockfile.Load(lockPath)
+	require.NoError(t, lerr)
+	_, ok := l.Find("nosrc")
+	require.False(t, ok, "sourceless latest plugin must not be locked")
+}
+
+// TestLock_SourcelessSkippedWhileSourcedLocked pins that one sourceless latest
+// plugin does not abort the whole lock: a co-enabled sourced plugin is still
+// resolved and recorded.
+//
+//nolint:paralleltest // mutates defaultFetcher global + cwd/HOME.
+func TestLock_SourcelessSkippedWhileSourcedLocked(t *testing.T) {
+	lockPath := seedProject(t, `"nosrc", "demo"`, map[string]string{
+		"nosrc": noSourcePluginTOML,
+		"demo":  demoPluginTOML,
+	})
+	swapFetcher(t, demoFetcher())
+
+	_, err := runLockCmd(t)
+	require.NoError(t, err)
+
+	l, lerr := lockfile.Load(lockPath)
+	require.NoError(t, lerr)
+	entry, ok := l.Find("demo")
+	require.True(t, ok, "sourced plugin must still be locked")
+	require.Equal(t, "1.2.3", entry.Version)
+	_, ok = l.Find("nosrc")
+	require.False(t, ok, "sourceless latest plugin must be skipped")
 }
 
 func errOrOut(err error, out string) string {

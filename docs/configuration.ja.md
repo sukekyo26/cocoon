@@ -324,9 +324,10 @@ enable = [
 利用可能なプラグイン一覧は `cocoon plugin list` で確認できます (埋め込み + ユーザー / プロジェクト上書き含む)。
 
 一部のプラグインは上流が machine-readable な「latest」を公開していません
-（`aws-cli` / `android-sdk` / `flutter` — [`cocoon lock`](commands.ja.md#exact-only-プラグイン) 参照）。
-これらは `enable` 配列で厳密バージョンに pin する **必要があります**（例:
-`"flutter=3.44.1"`）。未 pin や `latest` のままだと `cocoon lock` がエラーになります。
+（`aws-cli` / `android-sdk` / `flutter` / `zig` — [`cocoon lock`](commands.ja.md#source-なしプラグイン) 参照）。
+`latest` のままだと `cocoon lock` はこれらをスキップし（ビルドが非再現的に最新を解決）、
+再現可能なビルドが必要なら `enable` 配列で厳密バージョンに pin します（例:
+`"flutter=3.44.1"`）。
 
 > **移行メモ。** 旧 `[plugins.versions]` セクションは **削除** されました。残っている
 > 設定ファイルはロード時に拒否され、pin を `enable` 配列へ移すヒントが出ます。

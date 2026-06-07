@@ -21,5 +21,7 @@ version_capable = true
 # ("master" or a tagged version like "0.14.0"), but the only machine-readable
 # "latest" in index.json is master.version — a rolling dev string (e.g.
 # "0.15.0-dev.123+abc") that is not an index.json key and is non-reproducible
-# anyway. So zig is exact-only: pin a tagged version (zig=0.14.0); `cocoon lock`
-# rejects "latest". See exactOnlyPlugins in version_source_contract_test.go.
+# anyway. So zig is sourceless: `cocoon lock` skips "latest" and install.archive.sh
+# falls back to the "master" dev build from an empty $PIN at gen time
+# (non-reproducible); pin a tagged version (zig=0.14.0) for a reproducible build.
+# See sourcelessPlugins in version_source_contract_test.go.
