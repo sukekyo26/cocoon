@@ -211,7 +211,7 @@ func mergeCustomVolumes(
 		path := customVols[name]
 		if _, reserved := reservedMountPaths[path]; reserved {
 			return nil, fmt.Errorf(
-				"%w: config [volumes].%s targets reserved mount path '%s'",
+				"%w: your config file's [volumes].%s targets reserved mount path '%s'",
 				ErrVolumeNameConflict, name, path)
 		}
 		if existing, dup := pathToSrc[path]; dup {
