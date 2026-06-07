@@ -75,6 +75,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     libffi-dev \
     liblzma-dev \
     gnupg \
+    bubblewrap \
+    socat \
     jq \
     && sed -i -E -e 's|^# *(en_US\.UTF-8 UTF-8)$|\1|' /etc/locale.gen \
     && locale-gen \

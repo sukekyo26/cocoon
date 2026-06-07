@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- The `claude-code` plugin now installs `bubblewrap` and `socat`, the OS tools
+  Claude Code's bash sandbox needs for process isolation and its network proxy.
+  Previously the sandbox preflight reported `socat: not installed` (and relied
+  on another plugin to supply `bwrap`).
+
 ## [0.15.1] - 2026-06-07
 
 ### Fixed
