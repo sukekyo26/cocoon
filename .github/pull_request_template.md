@@ -42,7 +42,7 @@ None
 <!-- Required when 💥 is ticked above; otherwise write "None".
      For breaking changes, describe:
        - which config key / flag / API surface changed,
-       - the migration path users follow (sample workspace.toml diff or shell snippet),
+       - the migration path users follow (sample cocoon.toml diff or shell snippet),
        - the matching CHANGELOG `### BREAKING` entry. -->
 None
 

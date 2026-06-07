@@ -3,7 +3,7 @@
 // `cocoon lock` writes it after network resolution; `cocoon gen` reads it
 // offline so a generated workspace is reproducible. The file is wholly
 // cocoon-owned (never hand-edited), so it is marshalled as a whole rather
-// than line-mutated like workspace.toml.
+// than line-mutated like the config file.
 package lockfile
 
 import (
@@ -26,7 +26,7 @@ import (
 
 const (
 	// FileName is the default lock file basename, written at the workspace
-	// root alongside workspace.toml when [lockfile].name is unset. It aliases
+	// root alongside the discovered config file when [lockfile].name is unset. It aliases
 	// config.DefaultLockFileName (the schema accessor's source of truth) so
 	// the two never drift.
 	FileName = config.DefaultLockFileName
@@ -163,7 +163,7 @@ func Save(path string, l *Lock) error {
 // ComputeInputsHash returns a stable SHA256 over the enabled
 // version_capable plugins' (id, requested-spec) pairs. `cocoon lock --check`
 // recomputes it offline and compares it against the lock's recorded hash to
-// detect a lock that no longer matches workspace.toml (a plugin added/removed
+// detect a lock that no longer matches the config file (a plugin added/removed
 // or a constraint changed).
 func ComputeInputsHash(requestedByID map[string]string) string {
 	ids := make([]string, 0, len(requestedByID))

@@ -14,7 +14,7 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
-// LoadWorkspace parses and validates a workspace.toml file. Unknown top-level
+// LoadWorkspace parses and validates a config file. Unknown top-level
 // or nested keys are rejected as *ValidationError, except inside
 // [plugins.options] inline tables where extra keys are carried into
 // PluginVersionOverride.Extra (cross-checked later against the plugin's
@@ -115,7 +115,7 @@ func parseEnableSpec(raw string) (PluginVersionOverride, error) {
 
 // enableSpecError maps a parseEnableSpec failure to a localizable key; each
 // variant augments the version-constraint problem with the supported forms so
-// the workspace.toml author sees the fix inline.
+// the config file author sees the fix inline.
 func enableSpecError(spec string, err error) (string, []any) {
 	switch {
 	case errors.Is(err, ErrVersionSpecEmpty):

@@ -6,6 +6,21 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-06-07
+
+### 追加
+
+- `cocoon gen` / `cocoon lock` / `cocoon plugin` が `cocoon.toml` を優先的に探索し、
+  無ければ `workspace.toml` にフォールバックするようになりました。どちらの
+  ファイル名でも利用できます。同じディレクトリに両方が存在する場合は `cocoon.toml`
+  が優先され、より近いディレクトリの設定ファイルは親の優先名より勝ちます。
+
+### 変更
+
+- `cocoon init` が生成する設定ファイル名を `workspace.toml` から `cocoon.toml` に
+  変更しました。`workspace.toml` は引き続き設定ファイル名として完全にサポートされ
+  （フォールバックとして探索）、既存プロジェクトはリネーム不要で動作します。
+
 ## [0.14.2] - 2026-06-07
 
 ### 変更
@@ -664,7 +679,8 @@ cocoon の主要な変更を記録します。フォーマットは
 - `COMPOSE_PROJECT_NAME` をプロジェクトディレクトリの basename から導出するように変更。docker compose の namespace がホストディレクトリと一致する。
 - 国際化 (英語 / 日本語) カタログを追加。CLI プロンプト・エラーメッセージ・`workspace.toml` インラインコメントすべてを `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` で切替可能。
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.14.2...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/sukekyo26/cocoon/compare/v0.14.2...v0.15.0
 [0.14.2]: https://github.com/sukekyo26/cocoon/compare/v0.14.1...v0.14.2
 [0.14.1]: https://github.com/sukekyo26/cocoon/compare/v0.14.0...v0.14.1
 [0.14.0]: https://github.com/sukekyo26/cocoon/compare/v0.13.0...v0.14.0

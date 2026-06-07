@@ -33,9 +33,9 @@ func TestRunInit_YesWritesWorkspaceToml(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("init --yes: %v", err)
 	}
-	body, err := os.ReadFile(filepath.Join(work, "workspace.toml"))
+	body, err := os.ReadFile(filepath.Join(work, "cocoon.toml"))
 	if err != nil {
-		t.Fatalf("read workspace.toml: %v", err)
+		t.Fatalf("read cocoon.toml: %v", err)
 	}
 	for _, want := range []string{
 		`service_name = "myapp"`, `username = "dev"`,
@@ -44,7 +44,7 @@ func TestRunInit_YesWritesWorkspaceToml(t *testing.T) {
 		`"vim"`, `"nano"`,
 	} {
 		if !strings.Contains(string(body), want) {
-			t.Errorf("workspace.toml missing %q\n--- got ---\n%s", want, body)
+			t.Errorf("cocoon.toml missing %q\n--- got ---\n%s", want, body)
 		}
 	}
 }
@@ -65,16 +65,16 @@ func TestRunInit_AptCategoriesAgentExpands(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("init --yes --apt-categories agent: %v", err)
 	}
-	body, err := os.ReadFile(filepath.Join(work, "workspace.toml"))
+	body, err := os.ReadFile(filepath.Join(work, "cocoon.toml"))
 	if err != nil {
-		t.Fatalf("read workspace.toml: %v", err)
+		t.Fatalf("read cocoon.toml: %v", err)
 	}
 	for _, want := range []string{
 		`"jq"`, `"yq"`, `"ripgrep"`, `"fd-find"`, `"tree"`,
 		`"python3"`, `"python3-pip"`, `"python3-venv"`,
 	} {
 		if !strings.Contains(string(body), want) {
-			t.Errorf("workspace.toml missing agent package %q\n--- got ---\n%s", want, body)
+			t.Errorf("cocoon.toml missing agent package %q\n--- got ---\n%s", want, body)
 		}
 	}
 }
@@ -91,8 +91,8 @@ func TestRunInit_YesRejectsMissingServiceName(t *testing.T) {
 	if !errors.Is(err, clihelpers.ErrUsage) {
 		t.Errorf("expected ErrUsage, got %v", err)
 	}
-	if _, statErr := os.Stat(filepath.Join(work, "workspace.toml")); statErr == nil {
-		t.Error("workspace.toml should NOT have been written when --yes lacks --service-name")
+	if _, statErr := os.Stat(filepath.Join(work, "cocoon.toml")); statErr == nil {
+		t.Error("cocoon.toml should NOT have been written when --yes lacks --service-name")
 	}
 }
 
@@ -115,7 +115,7 @@ func TestRunInit_RefusesOverwriteWithoutForce(t *testing.T) {
 	pinEnglish(t)
 	work := t.TempDir()
 	t.Chdir(work)
-	if err := os.WriteFile(filepath.Join(work, "workspace.toml"), []byte("# pre-existing\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(work, "cocoon.toml"), []byte("# pre-existing\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	cmd := NewCommand(io.Discard, io.Discard)
@@ -123,12 +123,12 @@ func TestRunInit_RefusesOverwriteWithoutForce(t *testing.T) {
 	if err := cmd.Execute(); !errors.Is(err, clihelpers.ErrUsage) {
 		t.Errorf("expected ErrUsage for existing file, got %v", err)
 	}
-	body, readErr := os.ReadFile(filepath.Join(work, "workspace.toml"))
+	body, readErr := os.ReadFile(filepath.Join(work, "cocoon.toml"))
 	if readErr != nil {
-		t.Fatalf("read workspace.toml: %v", readErr)
+		t.Fatalf("read cocoon.toml: %v", readErr)
 	}
 	if string(body) != "# pre-existing\n" {
-		t.Error("existing workspace.toml was overwritten despite --force not being set")
+		t.Error("existing cocoon.toml was overwritten despite --force not being set")
 	}
 }
 
@@ -137,7 +137,7 @@ func TestRunInit_ForceOverwrites(t *testing.T) {
 	pinEnglish(t)
 	work := t.TempDir()
 	t.Chdir(work)
-	if err := os.WriteFile(filepath.Join(work, "workspace.toml"), []byte("# stale\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(work, "cocoon.toml"), []byte("# stale\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	cmd := NewCommand(io.Discard, io.Discard)
@@ -147,12 +147,47 @@ func TestRunInit_ForceOverwrites(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("init --force: %v", err)
 	}
-	body, readErr := os.ReadFile(filepath.Join(work, "workspace.toml"))
+	body, readErr := os.ReadFile(filepath.Join(work, "cocoon.toml"))
 	if readErr != nil {
-		t.Fatalf("read workspace.toml: %v", readErr)
+		t.Fatalf("read cocoon.toml: %v", readErr)
 	}
 	if !strings.Contains(string(body), `service_name = "newapp"`) {
 		t.Errorf("--force should overwrite, got:\n%s", body)
+	}
+}
+
+// TestRunInit_ProceedsWhenLegacyWorkspaceTomlExists pins that the overwrite
+// guard looks only at cocoon.toml: a bare workspace.toml (the supported
+// fallback name, which may belong to a different tool) does not block init,
+// and is left untouched while cocoon.toml is created beside it.
+//
+//nolint:paralleltest // t.Chdir
+func TestRunInit_ProceedsWhenLegacyWorkspaceTomlExists(t *testing.T) {
+	pinEnglish(t)
+	work := t.TempDir()
+	t.Chdir(work)
+	legacy := filepath.Join(work, "workspace.toml")
+	if err := os.WriteFile(legacy, []byte("# other tool's file\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cmd := NewCommand(io.Discard, io.Discard)
+	cmd.SetArgs([]string{"--yes", "--service-name", "newapp", "--username", "dev"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("init must not block on a pre-existing workspace.toml: %v", err)
+	}
+	body, err := os.ReadFile(filepath.Join(work, "cocoon.toml"))
+	if err != nil {
+		t.Fatalf("read cocoon.toml: %v", err)
+	}
+	if !strings.Contains(string(body), `service_name = "newapp"`) {
+		t.Errorf("cocoon.toml missing expected content:\n%s", body)
+	}
+	legacyBody, err := os.ReadFile(legacy)
+	if err != nil {
+		t.Fatalf("read workspace.toml: %v", err)
+	}
+	if string(legacyBody) != "# other tool's file\n" {
+		t.Errorf("legacy workspace.toml was modified: %q", legacyBody)
 	}
 }
 
@@ -272,7 +307,7 @@ func TestRunInit_ImagePathFixConflict(t *testing.T) {
 // TestRunInit_ImagePathFixFlagAgainstNonLanguageImage pins that the
 // flag-against-ubuntu gate fires at the CLI layer, so a script that
 // misses the image guard fails fast instead of writing an inconsistent
-// workspace.toml.
+// cocoon.toml.
 //
 //nolint:paralleltest // t.Chdir
 func TestRunInit_ImagePathFixFlagAgainstNonLanguageImage(t *testing.T) {
@@ -350,19 +385,19 @@ func TestRunInit_CertificatesFlag(t *testing.T) {
 			if err := cmd.Execute(); err != nil {
 				t.Fatalf("init: %v", err)
 			}
-			body, err := os.ReadFile(filepath.Join(work, "workspace.toml"))
+			body, err := os.ReadFile(filepath.Join(work, "cocoon.toml"))
 			if err != nil {
-				t.Fatalf("read workspace.toml: %v", err)
+				t.Fatalf("read cocoon.toml: %v", err)
 			}
 			out := string(body)
 			for _, want := range tc.mustContain {
 				if !strings.Contains(out, want) {
-					t.Errorf("workspace.toml missing %q\n--- got ---\n%s", want, out)
+					t.Errorf("cocoon.toml missing %q\n--- got ---\n%s", want, out)
 				}
 			}
 			for _, mustNot := range tc.mustNotContain {
 				if strings.Contains(out, mustNot) {
-					t.Errorf("workspace.toml must not contain %q\n--- got ---\n%s", mustNot, out)
+					t.Errorf("cocoon.toml must not contain %q\n--- got ---\n%s", mustNot, out)
 				}
 			}
 		})
@@ -447,19 +482,19 @@ func TestRunInit_SudoFlag(t *testing.T) {
 			if err := cmd.Execute(); err != nil {
 				t.Fatalf("init: %v", err)
 			}
-			body, err := os.ReadFile(filepath.Join(work, "workspace.toml"))
+			body, err := os.ReadFile(filepath.Join(work, "cocoon.toml"))
 			if err != nil {
-				t.Fatalf("read workspace.toml: %v", err)
+				t.Fatalf("read cocoon.toml: %v", err)
 			}
 			out := string(body)
 			for _, want := range tc.mustContain {
 				if !strings.Contains(out, want) {
-					t.Errorf("workspace.toml missing %q\n--- got ---\n%s", want, out)
+					t.Errorf("cocoon.toml missing %q\n--- got ---\n%s", want, out)
 				}
 			}
 			for _, mustNot := range tc.mustNotContain {
 				if strings.Contains(out, mustNot) {
-					t.Errorf("workspace.toml must not contain %q\n--- got ---\n%s", mustNot, out)
+					t.Errorf("cocoon.toml must not contain %q\n--- got ---\n%s", mustNot, out)
 				}
 			}
 		})
@@ -481,13 +516,13 @@ func TestRunInit_PluginsFlagWritesEnable(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("init --yes --plugins: %v", err)
 	}
-	body, err := os.ReadFile(filepath.Join(work, "workspace.toml"))
+	body, err := os.ReadFile(filepath.Join(work, "cocoon.toml"))
 	if err != nil {
-		t.Fatalf("read workspace.toml: %v", err)
+		t.Fatalf("read cocoon.toml: %v", err)
 	}
 	want := "[plugins]\nenable = [\n    \"go\",\n    \"uv\",\n    \"github-cli\",\n]"
 	if !strings.Contains(string(body), want) {
-		t.Errorf("workspace.toml missing %q\n--- got ---\n%s", want, body)
+		t.Errorf("cocoon.toml missing %q\n--- got ---\n%s", want, body)
 	}
 }
 
@@ -505,8 +540,8 @@ func TestRunInit_PluginsFlagRejectsUnknown(t *testing.T) {
 	if err := cmd.Execute(); !errors.Is(err, clihelpers.ErrUsage) {
 		t.Errorf("unknown plugin should be ErrUsage, got %v", err)
 	}
-	if _, statErr := os.Stat(filepath.Join(work, "workspace.toml")); statErr == nil {
-		t.Error("workspace.toml should NOT have been written when --plugins lists an unknown id")
+	if _, statErr := os.Stat(filepath.Join(work, "cocoon.toml")); statErr == nil {
+		t.Error("cocoon.toml should NOT have been written when --plugins lists an unknown id")
 	}
 }
 
@@ -514,7 +549,7 @@ func TestRunInit_PluginsFlagRejectsUnknown(t *testing.T) {
 func TestRunInit_YesNoDefaultPlugins(t *testing.T) {
 	// `--yes` with no --plugins falls back to defaultPluginIDs(); the
 	// embedded catalog ships no `default = true` plugin, so the generated
-	// workspace.toml enables nothing.
+	// cocoon.toml enables nothing.
 	pinEnglish(t)
 	work := t.TempDir()
 	t.Chdir(work)
@@ -524,13 +559,13 @@ func TestRunInit_YesNoDefaultPlugins(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("init --yes: %v", err)
 	}
-	body, err := os.ReadFile(filepath.Join(work, "workspace.toml"))
+	body, err := os.ReadFile(filepath.Join(work, "cocoon.toml"))
 	if err != nil {
-		t.Fatalf("read workspace.toml: %v", err)
+		t.Fatalf("read cocoon.toml: %v", err)
 	}
 	want := "[plugins]\nenable = []"
 	if !strings.Contains(string(body), want) {
-		t.Errorf("workspace.toml missing %q\n--- got ---\n%s", want, body)
+		t.Errorf("cocoon.toml missing %q\n--- got ---\n%s", want, body)
 	}
 }
 
@@ -549,15 +584,15 @@ func TestRunInit_PluginVersionsFlagWritesConstraintLines(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("init --plugin-versions: %v", err)
 	}
-	body, err := os.ReadFile(filepath.Join(work, "workspace.toml"))
+	body, err := os.ReadFile(filepath.Join(work, "cocoon.toml"))
 	if err != nil {
-		t.Fatalf("read workspace.toml: %v", err)
+		t.Fatalf("read cocoon.toml: %v", err)
 	}
 	// Versions are pinned inline in the enable array, in --plugins order
 	// (go, uv, starship); uv is left unpinned, the others carry their pin.
 	want := "enable = [\n    \"go=1.23.4\",\n    \"uv\",\n    \"starship=1.21.1\",\n]"
 	if !strings.Contains(string(body), want) {
-		t.Errorf("workspace.toml missing pinned enable array\n--- want ---\n%s\n--- got ---\n%s", want, body)
+		t.Errorf("cocoon.toml missing pinned enable array\n--- want ---\n%s\n--- got ---\n%s", want, body)
 	}
 	// init does not collect [plugins.options], so the table stays commented
 	// (no uncommented [plugins.options] header).
@@ -627,13 +662,13 @@ func TestRunInit_ShellFlagWritesContainerShell(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("init --shell fish: %v", err)
 	}
-	body, err := os.ReadFile(filepath.Join(work, "workspace.toml"))
+	body, err := os.ReadFile(filepath.Join(work, "cocoon.toml"))
 	if err != nil {
-		t.Fatalf("read workspace.toml: %v", err)
+		t.Fatalf("read cocoon.toml: %v", err)
 	}
 	want := "[container.shell]\ndefault = \"fish\""
 	if !strings.Contains(string(body), want) {
-		t.Errorf("workspace.toml missing %q\n--- got ---\n%s", want, body)
+		t.Errorf("cocoon.toml missing %q\n--- got ---\n%s", want, body)
 	}
 }
 
@@ -664,13 +699,13 @@ func TestRunInit_DefaultsShellToBash(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("init --yes: %v", err)
 	}
-	body, err := os.ReadFile(filepath.Join(work, "workspace.toml"))
+	body, err := os.ReadFile(filepath.Join(work, "cocoon.toml"))
 	if err != nil {
-		t.Fatalf("read workspace.toml: %v", err)
+		t.Fatalf("read cocoon.toml: %v", err)
 	}
 	want := "[container.shell]\ndefault = \"bash\""
 	if !strings.Contains(string(body), want) {
-		t.Errorf("workspace.toml missing %q\n--- got ---\n%s", want, body)
+		t.Errorf("cocoon.toml missing %q\n--- got ---\n%s", want, body)
 	}
 }
 
@@ -687,9 +722,9 @@ func TestRunInit_AliasBundlesFlagWritesShellAliases(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("init --alias-bundles: %v", err)
 	}
-	body, err := os.ReadFile(filepath.Join(work, "workspace.toml"))
+	body, err := os.ReadFile(filepath.Join(work, "cocoon.toml"))
 	if err != nil {
-		t.Fatalf("read workspace.toml: %v", err)
+		t.Fatalf("read cocoon.toml: %v", err)
 	}
 	for _, want := range []string{
 		`ga = "git add"`,
@@ -698,7 +733,7 @@ func TestRunInit_AliasBundlesFlagWritesShellAliases(t *testing.T) {
 		`la = "ls -A"`,
 	} {
 		if !strings.Contains(string(body), want) {
-			t.Errorf("workspace.toml missing %q\n--- got ---\n%s", want, body)
+			t.Errorf("cocoon.toml missing %q\n--- got ---\n%s", want, body)
 		}
 	}
 	if !strings.Contains(string(body), "aliases = {") {
@@ -716,9 +751,9 @@ func TestRunInit_NoAliasBundles_OmitsAliasesLine(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("init --yes: %v", err)
 	}
-	body, err := os.ReadFile(filepath.Join(work, "workspace.toml"))
+	body, err := os.ReadFile(filepath.Join(work, "cocoon.toml"))
 	if err != nil {
-		t.Fatalf("read workspace.toml: %v", err)
+		t.Fatalf("read cocoon.toml: %v", err)
 	}
 	if strings.Contains(string(body), "aliases =") {
 		t.Errorf("expected no aliases line when --alias-bundles unset, got:\n%s", body)
@@ -753,9 +788,9 @@ func TestRunInit_PortsFlagWritesActiveBlock(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("init --ports: %v", err)
 	}
-	body, err := os.ReadFile(filepath.Join(work, "workspace.toml"))
+	body, err := os.ReadFile(filepath.Join(work, "cocoon.toml"))
 	if err != nil {
-		t.Fatalf("read workspace.toml: %v", err)
+		t.Fatalf("read cocoon.toml: %v", err)
 	}
 	got := string(body)
 	for _, want := range []string{
@@ -763,7 +798,7 @@ func TestRunInit_PortsFlagWritesActiveBlock(t *testing.T) {
 		"forward = [\n    \"3000:3000\",\n    \"5432:5432\",\n]\n",
 	} {
 		if !strings.Contains(got, want) {
-			t.Errorf("workspace.toml missing %q\n--- got ---\n%s", want, got)
+			t.Errorf("cocoon.toml missing %q\n--- got ---\n%s", want, got)
 		}
 	}
 	// Active block replaces the commented template; the literal example
@@ -784,9 +819,9 @@ func TestRunInit_NoPorts_EmitsCommentedTemplate(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("init --yes: %v", err)
 	}
-	body, err := os.ReadFile(filepath.Join(work, "workspace.toml"))
+	body, err := os.ReadFile(filepath.Join(work, "cocoon.toml"))
 	if err != nil {
-		t.Fatalf("read workspace.toml: %v", err)
+		t.Fatalf("read cocoon.toml: %v", err)
 	}
 	got := string(body)
 	// No --ports = template commented out; no live `forward = [...]`

@@ -6,6 +6,21 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-06-07
+
+### Added
+
+- `cocoon gen`, `cocoon lock`, and `cocoon plugin` now discover `cocoon.toml`
+  first and fall back to `workspace.toml` when it is absent, so a project may use
+  either filename. When both exist in the same directory, `cocoon.toml` wins; a
+  config file in a closer directory still beats the preferred name in a parent.
+
+### Changed
+
+- `cocoon init` now generates `cocoon.toml` instead of `workspace.toml`.
+  `workspace.toml` remains a fully supported configuration filename (discovered
+  as a fallback), so existing projects keep working without a rename.
+
 ## [0.14.2] - 2026-06-07
 
 ### Changed
@@ -670,7 +685,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Add `COMPOSE_PROJECT_NAME` derivation from the project directory basename so docker compose namespacing matches the host directory.
 - Add i18n catalog (English / Japanese) covering every CLI prompt, error message, and inline `workspace.toml` comment, switched via `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG`.
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.14.2...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/sukekyo26/cocoon/compare/v0.14.2...v0.15.0
 [0.14.2]: https://github.com/sukekyo26/cocoon/compare/v0.14.1...v0.14.2
 [0.14.1]: https://github.com/sukekyo26/cocoon/compare/v0.14.0...v0.14.1
 [0.14.0]: https://github.com/sukekyo26/cocoon/compare/v0.13.0...v0.14.0

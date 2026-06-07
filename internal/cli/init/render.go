@@ -30,7 +30,7 @@ type containerSpec struct {
 	Ports          []string
 }
 
-// renderWorkspaceToml emits workspace.toml. Inline comments come from
+// renderWorkspaceToml emits cocoon.toml. Inline comments come from
 // the i18n catalog so the locale matches the original runner's $LANG
 // (re-run with --force under a different LANG to switch). The section
 // writers run in the file's top-to-bottom order.
@@ -379,7 +379,7 @@ func emitTemplate(sb *strings.Builder, cat *i18n.Catalog, key string) {
 
 // writeInlineTable emits a TOML inline-table value (`{ k = "v", ... }`)
 // with keys sorted so the output is deterministic across runs. Used for
-// `[container.shell] aliases = { ... }` so the generated workspace.toml
+// `[container.shell] aliases = { ... }` so the generated cocoon.toml
 // stays diff-friendly when the user re-runs `cocoon init --force`.
 func writeInlineTable(sb *strings.Builder, m map[string]string) {
 	keys := slices.Sorted(maps.Keys(m))

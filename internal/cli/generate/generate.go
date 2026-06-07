@@ -1,5 +1,5 @@
 // Package generatecli implements the in-process generation pipeline used by
-// the `cocoon gen` command. It loads workspace.toml + the enabled plugin
+// the `cocoon gen` command. It loads the config file + the enabled plugin
 // TOMLs once and produces the generated artifacts (Dockerfile,
 // docker-compose.yml, devcontainer.json when enabled, docker-entrypoint.sh,
 // manage.sh, .env) under .devcontainer/. Callers are responsible for atomic

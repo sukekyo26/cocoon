@@ -61,6 +61,84 @@ func TestDiscover_PrefersRootOverDotCocoon(t *testing.T) {
 	}
 }
 
+func TestDiscover_FindsRootCocoonToml(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	mustWrite(t, filepath.Join(dir, "cocoon.toml"), "")
+
+	got, err := config.Discover(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != filepath.Join(dir, "cocoon.toml") {
+		t.Fatalf("got %q, want %q", got, filepath.Join(dir, "cocoon.toml"))
+	}
+}
+
+// TestDiscover_PrefersCocoonTomlOverWorkspaceToml pins that, within one
+// directory, cocoon.toml wins over the legacy workspace.toml fallback.
+func TestDiscover_PrefersCocoonTomlOverWorkspaceToml(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	mustWrite(t, filepath.Join(dir, "cocoon.toml"), "preferred")
+	mustWrite(t, filepath.Join(dir, "workspace.toml"), "fallback")
+
+	got, err := config.Discover(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != filepath.Join(dir, "cocoon.toml") {
+		t.Fatalf("got %q, want root cocoon.toml", got)
+	}
+}
+
+// TestDiscover_PrefersDotCocoonCocoonTomlOverWorkspace pins the in-directory
+// order: .cocoon/cocoon.toml outranks .cocoon/workspace.toml.
+func TestDiscover_PrefersDotCocoonCocoonTomlOverWorkspace(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".cocoon"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	mustWrite(t, filepath.Join(dir, ".cocoon", "cocoon.toml"), "preferred")
+	mustWrite(t, filepath.Join(dir, ".cocoon", "workspace.toml"), "fallback")
+
+	got, err := config.Discover(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := filepath.Join(dir, ".cocoon", "cocoon.toml")
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+// TestDiscover_ProximityBeatsPreferredName pins that a closer directory wins
+// even when it only holds the legacy name: a child's workspace.toml outranks a
+// parent's cocoon.toml.
+func TestDiscover_ProximityBeatsPreferredName(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "cocoon.toml"), "parent")
+	child := filepath.Join(root, "child")
+	if err := os.MkdirAll(child, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	mustWrite(t, filepath.Join(child, "workspace.toml"), "child")
+
+	got, err := config.Discover(child)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != filepath.Join(child, "workspace.toml") {
+		t.Fatalf("got %q, want child workspace.toml (proximity wins)", got)
+	}
+}
+
 func TestDiscover_AscendsToParent(t *testing.T) {
 	t.Parallel()
 

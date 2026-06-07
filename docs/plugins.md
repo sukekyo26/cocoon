@@ -10,7 +10,7 @@ and the version-pin contract.
 
 If you are an end user just trying to enable an existing plugin, you
 only need one thing: list the plugin's id in `[plugins].enable` in
-`workspace.toml`. The rest of this page is for people writing or
+the config file. The rest of this page is for people writing or
 modifying a plugin.
 
 ## What a plugin is
@@ -91,7 +91,7 @@ declaration is only emitted alongside a hook, so a plugin built around
 
 Method names (the `<name>` in `[install.methods.<name>]` and the
 corresponding `install.<name>.sh` filename) follow a 4-category
-convention so the workspace.toml `[plugins.methods]` table reads the
+convention so the config file `[plugins.methods]` table reads the
 same way across the catalog. Plugin-specific names (e.g. `gh-cli`,
 `bun-sh`) make users look up plugin.toml to figure out what they
 picked.
@@ -131,7 +131,7 @@ of the install phase and the named-volume declaration in
 | `[install]`  | `build_args`      | list of strings    | `[]`  |   | Names of build-time variables the plugin consumes. The generator emits matching `ARG <name>` lines once per plugin (next to whichever of the install scripts runs first) and threads `<name>="${<name>}"` into the per-RUN env prefix of every hook, so both `install.<name>.sh` and `install_user.sh` can read `$<name>` as a normal env var. ARG scope is stage-wide, so a single declaration covers both RUNs. Names match `^[A-Z_][A-Z0-9_]*$` and must not collide with cocoon-reserved env variables (`PIN`, `CHECKSUM_AMD64`, `CHECKSUM_ARM64`, `RC_FILE`, `RC_SYNTAX`, `LOGIN_SHELL`, `COCOON_INSTALL_METHOD`, `USERNAME`) — the `build_args` pair is appended to the RUN prefix after the framework values and would silently shadow them. |
 | `[install]`  | `env`             | map<string,string> | `{}`  |   | `ENV` lines emitted after the install runs. Values can reference earlier `ENV`/`ARG` vars. |
 | `[install]`  | `volumes`         | list of strings    | `[]`  |   | Per-user paths under `/home/${USERNAME}/<dir>`; each one is `mkdir -p`'d, `chown`'d, and declared as a docker named volume so its contents persist across rebuilds. |
-| `[install]`  | `default_method`  | string             | —     | ✓ | Name of the method picked when `workspace.toml`'s `[plugins.methods]` does not pin one. Must be a key under `[install.methods]`. Required because `[install.methods]` is now mandatory (single-method plugins still declare one entry). |
+| `[install]`  | `default_method`  | string             | —     | ✓ | Name of the method picked when the config file's `[plugins.methods]` does not pin one. Must be a key under `[install.methods]`. Required because `[install.methods]` is now mandatory (single-method plugins still declare one entry). |
 | `[install.methods.<name>]` | `description` | string | — | ✓ | One-line description shown in `cocoon init`'s method picker. `<name>` matches `^[a-z][a-z0-9_-]*$` and must have a matching `install.<name>.sh` file on disk. **At least one method entry is required** per plugin; the legacy `install.sh` shape is no longer supported. Pick `<name>` from the 4 category words (see "Method name categories"). |
 | `[install.extra_versions.<key>]` | `env`, `default` | inline table | — |   | Declare a user-overridable subcomponent version. `<key>` matches `^[a-z][a-z0-9_]*$`; `env` is the variable name passed to the install script (`^[A-Z_][A-Z0-9_]*$`, must not collide with reserved env names or `build_args`); `default` is used when `[plugins.options].<id>` does not set the key. See "Subcomponent versions" below. |
 | `[version]`  | `version_capable` | bool               | —     | ✓ | If true, the install script accepts `$PIN` for version pinning (see "Versioned plugins" below). |
@@ -202,7 +202,7 @@ description = "Direct binary from GitHub Releases (no curl|sh)"
 
 With the matching `install.installer.sh` and `install.binary.sh` files
 on disk, the plugin offers two install paths. The selection flows
-through `workspace.toml`:
+through the config file:
 
 ```toml
 [plugins.methods]
@@ -225,7 +225,7 @@ The chosen script receives every standard env var (`$PIN`,
 
 **Multi-method plugins** should fail-fast when the env is missing
 (`: "${COCOON_INSTALL_METHOD:?missing}"`) and reject mismatched values
-so a stale `workspace.toml` reference is caught before the script pulls
+so a stale config file reference is caught before the script pulls
 down the wrong artifact after a rename. **Single-method plugins** can
 skip this check — the loader's `[install.methods]` enforcement
 guarantees `$COCOON_INSTALL_METHOD` is set, and there is no sibling
@@ -237,7 +237,7 @@ script to mistake it for. See
 (inline, e.g. `"go=1.23.4"`) and are **workspace-scoped, not method-scoped** —
 the catalog deliberately keeps `plugin.toml` free of per-method checksums to
 bound the diff every upstream release produces. Per-arch checksums are recorded
-in `cocoon.lock` by `cocoon lock`, not in `workspace.toml`. When switching
+in `cocoon.lock` by `cocoon lock`, not in the config file. When switching
 methods, re-run `cocoon lock` to refresh the recorded checksums so the install
 script's `sha256sum -c -` still matches the new artifact.
 
@@ -274,11 +274,11 @@ bash's environment for that step is composed from two sources:
 | `RC_SYNTAX`      | per-RUN env, always | `posix` (bash/zsh) or `fish`. Use this to branch when emitting rc lines. |
 | `LOGIN_SHELL`    | per-RUN env, always | `bash`, `zsh`, or `fish`. |
 | `USERNAME`       | Dockerfile `ARG`, always | The unprivileged container user name (declared via `ARG USERNAME` near the top of the generated Dockerfile and promoted to env by BuildKit). |
-| `PIN`            | per-RUN env, only when `[version].version_capable = true` | Version string from the `<id>=<version>` element in `workspace.toml`'s `[plugins].enable` array (e.g. `"go=1.23.4"` → `PIN="1.23.4"`). Empty for an unpinned id or a `latest` element with no lock yet, meaning "use upstream latest". |
+| `PIN`            | per-RUN env, only when `[version].version_capable = true` | Version string from the `<id>=<version>` element in the config file's `[plugins].enable` array (e.g. `"go=1.23.4"` → `PIN="1.23.4"`). Empty for an unpinned id or a `latest` element with no lock yet, meaning "use upstream latest". |
 | `CHECKSUM_AMD64` | per-RUN env, only when `version_capable = true` and `verify = "checksum"` | `sha256` of the amd64 artifact from `cocoon.lock`, or empty until you run `cocoon lock` (the script then verifies against the upstream-published checksum, warning only if the upstream ships none). Not passed to `verify = "pgp"` plugins. |
 | `CHECKSUM_ARM64` | same as above | `sha256` of the arm64 artifact. |
 | `<BUILD_ARG>`    | per-RUN env (also declared as `ARG`), only when listed in `[install].build_args` | The generator emits one `ARG <name>` line per plugin (next to whichever hook runs first) and threads `<name>="${<name>}"` into the per-RUN prefix of every hook. The Dockerfile substitutes the value on each prefix line at build time. No catalog plugin currently declares one; the mechanism is for custom plugins. |
-| `<EXTRA_ENV>`    | per-RUN env, when declared under `[install.extra_versions]` | One env var per declared subcomponent version. The plugin spells out the env name and a default; the user can override the value from `workspace.toml`'s `[plugins.options].<id>` inline table by writing the same key (e.g. `android-sdk = { api_level = "36" }`, with the main version pinned separately in `[plugins].enable` as `"android-sdk=..."`). The reserved env names above (`PIN`, `CHECKSUM_AMD64`, `CHECKSUM_ARM64`, `RC_FILE`, `RC_SYNTAX`, `LOGIN_SHELL`, `COCOON_INSTALL_METHOD`, `USERNAME`) are off-limits for collision reasons. See "Subcomponent versions" below. |
+| `<EXTRA_ENV>`    | per-RUN env, when declared under `[install.extra_versions]` | One env var per declared subcomponent version. The plugin spells out the env name and a default; the user can override the value from the config file's `[plugins.options].<id>` inline table by writing the same key (e.g. `android-sdk = { api_level = "36" }`, with the main version pinned separately in `[plugins].enable` as `"android-sdk=..."`). The reserved env names above (`PIN`, `CHECKSUM_AMD64`, `CHECKSUM_ARM64`, `RC_FILE`, `RC_SYNTAX`, `LOGIN_SHELL`, `COCOON_INSTALL_METHOD`, `USERNAME`) are off-limits for collision reasons. See "Subcomponent versions" below. |
 
 Nothing on the developer's host machine evaluates the script — bash
 runs the body inside the build environment, with the env composed as
@@ -367,7 +367,7 @@ build_tools = { env = "ANDROID_SDK_BUILD_TOOLS", default = "35.0.0" }
   `^[A-Z_][A-Z0-9_]*$`, must not collide with the reserved env
   variables above, with any name in `[install].build_args`, or with
   another declared `env` inside `extra_versions`.
-- **`default`** — required, non-empty. Used when `workspace.toml` does
+- **`default`** — required, non-empty. Used when the config file does
   not override the key. The install script should treat the env as
   required (e.g. `: "${ANDROID_SDK_API_LEVEL:?...}"`) so a misconfigured
   generator fails fast instead of producing a half-installed SDK. Both
@@ -456,5 +456,5 @@ Use these embedded plugins as templates when writing your own:
 - [`architecture.md`](architecture.md) — why the layered FS and
   inline-heredoc design exist.
 - [`configuration.md`](configuration.md) — the `[plugins]`,
-  `[plugins.methods]`, and `[plugins.options]` sections of `workspace.toml`.
+  `[plugins.methods]`, and `[plugins.options]` sections of the config file.
 - [`commands.md`](commands.md) — `cocoon plugin <subcmd>` reference.

@@ -205,8 +205,8 @@ func TestPin_WriteRequiresWorkspace(t *testing.T) {
 	if !errors.Is(err, clihelpers.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage", err)
 	}
-	if !strings.Contains(err.Error(), "workspace.toml") {
-		t.Errorf("err should mention workspace.toml: %v", err)
+	if !strings.Contains(err.Error(), "cocoon.toml") {
+		t.Errorf("err should mention cocoon.toml: %v", err)
 	}
 }
 

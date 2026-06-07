@@ -1,7 +1,7 @@
 package initcli
 
 // pathFixEnvEntry is one `K = "V"` pair the auto-path-fix adds to
-// [container.shell.env]. Slice order is preserved as the workspace.toml
+// [container.shell.env]. Slice order is preserved as the cocoon.toml
 // emit order; shellrc.go sorts alphabetically at render time so runtime
 // order is independent of this list.
 type pathFixEnvEntry struct {
@@ -24,7 +24,7 @@ type pathFixVolume struct {
 // imagePathFix describes the auto-injection cocoon offers for one language
 // base image. Command is the user-facing example command (e.g. `npm install
 // -g <pkg>`) that the entries make work without sudo; it is spliced into
-// the prompt description and the workspace.toml auto-comment so both
+// the prompt description and the cocoon.toml auto-comment so both
 // surfaces explain the *why* in concrete terms. Volumes pairs with Entries
 // to persist the install destinations across container rebuilds — the two
 // are emitted together (same prompt answer / same flag) because env

@@ -1,4 +1,4 @@
-cocoon init — generate workspace.toml in the current directory
+cocoon init — generate cocoon.toml in the current directory
 
 Asks (when running interactively) for the container service name, the
 inside-the-container username, the base image / version, the mount range,
@@ -29,7 +29,7 @@ Flags:
       --certificates             force-enable [certificates] auto-bake from ~/.cocoon/certs/
       --devcontainer             force-enable .devcontainer/devcontainer.json output
       --dir string               container workdir parent under /home/<user>/ (default "workspace"; slashes allowed for nested paths, e.g. "work/myproject")
-      --force                    overwrite an existing workspace.toml
+      --force                    overwrite an existing cocoon.toml
   -h, --help                     help for init
       --image string             base image: ubuntu, debian, node, python, golang, rust, denoland/deno
       --image-path-fix           force the language-image PATH/install-prefix auto-injection (requires --image=node|python|golang|rust|denoland/deno; default on for those)
