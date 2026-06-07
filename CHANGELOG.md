@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- The `codex` plugin now installs `bubblewrap`, so Codex runs its command
+  sandbox with the OS `bwrap` instead of falling back to a bundled copy (and no
+  longer prints the "could not find bubblewrap on PATH" warning).
+
 ## [0.15.0] - 2026-06-07
 
 ### Added

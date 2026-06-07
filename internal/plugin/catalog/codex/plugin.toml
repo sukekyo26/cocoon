@@ -4,6 +4,9 @@ description = "OpenAI's coding agent that runs in your terminal"
 url = "https://github.com/openai/codex"
 default = false
 
+[apt]
+packages = ["bubblewrap"]
+
 [install]
 requires_root = true
 volumes = ["/home/${USERNAME}/.codex"]
