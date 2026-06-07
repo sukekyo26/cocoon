@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- `cocoon init` image-version suggestions for the language base images now
+  offer a Debian trixie variant alongside bookworm, refreshed to the latest
+  upstream releases: `node` (`26`/`24` LTS × bookworm/trixie), `python`
+  (`3.14-slim-bookworm`, `3.14-slim-trixie`), `golang` (`1.26-bookworm`,
+  `1.26-trixie`), `rust` (`1.96-bookworm`, `1.96-trixie`), and `denoland/deno`
+  (`debian-2.8.2`). bookworm stays the default pick; any other well-formed tag
+  is still accepted via manual input.
+
 ## [0.15.3] - 2026-06-08
 
 ### Changed

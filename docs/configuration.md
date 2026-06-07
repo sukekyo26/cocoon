@@ -83,7 +83,7 @@ Image identity. `service_name`, `username`, `image`, `image_version` are all req
 | `service_name` | string | `^[a-z][a-z0-9_-]*$` | Compose `services:` key. Used as `docker compose exec <service_name>`. |
 | `username` | string | `^[a-z_][a-z0-9_-]*$` | Linux user created inside the container. |
 | `image` | string | `ubuntu` \| `debian` \| `node` \| `python` \| `golang` \| `rust` \| `denoland/deno` | Base image for `FROM`, written **verbatim** as DockerHub's canonical image name — `golang` (not `go`) and `denoland/deno` (vendor namespace) — so a reader can recreate the FROM line from the config file alone, with no cocoon-side alias resolution. |
-| `image_version` | string | plain Docker tag: first character must be alnum or `_`; trailing characters add `.` / `-`; no slash, no colon | Image tag (e.g. `26.04`, `24-bookworm-slim`, `1.26.3-bookworm`, `debian-2.7.14`). The table below is the curated suggestion list cocoon offers in `cocoon init`; **any well-formed tag the upstream registry publishes is accepted**, so you can pin a patch or new minor (e.g. `1.26.4-bookworm` the day it ships) without waiting for a cocoon release. |
+| `image_version` | string | plain Docker tag: first character must be alnum or `_`; trailing characters add `.` / `-`; no slash, no colon | Image tag (e.g. `26.04`, `24-bookworm-slim`, `1.26-bookworm`, `debian-2.8.2`). The table below is the curated suggestion list cocoon offers in `cocoon init`; **any well-formed tag the upstream registry publishes is accepted**, so you can pin a patch or new minor (e.g. `1.26.4-bookworm` the day it ships) without waiting for a cocoon release. |
 | `docker_socket` | bool | — | Mount `/var/run/docker.sock` for docker-in-docker. Pair with the `docker-cli` plugin so the container has a client to use it. Default `false`. |
 | `group_add` | `[]string` | each entry: group name (`^[a-z_][a-z0-9_-]*\$?$`) or numeric GID | Supplementary groups the container user joins (Compose `group_add:`). Required because the user runs as a numeric `UID:GID`, so groups baked into the image's `/etc/group` are not applied at runtime. A group **name** must already exist in the image's `/etc/group`; a numeric GID needs no matching entry. |
 | `devices` | `[]string` | `HOST:CONTAINER[:rwm]`; both paths absolute | Host devices mapped into the container (Compose `devices:`), e.g. `/dev/dri` for GPU rendering. CDI device syntax is not supported. |
@@ -95,16 +95,16 @@ Image identity. `service_name`, `username`, `image`, `image_version` are all req
 | `image` | `image_version` (suggestions) | FROM line emitted |
 |---|---|---|
 | `ubuntu` | `26.04`, `24.04`, `22.04` | `FROM ubuntu:<v>` |
-| `debian` | `13`, `12` | `FROM debian:<v>` |
-| `node` | `26-bookworm-slim`, `24-bookworm-slim`, `22-bookworm-slim` | `FROM node:<v>` |
-| `python` | `3.14-slim-bookworm`, `3.13-slim-bookworm`, `3.12-slim-bookworm` | `FROM python:<v>` |
-| `golang` | `1.26.3-bookworm`, `1.26-bookworm`, `1.25-bookworm`, `1.24-bookworm` | `FROM golang:<v>` |
-| `rust` | `1.95-bookworm`, `1.94-bookworm`, `1.93-bookworm` | `FROM rust:<v>` |
-| `denoland/deno` | `debian-2.7.14`, `debian-2.6.10`, `debian-2.5.7` | `FROM denoland/deno:<v>` |
+| `debian` | `12`, `13` | `FROM debian:<v>` |
+| `node` | `26-bookworm-slim`, `26-trixie-slim`, `24-bookworm-slim`, `24-trixie-slim` | `FROM node:<v>` |
+| `python` | `3.14-slim-bookworm`, `3.14-slim-trixie` | `FROM python:<v>` |
+| `golang` | `1.26-bookworm`, `1.26-trixie` | `FROM golang:<v>` |
+| `rust` | `1.96-bookworm`, `1.96-trixie` | `FROM rust:<v>` |
+| `denoland/deno` | `debian-2.8.2` | `FROM denoland/deno:<v>` |
 
 `cocoon init` exposes these as **Tab-completion suggestions** on the version input — press Tab to cycle through them or type any other tag directly. `--image-version <tag>` accepts the same set on the non-interactive path. Validation only enforces the tag format (no slash, no colon); whether the tag actually exists in the upstream registry is left to `docker pull` at build time.
 
-Every supported image is apt-based, so the existing plugin catalog works the same across all of them. `ubuntu` pulls from Ubuntu archives (archive.ubuntu.com); the other six are Debian (bookworm) variants and pull from deb.debian.org. apt-mirror rewriting branches on this in `aptMirrorOriginHosts` (see `internal/generate/dockerfile/dockerfile.go`).
+Every supported image is apt-based, so the existing plugin catalog works the same across all of them. `ubuntu` pulls from Ubuntu archives (archive.ubuntu.com); the other six are Debian-based variants (bookworm or trixie) and pull from deb.debian.org. apt-mirror rewriting branches on this in `aptMirrorOriginHosts` (see `internal/generate/dockerfile/dockerfile.go`).
 
 **Image vs plugin (mutually exclusive pairs):** picking a language-runtime image that overlaps with an existing cocoon plugin is rejected at validation time, because the plugin would either overwrite the base layer (go) or shadow it on `$PATH` (rust). Either drop the plugin from `[plugins].enable`, or switch back to `image = "ubuntu" / "debian"` and pin the version inline in the `enable` array (e.g. `"go=1.23.4"`).
 

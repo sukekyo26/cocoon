@@ -11,7 +11,7 @@
 #   PRESET          one of: minimal | single | amd64-full | arm64-full
 #   PLUGIN          (single preset only) the one catalog plugin id to build
 #   IMAGE           base image id (e.g. ubuntu, debian, denoland/deno)
-#   IMAGE_VERSION   image tag (e.g. 26.04, debian-2.7.14)
+#   IMAGE_VERSION   image tag (e.g. 26.04, debian-2.8.2)
 #
 # Optional env:
 #   SUDO_MODE       sudo posture to exercise, mirroring `cocoon init --sudo`:
