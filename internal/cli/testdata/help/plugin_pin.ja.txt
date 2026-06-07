@@ -1,14 +1,14 @@
 cocoon plugin pin — [plugins].enable エントリ (および任意で [plugins.methods]) を出力
 
 既定では `"<id>=<ref>"` という配列要素が stdout に出力されるので、
-cocoon.toml の [plugins].enable 配列に追加してください。素のバージョン
+設定ファイルの [plugins].enable 配列に追加してください。素のバージョン
 (1.23.4) は exact pin (<id>=1.23.4) として書かれ、"latest" を渡すと最新リリースを
 追従します。--write を付けると in-place で upsert されます (新規追加、または既存の
 <id> 要素を置換)。ファイルの残りは verbatim で保持されます。
 
 バージョンの具体リリースへの凍結と arch ごとの SHA256 checksum の記録は
 `cocoon lock` が lock ファイルに対して行います。checksum はもう
-cocoon.toml には置きません。
+設定ファイルには置きません。
 
 plugin.toml の [install.methods] に複数エントリを宣言しているプラグインには
 --method <name> を指定します。pin はその場合に `"<id>=<ref>"` の
@@ -20,5 +20,5 @@ enable エントリと `<id> = "<method>"` 行（[plugins.methods] 向け）の
 
 フラグ:
   -h, --help            pin のヘルプを表示
-      --method string   install メソッド名。[install.methods] を宣言したプラグインのみ意味を持ちます。指定すると単一の cocoon.toml 読み書きで [plugins.methods] と [plugins].enable エントリの両方を pin します。省略時は enable エントリのみ更新されます （既存の [plugins.methods] エントリ、またはプラグインの default_method が引き続き有効）。
+      --method string   install メソッド名。[install.methods] を宣言したプラグインのみ意味を持ちます。指定すると単一の設定ファイル読み書きで [plugins.methods] と [plugins].enable エントリの両方を pin します。省略時は enable エントリのみ更新されます （既存の [plugins.methods] エントリ、またはプラグインの default_method が引き続き有効）。
       --write           設定ファイルの enable エントリを upsert（cwd から自動探索）

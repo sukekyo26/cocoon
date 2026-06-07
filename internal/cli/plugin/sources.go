@@ -13,7 +13,7 @@ import (
 
 // ErrWorkspaceNotFound lets callers map "outside a cocoon project" to
 // clihelpers.ErrUsage and genuine system failures to clihelpers.ErrFailure.
-var ErrWorkspaceNotFound = errors.New("cocoon.toml not found in tree")
+var ErrWorkspaceNotFound = errors.New("config file not found in tree")
 
 // resolveLayered drops the project layer silently when no config file
 // is discoverable (read-only views like list/show still work from

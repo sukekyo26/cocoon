@@ -1,7 +1,7 @@
 cocoon plugin scaffold — create a new <id>/ directory under the project plugins overlay
 
 By default the new directory is created under <workspace>/.cocoon/plugins/<id>/,
-auto-discovered from the nearest cocoon.toml. Pass --plugins-dir <path> to
+auto-discovered from the nearest config file. Pass --plugins-dir <path> to
 override (the path is taken as-is, joined with <id>).
 
 The new directory contains a plugin.toml declaring a single

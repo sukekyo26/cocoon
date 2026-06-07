@@ -1,7 +1,7 @@
 cocoon plugin scaffold — プロジェクトのプラグインオーバーレイ配下に新しい <id>/ ディレクトリを作成
 
 既定では <workspace>/.cocoon/plugins/<id>/ 配下に新規ディレクトリが作られます
-（最寄りの cocoon.toml から自動探索）。--plugins-dir <path> で上書きすると、
+（最寄りの設定ファイルから自動探索）。--plugins-dir <path> で上書きすると、
 パスはそのまま採用され <id> が結合されます。
 
 新規ディレクトリには [install.methods.<category>] エントリを 1 つ宣言した
