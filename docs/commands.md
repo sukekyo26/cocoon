@@ -315,7 +315,7 @@ Updated /home/alice/proj/cocoon.toml: [plugins].enable "go=1.23.4"
 
 - A pin only makes sense for plugins whose `[version].version_capable = true`. The element's version is ignored at `gen` time for non-version-capable plugins.
 - Checksums are not pinned here. They are recorded in `cocoon.lock` by `cocoon lock`; until then the install script's fallback verifies each download against the checksum the upstream publishes with the release.
-- `--write` requires a discoverable the config file from cwd; without `--write`, the command works from anywhere because it only resolves the layered FS for id validation.
+- `--write` requires a discoverable config file from cwd; without `--write`, the command works from anywhere because it only resolves the layered FS for id validation.
 - `--write` refuses with a usage error if the config file still contains a `[plugins.versions]` section (the removed schema). Migrate each pin into the `[plugins].enable` array first — turn an inline-table pin like `go = { pin = "1.23.4" }` into the element `"go=1.23.4"` and delete the `[plugins.versions]` section — then re-run, or edit the config file manually.
 
 ### `cocoon plugin scaffold <id>`
@@ -361,7 +361,7 @@ OK: scaffolded /home/alice/projects/myapp/.cocoon/plugins/gh-cli (2 files)
 
 **Gotchas:**
 
-- Without `--plugins-dir` and outside a cocoon project (no discoverable the config file), scaffold refuses with an actionable error rather than silently writing to `./plugins/<id>/`.
+- Without `--plugins-dir` and outside a cocoon project (no discoverable config file), scaffold refuses with an actionable error rather than silently writing to `./plugins/<id>/`.
 - `--template binary` implies `--version-capable`; the scaffold rejects `binary` without `--version-capable`.
 - After scaffolding, the generated `plugin.toml` is reloaded under the same strict validator the runtime uses; if it fails (bad name, missing or malformed `url`, etc.), the directory is rolled back.
 - Like overlays from `add`, a scaffolded plugin still needs to be listed in `[plugins].enable` to take effect at `gen` time.
