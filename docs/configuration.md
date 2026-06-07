@@ -1,7 +1,7 @@
 # Configuration (`cocoon.toml`)
 
 > [!WARNING]
-> cocoon is in v0.x (alpha). By using it, please understand and accept that the `cocoon.toml` schema, the CLI flags, and the plugin contracts may change before 1.0, and that breaking changes can land in any release. See the [CHANGELOG](../CHANGELOG.md) and the README's "Project status" section.
+> cocoon is in v0.x (alpha). By using it, please understand and accept that the config file schema, the CLI flags, and the plugin contracts may change before 1.0, and that breaking changes can land in any release. See the [CHANGELOG](../CHANGELOG.md) and the README's "Project status" section.
 
 `cocoon.toml` is the single source of truth that drives `cocoon gen`. This page documents every section and field accepted by the schema.
 
@@ -82,7 +82,7 @@ Image identity. `service_name`, `username`, `image`, `image_version` are all req
 |---|---|---|---|
 | `service_name` | string | `^[a-z][a-z0-9_-]*$` | Compose `services:` key. Used as `docker compose exec <service_name>`. |
 | `username` | string | `^[a-z_][a-z0-9_-]*$` | Linux user created inside the container. |
-| `image` | string | `ubuntu` \| `debian` \| `node` \| `python` \| `golang` \| `rust` \| `denoland/deno` | Base image for `FROM`, written **verbatim** as DockerHub's canonical image name — `golang` (not `go`) and `denoland/deno` (vendor namespace) — so a reader can recreate the FROM line from cocoon.toml alone, with no cocoon-side alias resolution. |
+| `image` | string | `ubuntu` \| `debian` \| `node` \| `python` \| `golang` \| `rust` \| `denoland/deno` | Base image for `FROM`, written **verbatim** as DockerHub's canonical image name — `golang` (not `go`) and `denoland/deno` (vendor namespace) — so a reader can recreate the FROM line from the config file alone, with no cocoon-side alias resolution. |
 | `image_version` | string | plain Docker tag: first character must be alnum or `_`; trailing characters add `.` / `-`; no slash, no colon | Image tag (e.g. `26.04`, `24-bookworm-slim`, `1.26.3-bookworm`, `debian-2.7.14`). The table below is the curated suggestion list cocoon offers in `cocoon init`; **any well-formed tag the upstream registry publishes is accepted**, so you can pin a patch or new minor (e.g. `1.26.4-bookworm` the day it ships) without waiting for a cocoon release. |
 | `docker_socket` | bool | — | Mount `/var/run/docker.sock` for docker-in-docker. Pair with the `docker-cli` plugin so the container has a client to use it. Default `false`. |
 | `group_add` | `[]string` | each entry: group name (`^[a-z_][a-z0-9_-]*\$?$`) or numeric GID | Supplementary groups the container user joins (Compose `group_add:`). Required because the user runs as a numeric `UID:GID`, so groups baked into the image's `/etc/group` are not applied at runtime. A group **name** must already exist in the image's `/etc/group`; a numeric GID needs no matching entry. |
@@ -180,7 +180,7 @@ The interactive prompt previews the exact keys / values before asking, and the g
 
 `ubuntu` and `debian` do not surface the prompt — they have no language runtime to fix up. `rust` uses `CARGO_INSTALL_ROOT` rather than overriding `CARGO_HOME` so rustup state and `cargo build`'s registry cache continue to live under the image-default `/usr/local/cargo`; only `cargo install`'s output is redirected under `$HOME`.
 
-> **Inline `env = { ... }` and `[container.shell.env]` cannot coexist.** TOML treats them as conflicting definitions of the same `env` key under `[container.shell]` and the parser will reject the file at `cocoon gen` time (`toml: key env should be a table, not a value`). Once the auto-injected subsection is present, append further env keys *inside* that subsection rather than uncommenting the inline-form hint above. The generated cocoon.toml carries the same warning in two places (the `[container.shell]` env example block and the auto-comment above the auto-injected subsection) so the constraint stays visible whichever block you edit first.
+> **Inline `env = { ... }` and `[container.shell.env]` cannot coexist.** TOML treats them as conflicting definitions of the same `env` key under `[container.shell]` and the parser will reject the file at `cocoon gen` time (`toml: key env should be a table, not a value`). Once the auto-injected subsection is present, append further env keys *inside* that subsection rather than uncommenting the inline-form hint above. The generated the config file carries the same warning in two places (the `[container.shell]` env example block and the auto-comment above the auto-injected subsection) so the constraint stays visible whichever block you edit first.
 
 Enabling the matching cocoon plugin (`node` / `go` / `rust` / `deno`) for the same image is already rejected as a conflict, so the auto-injection only ever pairs with images you are using *without* the cocoon plugin overlay.
 
@@ -331,14 +331,14 @@ those **must** be pinned to an exact version in the `enable` array (e.g.
 `"flutter=3.44.1"`). Left unpinned or on `latest`, `cocoon lock` errors.
 
 > **Migration note.** The old `[plugins.versions]` section was **removed**. A
-> `cocoon.toml` that still has it is rejected at load with a hint to move
+> the config file that still has it is rejected at load with a hint to move
 > the pins into the `enable` array. Turn an inline-table pin like
 > `go = { pin = "1.23.4" }` into the enable element `"go=1.23.4"`, move any
 > extra keys (e.g. android-sdk's `api_level`) to `[plugins.options]` and
 > per-arch checksums into `cocoon.lock` (written by `cocoon lock`), then delete
 > the `[plugins.versions]` section.
 
-Checksums do **not** live in `cocoon.toml`. Per-arch SHA256 checksums are
+Checksums do **not** live in the config file. Per-arch SHA256 checksums are
 recorded in a `cocoon.lock` file by `cocoon lock`, which also resolves any
 `latest` element to a concrete version. When no checksum has been recorded yet,
 the install scripts still verify each download against the checksum the upstream
@@ -560,7 +560,7 @@ cp /path/to/corp-ca.crt ~/.cocoon/certs/
 docker compose -f .devcontainer/docker-compose.yml build
 ```
 
-This directory is a host-side global location, not a `cocoon.toml` section.
+This directory is a host-side global location, not a config file section.
 **Multiple cocoon projects share the same corp CA bundle** — there is no need
 to copy the cert into each project.
 
@@ -604,7 +604,7 @@ team; opted-out workspaces share cert-free artifacts.
 
 ## `[home_files]`
 
-Files persisted via per-file bind mounts. Each path is relative to `~/` (no leading `/`, no `~`, no `..`). Per-segment characters are restricted to `[A-Za-z0-9._-]` because the path is interpolated verbatim into the generated `initializeCommand` shell snippet — anything with shell-special meaning (`$`, backticks, `;`, `&`, `|`, `<`, `>`, `*`, `?`, `!`, quotes, backslashes, whitespace) is rejected so a repo-provided `cocoon.toml` cannot inject commands into the host shell. Use this to share host-side configs like `~/.gitconfig` into the container.
+Files persisted via per-file bind mounts. Each path is relative to `~/` (no leading `/`, no `~`, no `..`). Per-segment characters are restricted to `[A-Za-z0-9._-]` because the path is interpolated verbatim into the generated `initializeCommand` shell snippet — anything with shell-special meaning (`$`, backticks, `;`, `&`, `|`, `<`, `>`, `*`, `?`, `!`, quotes, backslashes, whitespace) is rejected so a repo-provided the config file cannot inject commands into the host shell. Use this to share host-side configs like `~/.gitconfig` into the container.
 
 ```toml
 [home_files]
@@ -688,7 +688,7 @@ extensions = [
 
 ## `[code_workspace]`
 
-Defines a VS Code `.code-workspace` file that `cocoon gen workspace` writes alongside `cocoon.toml` by default (**not** under `.devcontainer/`). The output directory can be redirected with `--output <dir>`; the generator always relativizes folder paths against the directory the file is actually written to, so VS Code resolves them correctly regardless of where the file lands. The generator expands `~` as well, so a `"~/.claude"` entry lets VS Code traverse upward to `$HOME`-adjacent directories from the same window.
+Defines a VS Code `.code-workspace` file that `cocoon gen workspace` writes alongside the config file by default (**not** under `.devcontainer/`). The output directory can be redirected with `--output <dir>`; the generator always relativizes folder paths against the directory the file is actually written to, so VS Code resolves them correctly regardless of where the file lands. The generator expands `~` as well, so a `"~/.claude"` entry lets VS Code traverse upward to `$HOME`-adjacent directories from the same window.
 
 This section has no effect on `cocoon gen` itself — the `.code-workspace` file is only written when you explicitly run `cocoon gen workspace`.
 
@@ -716,7 +716,7 @@ recommendations = ["golang.go", "ms-azuretools.vscode-docker"]
 
 ### Path resolution
 
-Folder paths are relativized against the **directory the `.code-workspace` file lives in** — by default that is the cocoon.toml directory, but it shifts when `--output` is passed.
+Folder paths are relativized against the **directory the `.code-workspace` file lives in** — by default that is the config file's directory, but it shifts when `--output` is passed.
 
 | Input                | Resolves to (default output, project at `/home/u/proj`, `$HOME=/home/u`) |
 |---|---|
@@ -726,7 +726,7 @@ Folder paths are relativized against the **directory the `.code-workspace` file 
 | `~/.config/nvim`     | `../.config/nvim`                                         |
 | `/etc/nginx`         | `../../../etc/nginx`                                      |
 
-Relative entries like `../sibling-repo` are interpreted from the cocoon.toml directory (so the value keeps the same meaning whether or not `--output` is set); the result is then re-anchored on the output directory for VS Code to consume.
+Relative entries like `../sibling-repo` are interpreted from the config file's directory (so the value keeps the same meaning whether or not `--output` is set); the result is then re-anchored on the output directory for VS Code to consume.
 
 - `name` is optional. When omitted, the basename of the resolved path is used (`.` falls back to the project directory's basename).
 - `~user` (other-user home expansion) is rejected; only the current user's `~` and `~/<rest>` are supported.

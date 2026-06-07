@@ -1,11 +1,11 @@
 # Architecture
 
 > [!WARNING]
-> cocoon is in v0.x (alpha). By using it, please understand and accept that the CLI flags, `cocoon.toml` schema, and plugin contracts may change before 1.0, and that breaking changes can land in any release. See the [CHANGELOG](../CHANGELOG.md) and the README's "Project status" section.
+> cocoon is in v0.x (alpha). By using it, please understand and accept that the CLI flags, the config file schema, and plugin contracts may change before 1.0, and that breaking changes can land in any release. See the [CHANGELOG](../CHANGELOG.md) and the README's "Project status" section.
 
 ## Design philosophy
 
-cocoon reads a project-local `cocoon.toml`, assembles the relevant plugin assets via a layered file source, and writes a `.devcontainer/` stack. Container lifecycle (build / up / down / exec) is handled by `docker compose` or VS Code Dev Containers.
+cocoon reads a project-local config file, assembles the relevant plugin assets via a layered file source, and writes a `.devcontainer/` stack. Container lifecycle (build / up / down / exec) is handled by `docker compose` or VS Code Dev Containers.
 
 Three rules drive the design:
 
@@ -31,7 +31,7 @@ flowchart LR
 
 `cocoon init` walks the user through an interactive form and writes `cocoon.toml`. `cocoon gen` then turns that file into a `.devcontainer/` directory consumable by either Docker or VS Code.
 
-For reproducible builds, an optional `cocoon lock` step sits between the two: it resolves every enabled `version_capable` plugin's version constraint (pinned inline in the `[plugins].enable` array) to a concrete version and per-arch checksums **over the network**, then writes `cocoon.lock` at the workspace root. `cocoon gen` consumes that lock **offline**, so the same `cocoon.toml` + `cocoon.lock` always generate the same `.devcontainer/`. The lock is the only point in the pipeline that reaches the network; generation itself stays hermetic. See [`cocoon lock` in `commands.md`](commands.md) for the file format and flags.
+For reproducible builds, an optional `cocoon lock` step sits between the two: it resolves every enabled `version_capable` plugin's version constraint (pinned inline in the `[plugins].enable` array) to a concrete version and per-arch checksums **over the network**, then writes `cocoon.lock` at the workspace root. `cocoon gen` consumes that lock **offline**, so the same config file + `cocoon.lock` always generate the same `.devcontainer/`. The lock is the only point in the pipeline that reaches the network; generation itself stays hermetic. See [`cocoon lock` in `commands.md`](commands.md) for the file format and flags.
 
 ## Components
 
@@ -40,8 +40,8 @@ For reproducible builds, an optional `cocoon lock` step sits between the two: it
 | Discovery | `internal/config/discovery.go` | Walks cwd → `.cocoon/` → parents to locate `cocoon.toml` (falling back to `workspace.toml`), stopping at `.git` or `$HOME`. |
 | Plugin LayeredFS | `internal/plugin/layered.go` | Overlays project / user / embedded plugin trees with priority `project > user > embedded`. |
 | Generators | `internal/generate/{dockerfile,compose,devcontainerjson,envfile,shellrc}` | Emit each artifact under `.devcontainer/`. Plugin install scripts are read directly from the LayeredFS and inlined into the generated Dockerfile via a quoted bash heredoc. |
-| Workspace generator | `internal/generate/codeworkspace` | Opt-in `cocoon gen workspace` subcommand. Reads `[code_workspace]` from `cocoon.toml`, `~`-expands folder paths and relativizes them against the directory the `.code-workspace` file is written to (the cocoon.toml directory by default, or `--output` when set), and writes `<name>.code-workspace` at the project root (not under `.devcontainer/`). |
-| i18n catalog | `internal/i18n/` | Switches CLI prompts and inline `cocoon.toml` comments between English and Japanese. |
+| Workspace generator | `internal/generate/codeworkspace` | Opt-in `cocoon gen workspace` subcommand. Reads `[code_workspace]` from the config file, `~`-expands folder paths and relativizes them against the directory the `.code-workspace` file is written to (the config file's directory by default, or `--output` when set), and writes `<name>.code-workspace` at the project root (not under `.devcontainer/`). |
+| i18n catalog | `internal/i18n/` | Switches CLI prompts and inline config-file comments between English and Japanese. |
 
 ## Plugin system
 
@@ -68,7 +68,7 @@ sequenceDiagram
     participant cfg as config.Discover
     participant fs as plugin.LayeredFS
     participant gen as Generators
-    cli->>cfg: find cocoon.toml
+    cli->>cfg: find the config file
     cfg-->>cli: WorkspaceContext
     cli->>fs: build LayeredFS (project ∪ user ∪ embedded)
     fs-->>cli: fs.FS
@@ -152,7 +152,7 @@ Bash / zsh source `~/.cocoon/.shellrc`; fish sources `~/.cocoon/.shellrc.fish`. 
 3. `LC_MESSAGES`
 4. `LANG`
 
-Any value starting with `ja` selects the Japanese catalog; everything else falls back to English. The detection runs once per `cocoon` invocation and switches both interactive prompts and the inline comments embedded in the generated `cocoon.toml`.
+Any value starting with `ja` selects the Japanese catalog; everything else falls back to English. The detection runs once per `cocoon` invocation and switches both interactive prompts and the inline comments embedded in the generated the config file.
 
 ## CI/CD
 

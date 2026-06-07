@@ -1,11 +1,11 @@
 # アーキテクチャ
 
 > [!WARNING]
-> cocoon は v0.x（alpha）開発段階です。お使いになる場合は、1.0 までに CLI フラグ・`cocoon.toml` スキーマ・プラグイン契約が変更され得ること、各リリースに breaking change が含まれうることをご了承のうえご利用ください。詳細は [CHANGELOG](CHANGELOG.ja.md) と README の「プロジェクトステータス」を参照してください。
+> cocoon は v0.x（alpha）開発段階です。お使いになる場合は、1.0 までに CLI フラグ・設定ファイルスキーマ・プラグイン契約が変更され得ること、各リリースに breaking change が含まれうることをご了承のうえご利用ください。詳細は [CHANGELOG](CHANGELOG.ja.md) と README の「プロジェクトステータス」を参照してください。
 
 ## 設計思想
 
-cocoon はプロジェクト直下の `cocoon.toml` を読み、レイヤード FS でプラグイン資産を解決し、`.devcontainer/` 一式を書き出すジェネレータです。コンテナのライフサイクル (build / up / down / exec) は `docker compose` か VS Code Dev Containers が担当します。
+cocoon はプロジェクト直下の設定ファイルを読み、レイヤード FS でプラグイン資産を解決し、`.devcontainer/` 一式を書き出すジェネレータです。コンテナのライフサイクル (build / up / down / exec) は `docker compose` か VS Code Dev Containers が担当します。
 
 設計を貫く 3 つのルール:
 
@@ -29,9 +29,9 @@ flowchart LR
     dcjson --> vscode([VS Code Reopen-in-Container])
 ```
 
-`cocoon init` がユーザーを対話フォームで誘導して `cocoon.toml` を書き出し、`cocoon gen` がそれを Docker / VS Code どちらでも使える `.devcontainer/` ディレクトリに変換します。
+`cocoon init` がユーザーを対話フォームで誘導して設定ファイルを書き出し、`cocoon gen` がそれを Docker / VS Code どちらでも使える `.devcontainer/` ディレクトリに変換します。
 
-再現性のため、両者の間に任意の `cocoon lock` ステップが入ります。有効化された `version_capable` プラグインのバージョン制約（`[plugins].enable` 配列にインライン指定）を、**ネットワーク越しに** 具体的なバージョンと arch ごとの checksum へ解決し、`cocoon.lock` を workspace ルートに書き出します。`cocoon gen` はその lock を **オフラインで** 消費するため、同じ `cocoon.toml` + `cocoon.lock` は常に同じ `.devcontainer/` を生成します。パイプラインの中でネットワークに触れるのはこの lock だけで、生成自体は hermetic に保たれます。ファイル形式とフラグは [`commands.ja.md` の `cocoon lock`](commands.ja.md) を参照してください。
+再現性のため、両者の間に任意の `cocoon lock` ステップが入ります。有効化された `version_capable` プラグインのバージョン制約（`[plugins].enable` 配列にインライン指定）を、**ネットワーク越しに** 具体的なバージョンと arch ごとの checksum へ解決し、`cocoon.lock` を workspace ルートに書き出します。`cocoon gen` はその lock を **オフラインで** 消費するため、同じ設定ファイル + `cocoon.lock` は常に同じ `.devcontainer/` を生成します。パイプラインの中でネットワークに触れるのはこの lock だけで、生成自体は hermetic に保たれます。ファイル形式とフラグは [`commands.ja.md` の `cocoon lock`](commands.ja.md) を参照してください。
 
 ## 構成要素
 
@@ -40,8 +40,8 @@ flowchart LR
 | Discovery | `internal/config/discovery.go` | cwd → `.cocoon/` → 親ディレクトリ方向に `cocoon.toml`（無ければ `workspace.toml`）を探索 (`.git` か `$HOME` で停止)。 |
 | Plugin LayeredFS | `internal/plugin/layered.go` | プロジェクト / ユーザー / 埋め込みプラグインツリーを `project > user > embedded` の優先度でオーバーレイ。 |
 | Generators | `internal/generate/{dockerfile,compose,devcontainerjson,envfile,shellrc}` | `.devcontainer/` 配下の各成果物を生成。プラグインの install スクリプトは LayeredFS から直接読み出し、bash heredoc で Dockerfile に埋め込む。 |
-| Workspace generator | `internal/generate/codeworkspace` | opt-in な `cocoon gen workspace` サブコマンド。`cocoon.toml` の `[code_workspace]` を読み、folder path を `~` 展開後、`.code-workspace` を書き出すディレクトリ (既定は cocoon.toml と同階層、`--output` 指定時はその先) 起点で相対化し、`<name>.code-workspace` をプロジェクトルート (`.devcontainer/` 配下ではない) に書き出す。 |
-| i18n catalog | `internal/i18n/` | CLI プロンプトと `cocoon.toml` 内コメントを英語 / 日本語で切替。 |
+| Workspace generator | `internal/generate/codeworkspace` | opt-in な `cocoon gen workspace` サブコマンド。設定ファイルの `[code_workspace]` を読み、folder path を `~` 展開後、`.code-workspace` を書き出すディレクトリ (既定は設定ファイルと同階層、`--output` 指定時はその先) 起点で相対化し、`<name>.code-workspace` をプロジェクトルート (`.devcontainer/` 配下ではない) に書き出す。 |
+| i18n catalog | `internal/i18n/` | CLI プロンプトと設定ファイル内コメントを英語 / 日本語で切替。 |
 
 ## プラグインシステム
 
@@ -68,7 +68,7 @@ sequenceDiagram
     participant cfg as config.Discover
     participant fs as plugin.LayeredFS
     participant gen as Generators
-    cli->>cfg: find cocoon.toml
+    cli->>cfg: find 設定ファイル
     cfg-->>cli: WorkspaceContext
     cli->>fs: build LayeredFS (project ∪ user ∪ embedded)
     fs-->>cli: fs.FS
@@ -152,7 +152,7 @@ bash / zsh は `~/.cocoon/.shellrc`、fish は `~/.cocoon/.shellrc.fish` を sou
 3. `LC_MESSAGES`
 4. `LANG`
 
-`ja` で始まる値なら日本語カタログ、それ以外は英語にフォールバック。`cocoon` 起動時に 1 回検出し、対話プロンプトと生成 `cocoon.toml` のインラインコメントの両方を切り替えます。
+`ja` で始まる値なら日本語カタログ、それ以外は英語にフォールバック。`cocoon` 起動時に 1 回検出し、対話プロンプトと生成設定ファイルのインラインコメントの両方を切り替えます。
 
 ## CI/CD
 

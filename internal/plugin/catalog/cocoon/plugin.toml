@@ -1,6 +1,6 @@
 [metadata]
 name = "cocoon"
-description = "cocoon — generate .devcontainer/ from cocoon.toml (dogfood the tool inside the container)"
+description = "cocoon — generate .devcontainer/ from your config file (dogfood the tool inside the container)"
 url = "https://github.com/sukekyo26/cocoon"
 default = false
 

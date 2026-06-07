@@ -7,7 +7,7 @@
 [日本語版 README](docs/README.ja.md)
 
 > [!WARNING]
-> **Project status: Alpha (v0.x).** cocoon is under active development. By using it, please understand and accept that the CLI flags, `cocoon.toml` schema, and plugin contracts may change before 1.0, and that breaking changes can land in any release. Read the **BREAKING** lines in the [CHANGELOG](CHANGELOG.md) before upgrading.
+> **Project status: Alpha (v0.x).** cocoon is under active development. By using it, please understand and accept that the CLI flags, the config file schema, and plugin contracts may change before 1.0, and that breaking changes can land in any release. Read the **BREAKING** lines in the [CHANGELOG](CHANGELOG.md) before upgrading.
 
 ## Why cocoon?
 
@@ -108,7 +108,7 @@ docker compose -f .devcontainer/docker-compose.yml up -d # or VS Code → "Reope
 12. **apt categories** — agent, text-editors, vcs, utilities, build, network, … (multi-select)
 13. **Plugins** to enable from the embedded catalog (multi-select)
 
-Each answer becomes a self-documenting line in `cocoon.toml`. Pass `--yes` together with the value flags (`--service-name`, `--username`, `--image`, `--dir`, `--plugins`, `--certificates`, `--ports`, …) to drive it from CI without a TTY.
+Each answer becomes a self-documenting line in the config file. Pass `--yes` together with the value flags (`--service-name`, `--username`, `--image`, `--dir`, `--plugins`, `--certificates`, `--ports`, …) to drive it from CI without a TTY.
 
 ## Plugins
 
@@ -118,7 +118,7 @@ Override or add your own under `~/.cocoon/plugins/<id>/` (user scope) or `<proje
 
 ## Corporate CA support
 
-Need to trust a private CA inside the container (a TLS-intercepting proxy, a dev self-signed cert, etc.)? Run `cocoon init --certificates` (or set `[certificates] enable = true` in `cocoon.toml`), then drop the `.crt` / `.cer` files into `~/.cocoon/certs/` on the host. They are picked up automatically at container build time. Cert-free workspaces stay cert-free — no wiring lands in the generated artifacts unless you opt in. See [`[certificates]`](docs/configuration.md#certificates) for the team workflow.
+Need to trust a private CA inside the container (a TLS-intercepting proxy, a dev self-signed cert, etc.)? Run `cocoon init --certificates` (or set `[certificates] enable = true` in the config file), then drop the `.crt` / `.cer` files into `~/.cocoon/certs/` on the host. They are picked up automatically at container build time. Cert-free workspaces stay cert-free — no wiring lands in the generated artifacts unless you opt in. See [`[certificates]`](docs/configuration.md#certificates) for the team workflow.
 
 ## Persistent personal shellrc
 
@@ -126,7 +126,7 @@ cocoon mounts a named Docker volume at `~/.cocoon/` inside the container so per-
 
 ## i18n
 
-Every prompt, error message, and inline `cocoon.toml` comment renders in English or Japanese. The locale is detected from `WORKSPACE_LANG`, then `LC_ALL` / `LC_MESSAGES` / `LANG` — any value starting with `ja` selects Japanese.
+Every prompt, error message, and inline config-file comment renders in English or Japanese. The locale is detected from `WORKSPACE_LANG`, then `LC_ALL` / `LC_MESSAGES` / `LANG` — any value starting with `ja` selects Japanese.
 
 ## Documentation
 
