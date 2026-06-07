@@ -6,6 +6,15 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+### 変更
+
+- `cocoon init` の言語ベースイメージ向け image-version 推奨候補に、bookworm に加えて
+  Debian trixie バリアントを追加し、上流の最新リリースに更新しました: `node`
+  (`26` / LTS `24` × bookworm/trixie)、`python` (`3.14-slim-bookworm` /
+  `3.14-slim-trixie`)、`golang` (`1.26-bookworm` / `1.26-trixie`)、`rust`
+  (`1.96-bookworm` / `1.96-trixie`)、`denoland/deno` (`debian-2.8.2`)。既定は
+  引き続き bookworm で、正しい形式であれば他のタグもマニュアル入力で受理します。
+
 ## [0.15.3] - 2026-06-08
 
 ### 変更

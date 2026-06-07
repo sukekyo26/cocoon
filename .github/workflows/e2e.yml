@@ -76,15 +76,15 @@ jobs:
           - label: amd64 / golang
             runs-on: ubuntu-latest
             image: golang
-            image-version: "1.26.3-bookworm"
+            image-version: "1.26-bookworm"
           - label: amd64 / rust
             runs-on: ubuntu-latest
             image: rust
-            image-version: "1.95-bookworm"
+            image-version: "1.96-bookworm"
           - label: amd64 / denoland/deno
             runs-on: ubuntu-latest
             image: denoland/deno
-            image-version: "debian-2.7.14"
+            image-version: "debian-2.8.2"
           - label: arm64 / ubuntu
             runs-on: ubuntu-24.04-arm
             image: ubuntu

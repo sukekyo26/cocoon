@@ -216,13 +216,15 @@ var SupportedShells = []string{"bash", "zsh", "fish"}
 //
 //nolint:gochecknoglobals // tabular configuration data, file-scoped by design.
 var SupportedImageVersions = map[string][]string{
-	"debian":        {"12", "13"}, // 12 (bookworm) is the cocoon default base image; 13 (trixie) selectable.
-	"ubuntu":        {"26.04", "24.04", "22.04"},
-	"node":          {"26-bookworm-slim", "24-bookworm-slim", "22-bookworm-slim"},
-	"python":        {"3.14-slim-bookworm", "3.13-slim-bookworm", "3.12-slim-bookworm"},
-	"golang":        {"1.26.3-bookworm", "1.26-bookworm", "1.25-bookworm", "1.24-bookworm"},
-	"rust":          {"1.95-bookworm", "1.94-bookworm", "1.93-bookworm"},
-	"denoland/deno": {"debian-2.7.14", "debian-2.6.10", "debian-2.5.7"},
+	"debian": {"12", "13"}, // 12 (bookworm) is the cocoon default base image; 13 (trixie) selectable.
+	"ubuntu": {"26.04", "24.04", "22.04"},
+	// Language images lead with the bookworm (default) tag and offer a trixie
+	// variant; node also keeps 26 (current) and 24 (LTS).
+	"node":          {"26-bookworm-slim", "26-trixie-slim", "24-bookworm-slim", "24-trixie-slim"},
+	"python":        {"3.14-slim-bookworm", "3.14-slim-trixie"},
+	"golang":        {"1.26-bookworm", "1.26-trixie"},
+	"rust":          {"1.96-bookworm", "1.96-trixie"},
+	"denoland/deno": {"debian-2.8.2"}, // deno ships a single debian variant (no bookworm/trixie split).
 }
 
 // ImageProvidesPlugin marks images that already pre-install a language
