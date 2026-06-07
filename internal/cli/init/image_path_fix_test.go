@@ -2,12 +2,12 @@
 package initcli
 
 import (
-	"io"
 	"sort"
 	"testing"
 
 	"github.com/sukekyo26/cocoon/internal/config"
 	"github.com/sukekyo26/cocoon/internal/plugin"
+	"github.com/sukekyo26/cocoon/internal/warn"
 )
 
 // TestImagePathFixApplies_MatchesLanguageImagesOnly pins that the gate
@@ -195,7 +195,7 @@ func TestImagePathFix_VolumesMatchPluginCatalog(t *testing.T) {
 	for _, id := range imageToPluginID {
 		ids = append(ids, id)
 	}
-	plugins, err := plugin.LoadEnabledFromFS(src, ids, io.Discard, "")
+	plugins, err := plugin.LoadEnabledFromFS(src, ids, warn.New(), "")
 	if err != nil {
 		t.Fatalf("plugin.LoadEnabledFromFS: %v", err)
 	}

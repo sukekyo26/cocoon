@@ -11,6 +11,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
+
+	"github.com/sukekyo26/cocoon/internal/i18n"
 )
 
 // errTestReject is the sentinel that validation-failure cases assert on via
@@ -75,7 +77,7 @@ func TestSelectOrInputField_AccessibleHeaderIncludesURLLine(t *testing.T) {
 		URLLine("https://github.com/golang/go")
 
 	var buf bytes.Buffer
-	f.printAccessibleHeader(&buf)
+	f.printAccessibleHeader(&buf, i18n.New(i18n.LangEN))
 	got := buf.String()
 	for _, want := range []string{
 		"Pin version for go",
@@ -108,7 +110,7 @@ func TestSelectOrInputField_URLLineEmptyOmitsRow(t *testing.T) {
 		Description("desc")
 
 	var buf bytes.Buffer
-	f.printAccessibleHeader(&buf)
+	f.printAccessibleHeader(&buf, i18n.New(i18n.LangEN))
 	got := buf.String()
 	if strings.Contains(got, "https://") {
 		t.Errorf("URL row leaked into header when URLLine was unset:\n%s", got)
@@ -724,6 +726,7 @@ func TestSelectOrInputField_RunAccessibleEOFBeforeAnswer(t *testing.T) {
 //
 //nolint:paralleltest // redirects process-global os.Stdin / os.Stdout.
 func TestSelectOrInputField_RunAccessiblePath(t *testing.T) {
+	t.Setenv("WORKSPACE_LANG", "en") // pin locale so the English prompt assertion is deterministic
 	var target string
 	f := newSelectOrInputField("image_version", &target, []string{"26.04", "24.04"}, "Other").
 		Validate(func(string) error { return nil })

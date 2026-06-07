@@ -7,7 +7,6 @@ package compose
 import (
 	"errors"
 	"fmt"
-	"io"
 	"maps"
 	"slices"
 	"strconv"
@@ -19,6 +18,7 @@ import (
 	"github.com/sukekyo26/cocoon/internal/generate"
 	"github.com/sukekyo26/cocoon/internal/generate/yamlx"
 	"github.com/sukekyo26/cocoon/internal/plugin"
+	"github.com/sukekyo26/cocoon/internal/warn"
 )
 
 const header = "# Auto-generated from workspace.toml — do not edit directly.\n"
@@ -62,7 +62,7 @@ const (
 // (specifically the loaded plugin metadata used to derive named volumes).
 type Options struct {
 	Plugins  map[string]*plugin.Plugin
-	Warnings io.Writer
+	Warnings *warn.Sink
 }
 
 // Generate renders docker-compose.yml from ctx and opts.
@@ -114,17 +114,21 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 }
 
 // volSrc names the source of a mount path so dedup warnings can be precise.
-type volSrc struct{ label, volName string }
+// label is a localizable warn.Ref ("plugin 'x'" / "workspace.toml volume 'y'").
+type volSrc struct {
+	label   warn.Ref
+	volName string
+}
 
 // mergeVolumes mirrors ComposeGenerator's de-duplication and conflict checks.
 func mergeVolumes(
 	pluginVols []plugin.Volume,
 	customVols map[string]string,
-	warnings io.Writer,
+	warnings *warn.Sink,
 ) (mergedPlugin []plugin.Volume, mergedCustom []volPair, err error) {
 	pathToSrc := map[string]volSrc{}
 
-	mergedPlugin, err = mergePluginVolumes(pluginVols, pathToSrc, warnings)
+	mergedPlugin, err = mergePluginVolumes(pluginVols, pathToSrc)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -144,7 +148,6 @@ func mergeVolumes(
 func mergePluginVolumes(
 	pluginVols []plugin.Volume,
 	pathToSrc map[string]volSrc,
-	warnings io.Writer,
 ) ([]plugin.Volume, error) {
 	// nameToPlugin tracks the first plugin that claimed a derived volume
 	// name. DeriveVolumeName uses the path's basename, so two plugins with
@@ -165,12 +168,9 @@ func mergePluginVolumes(
 				"%w: plugin '%s' targets reserved mount path '%s'",
 				ErrVolumeNameConflict, pv.PluginName, pv.MountPath)
 		}
-		if existing, dup := pathToSrc[pv.MountPath]; dup {
-			if warnings != nil {
-				fmt.Fprintf(warnings,
-					"WARNING: Volume path '%s' is defined by both %s and plugin '%s'. Using single volume '%s'.\n",
-					pv.MountPath, existing.label, pv.PluginName, existing.volName)
-			}
+		if _, dup := pathToSrc[pv.MountPath]; dup {
+			// Two plugins sharing a mount path dedup to one volume. This is
+			// harmless and unactionable for built-in plugins, so do it silently.
 			continue
 		}
 		if firstOwner, dup := nameToPlugin[pv.VolumeName]; dup {
@@ -180,7 +180,7 @@ func mergePluginVolumes(
 				ErrVolumeNameConflict, firstOwner, pv.PluginName, pv.VolumeName)
 		}
 		nameToPlugin[pv.VolumeName] = pv.PluginName
-		pathToSrc[pv.MountPath] = volSrc{label: "plugin '" + pv.PluginName + "'", volName: pv.VolumeName}
+		pathToSrc[pv.MountPath] = volSrc{label: warn.Reason(warn.VolLabelPlugin, pv.PluginName), volName: pv.VolumeName}
 		out = append(out, pv)
 	}
 	return out, nil
@@ -190,7 +190,7 @@ func mergeCustomVolumes(
 	customVols map[string]string,
 	pluginVolNames map[string]struct{},
 	pathToSrc map[string]volSrc,
-	warnings io.Writer,
+	warnings *warn.Sink,
 ) ([]volPair, error) {
 	customNames := slices.Sorted(maps.Keys(customVols))
 	for _, name := range customNames {
@@ -215,14 +215,10 @@ func mergeCustomVolumes(
 				ErrVolumeNameConflict, name, path)
 		}
 		if existing, dup := pathToSrc[path]; dup {
-			if warnings != nil {
-				fmt.Fprintf(warnings,
-					"WARNING: Volume path '%s' is defined by both %s and workspace.toml volume '%s'. Using single volume '%s'.\n",
-					path, existing.label, name, existing.volName)
-			}
+			warnings.Warn(warn.VolumeDupWorkspace, path, existing.label, name, existing.volName)
 			continue
 		}
-		pathToSrc[path] = volSrc{label: "workspace.toml volume '" + name + "'", volName: name}
+		pathToSrc[path] = volSrc{label: warn.Reason(warn.VolLabelWorkspace, name), volName: name}
 		out = append(out, volPair{Name: name, Path: path})
 	}
 	return out, nil

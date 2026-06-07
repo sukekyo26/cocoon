@@ -13,6 +13,7 @@ import (
 	"github.com/sukekyo26/cocoon/internal/generate"
 	"github.com/sukekyo26/cocoon/internal/generate/dockerfile"
 	"github.com/sukekyo26/cocoon/internal/plugin"
+	"github.com/sukekyo26/cocoon/internal/warn"
 )
 
 //nolint:gochecknoglobals // test-only flag scoped to dockerfile_test.
@@ -51,13 +52,12 @@ func TestGenerate_Snapshot(t *testing.T) {
 				ws.Container.Shell = &config.ContainerShellSpec{Default: &shell}
 			}
 
-			var warns bytes.Buffer
-			plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, &warns, pluginsDir)
+			plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, warn.New(), pluginsDir)
 			if err != nil {
 				t.Fatalf("load plugins: %v", err)
 			}
 
-			ctx := &generate.WorkspaceContext{WS: ws, PluginsFS: os.DirFS(pluginsDir), Plugins: plugins, Warnings: &warns}
+			ctx := &generate.WorkspaceContext{WS: ws, PluginsFS: os.DirFS(pluginsDir), Plugins: plugins, Warnings: warn.New()}
 			got, err := dockerfile.Generate(ctx, dockerfile.Options{
 				WorkspaceRoot: root,
 				// Pin the embedded repo dir so the snapshot does not drift
@@ -65,7 +65,7 @@ func TestGenerate_Snapshot(t *testing.T) {
 				// "cocoon" (e.g. a sibling worktree).
 				RepoDir:  "cocoon",
 				Plugins:  plugins,
-				Warnings: &warns,
+				Warnings: warn.New(),
 			})
 			if err != nil {
 				t.Fatalf("generate: %v", err)
@@ -123,15 +123,14 @@ func TestGenerate_FromLineForEachImage(t *testing.T) {
 				delete(ws.Plugins.Versions, conflict)
 			}
 
-			var warns bytes.Buffer
-			plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, &warns, pluginsDir)
+			plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, warn.New(), pluginsDir)
 			if err != nil {
 				t.Fatalf("load plugins: %v", err)
 			}
-			ctx := &generate.WorkspaceContext{WS: ws, PluginsFS: os.DirFS(pluginsDir), Plugins: plugins, Warnings: &warns}
+			ctx := &generate.WorkspaceContext{WS: ws, PluginsFS: os.DirFS(pluginsDir), Plugins: plugins, Warnings: warn.New()}
 			got, err := dockerfile.Generate(ctx, dockerfile.Options{
 				WorkspaceRoot: root, RepoDir: "cocoon",
-				Plugins: plugins, Warnings: &warns,
+				Plugins: plugins, Warnings: warn.New(),
 			})
 			if err != nil {
 				t.Fatalf("generate: %v", err)
@@ -252,18 +251,17 @@ func generateDebianWithMirrorURL(t *testing.T, mirrorURL string) string {
 	ws.Container.ImageVersion = "12"
 	ws.Apt.Mirror.URL = mirrorURL
 
-	var warns bytes.Buffer
-	plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, &warns, pluginsDir)
+	plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, warn.New(), pluginsDir)
 	if err != nil {
 		t.Fatalf("load plugins: %v", err)
 	}
 
-	ctx := &generate.WorkspaceContext{WS: ws, PluginsFS: os.DirFS(pluginsDir), Plugins: plugins, Warnings: &warns}
+	ctx := &generate.WorkspaceContext{WS: ws, PluginsFS: os.DirFS(pluginsDir), Plugins: plugins, Warnings: warn.New()}
 	got, err := dockerfile.Generate(ctx, dockerfile.Options{
 		WorkspaceRoot: root,
 		RepoDir:       "cocoon",
 		Plugins:       plugins,
-		Warnings:      &warns,
+		Warnings:      warn.New(),
 	})
 	if err != nil {
 		t.Fatalf("generate: %v", err)
@@ -396,18 +394,17 @@ func generateWithMirrorURLAndSources(t *testing.T, mirrorURL string, sources []c
 		ws.Apt.Sources = sources
 	}
 
-	var warns bytes.Buffer
-	plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, &warns, pluginsDir)
+	plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, warn.New(), pluginsDir)
 	if err != nil {
 		t.Fatalf("load plugins: %v", err)
 	}
 
-	ctx := &generate.WorkspaceContext{WS: ws, PluginsFS: os.DirFS(pluginsDir), Plugins: plugins, Warnings: &warns}
+	ctx := &generate.WorkspaceContext{WS: ws, PluginsFS: os.DirFS(pluginsDir), Plugins: plugins, Warnings: warn.New()}
 	got, err := dockerfile.Generate(ctx, dockerfile.Options{
 		WorkspaceRoot: root,
 		RepoDir:       "cocoon",
 		Plugins:       plugins,
-		Warnings:      &warns,
+		Warnings:      warn.New(),
 	})
 	if err != nil {
 		t.Fatalf("generate: %v", err)
@@ -543,18 +540,17 @@ func generateWithCertificatesDisabled(t *testing.T) string {
 	ws.Apt.Sources = nil
 	ws.Certificates = nil
 
-	var warns bytes.Buffer
-	plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, &warns, pluginsDir)
+	plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, warn.New(), pluginsDir)
 	if err != nil {
 		t.Fatalf("load plugins: %v", err)
 	}
 
-	ctx := &generate.WorkspaceContext{WS: ws, PluginsFS: os.DirFS(pluginsDir), Plugins: plugins, Warnings: &warns}
+	ctx := &generate.WorkspaceContext{WS: ws, PluginsFS: os.DirFS(pluginsDir), Plugins: plugins, Warnings: warn.New()}
 	got, err := dockerfile.Generate(ctx, dockerfile.Options{
 		WorkspaceRoot: root,
 		RepoDir:       "cocoon",
 		Plugins:       plugins,
-		Warnings:      &warns,
+		Warnings:      warn.New(),
 	})
 	if err != nil {
 		t.Fatalf("generate: %v", err)
@@ -605,18 +601,17 @@ func generateInStagingRootWithProxy(t *testing.T, root, mirrorURL, httpProxy str
 		ws.Apt.Proxy = &config.AptProxy{HTTP: &http}
 	}
 
-	var warns bytes.Buffer
-	plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, &warns, pluginsDir)
+	plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, warn.New(), pluginsDir)
 	if err != nil {
 		t.Fatalf("load plugins: %v", err)
 	}
 
-	ctx := &generate.WorkspaceContext{WS: ws, PluginsFS: os.DirFS(pluginsDir), Plugins: plugins, Warnings: &warns}
+	ctx := &generate.WorkspaceContext{WS: ws, PluginsFS: os.DirFS(pluginsDir), Plugins: plugins, Warnings: warn.New()}
 	got, err := dockerfile.Generate(ctx, dockerfile.Options{
 		WorkspaceRoot: root,
 		RepoDir:       "cocoon",
 		Plugins:       plugins,
-		Warnings:      &warns,
+		Warnings:      warn.New(),
 	})
 	if err != nil {
 		t.Fatalf("generate: %v", err)
@@ -787,14 +782,13 @@ func generateFromSnapshotFixture(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("load workspace: %v", err)
 	}
-	var warns bytes.Buffer
-	plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, &warns, pluginsDir)
+	plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, warn.New(), pluginsDir)
 	if err != nil {
 		t.Fatalf("load plugins: %v", err)
 	}
-	ctx := &generate.WorkspaceContext{WS: ws, PluginsFS: os.DirFS(pluginsDir), Plugins: plugins, Warnings: &warns}
+	ctx := &generate.WorkspaceContext{WS: ws, PluginsFS: os.DirFS(pluginsDir), Plugins: plugins, Warnings: warn.New()}
 	got, err := dockerfile.Generate(ctx, dockerfile.Options{
-		WorkspaceRoot: root, RepoDir: "cocoon", Plugins: plugins, Warnings: &warns,
+		WorkspaceRoot: root, RepoDir: "cocoon", Plugins: plugins, Warnings: warn.New(),
 	})
 	if err != nil {
 		t.Fatalf("generate: %v", err)
@@ -848,14 +842,13 @@ func TestGenerate_WorkspaceDirOverride(t *testing.T) {
 	}
 	ws.Workspace.Dir = "work/myapp"
 
-	var warns bytes.Buffer
-	plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, &warns, pluginsDir)
+	plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, warn.New(), pluginsDir)
 	if err != nil {
 		t.Fatalf("load plugins: %v", err)
 	}
-	ctx := &generate.WorkspaceContext{WS: ws, PluginsFS: os.DirFS(pluginsDir), Plugins: plugins, Warnings: &warns}
+	ctx := &generate.WorkspaceContext{WS: ws, PluginsFS: os.DirFS(pluginsDir), Plugins: plugins, Warnings: warn.New()}
 	got, err := dockerfile.Generate(ctx, dockerfile.Options{
-		WorkspaceRoot: root, RepoDir: "cocoon", Plugins: plugins, Warnings: &warns,
+		WorkspaceRoot: root, RepoDir: "cocoon", Plugins: plugins, Warnings: warn.New(),
 	})
 	if err != nil {
 		t.Fatalf("generate: %v", err)
@@ -889,14 +882,13 @@ func TestGenerate_BindPathsIncludeHomeRootMount(t *testing.T) {
 	}
 	ws.Mounts = []config.Mount{{Source: "/host/x", Target: "/home/${USERNAME}"}}
 
-	var warns bytes.Buffer
-	plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, &warns, pluginsDir)
+	plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, warn.New(), pluginsDir)
 	if err != nil {
 		t.Fatalf("load plugins: %v", err)
 	}
-	ctx := &generate.WorkspaceContext{WS: ws, PluginsFS: os.DirFS(pluginsDir), Plugins: plugins, Warnings: &warns}
+	ctx := &generate.WorkspaceContext{WS: ws, PluginsFS: os.DirFS(pluginsDir), Plugins: plugins, Warnings: warn.New()}
 	got, err := dockerfile.Generate(ctx, dockerfile.Options{
-		WorkspaceRoot: root, RepoDir: "cocoon", Plugins: plugins, Warnings: &warns,
+		WorkspaceRoot: root, RepoDir: "cocoon", Plugins: plugins, Warnings: warn.New(),
 	})
 	if err != nil {
 		t.Fatalf("generate: %v", err)
@@ -983,14 +975,13 @@ func TestGenerate_PasswordSudo(t *testing.T) {
 			m := mode
 			ws.Container.Sudo = &config.SudoSpec{Mode: &m}
 		}
-		var warns bytes.Buffer
-		plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, &warns, pluginsDir)
+		plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, warn.New(), pluginsDir)
 		if err != nil {
 			t.Fatalf("load plugins: %v", err)
 		}
-		ctx := &generate.WorkspaceContext{WS: ws, PluginsFS: os.DirFS(pluginsDir), Plugins: plugins, Warnings: &warns}
+		ctx := &generate.WorkspaceContext{WS: ws, PluginsFS: os.DirFS(pluginsDir), Plugins: plugins, Warnings: warn.New()}
 		got, gerr := dockerfile.Generate(ctx, dockerfile.Options{
-			WorkspaceRoot: root, RepoDir: "cocoon", Plugins: plugins, Warnings: &warns,
+			WorkspaceRoot: root, RepoDir: "cocoon", Plugins: plugins, Warnings: warn.New(),
 		})
 		if gerr != nil {
 			t.Fatalf("generate: %v", gerr)

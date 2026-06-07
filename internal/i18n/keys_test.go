@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/sukekyo26/cocoon/internal/warn"
 )
 
 // TestUserFacingKeyParityInBothLanguages pins the contract that every CLI
@@ -36,7 +38,11 @@ func TestUserFacingKeyParityInBothLanguages(t *testing.T) {
 // to the CLI help and init-prompt namespaces so unrelated tables (clean /
 // rebuild / plugin prompts) are not flagged.
 func diffPrefixedKeys(src, dst map[string]string) []string {
-	prefixes := []string{"cmd_", "flag_", "help_", "usage_", "version_", "init_"}
+	prefixes := []string{
+		"cmd_", "flag_", "help_", "usage_", "version_", "init_",
+		"gen_", "lock_", "selfupdate_", "plugin_", "clean_", "rebuild_",
+		"docker_", "warn_", "info_", "err_",
+	}
 	var missing []string
 	for k := range src {
 		if !hasAnyPrefix(k, prefixes) {
@@ -48,6 +54,25 @@ func diffPrefixedKeys(src, dst map[string]string) []string {
 	}
 	sort.Strings(missing)
 	return missing
+}
+
+// TestWarnCodesHaveCatalogEntries pins that every diagnostic code declared in
+// internal/warn has an entry in both language tables. The drain site renders
+// these via Catalog.Msg, so a missing key would surface the raw code string.
+func TestWarnCodesHaveCatalogEntries(t *testing.T) {
+	t.Parallel()
+	codes := warn.Codes()
+	if len(codes) == 0 {
+		t.Fatal("warn.Codes() returned no codes")
+	}
+	for _, code := range codes {
+		if _, ok := messages[LangEN][code]; !ok {
+			t.Errorf("warn code %q missing in en table", code)
+		}
+		if _, ok := messages[LangJA][code]; !ok {
+			t.Errorf("warn code %q missing in ja table", code)
+		}
+	}
 }
 
 func hasAnyPrefix(s string, prefixes []string) bool {

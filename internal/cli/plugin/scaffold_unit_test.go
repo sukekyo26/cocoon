@@ -3,7 +3,6 @@ package plugincli
 
 import (
 	"errors"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,7 +12,6 @@ import (
 
 	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
 	"github.com/sukekyo26/cocoon/internal/i18n"
-	"github.com/sukekyo26/cocoon/internal/logx"
 )
 
 func TestValidateNameInput(t *testing.T) {
@@ -285,16 +283,19 @@ func TestHuhPrompterRunEmptyGroups(t *testing.T) {
 }
 
 // TestRenderAndWrite_RenderError pins that a failing render triggers
-// cleanup and returns ErrFailure (so the caller aborts the scaffold).
+// cleanup, returns ErrFailure (so the caller aborts the scaffold), and
+// names the artifact so the failure stays diagnosable.
 func TestRenderAndWrite_RenderError(t *testing.T) {
 	t.Parallel()
 	var cleaned bool
-	log := logx.New(io.Discard, io.Discard)
 	_, err := renderAndWrite(t.TempDir(), "plugin.toml", 0o644,
 		func() (string, error) { return "", errors.New("boom") },
-		log, func() { cleaned = true })
+		func() { cleaned = true })
 	if !errors.Is(err, clihelpers.ErrFailure) {
 		t.Fatalf("err = %v, want ErrFailure", err)
+	}
+	if !strings.Contains(err.Error(), "plugin.toml") {
+		t.Errorf("err should name the artifact: %v", err)
 	}
 	if !cleaned {
 		t.Error("cleanup was not called on render error")
@@ -303,17 +304,20 @@ func TestRenderAndWrite_RenderError(t *testing.T) {
 
 // TestRenderAndWrite_WriteError pins the write-failure branch: the target
 // directory does not exist, so the atomic write cannot create its temp
-// file. cleanup must still run and the error must be ErrFailure.
+// file. cleanup must still run, the error must be ErrFailure, and the
+// destination path must survive (fsx errors only name their temp file).
 func TestRenderAndWrite_WriteError(t *testing.T) {
 	t.Parallel()
 	var cleaned bool
-	log := logx.New(io.Discard, io.Discard)
 	missingDir := filepath.Join(t.TempDir(), "does-not-exist")
 	_, err := renderAndWrite(missingDir, "plugin.toml", 0o644,
 		func() (string, error) { return "body", nil },
-		log, func() { cleaned = true })
+		func() { cleaned = true })
 	if !errors.Is(err, clihelpers.ErrFailure) {
 		t.Fatalf("err = %v, want ErrFailure", err)
+	}
+	if !strings.Contains(err.Error(), "plugin.toml") {
+		t.Errorf("err should name the destination path: %v", err)
 	}
 	if !cleaned {
 		t.Error("cleanup was not called on write error")

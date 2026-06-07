@@ -89,14 +89,14 @@ func (v *Version) validate(a *config.Accumulator) {
 	switch v.Verify {
 	case "", VerifyChecksum, VerifyPGP:
 	default:
-		a.Add(fmt.Sprintf("verify %q is not one of %q, %q", v.Verify, VerifyChecksum, VerifyPGP), "verify")
+		a.AddCode("err_pval_verify_oneof", []any{v.Verify, VerifyChecksum, VerifyPGP}, "verify")
 	}
 	if v.Verify != "" && !v.VersionCapable {
-		a.Add("verify requires version_capable = true", "verify")
+		a.AddCode("err_pval_verify_needs_capable", nil, "verify")
 	}
 	if v.Source != nil {
 		if !v.VersionCapable {
-			a.Add("[version.source] requires version_capable = true", "source")
+			a.AddCode("err_pval_source_needs_capable", nil, "source")
 		}
 		v.Source.validate(a.At("source"), v.Verify)
 	}
@@ -106,7 +106,7 @@ func (s *VersionSource) validate(a *config.Accumulator, verify string) {
 	s.Latest.validate(a.At("latest"))
 	s.Checksum.validate(a.At("checksum"), verify)
 	if s.usesArch() && len(s.Arch) == 0 {
-		a.Add(`arch map is required when a url or asset_name uses ${arch}`, "arch")
+		a.AddCode("err_pval_arch_required", nil, "arch")
 	}
 }
 
@@ -121,20 +121,20 @@ func (l *LatestSpec) validate(a *config.Accumulator) {
 	switch l.Type {
 	case LatestGitHubRelease:
 		if l.Repo == "" {
-			a.Add(`repo is required for latest.type = "github-release"`, "repo")
+			a.AddCode("err_pval_latest_repo_required", nil, "repo")
 		}
 	case LatestText, LatestTab:
 		validateSourceURL(a, l.URL, "url")
 	case LatestJSONField:
 		validateSourceURL(a, l.URL, "url")
 		if l.Field == "" {
-			a.Add(`field is required for latest.type = "json-field"`, "field")
+			a.AddCode("err_pval_latest_field_required", nil, "field")
 		}
 	case "":
-		a.Add("latest.type must be set", "type")
+		a.AddCode("err_pval_latest_type_required", nil, "type")
 	default:
-		a.Add(fmt.Sprintf("latest.type %q is not one of %q, %q, %q, %q",
-			l.Type, LatestGitHubRelease, LatestText, LatestJSONField, LatestTab), "type")
+		a.AddCode("err_pval_latest_type_oneof",
+			[]any{l.Type, LatestGitHubRelease, LatestText, LatestJSONField, LatestTab}, "type")
 	}
 }
 
@@ -146,20 +146,20 @@ func (c *ChecksumSpec) validate(a *config.Accumulator, verify string) {
 	case ChecksumShasumsFile:
 		validateSourceURL(a, c.ManifestURL, "manifest_url")
 		if c.AssetName == "" {
-			a.Add(`asset_name is required for checksum.type = "shasums-file"`, "asset_name")
+			a.AddCode("err_pval_checksum_asset_required", nil, "asset_name")
 		} else {
 			// asset_name is template-expanded by the resolver (matched against
 			// the SHASUMS manifest), so a typo'd placeholder must fail here too.
 			validateTemplatePlaceholders(a, c.AssetName, "asset_name")
 		}
 	case "":
-		a.Add("checksum.type must be set", "type")
+		a.AddCode("err_pval_checksum_type_required", nil, "type")
 	default:
-		a.Add(fmt.Sprintf("checksum.type %q is not one of %q, %q, %q",
-			c.Type, ChecksumNone, ChecksumSidecar, ChecksumShasumsFile), "type")
+		a.AddCode("err_pval_checksum_type_oneof",
+			[]any{c.Type, ChecksumNone, ChecksumSidecar, ChecksumShasumsFile}, "type")
 	}
 	if c.Type != "" && c.Type != ChecksumNone && verify == VerifyPGP {
-		a.Add(`checksum.type must be "none" when verify = "pgp"`, "type")
+		a.AddCode("err_pval_checksum_none_for_pgp", nil, "type")
 	}
 }
 
@@ -169,7 +169,7 @@ func (c *ChecksumSpec) validate(a *config.Accumulator, verify string) {
 func validateTemplatePlaceholders(a *config.Accumulator, raw, field string) {
 	for _, ph := range rxTemplatePlaceholder.FindAllString(raw, -1) {
 		if ph != "${version}" && ph != "${arch}" {
-			a.Add(fmt.Sprintf("%s has unknown placeholder %s (only ${version} and ${arch} are expanded)", field, ph), field)
+			a.AddCode("err_pval_unknown_placeholder", []any{field, ph}, field)
 		}
 	}
 }
@@ -180,30 +180,30 @@ func validateTemplatePlaceholders(a *config.Accumulator, raw, field string) {
 // third-party plugin.toml supplies. Untrusted-input gate per defensive-coding §5.
 func validateSourceURL(a *config.Accumulator, raw, field string) {
 	if raw == "" {
-		a.Add(field+" must not be empty", field)
+		a.AddCode("err_pval_field_required", []any{field}, field)
 		return
 	}
 	validateTemplatePlaceholders(a, raw, field)
 	stripped := rxTemplatePlaceholder.ReplaceAllString(raw, "x")
 	if !rxPluginURL.MatchString(stripped) {
-		a.Add(field+" must start with https:// and contain no whitespace", field)
+		a.AddCode("err_pval_field_https", []any{field}, field)
 	}
 }
 
 func (m *Metadata) validate(a *config.Accumulator) {
 	if m.Name == "" {
-		a.Add("name must not be empty", "name")
+		a.AddCode("err_pval_field_required", []any{"name"}, "name")
 	}
 	if m.Description == "" {
-		a.Add("description must not be empty", "description")
+		a.AddCode("err_pval_field_required", []any{"description"}, "description")
 	}
 	if m.URL == "" {
-		a.Add("url must not be empty", "url")
+		a.AddCode("err_pval_field_required", []any{"url"}, "url")
 	} else if !rxPluginURL.MatchString(m.URL) {
-		a.Add("url must start with https:// and contain no whitespace", "url")
+		a.AddCode("err_pval_field_https", []any{"url"}, "url")
 	}
 	if config.HasDuplicates(m.Conflicts) {
-		a.Add("metadata.conflicts contains duplicate entries", "conflicts")
+		a.AddCode("err_pval_duplicate_entries", []any{"metadata.conflicts"}, "conflicts")
 	}
 }
 
@@ -218,11 +218,11 @@ func (i *Install) validate(a *config.Accumulator) {
 			"a newline or double-quote would let the value escape the generated Dockerfile ENV line")
 	}
 	if config.HasDuplicates(i.BuildArgs) {
-		a.Add("install.build_args contains duplicate entries", "build_args")
+		a.AddCode("err_pval_duplicate_entries", []any{"install.build_args"}, "build_args")
 	}
 	for idx, b := range i.BuildArgs {
 		if !rxBuildArg.MatchString(b) {
-			a.Add("build_arg does not match "+rxBuildArg.String(), "build_args", fmt.Sprintf("%d", idx))
+			a.AddCode("err_pval_build_arg_pattern", []any{rxBuildArg.String()}, "build_args", fmt.Sprintf("%d", idx))
 			continue
 		}
 		if _, reserved := reservedExtraVersionEnvs[b]; reserved {
@@ -233,16 +233,16 @@ func (i *Install) validate(a *config.Accumulator) {
 			// no --build-arg is supplied), so reject the collision at
 			// decode time. Mirrors the [install.extra_versions].<k>.env
 			// collision check.
-			a.Add(fmt.Sprintf("build_arg %q collides with a cocoon-reserved variable", b),
+			a.AddCode("err_pval_build_arg_reserved", []any{b},
 				"build_args", fmt.Sprintf("%d", idx))
 		}
 	}
 	if config.HasDuplicates(i.Volumes) {
-		a.Add("install.volumes contains duplicate entries", "volumes")
+		a.AddCode("err_pval_duplicate_entries", []any{"install.volumes"}, "volumes")
 	}
 	for idx, v := range i.Volumes {
 		if !rxPluginVolume.MatchString(v) {
-			a.Add("volume does not match "+rxPluginVolume.String(), "volumes", fmt.Sprintf("%d", idx))
+			a.AddCode("err_pval_volume_pattern", []any{rxPluginVolume.String()}, "volumes", fmt.Sprintf("%d", idx))
 		}
 	}
 	i.validateMethods(a)
@@ -289,12 +289,11 @@ func validateOneExtraVersion(
 	seenEnv map[string]string,
 ) {
 	if _, reserved := reservedExtraVersionKeys[k]; reserved {
-		a.Add(fmt.Sprintf("extra_versions key %q is reserved under [plugins.options] "+
-			"(never routed as an extra) — pick a different key", k), "extra_versions", k)
+		a.AddCode("err_pval_extra_key_reserved", []any{k}, "extra_versions", k)
 		return
 	}
 	if !rxExtraVersionKey.MatchString(k) {
-		a.Add("extra_versions key does not match "+rxExtraVersionKey.String(), "extra_versions", k)
+		a.AddCode("err_pval_extra_key_pattern", []any{rxExtraVersionKey.String()}, "extra_versions", k)
 	}
 	if !checkExtraVersionEnv(a, k, spec.Env, buildArgs, seenEnv) {
 		return
@@ -314,25 +313,22 @@ func checkExtraVersionEnv(
 ) bool {
 	switch {
 	case env == "":
-		a.Add("env must not be empty", "extra_versions", k, "env")
+		a.AddCode("err_pval_field_required", []any{"env"}, "extra_versions", k, "env")
 		return false
 	case !rxBuildArg.MatchString(env):
-		a.Add("env does not match "+rxBuildArg.String(), "extra_versions", k, "env")
+		a.AddCode("err_pval_env_pattern", []any{rxBuildArg.String()}, "extra_versions", k, "env")
 		return false
 	}
 	if _, reserved := reservedExtraVersionEnvs[env]; reserved {
-		a.Add(fmt.Sprintf("env %q collides with a cocoon-reserved variable", env),
-			"extra_versions", k, "env")
+		a.AddCode("err_pval_env_reserved", []any{env}, "extra_versions", k, "env")
 		return false
 	}
 	if _, conflict := buildArgs[env]; conflict {
-		a.Add(fmt.Sprintf("env %q collides with an install.build_args entry", env),
-			"extra_versions", k, "env")
+		a.AddCode("err_pval_env_collides_build_arg", []any{env}, "extra_versions", k, "env")
 		return false
 	}
 	if prev, dup := seenEnv[env]; dup {
-		a.Add(fmt.Sprintf("env %q is also used by extra_versions.%s", env, prev),
-			"extra_versions", k, "env")
+		a.AddCode("err_pval_env_dup", []any{env, prev}, "extra_versions", k, "env")
 		return false
 	}
 	return true
@@ -342,27 +338,25 @@ func checkExtraVersionEnv(
 // runes that would break the Dockerfile RUN-prefix env quoting.
 func checkExtraVersionDefault(a *config.Accumulator, k, def string) {
 	if def == "" {
-		a.Add("default must not be empty (the install script reads the env as required; "+
-			"an empty default would make the build unstable across invocations)",
-			"extra_versions", k, "default")
+		a.AddCode("err_pval_default_required", nil, "extra_versions", k, "default")
 		return
 	}
 	if bad, r := config.UnsafeExtraVersionRune(def); bad {
-		a.Add(config.UnsafeExtraVersionMessage("default", r), "extra_versions", k, "default")
+		a.AddCode("err_field_extra_version_unsafe", []any{"default", r}, "extra_versions", k, "default")
 	}
 }
 
 func (i *Install) validateMethods(a *config.Accumulator) {
 	if len(i.Methods) == 0 {
 		if i.DefaultMethod != "" {
-			a.Add("default_method requires at least one [install.methods.<name>] entry", "default_method")
+			a.AddCode("err_pval_default_method_needs_methods", nil, "default_method")
 		}
 		return
 	}
 	if i.DefaultMethod == "" {
-		a.Add("default_method must be set when [install.methods] is declared", "default_method")
+		a.AddCode("err_pval_default_method_required", nil, "default_method")
 	} else if _, ok := i.Methods[i.DefaultMethod]; !ok {
-		a.Add(fmt.Sprintf("default_method %q is not declared in [install.methods]", i.DefaultMethod), "default_method")
+		a.AddCode("err_pval_default_method_undeclared", []any{i.DefaultMethod}, "default_method")
 	}
 	// Sort method names so ValidationError.Error()'s "first error"
 	// summary stays stable across runs (map iteration is randomised).
@@ -370,10 +364,10 @@ func (i *Install) validateMethods(a *config.Accumulator) {
 	for _, name := range names {
 		m := i.Methods[name]
 		if !rxMethodName.MatchString(name) {
-			a.Add("method name does not match "+rxMethodName.String(), "methods", name)
+			a.AddCode("err_pval_method_name_pattern", []any{rxMethodName.String()}, "methods", name)
 		}
 		if m.Description == "" {
-			a.Add("description must not be empty", "methods", name, "description")
+			a.AddCode("err_pval_field_required", []any{"description"}, "methods", name, "description")
 		}
 	}
 }

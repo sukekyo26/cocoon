@@ -3,13 +3,15 @@ package config
 import (
 	"errors"
 	"fmt"
-	"io"
 	"maps"
 	"net"
 	"regexp"
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/sukekyo26/cocoon/internal/i18n"
+	"github.com/sukekyo26/cocoon/internal/warn"
 )
 
 // ErrPortShortForm marks every rejection from ValidateShortForm so callers
@@ -97,10 +99,10 @@ func ComposePortEntries(forward []any) []ComposePort {
 // entry. devcontainer.json's forwardPorts lists ports inside the container
 // (where the app listens), which VS Code forwards to the local machine — not
 // the published host port. Entries that cannot reduce to a single TCP integer
-// (container-side port ranges, mode=host, protocol=udp) are skipped; if warn
-// is non-nil each skip is announced so the user can reconcile
+// (container-side port ranges, mode=host, protocol=udp) are skipped; each skip
+// is recorded in sink (nil drops them) so the user can reconcile
 // docker-compose-only ports with devcontainer output.
-func DevcontainerPortEntries(forward []any, warn io.Writer) []int {
+func DevcontainerPortEntries(forward []any, sink *warn.Sink) []int {
 	if len(forward) == 0 {
 		return nil
 	}
@@ -108,11 +110,7 @@ func DevcontainerPortEntries(forward []any, warn io.Writer) []int {
 	for i, raw := range forward {
 		port, ok, reason := devcontainerPort(raw)
 		if !ok {
-			if warn != nil {
-				fmt.Fprintf(warn,
-					"WARNING: ports.forward[%d] %s; skipping for devcontainer.json forwardPorts.\n",
-					i, reason)
-			}
+			sink.Warn(warn.PortSkip, i, reason)
 			continue
 		}
 		out = append(out, port)
@@ -120,66 +118,67 @@ func DevcontainerPortEntries(forward []any, warn io.Writer) []int {
 	return out
 }
 
-// devcontainerPort returns (container port, true, "") on success or
+// devcontainerPort returns (container port, true, zero Ref) on success or
 // (0, false, reason) when the entry cannot be expressed as a single integer.
-func devcontainerPort(raw any) (int, bool, string) {
+// The reason is a warn.Ref so the drain site localizes it.
+func devcontainerPort(raw any) (int, bool, warn.Ref) {
 	switch v := raw.(type) {
 	case string:
 		return shortFormContainerPort(v)
 	case map[string]any:
 		return longFormContainerPort(v)
 	default:
-		return 0, false, fmt.Sprintf("has unsupported type %T", raw)
+		return 0, false, warn.Reason(warn.PortReasonType, fmt.Sprintf("%T", raw))
 	}
 }
 
-func shortFormContainerPort(s string) (int, bool, string) {
+func shortFormContainerPort(s string) (int, bool, warn.Ref) {
 	m := rxPortShortForm.FindStringSubmatch(s)
 	if m == nil {
-		return 0, false, fmt.Sprintf("= %q is not a valid short-form port", s)
+		return 0, false, warn.Reason(warn.PortReasonShortInvalid, s)
 	}
 	// devcontainer.json's forwardPorts is TCP-only — VS Code's port
 	// tunnel does not carry UDP, so a UDP entry registered here would
 	// show up in the Ports panel but silently fail to forward.
 	if proto := m[rxPortShortForm.SubexpIndex("proto")]; proto == "udp" {
-		return 0, false, fmt.Sprintf("= %q uses protocol = \"udp\"", s)
+		return 0, false, warn.Reason(warn.PortReasonShortUDP, s)
 	}
 	// forwardPorts lists the port inside the container (where the app
 	// listens), not the published host port — for "30002:3000" VS Code
 	// forwards container port 3000, not 30002.
 	container := m[rxPortShortForm.SubexpIndex("container")]
 	if strings.Contains(container, "-") {
-		return 0, false, fmt.Sprintf("= %q uses a port range", s)
+		return 0, false, warn.Reason(warn.PortReasonRange, s)
 	}
 	n, err := strconv.Atoi(container)
 	if err != nil {
-		return 0, false, fmt.Sprintf("= %q has unparseable port", s)
+		return 0, false, warn.Reason(warn.PortReasonUnparseable, s)
 	}
-	return n, true, ""
+	return n, true, warn.Reason("")
 }
 
-func longFormContainerPort(m map[string]any) (int, bool, string) {
+func longFormContainerPort(m map[string]any) (int, bool, warn.Ref) {
 	if mode, ok := stringField(m, "mode"); ok && mode == "host" {
-		return 0, false, "uses mode = \"host\""
+		return 0, false, warn.Reason(warn.PortReasonHostMode)
 	}
 	// Symmetric with the short-form check above: devcontainer.json's
 	// forwardPorts cannot carry UDP, so a long-form entry with
 	// protocol = "udp" is skipped with the same warning class.
 	if proto, ok := stringField(m, "protocol"); ok && proto == "udp" {
-		return 0, false, "uses protocol = \"udp\""
+		return 0, false, warn.Reason(warn.PortReasonLongUDP)
 	}
 	// `target` is the container-side port that VS Code forwards; `published`
 	// is the host port and is irrelevant to forwardPorts (see
 	// shortFormContainerPort).
 	v, ok := m["target"]
 	if !ok {
-		return 0, false, "is missing target"
+		return 0, false, warn.Reason(warn.PortReasonMissingTarget)
 	}
 	n, ok := intField(v)
 	if !ok {
-		return 0, false, fmt.Sprintf("has a non-integer target %v", v)
+		return 0, false, warn.Reason(warn.PortReasonNonIntegerTarget, v)
 	}
-	return n, true, ""
+	return n, true, warn.Reason("")
 }
 
 // normalizeLongForm keeps only allowed keys. `target` is always int;
@@ -224,43 +223,57 @@ func validatePortsForward(a *Accumulator, forward []any) {
 		idx := strconv.Itoa(i)
 		switch v := raw.(type) {
 		case string:
-			if msg, ok := shortFormReason(v); !ok {
-				a.Add(msg, "forward", idx)
+			if code, args, ok := shortFormReason(v); !ok {
+				a.AddCode(code, args, "forward", idx)
 			}
 		case map[string]any:
 			validateLongForm(a, v, idx)
 		case int, int64, float64:
-			a.Add(
-				"int form was removed; use a string (\"3000:3000\") "+
-					"or table ({ target = 3000 })",
+			a.AddCode(
+				"err_portfld_int_form_removed",
+				nil,
 				"forward", idx,
 			)
 		default:
-			a.Add(fmt.Sprintf("must be string or table (got %T)", raw),
+			a.AddCode("err_portfld_must_be_string_or_table", []any{raw},
 				"forward", idx)
 		}
 	}
 }
 
-// ValidateShortForm wraps ErrPortShortForm on reject. The schema validator
-// and `cocoon init` prompt share this rule so a string init accepts cannot
-// be rejected later by gen.
+// ValidateShortForm reports a rejection as a localizable error on reject (nil
+// on accept). The schema validator and `cocoon init` prompt share this rule so
+// a string init accepts cannot be rejected later by gen. The returned error
+// wraps ErrPortShortForm for errors.Is and renders the reason in the active
+// language at the CLI boundary (the `--ports` flag path), not frozen to English.
 func ValidateShortForm(s string) error {
-	msg, ok := shortFormReason(s)
+	code, args, ok := shortFormReason(s)
 	if ok {
 		return nil
 	}
-	return fmt.Errorf("%w: %s", ErrPortShortForm, msg)
+	return &portShortFormError{code: code, args: args}
 }
 
-// shortFormReason returns ("", true) on accept and (reason, false) on
-// reject. Shared by ValidateShortForm and validatePortsForward.
-func shortFormReason(s string) (string, bool) {
+// portShortFormError is ValidateShortForm's localizable rejection: it wraps
+// ErrPortShortForm so callers classify via errors.Is, and carries the reason as
+// a catalog (code, args) pair so the boundary renders it in the active language
+// (i18n.Localizer). Error() renders English for logs / non-boundary callers.
+type portShortFormError struct {
+	code string
+	args []any
+}
+
+func (e *portShortFormError) Error() string                   { return i18n.English().Msg(e.code, e.args...) }
+func (e *portShortFormError) Localize(c *i18n.Catalog) string { return c.Msg(e.code, e.args...) }
+func (*portShortFormError) Unwrap() error                     { return ErrPortShortForm }
+
+// shortFormReason returns ("", nil, true) on accept and (code, args, false) on
+// reject. Shared by ValidateShortForm and validatePortsForward so the same rule
+// drives both the localized validation error and the init prompt.
+func shortFormReason(s string) (code string, args []any, ok bool) {
 	m := rxPortShortForm.FindStringSubmatch(s)
 	if m == nil {
-		return fmt.Sprintf(
-			"%q does not match docker-compose short form "+
-				"[HOST_IP:][HOST:]CONTAINER[/PROTOCOL]", s), false
+		return "err_portfld_short_form_nomatch", []any{s}, false
 	}
 	for _, name := range []string{"host", "container"} {
 		raw := m[rxPortShortForm.SubexpIndex(name)]
@@ -270,18 +283,17 @@ func shortFormReason(s string) (string, bool) {
 		for _, part := range strings.Split(raw, "-") {
 			n, err := strconv.Atoi(part)
 			if err != nil || n < portMin || n > portMax {
-				return fmt.Sprintf("port must be in [%d,%d] (got %q)",
-					portMin, portMax, part), false
+				return "err_portfld_short_form_range", []any{portMin, portMax, part}, false
 			}
 		}
 	}
 	if ip := m[rxPortShortForm.SubexpIndex("ip")]; ip != "" {
 		bare := strings.TrimSuffix(strings.TrimPrefix(ip, "["), "]")
 		if net.ParseIP(bare) == nil {
-			return fmt.Sprintf("%q is not a valid IPv4/IPv6 address", ip), false
+			return "err_portfld_short_form_ip", []any{ip}, false
 		}
 	}
-	return "", true
+	return "", nil, true
 }
 
 func validateLongForm(a *Accumulator, m map[string]any, idx string) {
@@ -289,7 +301,7 @@ func validateLongForm(a *Accumulator, m map[string]any, idx string) {
 		return
 	}
 	if _, present := m["target"]; !present {
-		a.Add("target is required", "forward", idx, "target")
+		a.AddCode("err_portfld_target_required", nil, "forward", idx, "target")
 	}
 	validateLongFormPortFields(a, m, idx)
 	validateLongFormStringField(a, m, idx, "host_ip", validateHostIP)
@@ -300,9 +312,8 @@ func validateLongForm(a *Accumulator, m map[string]any, idx string) {
 func rejectUnknownLongFormKeys(a *Accumulator, m map[string]any, idx string) bool {
 	for k := range m {
 		if _, ok := allowedLongFormKeys[k]; !ok {
-			a.Add(fmt.Sprintf(
-				"unknown key %q (allowed: %s)",
-				k, strings.Join(longFormKeyOrder, ", ")),
+			a.AddCode("err_portfld_unknown_key",
+				[]any{k, strings.Join(longFormKeyOrder, ", ")},
 				"forward", idx)
 			return true
 		}
@@ -322,11 +333,11 @@ func validateLongFormPortFields(a *Accumulator, m map[string]any, idx string) {
 func validateIntPortField(a *Accumulator, v any, idx, key string) {
 	n, parsed := intField(v)
 	if !parsed {
-		a.Add(fmt.Sprintf("%s must be an integer", key), "forward", idx, key)
+		a.AddCode("err_portfld_must_be_integer", []any{key}, "forward", idx, key)
 		return
 	}
 	if n < portMin || n > portMax {
-		a.Add(fmt.Sprintf("%s must be in [%d,%d]", key, portMin, portMax),
+		a.AddCode("err_portfld_must_be_in_range", []any{key, portMin, portMax},
 			"forward", idx, key)
 	}
 }
@@ -341,58 +352,59 @@ func validateLongFormPublished(a *Accumulator, v any, idx string) {
 	}
 	s, ok := v.(string)
 	if !ok {
-		a.Add("published must be an integer or a string", "forward", idx, "published")
+		a.AddCode("err_portfld_published_int_or_string", nil, "forward", idx, "published")
 		return
 	}
 	if !rxLongFormPublishedString.MatchString(s) {
-		a.Add(fmt.Sprintf(
-			"published string %q must be a port or numeric range like \"8000-8010\"", s),
+		a.AddCode("err_portfld_published_string_form",
+			[]any{s},
 			"forward", idx, "published")
 		return
 	}
 	for _, part := range strings.Split(s, "-") {
 		n, err := strconv.Atoi(part)
 		if err != nil || n < portMin || n > portMax {
-			a.Add(fmt.Sprintf("published port must be in [%d,%d] (got %q)",
-				portMin, portMax, part),
+			a.AddCode("err_portfld_published_port_range",
+				[]any{portMin, portMax, part},
 				"forward", idx, "published")
 			return
 		}
 	}
 }
 
-// validateLongFormStringField is a no-op when the key is absent. The
-// `check` callback returns the message to emit (or "" to accept).
+// validateLongFormStringField is a no-op when the key is absent. The `check`
+// callback returns ("", nil) to accept or (code, args) to emit a localized
+// failure.
 func validateLongFormStringField(
 	a *Accumulator,
 	m map[string]any,
 	idx, name string,
-	check func(string) string,
+	check func(string) (string, []any),
 ) {
 	if v, ok := stringField(m, name); ok {
-		if msg := check(v); msg != "" {
-			a.Add(msg, "forward", idx, name)
+		if code, args := check(v); code != "" {
+			a.AddCode(code, args, "forward", idx, name)
 		}
 		return
 	}
 	if _, present := m[name]; present {
-		a.Add(name+" must be a string", "forward", idx, name)
+		a.AddCode("err_portfld_long_form_value_string", []any{name}, "forward", idx, name)
 	}
 }
 
-func validateHostIP(v string) string {
+func validateHostIP(v string) (string, []any) {
 	if net.ParseIP(v) == nil {
-		return fmt.Sprintf("host_ip %q is not a valid IP address", v)
+		return "err_portfld_host_ip_invalid", []any{v}
 	}
-	return ""
+	return "", nil
 }
 
-func validateEnum(field string, allowed map[string]struct{}) func(string) string {
-	return func(v string) string {
+func validateEnum(field string, allowed map[string]struct{}) func(string) (string, []any) {
+	return func(v string) (string, []any) {
 		if _, ok := allowed[v]; ok {
-			return ""
+			return "", nil
 		}
-		return fmt.Sprintf("%s must be one of %s (got %q)", field, strings.Join(slices.Sorted(maps.Keys(allowed)), "/"), v)
+		return "err_portfld_enum", []any{field, strings.Join(slices.Sorted(maps.Keys(allowed)), "/"), v}
 	}
 }
 

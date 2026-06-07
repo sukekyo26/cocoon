@@ -6,6 +6,34 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+## [0.14.2] - 2026-06-07
+
+### 変更
+
+- `cocoon gen` が、2 つのプラグインが同じボリュームのマウントパスを宣言しても
+  警告を出さなくなりました。パスは引き続き単一のボリュームに重複排除されます。
+  この通知は単なるノイズで、プラグインがビルトインの場合はユーザーが対処
+  できませんでした。`workspace.toml` のボリュームとプラグインの衝突は、自分の
+  ボリュームをリネームすれば解消できるため引き続き警告します。
+
+### 修正
+
+- `cocoon gen`（および `cocoon lock`）が、ジェネレータ由来の診断
+  （ボリュームパスの衝突、`[apt]` とベースパッケージの重複、verbatim な
+  `[dockerfile]` フック、checksum 無しの pin、`[env].TZ` の上書き、スキップされた
+  `forwardPorts`、プラグインの上書き・不在の通知）を実行環境の言語で出力するように
+  なりました。日本語環境でこれらの警告だけ英語で表示され、他の出力と言語が混在する
+  問題を解消します。
+- `cocoon self-update` / `cocoon lock` / `cocoon plugin pin` と `cocoon init` の
+  スクリーンリーダー用プロンプトが、実行時の出力（進捗・成功・貼り付け用スニペット）
+  を常に英語ではなく実行環境の言語で表示するようになりました。
+  （`cocoon plugin list` / `cocoon plugin show` の列ヘッダ・フィールドラベルは
+  `plugin.toml` のフィールド識別子に対応するため英語のままです。）
+- エラーメッセージが実行環境の言語で表示されるようになりました。全サブコマンドの
+  usage/failure エラーと workspace.toml / plugin.toml の検証メッセージが、日本語ロケール
+  では日本語になります。cocoon が Go 標準ライブラリ（ファイルシステム・TOML パーサ・
+  ネットワーク）からそのまま wrap するエラー文は英語のまま残ります。
+
 ## [0.14.1] - 2026-06-05
 
 ### 修正
@@ -636,7 +664,8 @@ cocoon の主要な変更を記録します。フォーマットは
 - `COMPOSE_PROJECT_NAME` をプロジェクトディレクトリの basename から導出するように変更。docker compose の namespace がホストディレクトリと一致する。
 - 国際化 (英語 / 日本語) カタログを追加。CLI プロンプト・エラーメッセージ・`workspace.toml` インラインコメントすべてを `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` で切替可能。
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.14.1...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.14.2...HEAD
+[0.14.2]: https://github.com/sukekyo26/cocoon/compare/v0.14.1...v0.14.2
 [0.14.1]: https://github.com/sukekyo26/cocoon/compare/v0.14.0...v0.14.1
 [0.14.0]: https://github.com/sukekyo26/cocoon/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/sukekyo26/cocoon/compare/v0.12.0...v0.13.0

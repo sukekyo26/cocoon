@@ -6,6 +6,35 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.14.2] - 2026-06-07
+
+### Changed
+
+- `cocoon gen` no longer warns when two plugins declare the same volume mount
+  path. The paths still deduplicate to a single volume; the notice was just
+  noise, and unactionable when the plugins are built in. A collision between a
+  `workspace.toml` volume and a plugin still warns, since renaming your own
+  volume resolves it.
+
+### Fixed
+
+- `cocoon gen` (and `cocoon lock`) now localize their generator diagnostics —
+  volume-path collisions, `[apt]`/base-package overlap, verbatim `[dockerfile]`
+  hooks, pin-without-checksum, `[env].TZ` override, skipped `forwardPorts`, and
+  plugin override / missing-plugin notices — to the active language. A Japanese
+  environment no longer sees these warnings in English while the rest of the
+  output is Japanese.
+- `cocoon self-update`, `cocoon lock`, `cocoon plugin pin`, and the `cocoon init`
+  screen-reader prompts now print their runtime output (progress, success,
+  paste-in snippets) in the active language instead of always in English.
+  (`cocoon plugin list` / `cocoon plugin show` keep their column headers and
+  field labels in English — they mirror `plugin.toml` field identifiers.)
+- Error messages are now localized to the active language: usage/failure errors
+  across all subcommands and `workspace.toml` / `plugin.toml` validation messages
+  render in Japanese under a Japanese locale. Error text cocoon wraps verbatim
+  from the Go standard library (filesystem, TOML parser, network) stays in
+  English.
+
 ## [0.14.1] - 2026-06-05
 
 ### Fixed
@@ -641,7 +670,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Add `COMPOSE_PROJECT_NAME` derivation from the project directory basename so docker compose namespacing matches the host directory.
 - Add i18n catalog (English / Japanese) covering every CLI prompt, error message, and inline `workspace.toml` comment, switched via `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG`.
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.14.1...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.14.2...HEAD
+[0.14.2]: https://github.com/sukekyo26/cocoon/compare/v0.14.1...v0.14.2
 [0.14.1]: https://github.com/sukekyo26/cocoon/compare/v0.14.0...v0.14.1
 [0.14.0]: https://github.com/sukekyo26/cocoon/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/sukekyo26/cocoon/compare/v0.12.0...v0.13.0

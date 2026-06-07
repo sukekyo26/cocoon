@@ -1,17 +1,18 @@
 package dockerfile //nolint:testpackage // exercises unexported generatePluginInstalls / userDirsBlockTmpl directly.
 
 import (
-	"bytes"
 	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"testing/fstest"
 
 	"github.com/sukekyo26/cocoon/internal/config"
 	"github.com/sukekyo26/cocoon/internal/plugin"
+	"github.com/sukekyo26/cocoon/internal/warn"
 )
 
 // errFS is a minimal fs.FS that fails every Open with the configured
@@ -47,7 +48,7 @@ func TestGeneratePluginInstalls_NoRedundantUserToggle(t *testing.T) {
 		[]string{"/home/${USERNAME}/.cache/needs-root"},
 		map[string]config.PluginVersionOverride{},
 		nil,
-		&bytes.Buffer{},
+		warn.New(),
 		shellEnv{rcFileAbs: "/home/${USERNAME}/.bashrc", rcSyntax: "posix", loginShell: "bash"},
 	)
 	if err != nil {
@@ -183,7 +184,7 @@ func TestGeneratePluginInstalls_EnvOnlyPluginEmitsEnv(t *testing.T) {
 		plugins, enabled, os.DirFS(pluginsDir), nil,
 		map[string]config.PluginVersionOverride{},
 		nil,
-		&bytes.Buffer{},
+		warn.New(),
 		shellEnv{rcFileAbs: "/home/${USERNAME}/.bashrc", rcSyntax: "posix", loginShell: "bash"},
 	)
 	if err != nil {
@@ -247,7 +248,7 @@ func TestGeneratePluginInstalls_BuildArgsWithoutInstallSh(t *testing.T) {
 		plugins, enabled, os.DirFS(pluginsDir), nil,
 		map[string]config.PluginVersionOverride{},
 		nil,
-		&bytes.Buffer{},
+		warn.New(),
 		shellEnv{rcFileAbs: "/home/${USERNAME}/.bashrc", rcSyntax: "posix", loginShell: "bash"},
 	)
 	if err != nil {
@@ -303,7 +304,7 @@ func TestGeneratePluginInstalls_BuildArgsDeclaredOnce(t *testing.T) {
 		plugins, enabled, os.DirFS(pluginsDir), nil,
 		map[string]config.PluginVersionOverride{},
 		nil,
-		&bytes.Buffer{},
+		warn.New(),
 		shellEnv{rcFileAbs: "/home/${USERNAME}/.bashrc", rcSyntax: "posix", loginShell: "bash"},
 	)
 	if err != nil {
@@ -384,7 +385,7 @@ func TestGeneratePluginInstalls_NilPluginsFSFailsFast(t *testing.T) {
 				tc.plugins, tc.enabled, nil, nil,
 				map[string]config.PluginVersionOverride{},
 				nil,
-				&bytes.Buffer{},
+				warn.New(),
 				shellEnv{rcFileAbs: "/home/${USERNAME}/.bashrc", rcSyntax: "posix", loginShell: "bash"},
 			)
 			if tc.wantError {
@@ -545,7 +546,7 @@ func TestBuildPluginSnippets_RejectsUnsafeScript(t *testing.T) {
 				plugins, []string{"colliding"}, os.DirFS(pluginsDir), nil,
 				map[string]config.PluginVersionOverride{},
 				nil,
-				&bytes.Buffer{},
+				warn.New(),
 				shellEnv{rcFileAbs: "/home/${USERNAME}/.bashrc", rcSyntax: "posix", loginShell: "bash"},
 			)
 			if tc.wantErr != nil {
@@ -644,7 +645,7 @@ func TestGeneratePluginInstalls_MethodOverride(t *testing.T) {
 				plugins, enabled, os.DirFS(pluginsDir), nil,
 				map[string]config.PluginVersionOverride{},
 				tc.methods,
-				&bytes.Buffer{},
+				warn.New(),
 				shellEnv{rcFileAbs: "/home/${USERNAME}/.bashrc", rcSyntax: "posix", loginShell: "bash"},
 			)
 			if err != nil {
@@ -685,7 +686,7 @@ func TestGeneratePluginInstalls_LegacyPluginNoMethodEnv(t *testing.T) {
 		plugins, enabled, os.DirFS(pluginsDir), nil,
 		map[string]config.PluginVersionOverride{},
 		nil,
-		&bytes.Buffer{},
+		warn.New(),
 		shellEnv{rcFileAbs: "/home/${USERNAME}/.bashrc", rcSyntax: "posix", loginShell: "bash"},
 	)
 	if err != nil {
@@ -844,16 +845,16 @@ func TestValidateVersionOverrides_PinWithoutChecksumWarning(t *testing.T) {
 	sidecar := &plugin.VersionSource{Checksum: plugin.ChecksumSpec{Type: plugin.ChecksumSidecar}} //nolint:exhaustruct // only the kind matters here
 	noneSrc := &plugin.VersionSource{Checksum: plugin.ChecksumSpec{Type: plugin.ChecksumNone}}    //nolint:exhaustruct // only the kind matters here
 	cases := []struct {
-		name         string
-		verify       string
-		src          *plugin.VersionSource
-		method       string
-		wantWarn     bool
-		wantContains string
+		name     string
+		verify   string
+		src      *plugin.VersionSource
+		method   string
+		wantWarn bool
+		wantCode string
 	}{
-		{"auto_resolvable_points_at_lock", plugin.VerifyChecksum, sidecar, "binary", true, "cocoon lock"},
-		{"none_type_warns_unverified", plugin.VerifyChecksum, noneSrc, "binary", true, "WITHOUT verification"},
-		{"no_source_warns_unverified", plugin.VerifyChecksum, nil, "archive", true, "WITHOUT verification"},
+		{"auto_resolvable_points_at_lock", plugin.VerifyChecksum, sidecar, "binary", true, warn.PinNoChecksum},
+		{"none_type_warns_unverified", plugin.VerifyChecksum, noneSrc, "binary", true, warn.PinNoVerify},
+		{"no_source_warns_unverified", plugin.VerifyChecksum, nil, "archive", true, warn.PinNoVerify},
 		{"installer_method_silent", plugin.VerifyChecksum, noneSrc, "installer", false, ""},
 		{"apt_method_silent", plugin.VerifyChecksum, noneSrc, "apt", false, ""},
 		{"pgp_plugin_silent", plugin.VerifyPGP, nil, "binary", false, ""},
@@ -872,21 +873,22 @@ func TestValidateVersionOverrides_PinWithoutChecksumWarning(t *testing.T) {
 					Version: plugin.Version{VersionCapable: true, Verify: tc.verify, Source: tc.src},
 				},
 			}
-			var warnings bytes.Buffer
+			sink := warn.New()
 			err := validateVersionOverrides(
 				plugins,
 				map[string]config.PluginVersionOverride{"p": {Pin: "1.0.0"}},
 				nil,
-				&warnings,
+				sink,
 			)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if gotWarn := strings.Contains(warnings.String(), "WARNING"); gotWarn != tc.wantWarn {
-				t.Errorf("warning emitted = %v, want %v\n%s", gotWarn, tc.wantWarn, warnings.String())
+			if gotWarn := len(sink.All()) > 0; gotWarn != tc.wantWarn {
+				t.Errorf("warning emitted = %v, want %v\n%v", gotWarn, tc.wantWarn, sink.All())
 			}
-			if tc.wantContains != "" && !strings.Contains(warnings.String(), tc.wantContains) {
-				t.Errorf("warning %q does not contain %q", warnings.String(), tc.wantContains)
+			if tc.wantCode != "" &&
+				!slices.ContainsFunc(sink.All(), func(w warn.Warning) bool { return w.Code == tc.wantCode }) {
+				t.Errorf("want warning code %q, got %v", tc.wantCode, sink.All())
 			}
 		})
 	}
@@ -919,7 +921,7 @@ func TestGeneratePluginInstalls_UnknownMethodFails(t *testing.T) {
 		plugins, []string{"tester"}, os.DirFS(pluginsDir), nil,
 		map[string]config.PluginVersionOverride{},
 		map[string]string{"tester": "ghost"},
-		&bytes.Buffer{},
+		warn.New(),
 		shellEnv{rcFileAbs: "/home/${USERNAME}/.bashrc", rcSyntax: "posix", loginShell: "bash"},
 	)
 	if !errors.Is(err, plugin.ErrUnknownMethod) {
@@ -1011,7 +1013,7 @@ func TestValidateVersionOverrides_UnknownExtraKey(t *testing.T) {
 			Extra: map[string]string{"api_lvl": "35"}, // typo!
 		},
 	}
-	err := validateVersionOverrides(plugins, overrides, nil, &bytes.Buffer{})
+	err := validateVersionOverrides(plugins, overrides, nil, warn.New())
 	if !errors.Is(err, ErrUnknownExtraVersion) {
 		t.Fatalf("err = %v, want errors.Is(.., ErrUnknownExtraVersion)", err)
 	}
@@ -1044,7 +1046,7 @@ func TestValidateVersionOverrides_DeclaredExtraKeyOK(t *testing.T) {
 			Extra: map[string]string{"api_level": "36", "build_tools": "36.0.0"},
 		},
 	}
-	if err := validateVersionOverrides(plugins, overrides, nil, &bytes.Buffer{}); err != nil {
+	if err := validateVersionOverrides(plugins, overrides, nil, warn.New()); err != nil {
 		t.Fatalf("validateVersionOverrides: %v", err)
 	}
 }

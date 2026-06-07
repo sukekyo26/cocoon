@@ -1,8 +1,8 @@
 package generate_test
 
 import (
-	"bytes"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -10,6 +10,7 @@ import (
 	"github.com/sukekyo26/cocoon/internal/generate"
 	"github.com/sukekyo26/cocoon/internal/lockfile"
 	"github.com/sukekyo26/cocoon/internal/plugin"
+	"github.com/sukekyo26/cocoon/internal/warn"
 )
 
 func ptr[T any](v T) *T { return &v }
@@ -336,14 +337,14 @@ func TestWorkspaceContext_BuildEnvironment(t *testing.T) {
 			Locale: &config.LocaleSpec{Timezone: ptr("Asia/Tokyo")},
 			Env:    map[string]string{"TZ": "UTC"},
 		}
-		var warnings bytes.Buffer
-		c := &generate.WorkspaceContext{WS: ws, Warnings: &warnings}
+		sink := warn.New()
+		c := &generate.WorkspaceContext{WS: ws, Warnings: sink}
 		got := c.BuildEnvironment()
 		if !strings.Contains(strings.Join(got, ","), "TZ=Asia/Tokyo") {
 			t.Errorf("expected locale TZ to win: %v", got)
 		}
-		if !strings.Contains(warnings.String(), "WARNING") {
-			t.Errorf("expected warning, got %q", warnings.String())
+		if !slices.ContainsFunc(sink.All(), func(w warn.Warning) bool { return w.Code == warn.TZOverride }) {
+			t.Errorf("expected TZ override warning, got %v", sink.All())
 		}
 	})
 	t.Run("env_TZ_only", func(t *testing.T) {

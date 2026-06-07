@@ -261,9 +261,11 @@ func portsInput(cat *i18n.Catalog, target *string) *huh.Input {
 		Value(target)
 }
 
-// portsInputValidator localizes the rejection message via the catalog.
-// Separate from parsePorts so the `--ports` flag path keeps its English
-// usage error consistent with the other init flag validators.
+// portsInputValidator localizes the rejection via the catalog for inline TUI
+// display. Separate from parsePorts because the prompt shows one concise
+// message (init_err_port_invalid_fmt) rather than ValidateShortForm's detailed
+// reason; the `--ports` flag path surfaces that reason (also localized) at the
+// CLI boundary.
 func portsInputValidator(cat *i18n.Catalog) func(string) error {
 	return func(s string) error {
 		for _, part := range strings.Split(s, ",") {

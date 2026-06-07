@@ -39,8 +39,8 @@ func runList(stdout, _ io.Writer, sourceFilter string) error {
 		sourceFilter != plugin.SourceEmbedded &&
 		sourceFilter != plugin.SourceUser &&
 		sourceFilter != plugin.SourceProject {
-		return fmt.Errorf("%w: --source must be one of %q / %q / %q",
-			clihelpers.ErrUsage, plugin.SourceEmbedded, plugin.SourceUser, plugin.SourceProject)
+		return clihelpers.UsageErr("err_pluginlist_invalid_source",
+			plugin.SourceEmbedded, plugin.SourceUser, plugin.SourceProject)
 	}
 
 	layered, err := resolveLayered()
@@ -51,6 +51,8 @@ func runList(stdout, _ io.Writer, sourceFilter string) error {
 	ids := slices.Sorted(maps.Keys(sources))
 
 	tw := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
+	// Column headers and the yes/no flag are plugin.toml field identifiers, kept
+	// in English (stable across locales) to match `cocoon plugin show`.
 	fmt.Fprintln(tw, "ID\tSOURCE\tDEFAULT\tDESCRIPTION\tURL")
 	for _, id := range ids {
 		src := sources[id]

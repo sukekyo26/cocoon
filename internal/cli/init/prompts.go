@@ -222,7 +222,7 @@ func promptPluginsWithRetry(cat *i18n.Catalog, plugins map[string]*plugin.Plugin
 		// form is reappearing.
 		fmt.Fprintln(os.Stderr, err)
 	}
-	return fmt.Errorf("%w: plugin conflict not resolved after %d attempts", clihelpers.ErrUsage, maxAttempts)
+	return clihelpers.UsageErr("err_initprompts_plugin_conflict_unresolved", maxAttempts)
 }
 
 // runSingleFieldForm wraps a single huh.Field into a one-Group, one-
@@ -240,9 +240,9 @@ func promptPluginsWithRetry(cat *i18n.Catalog, plugins map[string]*plugin.Plugin
 var runSingleFieldForm = func(field huh.Field) error {
 	if err := huh.NewForm(huh.NewGroup(field)).WithKeyMap(keyMapWithoutPrevHelp()).Run(); err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
-			return fmt.Errorf("%w: aborted", clihelpers.ErrUsage)
+			return clihelpers.UsageErr("err_initprompts_aborted")
 		}
-		return fmt.Errorf("%w: prompt: %w", clihelpers.ErrFailure, err)
+		return clihelpers.FailureWrap(err, "err_initprompts_prompt")
 	}
 	return nil
 }

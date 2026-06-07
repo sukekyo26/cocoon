@@ -68,11 +68,14 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 //nolint:gocyclo,gocognit,funlen // self-update has many sequential phases; splitting hurts readability.
 func runSelfUpdate(ctx context.Context, stdout, stderr io.Writer, checkOnly, force bool) error {
 	log := logx.New(stdout, stderr)
+	cat := i18n.New(i18n.Detect())
 
 	current := strings.TrimSpace(version.Get())
 	if current == "" || current == "dev" {
-		log.Error("self-update: cannot self-update a dev build (no version baked in)")
-		return clihelpers.ErrFailure
+		// Carry the message on the error so the boundary renders it once in the
+		// active language; logging here + returning the bare sentinel would also
+		// print "cocoon: failure" (English) from the boundary.
+		return clihelpers.FailureErr("selfupdate_dev_build")
 	}
 	current = strings.TrimPrefix(current, "v")
 
@@ -88,13 +91,16 @@ func runSelfUpdate(ctx context.Context, stdout, stderr io.Writer, checkOnly, for
 		var err error
 		selfPath, err = executablePath()
 		if err != nil {
-			return fmt.Errorf("%w: locate self: %w", clihelpers.ErrFailure, err)
+			return clihelpers.FailureWrap(err, "err_selfupdate_locate_self")
 		}
 		if err = checkInstallDirWritable(selfPath); err != nil {
 			if errors.Is(err, ErrInstallDirReadOnly) {
-				return fmt.Errorf("%w: %w\n%s", clihelpers.ErrFailure, err, installDirHint(selfPath))
+				// hint first, then the failing dir + cause on its own line, so
+				// FailureWrap's appended cause never glues onto the "sudo …" line.
+				return clihelpers.FailureWrap(ErrInstallDirReadOnly, "err_selfupdate_install_dir_readonly",
+					clihelpers.L("err_selfupdate_dir_hint", selfPath, selfPath), filepath.Dir(selfPath))
 			}
-			return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+			return clihelpers.FailureWrap(err, "")
 		}
 	}
 
@@ -102,22 +108,22 @@ func runSelfUpdate(ctx context.Context, stdout, stderr io.Writer, checkOnly, for
 	defer cancel()
 	rel, err := fetchLatest(tctx)
 	if err != nil {
-		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+		return clihelpers.FailureWrap(err, "")
 	}
 	latest := strings.TrimPrefix(rel.TagName, "v")
 
-	log.Infof("%s %s", log.Bold("current version :"), current)
-	log.Infof("%s %s", log.Bold("latest release  :"), latest)
+	log.Infof("%s %s", log.Bold(cat.Msg("selfupdate_label_current")), current)
+	log.Infof("%s %s", log.Bold(cat.Msg("selfupdate_label_latest")), latest)
 
 	if !force && latest == current {
-		log.Success("already up to date")
+		log.Success(cat.Msg("selfupdate_up_to_date"))
 		return nil
 	}
 	if checkOnly {
 		// stdout: keeps the line on the same stream as the version labels
 		// so grep-on-stdout scripts keep working. Exit code 100 is still
 		// the canonical "newer available" signal.
-		log.Infof("newer release %s available; rerun without --check-only to install", latest)
+		log.Info(cat.Msg("selfupdate_newer_available", latest))
 		// Cancel before os.Exit (gocritic exitAfterDefer).
 		cancel()
 		osExit(ExitNewerAvailable) //nolint:gocritic // cancel() above runs the only pending defer.
@@ -128,44 +134,44 @@ func runSelfUpdate(ctx context.Context, stdout, stderr io.Writer, checkOnly, for
 	assetURL := rel.AssetURL(assetName)
 	sumsURL := rel.AssetURL("SHA256SUMS")
 	if assetURL == "" {
-		return fmt.Errorf("%w: release asset %q not found in %s", clihelpers.ErrFailure, assetName, rel.TagName)
+		return clihelpers.FailureErr("err_selfupdate_asset_not_found", assetName, rel.TagName)
 	}
 	if sumsURL == "" {
-		return fmt.Errorf("%w: SHA256SUMS not found in %s", clihelpers.ErrFailure, rel.TagName)
+		return clihelpers.FailureErr("err_selfupdate_sums_not_found", rel.TagName)
 	}
 
 	tmp, err := os.MkdirTemp("", "cocoon-update-")
 	if err != nil {
-		return fmt.Errorf("%w: mktemp: %w", clihelpers.ErrFailure, err)
+		return clihelpers.FailureWrap(err, "err_selfupdate_mktemp")
 	}
 	defer func() { _ = os.RemoveAll(tmp) }()
 
 	binPath := filepath.Join(tmp, assetName)
 	sumsPath := filepath.Join(tmp, "SHA256SUMS")
-	// Progressf writes to stderr (transient, not data) so stdout-grep
+	// Progress writes to stderr (transient, not data) so stdout-grep
 	// scripts see only the stable version / success output.
-	log.Progressf("downloading %s...", assetName)
+	log.Progress(cat.Msg("selfupdate_downloading", assetName))
 	if err = downloadFile(ctx, assetURL, binPath); err != nil {
-		return fmt.Errorf("%w: download %s: %w", clihelpers.ErrFailure, assetName, err)
+		return clihelpers.FailureWrap(err, "err_selfupdate_download_asset", assetName)
 	}
 	if err = downloadFile(ctx, sumsURL, sumsPath); err != nil {
-		return fmt.Errorf("%w: download SHA256SUMS: %w", clihelpers.ErrFailure, err)
+		return clihelpers.FailureWrap(err, "err_selfupdate_download_sums")
 	}
 
 	expected, err := readChecksum(sumsPath, assetName)
 	if err != nil {
-		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+		return clihelpers.FailureWrap(err, "")
 	}
 	actual, err := sha256File(binPath)
 	if err != nil {
-		return fmt.Errorf("%w: %w", clihelpers.ErrFailure, err)
+		return clihelpers.FailureWrap(err, "")
 	}
 	if !strings.EqualFold(actual, expected) {
-		return fmt.Errorf("%w: checksum mismatch (got %s, want %s)", clihelpers.ErrFailure, actual, expected)
+		return clihelpers.FailureErr("err_selfupdate_checksum_mismatch", actual, expected)
 	}
 
 	if err = os.Chmod(binPath, 0o755); err != nil {
-		return fmt.Errorf("%w: chmod: %w", clihelpers.ErrFailure, err)
+		return clihelpers.FailureWrap(err, "err_selfupdate_chmod")
 	}
 
 	if err = atomicReplace(binPath, selfPath); err != nil {
@@ -174,12 +180,13 @@ func runSelfUpdate(ctx context.Context, stdout, stderr io.Writer, checkOnly, for
 		// preflight↔rename race) by reusing the same hint so the user
 		// still sees actionable remediation rather than a raw syscall error.
 		if errors.Is(err, fs.ErrPermission) {
-			return fmt.Errorf("%w: replace %s: %w\n%s", clihelpers.ErrFailure, selfPath, err, installDirHint(selfPath))
+			return clihelpers.FailureWrap(err, "err_selfupdate_replace_perm",
+				clihelpers.L("err_selfupdate_dir_hint", selfPath, selfPath), selfPath)
 		}
-		return fmt.Errorf("%w: replace %s: %w", clihelpers.ErrFailure, selfPath, err)
+		return clihelpers.FailureWrap(err, "err_selfupdate_replace", selfPath)
 	}
 
-	log.Successf("updated cocoon to %s at %s", latest, selfPath)
+	log.Success(cat.Msg("selfupdate_updated", latest, selfPath))
 	return nil
 }
 
@@ -281,18 +288,6 @@ func checkInstallDirWritable(selfPath string) error {
 		return fmt.Errorf("preflight cleanup %s: %w", name, rerr)
 	}
 	return nil
-}
-
-// installDirHint returns a remediation message naming the binary's
-// location and the elevated invocation the user needs to retry. Kept
-// minimal (no alternative install paths) so the message stays focused
-// on the one action that always works.
-func installDirHint(selfPath string) string {
-	return fmt.Sprintf(
-		"  cocoon binary lives at %s. self-update needs write access to its parent dir.\n"+
-			"  rerun with elevated privileges: sudo %s self-update",
-		selfPath, selfPath,
-	)
 }
 
 // atomicReplace falls back to copy+chmod when src and dst are on
