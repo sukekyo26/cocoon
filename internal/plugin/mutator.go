@@ -29,12 +29,12 @@ var rxEnableLine = regexp.MustCompile(`^\s*enable\s*=\s*\[`)
 // entries can be extracted regardless of single- or multi-line layout.
 var rxQuotedElem = regexp.MustCompile(`"([^"]*)"`)
 
-// ErrLegacyPluginVersions is returned when cocoon.toml still carries a
+// ErrLegacyPluginVersions is returned when the config file still carries a
 // `[plugins.versions]` section. cocoon now pins versions inline in the enable
 // array, so the mutator refuses rather than leave a stale section cocoon gen
 // would reject.
 var ErrLegacyPluginVersions = errors.New(
-	"cocoon.toml has a [plugins.versions] section; cocoon now pins versions in the enable array " +
+	"the config file has a [plugins.versions] section; cocoon now pins versions in the enable array " +
 		`(enable = [ "go=1.23.4" ]) and puts extra knobs in [plugins.options]. ` +
 		"Migrate it before invoking --write")
 
@@ -42,7 +42,7 @@ var ErrLegacyPluginVersions = errors.New(
 // (`<id>=<version>` or `<id>=latest`) and, when method != "", the
 // [plugins.methods] `<id> = "<method>"` line. Both upserts share a single
 // read-modify-write cycle so a transient I/O failure cannot leave
-// cocoon.toml half-updated (writing the version and method in two separate
+// the config file half-updated (writing the version and method in two separate
 // passes would be non-transactional). Pass method = "" to upsert the version
 // alone.
 //

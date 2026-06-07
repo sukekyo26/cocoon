@@ -157,7 +157,7 @@ var messagesEN_init = map[string]string{
 	"gen_home_files_in_container_warning":   "WARNING: cocoon gen is running inside a container (/.dockerenv detected); [home_files] entries will be touched in this container's HOME, not the Docker host's. Run `cocoon gen` on the host before `docker compose up`.",
 	"gen_home_files_is_directory":           "%s exists as a directory (likely auto-created by a previous `docker compose up` when the file was missing); remove it with `rm -rf %s` and re-run `cocoon gen`",
 	"gen_unlocked_latest_warning":           "WARNING: plugin %q uses \"latest\" without a %s entry; the build will resolve it non-reproducibly. Run `cocoon lock` to freeze it (or `cocoon gen --locked` to make this an error).",
-	"gen_docker_cli_without_socket_warning": "WARNING: the docker-cli plugin is enabled but [container].docker_socket is not enabled (unset or false); the in-container docker client has no daemon socket to reach, so `docker ...` will fail with \"cannot connect to the Docker daemon\". Add `docker_socket = true` under [container] in cocoon.toml, or remove the docker-cli plugin. Ignore this if the container talks to a remote DOCKER_HOST.",
+	"gen_docker_cli_without_socket_warning": "WARNING: the docker-cli plugin is enabled but [container].docker_socket is not enabled (unset or false); the in-container docker client has no daemon socket to reach, so `docker ...` will fail with \"cannot connect to the Docker daemon\". Add `docker_socket = true` under [container] in your config file, or remove the docker-cli plugin. Ignore this if the container talks to a remote DOCKER_HOST.",
 	"gen_password_sudo_missing_secret":      "WARNING: password sudo is enabled but %s is missing or empty; `docker compose build` will fail until it contains a single line `SUDO_PASSWORD=<your-password>` (it is gitignored and read at build time via a Docker build secret).",
 	"gen_sudo_gitignore_ensured":            "ensured %s ignores the sudo password secret (.env.local)",
 	// init sudo password seed (.env.local)
@@ -165,7 +165,7 @@ var messagesEN_init = map[string]string{
 	"init_sudo_env_local_exists": "%s already exists; left untouched (it holds your sudo password). Edit it directly to change the password.",
 	// gen workspace (.code-workspace generator)
 	"gen_workspace_wrote":        "wrote %s",
-	"gen_workspace_no_folders":   "no folders configured: add entries to [code_workspace].folders in cocoon.toml, or pass one or more --folder flags",
+	"gen_workspace_no_folders":   "no folders configured: add entries to [code_workspace].folders in your config file, or pass one or more --folder flags",
 	"gen_workspace_invalid_name": "invalid --name %q: must be a single path segment of [A-Za-z0-9._-] (no slash, backslash, colon, or whitespace)",
 	"gen_workspace_next_header":  "Next steps:",
 	"gen_workspace_next_step":    "  Open in VS Code: code %s",
@@ -320,7 +320,7 @@ var messagesJA_init = map[string]string{
 	"gen_home_files_in_container_warning":   "警告: cocoon gen がコンテナ内 (/.dockerenv を検出) で実行されています。[home_files] エントリは Docker ホストではなくこのコンテナの HOME に対して touch されます。`docker compose up` の前にホスト側で `cocoon gen` を実行してください。",
 	"gen_home_files_is_directory":           "%s がディレクトリとして存在します (以前の `docker compose up` がファイル不在時に自動作成した可能性)。`rm -rf %s` で削除してから `cocoon gen` を再実行してください",
 	"gen_unlocked_latest_warning":           "警告: プラグイン %q は %s のエントリ無しで \"latest\" を使っています。build 時に非再現的に解決されます。`cocoon lock` で凍結してください（`cocoon gen --locked` でエラー化できます）。",
-	"gen_docker_cli_without_socket_warning": "警告: docker-cli プラグインは有効ですが [container].docker_socket が有効化されていません (未設定または false)。コンテナ内の docker クライアントが接続できる daemon ソケットが無いため、`docker ...` は \"cannot connect to the Docker daemon\" で失敗します。cocoon.toml の [container] に `docker_socket = true` を追加するか、docker-cli プラグインを外してください。リモートの DOCKER_HOST に接続する構成ならこの警告は無視して構いません。",
+	"gen_docker_cli_without_socket_warning": "警告: docker-cli プラグインは有効ですが [container].docker_socket が有効化されていません (未設定または false)。コンテナ内の docker クライアントが接続できる daemon ソケットが無いため、`docker ...` は \"cannot connect to the Docker daemon\" で失敗します。設定ファイルの [container] に `docker_socket = true` を追加するか、docker-cli プラグインを外してください。リモートの DOCKER_HOST に接続する構成ならこの警告は無視して構いません。",
 	"gen_password_sudo_missing_secret":      "警告: password sudo が有効ですが %s が存在しないか空です。`SUDO_PASSWORD=<パスワード>` の 1 行を記述するまで `docker compose build` は失敗します (このファイルは gitignore 対象で、ビルド時に Docker build secret として読まれます)。",
 	"gen_sudo_gitignore_ensured":            "%s が sudo パスワードの secret (.env.local) を無視するようにしました",
 	// init sudo password seed (.env.local)
@@ -328,7 +328,7 @@ var messagesJA_init = map[string]string{
 	"init_sudo_env_local_exists": "%s は既に存在するため変更しません (sudo パスワードを保持)。変更するにはこのファイルを直接編集してください。",
 	// gen workspace (.code-workspace ジェネレータ)
 	"gen_workspace_wrote":        "%s を書き出しました",
-	"gen_workspace_no_folders":   "folders が空です: cocoon.toml の [code_workspace].folders にエントリを追加するか、--folder フラグを 1 つ以上指定してください",
+	"gen_workspace_no_folders":   "folders が空です: 設定ファイルの [code_workspace].folders にエントリを追加するか、--folder フラグを 1 つ以上指定してください",
 	"gen_workspace_invalid_name": "--name %q が不正です: 単一のパスセグメント ([A-Za-z0-9._-]) で指定してください (スラッシュ・バックスラッシュ・コロン・空白は使用不可)",
 	"gen_workspace_next_header":  "次のステップ:",
 	"gen_workspace_next_step":    "  VS Code で開く: code %s",

@@ -68,7 +68,7 @@ var reservedExtraVersionEnvs = map[string]struct{}{
 }
 
 // Validate returns a *config.ValidationError on failure so the CLI's error
-// renderer treats it identically to a cocoon.toml failure.
+// renderer treats it identically to a config-file failure.
 func (p *Plugin) Validate(path string) error {
 	a := config.NewAccumulator()
 	p.runValidate(a)

@@ -34,8 +34,8 @@ type Apt struct {
 // install.<name>.sh on disk. The in-memory Validate() method, by
 // contrast, tolerates an empty Methods so test code can build *Plugin
 // literals without filling in Methods just to exercise an unrelated
-// field. The active method is selected at install time via
-// cocoon.toml's [plugins.methods] map; absent overrides fall back
+// field. The active method is selected at install time via the
+// config file's [plugins.methods] map; absent overrides fall back
 // to DefaultMethod.
 type Install struct {
 	RequiresRoot  bool                        `toml:"requires_root"`
@@ -54,10 +54,10 @@ type InstallMethod struct {
 }
 
 // ExtraVersionSpec mirrors plugin.toml [install.extra_versions.<key>].
-// It declares one user-overridable subcomponent version: cocoon.toml
+// It declares one user-overridable subcomponent version: the config file
 // can write `<key> = "..."` inside [plugins.options].<id> and the value
 // is exported into the install script as the env variable named in Env.
-// Default is used when the cocoon.toml override is absent. Both Env
+// Default is used when the config-file override is absent. Both Env
 // and Default are required (an empty Env is rejected during validation
 // and an empty Default would make the install script unstable across
 // invocations).
