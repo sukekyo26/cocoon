@@ -4,9 +4,8 @@ description = "Claude Code — AI-powered coding assistant by Anthropic"
 url = "https://github.com/anthropics/claude-code"
 default = false
 
-# Claude Code's bash sandbox needs bubblewrap + seccomp for process isolation
-# and socat for the network proxy; seccomp is a kernel feature, ripgrep ships
-# with Claude Code itself, so only these two apt packages are required.
+# Claude Code's bash sandbox needs bubblewrap for process isolation and
+# socat for its network proxy.
 [apt]
 packages = ["bubblewrap", "socat"]
 
