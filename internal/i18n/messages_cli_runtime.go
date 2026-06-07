@@ -30,8 +30,8 @@ var cliRuntimeEN = map[string]string{
 	// plugin pin.
 	"plugin_pin_updated_enable":          "Updated %s: [plugins].enable %q",
 	"plugin_pin_updated_method":          "Updated %s: [plugins.methods] %s = %q",
-	"plugin_pin_snippet_enable_header":   "# Add (or update) this entry in the [plugins].enable array in workspace.toml:",
-	"plugin_pin_snippet_header":          "# Add the following to workspace.toml:",
+	"plugin_pin_snippet_enable_header":   "# Add (or update) this entry in the [plugins].enable array in cocoon.toml:",
+	"plugin_pin_snippet_header":          "# Add the following to cocoon.toml:",
 	"plugin_pin_snippet_enable_section":  "# In the [plugins].enable array:",
 	"plugin_pin_snippet_methods_section": "# Under [plugins.methods]:",
 
@@ -62,8 +62,8 @@ var cliRuntimeJA = map[string]string{
 	// plugin pin.
 	"plugin_pin_updated_enable":          "%s を更新しました: [plugins].enable %q",
 	"plugin_pin_updated_method":          "%s を更新しました: [plugins.methods] %s = %q",
-	"plugin_pin_snippet_enable_header":   "# workspace.toml の [plugins].enable 配列に次のエントリを追加（または更新）してください:",
-	"plugin_pin_snippet_header":          "# workspace.toml に次を追加してください:",
+	"plugin_pin_snippet_enable_header":   "# cocoon.toml の [plugins].enable 配列に次のエントリを追加（または更新）してください:",
+	"plugin_pin_snippet_header":          "# cocoon.toml に次を追加してください:",
 	"plugin_pin_snippet_enable_section":  "# [plugins].enable 配列に:",
 	"plugin_pin_snippet_methods_section": "# [plugins.methods] の下に:",
 

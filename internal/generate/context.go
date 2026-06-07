@@ -15,19 +15,19 @@ import (
 )
 
 // ErrInvalidLocale is returned (wrapped) by LocaleSedScript when a locale
-// name from workspace.toml contains characters that cannot safely be
+// name from cocoon.toml contains characters that cannot safely be
 // embedded into the generated /etc/locale.gen sed script. Callers can
 // identify it with errors.Is.
 var ErrInvalidLocale = errors.New("invalid locale name")
 
-// WorkspaceContext is a normalized read-only view over a workspace.toml that
+// WorkspaceContext is a normalized read-only view over a cocoon.toml that
 // generator subpackages consume.
 type WorkspaceContext struct {
 	WS *config.Workspace
 	// PluginsFS lets generators read install scripts directly so the catalog
 	// can be embedded, on-disk, or LayeredFS-merged transparently.
 	PluginsFS fs.FS
-	// ProjectDir holds the directory containing workspace.toml. envfile uses
+	// ProjectDir holds the directory containing cocoon.toml. envfile uses
 	// its basename as COMPOSE_PROJECT_NAME so the namespace matches the root
 	// the user invoked `cocoon gen` against. May be empty for older callers;
 	// envfile falls back to ServiceName in that case.
@@ -354,7 +354,7 @@ func (c *WorkspaceContext) LocaleSedScript() (string, error) {
 // metacharacters, whitespace, quote marks, non-ASCII bytes). Returning
 // an ErrInvalidLocale-wrapped error keeps the generated sed script free
 // of injection vectors. config.LocaleSpec.validate already enforces a
-// stricter regex for workspace.toml input; this check is the
+// stricter regex for cocoon.toml input; this check is the
 // defence-in-depth gate at the generator boundary for callers that
 // construct WorkspaceContext directly.
 func validateLocaleName(name string) error {

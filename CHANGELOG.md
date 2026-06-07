@@ -6,6 +6,19 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `cocoon gen`, `cocoon lock`, and `cocoon plugin` now discover `cocoon.toml`
+  first and fall back to `workspace.toml` when it is absent, so a project may use
+  either filename. When both exist in the same directory, `cocoon.toml` wins; a
+  config file in a closer directory still beats the preferred name in a parent.
+
+### Changed
+
+- `cocoon init` now generates `cocoon.toml` instead of `workspace.toml`.
+  `workspace.toml` remains a fully supported configuration filename (discovered
+  as a fallback), so existing projects keep working without a rename.
+
 ## [0.14.2] - 2026-06-07
 
 ### Changed

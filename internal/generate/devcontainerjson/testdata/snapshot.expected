@@ -1,4 +1,4 @@
-// Auto-generated from workspace.toml — do not edit directly.
+// Auto-generated from cocoon.toml — do not edit directly.
 {
 	"name": "snapshot-test",
 	"dockerComposeFile": [

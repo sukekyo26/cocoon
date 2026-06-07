@@ -10,7 +10,7 @@ import (
 // failure class via errors.Is.
 var ErrNilPlugin = errors.New("plugin: nil plugin pointer")
 
-// ErrUnknownMethod is returned by ResolveMethod when workspace.toml's
+// ErrUnknownMethod is returned by ResolveMethod when cocoon.toml's
 // [plugins.methods] map names an install method that the plugin does
 // not declare in [install.methods]. The wrapped message includes the
 // method name but omits the plugin id; callers add their own plugin-id
@@ -19,7 +19,7 @@ var ErrNilPlugin = errors.New("plugin: nil plugin pointer")
 var ErrUnknownMethod = errors.New("unknown install method")
 
 // ResolveMethod selects which install.<name>.sh to use for the plugin
-// identified by id. methods is the workspace.toml [plugins.methods]
+// identified by id. methods is the cocoon.toml [plugins.methods]
 // map (may be nil or empty). The returned name is:
 //   - methods[id] when it names a declared method
 //   - p.Install.DefaultMethod when no workspace override is provided

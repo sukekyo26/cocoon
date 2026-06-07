@@ -3,10 +3,10 @@ cocoon plugin — cocoon プラグインの参照・作成
 サブコマンド:
   list       レイヤービュー (project > user > embedded) で参照可能な全プラグインを表示
   show       単一プラグイン ID の解決済みマニフェストを表示
-  pin        workspace.toml の [plugins].enable エントリを出力
+  pin        cocoon.toml の [plugins].enable エントリを出力
   scaffold   テンプレートから新しい <id>/ ディレクトリを作成
 
-プラグインを使うには workspace.toml の [plugins].enable に id を追加します。
+プラグインを使うには cocoon.toml の [plugins].enable に id を追加します。
 組み込みカタログは自動で読み込まれます。組み込みプラグインをカスタマイズしたい
 場合は "cocoon plugin scaffold <new-id>" で新しい ID を作って中身を書き換える
 のが想定フローです。cocoon ソースリポジトリの clone（または展開済みのソース
@@ -21,7 +21,7 @@ tarball）を持っている場合、internal/plugin/catalog/<id>/ から
 サブコマンド:
   help        このコマンドの使い方を表示
   list        利用可能なプラグインとその source (embedded / user / project) を表示
-  pin         workspace.toml 向けの [plugins].enable エントリを出力 (stdout、または --write で in-place)
+  pin         cocoon.toml 向けの [plugins].enable エントリを出力 (stdout、または --write で in-place)
   scaffold    新しい <id>/ プラグインディレクトリを作成 (既定: <workspace>/.cocoon/plugins、--plugins-dir で上書き)
   show        単一プラグインの解決済みマニフェストを表示
 

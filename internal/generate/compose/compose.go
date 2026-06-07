@@ -21,9 +21,9 @@ import (
 	"github.com/sukekyo26/cocoon/internal/warn"
 )
 
-const header = "# Auto-generated from workspace.toml — do not edit directly.\n"
+const header = "# Auto-generated from cocoon.toml — do not edit directly.\n"
 
-// ErrVolumeNameConflict is returned when a workspace.toml [volumes] entry
+// ErrVolumeNameConflict is returned when a cocoon.toml [volumes] entry
 // shares a name with an auto-derived plugin volume or with a name cocoon
 // reserves at the compose level (see reservedVolumeNames).
 var ErrVolumeNameConflict = errors.New(
@@ -31,14 +31,14 @@ var ErrVolumeNameConflict = errors.New(
 )
 
 // reservedVolumeNames are volume keys cocoon emits unconditionally in the
-// generated compose. Plugins and workspace.toml [volumes] cannot reuse them.
+// generated compose. Plugins and cocoon.toml [volumes] cannot reuse them.
 var reservedVolumeNames = map[string]struct{}{
 	"local":  {}, // /home/<user>/.local persistence
 	"cocoon": {}, // /home/<user>/.cocoon persistence (.shellrc, history, etc.)
 }
 
 // reservedMountPaths are container target paths cocoon owns. A plugin or
-// workspace.toml [volumes] entry that maps to one of these targets — even
+// cocoon.toml [volumes] entry that maps to one of these targets — even
 // under a different volume name — would collide with the unconditional
 // `local:`/`cocoon:` mounts emitted by buildVolumeMounts and break
 // `docker compose up`. We reject them at gen time so the user sees a clear
@@ -48,7 +48,7 @@ var reservedMountPaths = map[string]struct{}{
 	"/home/${USERNAME}/.cocoon": {},
 }
 
-// Defaults applied to [container.resources] when the workspace.toml omits a
+// Defaults applied to [container.resources] when the cocoon.toml omits a
 // field.
 const (
 	defaultStopGracePeriod = "30s"
@@ -114,7 +114,7 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 }
 
 // volSrc names the source of a mount path so dedup warnings can be precise.
-// label is a localizable warn.Ref ("plugin 'x'" / "workspace.toml volume 'y'").
+// label is a localizable warn.Ref ("plugin 'x'" / "cocoon.toml volume 'y'").
 type volSrc struct {
 	label   warn.Ref
 	volName string
@@ -196,12 +196,12 @@ func mergeCustomVolumes(
 	for _, name := range customNames {
 		if _, reserved := reservedVolumeNames[name]; reserved {
 			return nil, fmt.Errorf(
-				"%w: '%s' is reserved by cocoon (remove it from workspace.toml [volumes])",
+				"%w: '%s' is reserved by cocoon (remove it from cocoon.toml [volumes])",
 				ErrVolumeNameConflict, name)
 		}
 		if _, conflict := pluginVolNames[name]; conflict {
 			return nil, fmt.Errorf(
-				"%w: '%s' (remove it from workspace.toml or disable the plugin)",
+				"%w: '%s' (remove it from cocoon.toml or disable the plugin)",
 				ErrVolumeNameConflict, name)
 		}
 	}
@@ -211,7 +211,7 @@ func mergeCustomVolumes(
 		path := customVols[name]
 		if _, reserved := reservedMountPaths[path]; reserved {
 			return nil, fmt.Errorf(
-				"%w: workspace.toml [volumes].%s targets reserved mount path '%s'",
+				"%w: cocoon.toml [volumes].%s targets reserved mount path '%s'",
 				ErrVolumeNameConflict, name, path)
 		}
 		if existing, dup := pathToSrc[path]; dup {

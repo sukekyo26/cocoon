@@ -1,6 +1,6 @@
 cocoon — project-aware container workspace generator
 
-Run cocoon from any project directory to read its workspace.toml and
+Run cocoon from any project directory to read its cocoon.toml and
 materialize a Dev Container or plain docker-compose stack tailored to
 that repository.
 
@@ -10,9 +10,9 @@ Usage:
 
 Available Commands:
   completion  Generate the autocompletion script for the specified shell
-  gen         Generate .devcontainer/ artifacts from workspace.toml
+  gen         Generate .devcontainer/ artifacts from cocoon.toml
   help        Help about any command
-  init        Create workspace.toml in the current directory
+  init        Create cocoon.toml in the current directory
   lock        Resolve plugin versions and write the lock file for reproducible builds
   plugin      Inspect and author cocoon plugins (list / show / pin / scaffold)
   self-update Replace this binary with the latest released version

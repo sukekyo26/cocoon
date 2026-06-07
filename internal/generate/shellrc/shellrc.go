@@ -1,5 +1,5 @@
 // Package shellrc renders the Dockerfile RUN block that injects the
-// [container.shell] env/aliases from workspace.toml plus a bootstrap line
+// [container.shell] env/aliases from cocoon.toml plus a bootstrap line
 // that sources the user's persistent shellrc (~/.cocoon/.shellrc, or
 // ~/.cocoon/.shellrc.fish for fish) from the cocoon named volume.
 //
@@ -40,7 +40,7 @@ func RenderDockerfileBlock(ctx *generate.WorkspaceContext) (string, error) {
 	env := ctx.ShellEnv()
 
 	var inner strings.Builder
-	inner.WriteString("# Auto-generated from [container.shell] of workspace.toml.\n")
+	inner.WriteString("# Auto-generated from [container.shell] of cocoon.toml.\n")
 	if len(env) > 0 {
 		inner.WriteString("\n# Environment variables\n")
 		for _, line := range renderEnvLines(env, ctx.RCSyntax()) {

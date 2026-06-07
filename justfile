@@ -94,7 +94,7 @@ vuln:
 # Run after intentional changes to generators or `cocoon init` output,
 # then commit the updated golden / snapshot files under each package's
 # testdata/ along with the source change (covers `*.expected` and
-# `testdata/init/*.workspace.toml`). CI runs without -update-golden,
+# `testdata/init/*.cocoon.toml`). CI runs without -update-golden,
 # so any drift fails the test job.
 # Regenerate all golden / snapshot files in one shot.
 regen-snapshots:

@@ -10,7 +10,7 @@ import (
 )
 
 //nolint:gochecknoglobals // test-only flag scoped to this test file.
-var updateGolden = flag.Bool("update-golden", false, "rewrite testdata/init/*.workspace.toml from current init output")
+var updateGolden = flag.Bool("update-golden", false, "rewrite testdata/init/*.cocoon.toml from current init output")
 
 // TestRunInit_Snapshot pins `cocoon init --yes` output across a matrix of
 // flag combinations. Re-run with `-update-golden` after intentional writer
@@ -25,7 +25,7 @@ func TestRunInit_Snapshot(t *testing.T) {
 	}{
 		{
 			name:   "default",
-			golden: "default.workspace.toml",
+			golden: "default.cocoon.toml",
 			args: []string{
 				"--yes", "--service-name", "dev", "--username", "dev",
 				"--image", "ubuntu", "--image-version", "22.04",
@@ -38,7 +38,7 @@ func TestRunInit_Snapshot(t *testing.T) {
 			// [certificates] enable=true section is emitted instead of the
 			// commented template. Pins the opt-in branch end-to-end.
 			name:   "default-with-certificates",
-			golden: "default-with-certificates.workspace.toml",
+			golden: "default-with-certificates.cocoon.toml",
 			args: []string{
 				"--yes", "--service-name", "dev", "--username", "dev",
 				"--image", "ubuntu", "--image-version", "22.04",
@@ -50,7 +50,7 @@ func TestRunInit_Snapshot(t *testing.T) {
 			// --sudo password emits the live [container.sudo] mode = "password"
 			// block; the [container.security_opt] section stays commented.
 			name:   "sudo-password",
-			golden: "sudo-password.workspace.toml",
+			golden: "sudo-password.cocoon.toml",
 			args: []string{
 				"--yes", "--service-name", "dev", "--username", "dev",
 				"--image", "ubuntu", "--image-version", "22.04",
@@ -63,7 +63,7 @@ func TestRunInit_Snapshot(t *testing.T) {
 			// no_new_privileges = true block; the [container.sudo] section
 			// stays commented.
 			name:   "sudo-none",
-			golden: "sudo-none.workspace.toml",
+			golden: "sudo-none.cocoon.toml",
 			args: []string{
 				"--yes", "--service-name", "dev", "--username", "dev",
 				"--image", "ubuntu", "--image-version", "22.04",
@@ -73,7 +73,7 @@ func TestRunInit_Snapshot(t *testing.T) {
 		},
 		{
 			name:   "plugins-amd64-full",
-			golden: "plugins-amd64-full.workspace.toml",
+			golden: "plugins-amd64-full.cocoon.toml",
 			args: []string{
 				"--yes", "--service-name", "dev", "--username", "dev",
 				"--image", "ubuntu", "--image-version", "22.04",
@@ -100,7 +100,7 @@ func TestRunInit_Snapshot(t *testing.T) {
 		},
 		{
 			name:   "plugins-arm64-full",
-			golden: "plugins-arm64-full.workspace.toml",
+			golden: "plugins-arm64-full.cocoon.toml",
 			args: []string{
 				"--yes", "--service-name", "dev", "--username", "dev",
 				"--image", "ubuntu", "--image-version", "22.04",
@@ -119,7 +119,7 @@ func TestRunInit_Snapshot(t *testing.T) {
 		},
 		{
 			name:   "plugins-versions-minimal",
-			golden: "plugins-versions-minimal.workspace.toml",
+			golden: "plugins-versions-minimal.cocoon.toml",
 			args: []string{
 				"--yes", "--service-name", "dev", "--username", "dev",
 				"--image", "ubuntu", "--image-version", "22.04",
@@ -135,7 +135,7 @@ func TestRunInit_Snapshot(t *testing.T) {
 			// Exercises every accepted short-form variant so a regex /
 			// validator drift will surface here as a deliberate diff.
 			name:   "ports-set",
-			golden: "ports-set.workspace.toml",
+			golden: "ports-set.cocoon.toml",
 			args: []string{
 				"--yes", "--service-name", "dev", "--username", "dev",
 				"--image", "ubuntu", "--image-version", "22.04",
@@ -151,7 +151,7 @@ func TestRunInit_Snapshot(t *testing.T) {
 			// shape (NPM_CONFIG_PREFIX + PATH) and the auto-comment that
 			// explains why the block exists.
 			name:   "image-path-fix-node",
-			golden: "image-path-fix-node.workspace.toml",
+			golden: "image-path-fix-node.cocoon.toml",
 			args: []string{
 				"--yes", "--service-name", "dev", "--username", "dev",
 				"--image", "node", "--image-version", "22-bookworm-slim",
@@ -163,7 +163,7 @@ func TestRunInit_Snapshot(t *testing.T) {
 			// golang exercises the single-PATH-entry shape so a regression
 			// that drops the PATH entry stays caught.
 			name:   "image-path-fix-golang",
-			golden: "image-path-fix-golang.workspace.toml",
+			golden: "image-path-fix-golang.cocoon.toml",
 			args: []string{
 				"--yes", "--service-name", "dev", "--username", "dev",
 				"--image", "golang", "--image-version", "1.25-bookworm",
@@ -176,7 +176,7 @@ func TestRunInit_Snapshot(t *testing.T) {
 			// (which avoids overriding CARGO_HOME) cannot silently flip to
 			// the CARGO_HOME spelling on a future refactor.
 			name:   "image-path-fix-rust",
-			golden: "image-path-fix-rust.workspace.toml",
+			golden: "image-path-fix-rust.cocoon.toml",
 			args: []string{
 				"--yes", "--service-name", "dev", "--username", "dev",
 				"--image", "rust", "--image-version", "1.93-bookworm",
@@ -189,7 +189,7 @@ func TestRunInit_Snapshot(t *testing.T) {
 			// [container.shell.env] entry, so a regression that drops either
 			// surface stays caught.
 			name:   "image-path-fix-deno",
-			golden: "image-path-fix-deno.workspace.toml",
+			golden: "image-path-fix-deno.cocoon.toml",
 			args: []string{
 				"--yes", "--service-name", "dev", "--username", "dev",
 				"--image", "denoland/deno", "--image-version", "debian-2.7.14",
@@ -203,7 +203,7 @@ func TestRunInit_Snapshot(t *testing.T) {
 			// no active [volumes] block is emitted and the commented-out
 			// template stays in place.
 			name:   "image-path-fix-python",
-			golden: "image-path-fix-python.workspace.toml",
+			golden: "image-path-fix-python.cocoon.toml",
 			args: []string{
 				"--yes", "--service-name", "dev", "--username", "dev",
 				"--image", "python", "--image-version", "3.13-slim-bookworm",
@@ -216,7 +216,7 @@ func TestRunInit_Snapshot(t *testing.T) {
 			// auto-comment + [container.shell.env] block stays absent when
 			// the user opts out explicitly.
 			name:   "image-path-fix-disabled",
-			golden: "image-path-fix-disabled.workspace.toml",
+			golden: "image-path-fix-disabled.cocoon.toml",
 			args: []string{
 				"--yes", "--service-name", "dev", "--username", "dev",
 				"--image", "node", "--image-version", "22-bookworm-slim",
@@ -246,9 +246,9 @@ func TestRunInit_Snapshot(t *testing.T) {
 			if err := cmd.Execute(); err != nil {
 				t.Fatalf("init %s: %v", tc.name, err)
 			}
-			got, err := os.ReadFile(filepath.Join(work, "workspace.toml"))
+			got, err := os.ReadFile(filepath.Join(work, "cocoon.toml"))
 			if err != nil {
-				t.Fatalf("read workspace.toml: %v", err)
+				t.Fatalf("read cocoon.toml: %v", err)
 			}
 
 			goldenPath := filepath.Join(goldenDir, tc.golden)
@@ -270,7 +270,7 @@ func TestRunInit_Snapshot(t *testing.T) {
 				t.Fatalf("read golden %s: %v (run with -update-golden to create)", goldenPath, err)
 			}
 			if string(got) != string(want) {
-				t.Errorf("workspace.toml mismatch for %s\n--- got ---\n%s\n--- want ---\n%s",
+				t.Errorf("cocoon.toml mismatch for %s\n--- got ---\n%s\n--- want ---\n%s",
 					tc.name, got, want)
 			}
 		})

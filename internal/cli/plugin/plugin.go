@@ -8,7 +8,7 @@
 //	scaffold   create a new <id>/ directory under .cocoon/plugins from a template
 //
 // To use an embedded plugin, add its id to [plugins].enable in
-// workspace.toml. To customise it, the supported workflow is
+// cocoon.toml. To customise it, the supported workflow is
 // `cocoon plugin scaffold <new-id>` and adapting the logic. With a
 // cocoon source checkout, copying internal/plugin/catalog/<id>/
 // into the user / project overlay is a shortcut; single-binary

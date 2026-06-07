@@ -16,9 +16,9 @@ func UserPluginsDir() (string, error) {
 }
 
 // ProjectPluginsDir is the LayeredFS project-layer root for the workspace
-// whose workspace.toml lives at wsPath: the .cocoon/plugins directory nested
+// whose cocoon.toml lives at wsPath: the .cocoon/plugins directory nested
 // under the workspace directory (filepath.Dir(wsPath)). It sits inside a
-// WorkspaceContext's ProjectDir (the directory holding workspace.toml), not
+// WorkspaceContext's ProjectDir (the directory holding cocoon.toml), not
 // alongside it.
 func ProjectPluginsDir(wsPath string) string {
 	return filepath.Join(filepath.Dir(wsPath), ".cocoon", "plugins")

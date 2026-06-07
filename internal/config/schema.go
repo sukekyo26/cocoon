@@ -1,10 +1,10 @@
-// Package config loads, validates and re-emits workspace.toml and plugin.toml.
+// Package config loads, validates and re-emits cocoon.toml and plugin.toml.
 //
 // Optional sections are modelled as pointers so a missing section can be
 // distinguished from an empty one.
 package config
 
-// Workspace mirrors workspace.toml.
+// Workspace mirrors cocoon.toml.
 type Workspace struct {
 	Workspace     *WorkspaceSpec            `toml:"workspace,omitempty"`
 	Container     ContainerSpec             `toml:"container"`
@@ -32,11 +32,21 @@ func (w *Workspace) HasDevcontainer() bool { return len(w.Devcontainer) > 0 }
 // already establishes.
 const DefaultLockFileName = "cocoon.lock"
 
+// Config filenames discovered by Discover and written by `cocoon init`.
+//
+// DefaultConfigFileName is the basename `cocoon init` writes and Discover
+// prefers. LegacyConfigFileName is the original name, still accepted by
+// Discover as a fallback so existing projects keep working without a rename.
+const (
+	DefaultConfigFileName = "cocoon.toml"
+	LegacyConfigFileName  = "workspace.toml"
+)
+
 // LockFileSpec models the optional [lockfile] section. It currently carries
 // only the lock file's basename; the section exists so lock-related knobs can
 // be added later without a second top-level table.
 type LockFileSpec struct {
-	// Name overrides the lock file's basename (written next to workspace.toml).
+	// Name overrides the lock file's basename (written next to cocoon.toml).
 	// Pointer distinguishes "field omitted" (default DefaultLockFileName) from
 	// an explicit value.
 	Name *string `toml:"name,omitempty"`
@@ -103,7 +113,7 @@ func (w *WorkspaceSpec) DevContainerOrDefault() bool {
 // DockerHub image name pulled verbatim into the FROM line; ImageVersion is
 // the image-specific tag. The closed image set lives in SupportedImages;
 // per-image suggestions in SupportedImageVersions. Using canonical names
-// means a reader can recreate the FROM line from workspace.toml alone — no
+// means a reader can recreate the FROM line from cocoon.toml alone — no
 // alias resolution required.
 type ContainerSpec struct {
 	ServiceName  string `toml:"service_name"`
@@ -112,7 +122,7 @@ type ContainerSpec struct {
 	ImageVersion string `toml:"image_version"`
 
 	// DeprecatedOs / DeprecatedOsVersion exist solely so a legacy
-	// workspace.toml that still uses `os = "..."` / `os_version = "..."` (the
+	// cocoon.toml that still uses `os = "..."` / `os_version = "..."` (the
 	// v0.2.x shape) can be detected and rejected with a migration message
 	// pointing at the new `image` / `image_version` keys. They must not be
 	// read or written outside of validation; do not feed these values into
@@ -166,7 +176,7 @@ func (c *ContainerSpec) DockerSocketEnabled() bool {
 // Dockerfile template all key off this list.
 //
 // Each id is the **canonical DockerHub image name** — exactly what appears
-// in the FROM line — so users can read a workspace.toml and know which
+// in the FROM line — so users can read a cocoon.toml and know which
 // image is pulled without any cocoon-side aliasing:
 //
 //   - Linux distributions: "ubuntu" / "debian" — library/ namespace.
@@ -218,7 +228,7 @@ var SupportedImageVersions = map[string][]string{
 // ImageProvidesPlugin marks images that already pre-install a language
 // and must not be combined with the cocoon plugin of the same name. The
 // mapping is image id (= canonical DockerHub name) → conflicting plugin
-// id (= cocoon catalog id); validation rejects workspace.toml files that
+// id (= cocoon catalog id); validation rejects cocoon.toml files that
 // set `image = <key>` AND enable the named plugin so users get a
 // fail-fast error instead of silently wasting docker-build time.
 //
@@ -497,7 +507,7 @@ type Mount struct {
 // rebuilds. Per-segment characters are restricted to [A-Za-z0-9._-] because
 // the path flows verbatim into the generated initializeCommand shell snippet
 // (run under /bin/sh), so anything shell-special — $, backticks, ; & | < > * ? !,
-// quotes, backslashes, whitespace — would let a repo-provided workspace.toml
+// quotes, backslashes, whitespace — would let a repo-provided cocoon.toml
 // inject commands into the host shell. `cocoon gen` and the generated
 // devcontainer.json's initializeCommand both touch missing host files
 // (0o600, idempotent) so Docker does not auto-create the bind source as a
@@ -556,7 +566,7 @@ type Devcontainer map[string]any
 //   - Folders: inline-table array of {path, name}. name is optional and
 //     defaults to the basename of the resolved path. path supports "~"
 //     home expansion and is relativized against the directory the
-//     .code-workspace file is written to (the workspace.toml directory by
+//     .code-workspace file is written to (the cocoon.toml directory by
 //     default, or `cocoon gen workspace --output <dir>` when set).
 //   - Settings: VS Code workspace "settings" object, passed through verbatim
 //     as JSON. Empty map is elided from the output.

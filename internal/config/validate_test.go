@@ -1271,8 +1271,9 @@ func TestLockFileSpec_NameOrDefault(t *testing.T) {
 }
 
 // TestValidate_LockFileName pins the [lockfile].name guard by category: a
-// plain basename is accepted; a slash, "." / "..", or "workspace.toml" are
-// rejected (the last would overwrite the user's own config).
+// plain basename is accepted; a slash, "." / "..", or either config filename
+// ("cocoon.toml" / "workspace.toml") are rejected (the last two would
+// overwrite the user's own config).
 func TestValidate_LockFileName(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -1283,6 +1284,7 @@ func TestValidate_LockFileName(t *testing.T) {
 		{"slash", "sub/custom.lock", true},
 		{"dot", ".", true},
 		{"dotdot", "..", true},
+		{"cocoon_collision", "cocoon.toml", true},
 		{"workspace_collision", "workspace.toml", true},
 	}
 	for _, tc := range cases {

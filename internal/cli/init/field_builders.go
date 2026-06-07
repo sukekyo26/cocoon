@@ -168,7 +168,7 @@ func imagePathFixConfirm(cat *i18n.Catalog, image string, target *bool) *huh.Con
 // formatPathFixPreview renders the full set of TOML changes the user is
 // about to accept — section headers, env entries, and (when present)
 // named-volume entries — so the prompt mirrors the structure that lands
-// in workspace.toml. Python carries no Volumes (its install target is
+// in cocoon.toml. Python carries no Volumes (its install target is
 // already covered by the reserved `local:` named volume), so the
 // [volumes] block is omitted for that image.
 func formatPathFixPreview(fix imagePathFix) string {
@@ -184,7 +184,7 @@ func formatPathFixPreview(fix imagePathFix) string {
 
 // formatPathFixEntries renders the entries as TOML-looking lines so the
 // prompt's preview shows the same keys and values that land in
-// workspace.toml. The preview adds a 2-space indent and pads keys
+// cocoon.toml. The preview adds a 2-space indent and pads keys
 // against the longest one for legibility on multi-entry images
 // (node, rust); the file emit in writeImagePathFixEnv stays unpadded
 // canonical TOML, so the two surfaces share the key=value pairs but

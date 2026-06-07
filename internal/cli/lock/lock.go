@@ -48,7 +48,7 @@ func specHashInput(specs []pluginSpec) map[string]string {
 	return m
 }
 
-// checkLock verifies (offline) that the lock matches workspace.toml: present,
+// checkLock verifies (offline) that the lock matches cocoon.toml: present,
 // inputs_hash current, and an entry for every enabled plugin whose requested
 // spec and [plugins.options] extras still match. (A manual [plugins.options]
 // checksum is not compared: it is never recorded in the lock and gen bakes it

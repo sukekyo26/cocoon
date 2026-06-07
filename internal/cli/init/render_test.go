@@ -112,7 +112,7 @@ func TestRenderWorkspaceToml_NoAliases_OmitsLine(t *testing.T) {
 
 // TestRenderWorkspaceToml_LocalizedComments_EN pins the English section
 // header line. The full block is allowed to evolve, but this prefix is the
-// load-bearing self-documentation for users opening workspace.toml.
+// load-bearing self-documentation for users opening cocoon.toml.
 func TestRenderWorkspaceToml_LocalizedComments_EN(t *testing.T) {
 	t.Parallel()
 	cat := i18n.New(i18n.LangEN)
@@ -121,7 +121,7 @@ func TestRenderWorkspaceToml_LocalizedComments_EN(t *testing.T) {
 		Shell: "bash", MountRoot: ".", Devcontainer: true,
 	}, cat)
 	for _, want := range []string{
-		"# workspace.toml — cocoon configuration",
+		"# cocoon.toml — cocoon configuration",
 		"# [workspace] — generation-wide knobs.",
 		"# [container] — image identity.",
 		"# [container.shell] — login shell + per-shell rc injection.",
@@ -142,7 +142,7 @@ func TestRenderWorkspaceToml_LocalizedComments_JA(t *testing.T) {
 		Shell: "bash", MountRoot: ".", Devcontainer: true,
 	}, cat)
 	for _, want := range []string{
-		"# workspace.toml — cocoon 設定",
+		"# cocoon.toml — cocoon 設定",
 		"# [workspace] — 生成全体の挙動。",
 		"# [container] — イメージの素性。",
 		"# [container.shell] — ログインシェル",
@@ -266,7 +266,7 @@ func TestRenderWorkspaceToml_TemplateOrdering(t *testing.T) {
 }
 
 // TestRenderWorkspaceToml_DockerSocketTemplatePresent pins that every
-// generated workspace.toml carries the commented-out docker_socket opt-in
+// generated cocoon.toml carries the commented-out docker_socket opt-in
 // line so users discover it without re-running init.
 func TestRenderWorkspaceToml_DockerSocketTemplatePresent(t *testing.T) {
 	t.Parallel()

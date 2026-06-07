@@ -12,12 +12,12 @@ func init() {
 
 var warningsEN = map[string]string{
 	// Volume dedup.
-	"warn_volume_dup_workspace": "WARNING: Volume path '%s' is defined by both %s and workspace.toml volume '%s'. Using single volume '%s'.",
+	"warn_volume_dup_workspace": "WARNING: Volume path '%s' is defined by both %s and cocoon.toml volume '%s'. Using single volume '%s'.",
 	"warn_vol_label_plugin":     "plugin '%s'",
-	"warn_vol_label_workspace":  "workspace.toml volume '%s'",
+	"warn_vol_label_workspace":  "cocoon.toml volume '%s'",
 
 	// Dockerfile.
-	"warn_apt_redundant":       "WARNING: [apt] packages contains '%s', which cocoon already installs as a base package. Remove it from [apt] packages in workspace.toml to avoid redundant installs.",
+	"warn_apt_redundant":       "WARNING: [apt] packages contains '%s', which cocoon already installs as a base package. Remove it from [apt] packages in cocoon.toml to avoid redundant installs.",
 	"warn_dockerfile_verbatim": "WARNING: Custom Dockerfile instructions from [dockerfile].%s are being injected verbatim. You are responsible for their safety.",
 
 	// Plugin version pins.
@@ -46,12 +46,12 @@ var warningsEN = map[string]string{
 
 var warningsJA = map[string]string{
 	// Volume dedup.
-	"warn_volume_dup_workspace": "警告: ボリュームパス '%s' が %s と workspace.toml の volume '%s' の両方で定義されています。単一のボリューム '%s' を使用します。",
+	"warn_volume_dup_workspace": "警告: ボリュームパス '%s' が %s と cocoon.toml の volume '%s' の両方で定義されています。単一のボリューム '%s' を使用します。",
 	"warn_vol_label_plugin":     "プラグイン '%s'",
-	"warn_vol_label_workspace":  "workspace.toml の volume '%s'",
+	"warn_vol_label_workspace":  "cocoon.toml の volume '%s'",
 
 	// Dockerfile.
-	"warn_apt_redundant":       "警告: [apt] packages に '%s' が含まれていますが、cocoon がベースパッケージとして既にインストールします。重複インストールを避けるため workspace.toml の [apt] packages から削除してください。",
+	"warn_apt_redundant":       "警告: [apt] packages に '%s' が含まれていますが、cocoon がベースパッケージとして既にインストールします。重複インストールを避けるため cocoon.toml の [apt] packages から削除してください。",
 	"warn_dockerfile_verbatim": "警告: [dockerfile].%s のカスタム Dockerfile 命令はそのまま埋め込まれます。その安全性はあなたの責任です。",
 
 	// Plugin version pins.

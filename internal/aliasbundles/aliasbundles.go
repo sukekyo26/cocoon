@@ -1,7 +1,7 @@
 // Package aliasbundles defines the curated shell-alias preset groups offered
 // by `cocoon init`'s interactive bootstrap. Bundles are presented as a
 // multi-select; selected bundles are merged into [container.shell] aliases
-// in the generated workspace.toml.
+// in the generated cocoon.toml.
 package aliasbundles
 
 import "sort"
