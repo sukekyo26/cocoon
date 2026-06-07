@@ -12,7 +12,7 @@ applyTo: "internal/plugin/catalog/**"
 
 - `[install.methods.<name>]` と対応する `install.<name>.sh` の `<name>` は
   **binary / installer / apt / archive** の 4 語彙のみ。vendor 名（`gh-cli`,
-  `astral`, `bun-sh` 等）は指摘 — workspace.toml の `[plugins.methods]` が
+  `astral`, `bun-sh` 等）は指摘 — cocoon.toml の `[plugins.methods]` が
   プラグインごとにブレる。
 - `install.sh`（カテゴリ無し）は loader が reject。必ず `install.<category>.sh`。
 - method 1 つなら `cocoon init` に method ピッカーは出ない。不要な複数 method は

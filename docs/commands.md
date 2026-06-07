@@ -9,7 +9,7 @@ Reference for every command exposed by the `cocoon` binary.
 
 | Command | Purpose |
 |---|---|
-| `cocoon init` | Generate `workspace.toml` interactively |
+| `cocoon init` | Generate `cocoon.toml` interactively |
 | `cocoon gen` | Generate `.devcontainer/` artifacts |
 | `cocoon gen workspace` | Generate `<name>.code-workspace` at the project root |
 | `cocoon lock` | Resolve plugin versions and write `cocoon.lock` for reproducible builds |
@@ -26,7 +26,7 @@ Reference for every command exposed by the `cocoon` binary.
 
 ## `cocoon init`
 
-Generate `workspace.toml` in the current directory.
+Generate `cocoon.toml` in the current directory.
 
 ### Flags
 
@@ -46,10 +46,10 @@ Generate `workspace.toml` in the current directory.
 | `--sudo <mode>` | string | In-container sudo policy: `nopasswd` (default, passwordless), `password` (requires `SUDO_PASSWORD` from `.devcontainer/.env.local`, applied via a build secret), or `none` (`no_new_privileges = true`, disables sudo). Interactive `password` prompts for the password and writes `.env.local` (0600). |
 | `--apt-categories <ids>` | string | Comma-separated apt category IDs (skips the prompt). |
 | `--plugins <ids>` | string | Comma-separated plugin IDs to enable. |
-| `--plugin-versions <id>=<ref>,...` | string | Comma-separated `<id>=<ref>` pins for `version_capable` plugins. Each `<id>` must also appear in `--plugins`, must be `version_capable`, and may not repeat. The version is written inline in the generated `workspace.toml`'s `[plugins].enable` array (e.g. `--plugin-versions go=1.23.4` → the element `"go=1.23.4"`); no checksums. |
+| `--plugin-versions <id>=<ref>,...` | string | Comma-separated `<id>=<ref>` pins for `version_capable` plugins. Each `<id>` must also appear in `--plugins`, must be `version_capable`, and may not repeat. The version is written inline in the generated `cocoon.toml`'s `[plugins].enable` array (e.g. `--plugin-versions go=1.23.4` → the element `"go=1.23.4"`); no checksums. |
 | `--alias-bundles <ids>` | string | Comma-separated shell-alias bundle IDs (e.g. `git,ls`). |
 | `--ports <values>` | string | Comma-separated docker-compose short-form port mappings (e.g. `3000:3000,5432:5432`). Accepts every form documented for `[ports].forward`: container-only `3000`, ranges `3000-3005:3000-3005`, IPv4/IPv6 binds `127.0.0.1:8001:8001` / `[::1]:80:80`, and protocols `6060:6060/udp`. Skips the prompt. Empty / omitted = no active `[ports]` block (the commented-out template stays so the section is discoverable). |
-| `--force` | bool | Overwrite an existing `workspace.toml`. |
+| `--force` | bool | Overwrite an existing `cocoon.toml`. |
 
 ### Interactive flow
 
@@ -90,14 +90,14 @@ cocoon init --yes \
 
 ## `cocoon gen`
 
-Read `workspace.toml`, resolve the layered plugin catalog (project ∪ user ∪ embedded), and write `.devcontainer/`. Plugin install scripts are inlined directly into the generated Dockerfile, so the build needs no external context beyond the project tree. Generation is fully offline: when a [`cocoon.lock`](#cocoon-lock) is present, each locked plugin's resolved version and per-arch checksums are baked into the Dockerfile (`PIN` / `CHECKSUM_*`) so the build is reproducible.
+Read `cocoon.toml`, resolve the layered plugin catalog (project ∪ user ∪ embedded), and write `.devcontainer/`. Plugin install scripts are inlined directly into the generated Dockerfile, so the build needs no external context beyond the project tree. Generation is fully offline: when a [`cocoon.lock`](#cocoon-lock) is present, each locked plugin's resolved version and per-arch checksums are baked into the Dockerfile (`PIN` / `CHECKSUM_*`) so the build is reproducible.
 
 ### Flags
 
 | Flag | Type | Description |
 |---|---|---|
-| `--workspace <path>` | string | Path to `workspace.toml` (default: discovered from cwd). |
-| `--output <dir>` | string | Project root to write artifacts under (default: directory of `workspace.toml`). |
+| `--workspace <path>` | string | Path to `cocoon.toml` (default: discovered from cwd). |
+| `--output <dir>` | string | Project root to write artifacts under (default: directory of `cocoon.toml`). |
 | `--locked` | bool | Fail if any enabled plugin uses `"latest"` without a `cocoon.lock` entry (reproducible CI). Without it, such plugins warn and fall back to resolving the latest version at build time. |
 
 ### Examples
@@ -106,8 +106,8 @@ Read `workspace.toml`, resolve the layered plugin catalog (project ∪ user ∪ 
 # From the project root
 cocoon gen
 
-# Specify a workspace.toml elsewhere
-cocoon gen --workspace ./infra/workspace.toml --output ./infra
+# Specify a cocoon.toml elsewhere
+cocoon gen --workspace ./infra/cocoon.toml --output ./infra
 ```
 
 ### TLS certificates
@@ -116,7 +116,7 @@ The generated `Dockerfile` / `docker-compose.yml` / `devcontainer.json` carry ce
 
 ### `cocoon gen workspace`
 
-Generate a VS Code `.code-workspace` file from the `[code_workspace]` section of `workspace.toml`. By default the file is written next to `workspace.toml` (**not** under `.devcontainer/`), so VS Code can open it with `code <name>.code-workspace` and treat it as the project's entry point. Pass `--output <dir>` to redirect the file elsewhere — folder paths are always relativized against the directory the file is actually written to, so VS Code resolves them correctly from that location. Paths in `folders[]` are `~`-expanded as well, which is what lets entries like `"~/.claude"` resolve to a path VS Code can traverse upward.
+Generate a VS Code `.code-workspace` file from the `[code_workspace]` section of `cocoon.toml`. By default the file is written next to `cocoon.toml` (**not** under `.devcontainer/`), so VS Code can open it with `code <name>.code-workspace` and treat it as the project's entry point. Pass `--output <dir>` to redirect the file elsewhere — folder paths are always relativized against the directory the file is actually written to, so VS Code resolves them correctly from that location. Paths in `folders[]` are `~`-expanded as well, which is what lets entries like `"~/.claude"` resolve to a path VS Code can traverse upward.
 
 `cocoon gen` itself does **not** emit this file — the subcommand is opt-in.
 
@@ -124,18 +124,18 @@ Generate a VS Code `.code-workspace` file from the `[code_workspace]` section of
 
 | Flag | Type | Description |
 |---|---|---|
-| `--workspace <path>` | string | Path to `workspace.toml` (default: discovered from cwd). |
-| `--output <dir>` | string | Project root to write the `.code-workspace` under (default: directory of `workspace.toml`). |
+| `--workspace <path>` | string | Path to `cocoon.toml` (default: discovered from cwd). |
+| `--output <dir>` | string | Project root to write the `.code-workspace` under (default: directory of `cocoon.toml`). |
 | `--name <basename>` | string | Output file basename without `.code-workspace` (default: `[code_workspace].name` or project directory basename). Validated as a single path segment. |
 | `--folder <path>[=<name>]` | repeatable | Append a folder after `[code_workspace].folders`. Supports `~` expansion. Pass `=<name>` to override the auto-derived display name. |
 
 #### Examples
 
 ```bash
-# Use [code_workspace] from workspace.toml as-is
+# Use [code_workspace] from cocoon.toml as-is
 cocoon gen workspace
 
-# Add ad-hoc folders without editing workspace.toml
+# Add ad-hoc folders without editing cocoon.toml
 cocoon gen workspace --folder ~/.config/nvim --folder ../sibling-repo=Sibling
 
 # Override the file name
@@ -148,20 +148,20 @@ See [`[code_workspace]` in `configuration.md`](configuration.md#code_workspace) 
 
 ## `cocoon lock`
 
-Resolve every enabled `version_capable` plugin's `[plugins].enable` version pin to a concrete version (plus per-arch SHA256 checksums) over the network, and write `cocoon.lock` at the workspace root (next to `workspace.toml`). `cocoon gen` then consumes `cocoon.lock` offline so the generated `.devcontainer/` is reproducible — same plugin versions, same checksums, no network call at generation time.
+Resolve every enabled `version_capable` plugin's `[plugins].enable` version pin to a concrete version (plus per-arch SHA256 checksums) over the network, and write `cocoon.lock` at the workspace root (next to `cocoon.toml`). `cocoon gen` then consumes `cocoon.lock` offline so the generated `.devcontainer/` is reproducible — same plugin versions, same checksums, no network call at generation time.
 
 - A `"latest"` constraint is frozen to the newest release. An `"=x.y.z"` exact pin keeps its version and gains recorded per-arch checksums.
-- The lock file is named `cocoon.lock` by default; set [`[lockfile].name`](configuration.md#lockfile) in `workspace.toml` to use a different basename (both `cocoon lock` and `cocoon gen` honor it).
+- The lock file is named `cocoon.lock` by default; set [`[lockfile].name`](configuration.md#lockfile) in `cocoon.toml` to use a different basename (both `cocoon lock` and `cocoon gen` honor it).
 - Re-running is idempotent: already-locked entries are reused with **no network call** unless `--upgrade` is passed. `--upgrade` re-resolves `"latest"` constraints to the current newest release; exact pins never change.
 
 ### `cocoon.lock`
 
-A generated, committed TOML file — machine-owned, so do **not** hand-edit it; re-run `cocoon lock` instead. It carries a top-level `lock_version` (lock-format version) and `inputs_hash` (a digest of the enabled plugins and their constraints, used by `--check` and `cocoon gen --locked` to detect drift from `workspace.toml`), then one `[[plugins]]` entry per resolved plugin:
+A generated, committed TOML file — machine-owned, so do **not** hand-edit it; re-run `cocoon lock` instead. It carries a top-level `lock_version` (lock-format version) and `inputs_hash` (a digest of the enabled plugins and their constraints, used by `--check` and `cocoon gen --locked` to detect drift from `cocoon.toml`), then one `[[plugins]]` entry per resolved plugin:
 
 | Field | Meaning |
 |---|---|
 | `id` | Plugin id. |
-| `requested` | The `workspace.toml` constraint that produced the entry (`"latest"` or `"=x.y.z"`). |
+| `requested` | The `cocoon.toml` constraint that produced the entry (`"latest"` or `"=x.y.z"`). |
 | `version` | The concrete resolved version. |
 | `checksum_amd64` / `checksum_arm64` | Per-arch SHA256 of the downloaded artifact. Omitted for plugins that publish no fetchable per-arch hash (e.g. `verify = "pgp"` or `| bash` installers). |
 | `extra` | Frozen subcomponent selectors, when the plugin has them (e.g. android-sdk's `api_level`). |
@@ -170,8 +170,8 @@ A generated, committed TOML file — machine-owned, so do **not** hand-edit it; 
 
 | Flag | Type | Description |
 |---|---|---|
-| `--workspace <path>` | string | Path to `workspace.toml` (default: discovered from cwd). |
-| `--check` | bool | Verify `cocoon.lock` matches `workspace.toml` **without resolving** (no network). Exits non-zero on drift — a missing lock, a changed `inputs_hash`, or any enabled plugin whose recorded `requested` no longer matches. For CI. |
+| `--workspace <path>` | string | Path to `cocoon.toml` (default: discovered from cwd). |
+| `--check` | bool | Verify `cocoon.lock` matches `cocoon.toml` **without resolving** (no network). Exits non-zero on drift — a missing lock, a changed `inputs_hash`, or any enabled plugin whose recorded `requested` no longer matches. For CI. |
 | `--upgrade` | bool | Re-resolve `"latest"` constraints to the current newest release. Exact pins are untouched. |
 
 ### Exact-only plugins
@@ -213,7 +213,7 @@ version = "0.5.11"
 # Refresh "latest" constraints to the newest releases
 cocoon lock --upgrade
 
-# CI gate: fail if the committed lock no longer matches workspace.toml
+# CI gate: fail if the committed lock no longer matches cocoon.toml
 cocoon lock --check
 ```
 
@@ -229,7 +229,7 @@ Inspect and author cocoon plugins. Plugins live in three layers, resolved with p
 | user | `~/.cocoon/plugins/<id>/` | overlay scaffolded or copied from another overlay |
 | embedded | `internal/plugin/catalog/<id>/` (in the cocoon source repo, compiled into the binary via `go:embed`) | shipped with cocoon; **not on disk** for single-binary installs |
 
-To enable an embedded plugin, just add its id to `[plugins].enable` in `workspace.toml`. To customise an embedded plugin, the supported workflow is `cocoon plugin scaffold <new-id>` and adapting logic. If you have a clone of the cocoon repo (or an unpacked source tarball), `cp -r internal/plugin/catalog/<id> ~/.cocoon/plugins/<id>/` works as a shortcut; on a single-binary install the embedded source is not present on disk.
+To enable an embedded plugin, just add its id to `[plugins].enable` in `cocoon.toml`. To customise an embedded plugin, the supported workflow is `cocoon plugin scaffold <new-id>` and adapting logic. If you have a clone of the cocoon repo (or an unpacked source tarball), `cp -r internal/plugin/catalog/<id> ~/.cocoon/plugins/<id>/` works as a shortcut; on a single-binary install the embedded source is not present on disk.
 
 Overlays are read at `gen` time only; placing files in `~/.cocoon/plugins/<id>/` does not enable a plugin on its own — `[plugins].enable` is the activation list.
 
@@ -284,13 +284,13 @@ volumes: [/home/${USERNAME}/go]
 
 ### `cocoon plugin pin <id> <ref>`
 
-**Purpose:** pin a version for a `version_capable` plugin in `workspace.toml`'s `[plugins].enable` array. The pin is emitted as an array element — `"<id>=<ref>"` — that the plugin's install script reads via `$PIN`. A bare `<ref>` (e.g. `1.23.4`) is written with the version spelled bare (`"go=1.23.4"`); passing `latest` writes `"go=latest"`; a range (`>=`, `^`, …) is rejected with a usage error.
+**Purpose:** pin a version for a `version_capable` plugin in `cocoon.toml`'s `[plugins].enable` array. The pin is emitted as an array element — `"<id>=<ref>"` — that the plugin's install script reads via `$PIN`. A bare `<ref>` (e.g. `1.23.4`) is written with the version spelled bare (`"go=1.23.4"`); passing `latest` writes `"go=latest"`; a range (`>=`, `^`, …) is rejected with a usage error.
 
 **Example (default — stdout, manual paste):**
 
 ```console
 $ cocoon plugin pin go 1.23.4
-# Add (or update) this entry in the [plugins].enable array in workspace.toml:
+# Add (or update) this entry in the [plugins].enable array in cocoon.toml:
 
 "go=1.23.4"
 ```
@@ -299,7 +299,7 @@ $ cocoon plugin pin go 1.23.4
 
 ```console
 $ cocoon plugin pin go 1.23.4 --write
-Updated /home/alice/proj/workspace.toml: [plugins].enable "go=1.23.4"
+Updated /home/alice/proj/cocoon.toml: [plugins].enable "go=1.23.4"
 ```
 
 `--write` upserts the `<id>` element in the `[plugins].enable` array — replacing the existing `"<id>"` / `"<id>=..."` element if the id is already enabled, or appending a new one — and re-emits the array in canonical multi-line style (one element per line). Comments and blank lines elsewhere in the file are preserved.
@@ -309,14 +309,14 @@ Updated /home/alice/proj/workspace.toml: [plugins].enable "go=1.23.4"
 | Flag | Description |
 |---|---|
 | `--method <name>` | Install method to validate the ref against (when the plugin declares more than one). |
-| `--write` | Upsert the pin element in `workspace.toml`'s `[plugins].enable` array (auto-discovered from cwd). |
+| `--write` | Upsert the pin element in `cocoon.toml`'s `[plugins].enable` array (auto-discovered from cwd). |
 
 **Gotchas:**
 
 - A pin only makes sense for plugins whose `[version].version_capable = true`. The element's version is ignored at `gen` time for non-version-capable plugins.
 - Checksums are not pinned here. They are recorded in `cocoon.lock` by `cocoon lock`; until then the install script's fallback verifies each download against the checksum the upstream publishes with the release.
-- `--write` requires a discoverable `workspace.toml` from cwd; without `--write`, the command works from anywhere because it only resolves the layered FS for id validation.
-- `--write` refuses with a usage error if `workspace.toml` still contains a `[plugins.versions]` section (the removed schema). Migrate each pin into the `[plugins].enable` array first — turn an inline-table pin like `go = { pin = "1.23.4" }` into the element `"go=1.23.4"` and delete the `[plugins.versions]` section — then re-run, or edit `workspace.toml` manually.
+- `--write` requires a discoverable `cocoon.toml` from cwd; without `--write`, the command works from anywhere because it only resolves the layered FS for id validation.
+- `--write` refuses with a usage error if `cocoon.toml` still contains a `[plugins.versions]` section (the removed schema). Migrate each pin into the `[plugins].enable` array first — turn an inline-table pin like `go = { pin = "1.23.4" }` into the element `"go=1.23.4"` and delete the `[plugins.versions]` section — then re-run, or edit `cocoon.toml` manually.
 
 ### `cocoon plugin scaffold <id>`
 
@@ -347,7 +347,7 @@ OK: scaffolded /home/alice/projects/myapp/.cocoon/plugins/gh-cli (2 files)
 
 | Flag | Description |
 |---|---|
-| `--plugins-dir <path>` | Output directory. Default: `<workspace>/.cocoon/plugins` (auto-discovered from `workspace.toml`). |
+| `--plugins-dir <path>` | Output directory. Default: `<workspace>/.cocoon/plugins` (auto-discovered from `cocoon.toml`). |
 | `--name <name>` | Display name (e.g. `"GitHub CLI"`). |
 | `--description <text>` | Short description. Do not embed the upstream URL — pass it via `--url`. |
 | `--url <url>` | Upstream project URL (`https://...`, no whitespace). Required under `--non-interactive`. |
@@ -361,7 +361,7 @@ OK: scaffolded /home/alice/projects/myapp/.cocoon/plugins/gh-cli (2 files)
 
 **Gotchas:**
 
-- Without `--plugins-dir` and outside a cocoon project (no discoverable `workspace.toml`), scaffold refuses with an actionable error rather than silently writing to `./plugins/<id>/`.
+- Without `--plugins-dir` and outside a cocoon project (no discoverable `cocoon.toml`), scaffold refuses with an actionable error rather than silently writing to `./plugins/<id>/`.
 - `--template binary` implies `--version-capable`; the scaffold rejects `binary` without `--version-capable`.
 - After scaffolding, the generated `plugin.toml` is reloaded under the same strict validator the runtime uses; if it fails (bad name, missing or malformed `url`, etc.), the directory is rolled back.
 - Like overlays from `add`, a scaffolded plugin still needs to be listed in `[plugins].enable` to take effect at `gen` time.
