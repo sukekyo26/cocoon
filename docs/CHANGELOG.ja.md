@@ -6,6 +6,17 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+## [0.15.4] - 2026-06-08
+
+### 変更
+
+- `cocoon init` の言語ベースイメージ向け image-version 推奨候補に、bookworm に加えて
+  Debian trixie バリアントを追加し、上流の最新リリースに更新しました: `node`
+  (`26` / LTS `24` × bookworm/trixie)、`python` (`3.14-slim-bookworm` /
+  `3.14-slim-trixie`)、`golang` (`1.26-bookworm` / `1.26-trixie`)、`rust`
+  (`1.96-bookworm` / `1.96-trixie`)、`denoland/deno` (`debian-2.8.2`)。既定は
+  引き続き bookworm で、正しい形式であれば他のタグもマニュアル入力で受理します。
+
 ## [0.15.3] - 2026-06-08
 
 ### 変更
@@ -714,7 +725,7 @@ cocoon の主要な変更を記録します。フォーマットは
 - `COMPOSE_PROJECT_NAME` をプロジェクトディレクトリの basename から導出するように変更。docker compose の namespace がホストディレクトリと一致する。
 - 国際化 (英語 / 日本語) カタログを追加。CLI プロンプト・エラーメッセージ・`workspace.toml` インラインコメントすべてを `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` で切替可能。
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.15.3...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.15.4...HEAD
 [0.15.3]: https://github.com/sukekyo26/cocoon/compare/v0.15.2...v0.15.3
 [0.15.2]: https://github.com/sukekyo26/cocoon/compare/v0.15.1...v0.15.2
 [0.15.1]: https://github.com/sukekyo26/cocoon/compare/v0.15.0...v0.15.1
