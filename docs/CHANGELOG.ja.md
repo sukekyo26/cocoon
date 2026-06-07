@@ -6,6 +6,15 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+## [0.15.2] - 2026-06-07
+
+### 修正
+
+- `claude-code` プラグインが `bubblewrap` と `socat` をインストールするように
+  なりました。これらは Claude Code の bash サンドボックスがプロセス分離と
+  ネットワークプロキシに必要とする OS ツールです。これまではサンドボックスの
+  事前チェックで `socat: not installed` と表示され、`bwrap` も別プラグイン頼みでした。
+
 ## [0.15.1] - 2026-06-07
 
 ### 修正
@@ -687,7 +696,8 @@ cocoon の主要な変更を記録します。フォーマットは
 - `COMPOSE_PROJECT_NAME` をプロジェクトディレクトリの basename から導出するように変更。docker compose の namespace がホストディレクトリと一致する。
 - 国際化 (英語 / 日本語) カタログを追加。CLI プロンプト・エラーメッセージ・`workspace.toml` インラインコメントすべてを `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` で切替可能。
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.15.1...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.15.2...HEAD
+[0.15.2]: https://github.com/sukekyo26/cocoon/compare/v0.15.1...v0.15.2
 [0.15.1]: https://github.com/sukekyo26/cocoon/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/sukekyo26/cocoon/compare/v0.14.2...v0.15.0
 [0.14.2]: https://github.com/sukekyo26/cocoon/compare/v0.14.1...v0.14.2

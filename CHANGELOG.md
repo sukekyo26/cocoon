@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.15.2] - 2026-06-07
+
+### Fixed
+
+- The `claude-code` plugin now installs `bubblewrap` and `socat`, the OS tools
+  Claude Code's bash sandbox needs for process isolation and its network proxy.
+  Previously the sandbox preflight reported `socat: not installed` (and relied
+  on another plugin to supply `bwrap`).
+
 ## [0.15.1] - 2026-06-07
 
 ### Fixed
@@ -693,7 +702,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Add `COMPOSE_PROJECT_NAME` derivation from the project directory basename so docker compose namespacing matches the host directory.
 - Add i18n catalog (English / Japanese) covering every CLI prompt, error message, and inline `workspace.toml` comment, switched via `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG`.
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.15.1...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.15.2...HEAD
+[0.15.2]: https://github.com/sukekyo26/cocoon/compare/v0.15.1...v0.15.2
 [0.15.1]: https://github.com/sukekyo26/cocoon/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/sukekyo26/cocoon/compare/v0.14.2...v0.15.0
 [0.14.2]: https://github.com/sukekyo26/cocoon/compare/v0.14.1...v0.14.2
