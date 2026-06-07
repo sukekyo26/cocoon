@@ -20,7 +20,7 @@ var cliRuntimeEN = map[string]string{
 	"selfupdate_updated":         "updated cocoon to %s at %s",
 
 	// lock.
-	"lock_nothing_to_lock":           "no version-capable plugins enabled; nothing to lock",
+	"lock_nothing_to_lock":           "no lockable plugins; nothing to lock",
 	"lock_up_to_date":                "%s is up to date (%d plugin(s))",
 	"lock_reused":                    "Reused %s %s",
 	"lock_locked":                    "Locked %s %s",
@@ -53,7 +53,7 @@ var cliRuntimeJA = map[string]string{
 	"selfupdate_updated":         "cocoon を %s に更新しました (%s)",
 
 	// lock.
-	"lock_nothing_to_lock":           "version_capable なプラグインが有効化されていません。lock する対象がありません",
+	"lock_nothing_to_lock":           "lock 可能なプラグインがありません。lock する対象がありません",
 	"lock_up_to_date":                "%s は最新です (%d 個のプラグイン)",
 	"lock_reused":                    "再利用しました %s %s",
 	"lock_locked":                    "ロックしました %s %s",
