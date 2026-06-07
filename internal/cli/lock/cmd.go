@@ -69,11 +69,17 @@ func runLock(ctx context.Context, stdout, stderr io.Writer, opts lockOptions) er
 	if err != nil {
 		return err //nolint:wrapcheck // ErrFailure already attached by generatecli
 	}
-	requested := requestedSpecs(wctx)
+	requested, skipped := requestedSpecs(wctx)
 	lockPath := lockfile.PathFor(wsPath, wctx.WS)
 	log := logx.New(stdout, stderr)
 	cat := i18n.New(i18n.Detect())
 	clihelpers.DrainWarnings(log, cat, wctx.Warnings)
+	for _, id := range skipped {
+		// A skip is a non-reproducible degradation, not a success — use neutral
+		// Info (stdout, no green check). The reproducibility warning is left to
+		// gen's UnlockedLatestPlugins so it is not duplicated here.
+		log.Info(cat.Msg("lock_skipped_sourceless_latest", id, id))
+	}
 	existing, err := loadExistingLock(lockPath, opts.check, log, cat)
 	if err != nil {
 		return err

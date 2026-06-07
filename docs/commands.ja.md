@@ -174,9 +174,9 @@ TOML スキーマとパス解決ルールは [`configuration.ja.md` の `[code_w
 | `--check` | bool | `cocoon.lock` が設定ファイルと一致するかを **解決せずに** 検証 (ネットワークなし)。ドリフト時は非ゼロ終了 — lock 欠落、`inputs_hash` の変化、有効プラグインの `requested` 記録が一致しない、のいずれか。CI 向け。 |
 | `--upgrade` | bool | `"latest"` 制約を現在の最新リリースへ再解決する。厳密 pin は触らない。 |
 
-### exact-only プラグイン
+### source なしプラグイン
 
-一部のプラグインは上流が machine-readable な「latest」を公開していない: **`aws-cli`** (バージョン無しのダウンロード alias)、**`android-sdk`** (HTML スクレイプのビルド番号)、**`flutter`** (コミットハッシュをキーとするリリース)。これらは `"latest"` を解決できず、`[plugins].enable` 配列でインラインに厳密バージョンを pin する必要がある (例: `"flutter=3.44.1"`)。未 pin や `latest` のままだと `cocoon lock` は pin を促すヒント (`"<id>=<version>"`) と共にエラーになる。
+一部のプラグインは、cocoon が再現可能なバージョンへ解決できる machine-readable な「latest」を上流が公開していない: **`aws-cli`** (バージョン無しのダウンロード alias)、**`android-sdk`** (HTML スクレイプのビルド番号)、**`flutter`** (コミットハッシュをキーとするリリース)、**`zig`** (`master`（rolling dev ビルド）のみ)。`latest` (または未 pin) のとき、`cocoon lock` はこれらを lock できないため **スキップ** し (lock エントリを書かない)、`cocoon gen` に委ねる。`cocoon gen` はビルド時に最新を導入するが、これは **再現性がない**: `cocoon gen` は警告し、`cocoon gen --locked` は失敗する。再現可能にするには `[plugins].enable` 配列でインラインに厳密バージョンを pin する (例: `"flutter=3.44.1"`)。その後 `cocoon lock` が pin を記録する。
 
 ### 例
 

@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- `cocoon lock` no longer errors when a `version_capable` plugin without a
+  `[version.source]` (`aws-cli`, `android-sdk`, `flutter`, `zig`) is enabled on
+  `"latest"` (or unpinned). It now skips such a plugin (recording no lock entry)
+  and `cocoon gen` installs the latest at build time. That build is not
+  reproducible (`cocoon gen` warns; `cocoon gen --locked` still fails), so pin an
+  exact version (e.g. `"aws-cli=2.34.48"`) for reproducibility; `zig` on
+  `"latest"` resolves to the `master` dev build.
+
 ### Fixed
 
 - `cocoon init`: when typing a custom value on the manual-input row of a

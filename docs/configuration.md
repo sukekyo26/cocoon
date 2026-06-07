@@ -326,9 +326,10 @@ enable = [
 Run `cocoon plugin list` to see every available plugin (embedded + user / project overlays).
 
 A few plugins' upstreams expose no machine-readable "latest" (`aws-cli`,
-`android-sdk`, `flutter` — see [`cocoon lock`](commands.md#exact-only-plugins));
-those **must** be pinned to an exact version in the `enable` array (e.g.
-`"flutter=3.44.1"`). Left unpinned or on `latest`, `cocoon lock` errors.
+`android-sdk`, `flutter`, `zig` — see [`cocoon lock`](commands.md#sourceless-plugins));
+`cocoon lock` skips these on `latest` (the build then resolves the latest
+non-reproducibly), so pin an exact version in the `enable` array (e.g.
+`"flutter=3.44.1"`) when you need a reproducible build.
 
 > **Migration note.** The old `[plugins.versions]` section was **removed**. A
 > the config file that still has it is rejected at load with a hint to move

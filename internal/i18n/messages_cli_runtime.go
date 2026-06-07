@@ -20,12 +20,13 @@ var cliRuntimeEN = map[string]string{
 	"selfupdate_updated":         "updated cocoon to %s at %s",
 
 	// lock.
-	"lock_nothing_to_lock":    "no version-capable plugins enabled; nothing to lock",
-	"lock_up_to_date":         "%s is up to date (%d plugin(s))",
-	"lock_reused":             "Reused %s %s",
-	"lock_locked":             "Locked %s %s",
-	"lock_wrote":              "Wrote %s (%d plugin(s))",
-	"lock_ignoring_malformed": "ignoring malformed %s (%v); regenerating from scratch",
+	"lock_nothing_to_lock":           "no lockable plugins; nothing to lock",
+	"lock_up_to_date":                "%s is up to date (%d plugin(s))",
+	"lock_reused":                    "Reused %s %s",
+	"lock_locked":                    "Locked %s %s",
+	"lock_wrote":                     "Wrote %s (%d plugin(s))",
+	"lock_ignoring_malformed":        "ignoring malformed %s (%v); regenerating from scratch",
+	"lock_skipped_sourceless_latest": "Skipped %s: its latest version cannot be determined automatically, so \"latest\" cannot be locked; cocoon gen installs the latest at build time (not reproducible). To lock it, set a version in [plugins].enable: \"%s=<version>\"",
 
 	// plugin pin.
 	"plugin_pin_updated_enable":          "Updated %s: [plugins].enable %q",
@@ -52,12 +53,13 @@ var cliRuntimeJA = map[string]string{
 	"selfupdate_updated":         "cocoon を %s に更新しました (%s)",
 
 	// lock.
-	"lock_nothing_to_lock":    "version_capable なプラグインが有効化されていません。lock する対象がありません",
-	"lock_up_to_date":         "%s は最新です (%d 個のプラグイン)",
-	"lock_reused":             "再利用しました %s %s",
-	"lock_locked":             "ロックしました %s %s",
-	"lock_wrote":              "%s を書き出しました (%d 個のプラグイン)",
-	"lock_ignoring_malformed": "破損した %s を無視します (%v)。最初から再生成します",
+	"lock_nothing_to_lock":           "lock 可能なプラグインがありません。lock する対象がありません",
+	"lock_up_to_date":                "%s は最新です (%d 個のプラグイン)",
+	"lock_reused":                    "再利用しました %s %s",
+	"lock_locked":                    "ロックしました %s %s",
+	"lock_wrote":                     "%s を書き出しました (%d 個のプラグイン)",
+	"lock_ignoring_malformed":        "破損した %s を無視します (%v)。最初から再生成します",
+	"lock_skipped_sourceless_latest": "%s をスキップ: 最新バージョンを自動で特定できないため \"latest\" を lock できません。cocoon gen がビルド時に最新を導入します（再現性なし）。lock するには [plugins].enable でバージョンを指定してください: \"%s=<version>\"",
 
 	// plugin pin.
 	"plugin_pin_updated_enable":          "%s を更新しました: [plugins].enable %q",
