@@ -20,7 +20,7 @@ Usage:
 
 Available Commands:
   help        Show usage for this command
-  workspace   Generate <name>.code-workspace at the project root from cocoon.toml
+  workspace   Generate <name>.code-workspace at the project root from your config file
 
 Flags:
   -h, --help               help for gen

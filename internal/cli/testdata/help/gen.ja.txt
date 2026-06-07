@@ -19,7 +19,7 @@ cocoon gen — .devcontainer/{Dockerfile, docker-compose.yml, devcontainer.json}
 
 サブコマンド:
   help        このコマンドの使い方を表示
-  workspace   cocoon.toml から <name>.code-workspace をプロジェクトルートに生成
+  workspace   設定ファイルから <name>.code-workspace をプロジェクトルートに生成
 
 フラグ:
   -h, --help               gen のヘルプを表示

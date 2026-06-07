@@ -1,13 +1,13 @@
 cocoon gen workspace — generate a VS Code .code-workspace file
 
-Reads [code_workspace] from cocoon.toml and writes <name>.code-workspace
+Reads [code_workspace] from your config file and writes <name>.code-workspace
 at the project root (not under .devcontainer/). Folder paths are "~"-expanded
 and relativized against the directory the .code-workspace file is written to
-(the cocoon.toml directory by default, or --output when set), so an entry
+(the config file's directory by default, or --output when set), so an entry
 like "~/.claude" resolves to a relative path that VS Code can traverse from
 that location.
 
-Use --folder to add ad-hoc folders without editing cocoon.toml; flag
+Use --folder to add ad-hoc folders without editing your config file; flag
 entries are appended after the declarative [code_workspace].folders list.
 A folder name is auto-derived from the basename of the resolved path; pass
 "<path>=<name>" via --folder to override (e.g. --folder ~/.claude=Claude).

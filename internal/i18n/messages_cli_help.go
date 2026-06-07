@@ -102,7 +102,7 @@ var messagesEN_cliHelp = map[string]string{
 	"cmd_root_short": "Project-aware container workspace generator",
 	"cmd_root_long": `cocoon — project-aware container workspace generator
 
-Run cocoon from any project directory to read its cocoon.toml and
+Run cocoon from any project directory to read its config file and
 materialize a Dev Container or plain docker-compose stack tailored to
 that repository.`,
 
@@ -166,7 +166,7 @@ to drive non-interactively from CI.`,
 	"flag_init_force_usage": "overwrite an existing cocoon.toml",
 
 	// cocoon gen
-	"cmd_gen_short": "Generate .devcontainer/ artifacts from cocoon.toml",
+	"cmd_gen_short": "Generate .devcontainer/ artifacts from your config file",
 	"cmd_gen_long": `cocoon gen — generate .devcontainer/{Dockerfile, docker-compose.yml, devcontainer.json}
 
 Discovers cocoon.toml (falling back to workspace.toml) from the current
@@ -204,17 +204,17 @@ passed.`,
 	"flag_lock_upgrade_usage":   `re-resolve "latest" constraints even if already locked (exact pins are unchanged)`,
 
 	// cocoon gen workspace
-	"cmd_gen_workspace_short": "Generate <name>.code-workspace at the project root from cocoon.toml",
+	"cmd_gen_workspace_short": "Generate <name>.code-workspace at the project root from your config file",
 	"cmd_gen_workspace_long": `cocoon gen workspace — generate a VS Code .code-workspace file
 
-Reads [code_workspace] from cocoon.toml and writes <name>.code-workspace
+Reads [code_workspace] from your config file and writes <name>.code-workspace
 at the project root (not under .devcontainer/). Folder paths are "~"-expanded
 and relativized against the directory the .code-workspace file is written to
-(the cocoon.toml directory by default, or --output when set), so an entry
+(the config file's directory by default, or --output when set), so an entry
 like "~/.claude" resolves to a relative path that VS Code can traverse from
 that location.
 
-Use --folder to add ad-hoc folders without editing cocoon.toml; flag
+Use --folder to add ad-hoc folders without editing your config file; flag
 entries are appended after the declarative [code_workspace].folders list.
 A folder name is auto-derived from the basename of the resolved path; pass
 "<path>=<name>" via --folder to override (e.g. --folder ~/.claude=Claude).
@@ -364,7 +364,7 @@ var messagesJA_cliHelp = map[string]string{
 	"cmd_root_short": "プロジェクト連動のコンテナ ワークスペース生成ツール",
 	"cmd_root_long": `cocoon — プロジェクト連動のコンテナ ワークスペース生成ツール
 
-プロジェクトディレクトリで cocoon を実行すると cocoon.toml を読み取り、
+プロジェクトディレクトリで cocoon を実行すると設定ファイルを読み取り、
 そのリポジトリ専用の Dev Container または docker-compose スタックを生成します。`,
 
 	// cocoon version
@@ -426,7 +426,7 @@ CI など非対話実行では --yes に加えて --service-name / --username
 	"flag_init_force_usage": "既存の cocoon.toml を上書き",
 
 	// cocoon gen
-	"cmd_gen_short": "cocoon.toml から .devcontainer/ の成果物を生成",
+	"cmd_gen_short": "設定ファイルから .devcontainer/ の成果物を生成",
 	"cmd_gen_long": `cocoon gen — .devcontainer/{Dockerfile, docker-compose.yml, devcontainer.json} を生成
 
 カレントディレクトリから親方向に cocoon.toml（無ければ workspace.toml）を探索し
@@ -461,17 +461,17 @@ exact バージョンへの pin が必要です。再実行はべき等で、既
 	"flag_lock_upgrade_usage":   `既にロック済みでも "latest" 制約を再解決（exact pin は不変）`,
 
 	// cocoon gen workspace
-	"cmd_gen_workspace_short": "cocoon.toml から <name>.code-workspace をプロジェクトルートに生成",
+	"cmd_gen_workspace_short": "設定ファイルから <name>.code-workspace をプロジェクトルートに生成",
 	"cmd_gen_workspace_long": `cocoon gen workspace — VS Code の .code-workspace ファイルを生成
 
-cocoon.toml の [code_workspace] を読み取り、<name>.code-workspace を
+設定ファイルの [code_workspace] を読み取り、<name>.code-workspace を
 プロジェクトルート（.devcontainer/ 配下ではない）に書き出します。
 folders[].path は "~" 展開され、.code-workspace の書き出し先ディレクトリ
-（既定で cocoon.toml のあるディレクトリ、--output 指定時はそのディレクトリ）を
+（既定で設定ファイルのあるディレクトリ、--output 指定時はそのディレクトリ）を
 基準に相対化されるため、"~/.claude" のようなエントリは VS Code が
 その場所から辿れる相対パスに解決されます。
 
-cocoon.toml を編集せずに一時的なフォルダを追加したい場合は --folder を使います。
+設定ファイルを編集せずに一時的なフォルダを追加したい場合は --folder を使います。
 フラグ指定エントリは宣言済みの [code_workspace].folders の後ろに追記されます。
 フォルダ名は解決されたパスの basename から自動導出されますが、
 --folder "<path>=<name>" で上書きできます（例: --folder ~/.claude=Claude）。

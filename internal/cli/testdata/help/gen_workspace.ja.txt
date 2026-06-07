@@ -1,13 +1,13 @@
 cocoon gen workspace — VS Code の .code-workspace ファイルを生成
 
-cocoon.toml の [code_workspace] を読み取り、<name>.code-workspace を
+設定ファイルの [code_workspace] を読み取り、<name>.code-workspace を
 プロジェクトルート（.devcontainer/ 配下ではない）に書き出します。
 folders[].path は "~" 展開され、.code-workspace の書き出し先ディレクトリ
-（既定で cocoon.toml のあるディレクトリ、--output 指定時はそのディレクトリ）を
+（既定で設定ファイルのあるディレクトリ、--output 指定時はそのディレクトリ）を
 基準に相対化されるため、"~/.claude" のようなエントリは VS Code が
 その場所から辿れる相対パスに解決されます。
 
-cocoon.toml を編集せずに一時的なフォルダを追加したい場合は --folder を使います。
+設定ファイルを編集せずに一時的なフォルダを追加したい場合は --folder を使います。
 フラグ指定エントリは宣言済みの [code_workspace].folders の後ろに追記されます。
 フォルダ名は解決されたパスの basename から自動導出されますが、
 --folder "<path>=<name>" で上書きできます（例: --folder ~/.claude=Claude）。
