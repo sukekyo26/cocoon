@@ -26,8 +26,9 @@ const teatestTimeout = 3 * time.Second
 const teatestUnset = "\x00unset"
 
 // keyMsg builds a special-key message (arrows, Home/End, Enter, Tab). Printable
-// runes go through tm.Type instead; note tm.Type of "g"/"G"/"j"/"k" would be
-// stolen by the Select nav keymap, so typed test values avoid those.
+// runes go through tm.Type instead; "g"/"G"/"j"/"k" are typed verbatim on the
+// input row but still drive nav on a suggestion row, so type them only once the
+// cursor has parked on the input row.
 func keyMsg(t tea.KeyType) tea.KeyMsg { return tea.KeyMsg{Type: t} }
 
 // newTeatestField wires the field the way runSingleFieldForm does (huh's
@@ -131,6 +132,17 @@ func TestSelectOrInputField_Teatest(t *testing.T) {
 				tm.Send(keyMsg(tea.KeyEnter))
 			},
 			want: "v9", // commit trims surrounding space
+		},
+		{
+			// Regression: j/k/g/G are typed verbatim on the input row instead
+			// of being stolen by the vim Select nav keymap.
+			name: "input_row_types_nav_runes",
+			drive: func(tm *teatest.TestModel) {
+				tm.Send(keyMsg(tea.KeyEnd)) // input row
+				tm.Type("jdk-G21")
+				tm.Send(keyMsg(tea.KeyEnter))
+			},
+			want: "jdk-G21",
 		},
 	}
 	for _, tc := range cases {

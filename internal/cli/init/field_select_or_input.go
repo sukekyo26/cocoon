@@ -133,6 +133,14 @@ func (f *selectOrInputField) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return f, nil
 	}
 	f.err = nil
+	// On the input row, printable keys (j/k/g/G included) are typed into the
+	// textinput rather than stolen by the vim Select nav keymap. Arrows, Enter
+	// and Tab are not KeyRunes, so they still flow through nav/submit below.
+	if f.cursor == len(f.suggestions) && keymsg.Type == tea.KeyRunes {
+		var cmd tea.Cmd
+		f.input, cmd = f.input.Update(keymsg)
+		return f, cmd
+	}
 	if cmd, handled := f.handleNav(keymsg); handled {
 		return f, cmd
 	}

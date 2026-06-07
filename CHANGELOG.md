@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- `cocoon init`: when typing a custom value on the manual-input row of a
+  version prompt, the keys `j`, `k`, `g`, and `G` are now entered as text
+  instead of being intercepted as list navigation (up/down/top/bottom).
+
 ## [0.15.2] - 2026-06-07
 
 ### Fixed
