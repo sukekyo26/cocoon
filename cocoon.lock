@@ -2,26 +2,26 @@
 # Records resolved plugin versions + per-arch checksums for reproducible builds.
 
 lock_version = 1
-inputs_hash = '7a7c9a335ff70e4476bf085efdf31e3202fc08e9bafb259e1c34c9e47cc9010f'
+inputs_hash = '0da2cf8a493616e1f1cbfb49be0b7c045c8d0fa1292f209f685fdedd69bdd268'
 
 [[plugins]]
 id = 'cocoon'
 requested = 'latest'
-version = '0.14.0'
-checksum_amd64 = '92e5e2c628653a548f06bbccdf4caf92b7f0a5449fedf08971d27c1ef8b1bf29'
-checksum_arm64 = '190b374510612b69833bdf8a8235ec9514e36fae6156bcc3ae8a4d703ba7943a'
+version = '0.15.1'
+checksum_amd64 = '66d3005217340200a10e882ebf52f432b1a68765efbaa3e91bf190aa57396ee0'
+checksum_arm64 = 'feb299e7452559a13fdc59c010dad4c045bc311ff193a1c93a2c90be3d9e8029'
 
 [[plugins]]
 id = 'codex'
-requested = '=0.137.0'
+requested = 'latest'
 version = '0.137.0'
 
 [[plugins]]
 id = 'copilot-cli'
 requested = 'latest'
-version = '1.0.59'
-checksum_amd64 = '44c1f29b2ab2b51ee9d6fab8b930919186ba908bb760e02da3fe3065408bf625'
-checksum_arm64 = '409d93d289e220e4d156696f9052eba313fe1c423da38bedd34a52ad9fd2efa1'
+version = '1.0.60'
+checksum_amd64 = 'bcbc762b86b3997586883a92995ee0cc1ae35fa80c1f62250b7eb15f02b1bcc3'
+checksum_arm64 = '1ac48cd687b047fe2c549f3f8a440b31e8b5d8188a91dd8ba1e46500d37dc435'
 
 [[plugins]]
 id = 'docker-buildx'
@@ -53,12 +53,12 @@ checksum_arm64 = '524659219d6a207a7400f2bde15d19ba060ffbe0d32a8643319ad67e3bb64c
 
 [[plugins]]
 id = 'shellcheck'
-requested = '=0.11.0'
+requested = 'latest'
 version = '0.11.0'
 
 [[plugins]]
 id = 'shfmt'
-requested = '=3.13.1'
+requested = 'latest'
 version = '3.13.1'
 
 [[plugins]]

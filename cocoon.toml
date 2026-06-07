@@ -124,7 +124,7 @@ PATH = "$HOME/go/bin:$PATH"
 enable = [
     "claude-code",
     "cocoon",
-    "codex=0.137.0",
+    "codex",
     "copilot-cli",
     "docker-buildx",
     "docker-cli",
@@ -147,7 +147,6 @@ copilot-cli = "binary"
 # Hand-recorded per-arch checksums for plugins whose upstream publishes no
 # machine-readable checksum, so `cocoon lock` cannot fill one. Values verified
 # against the GitHub release API asset digests for the cocoon.lock versions.
-codex      = { checksum_amd64 = "d96e88313b95597e9cbb8704f6db16dbb81c07142b08cfb628479ab433696931", checksum_arm64 = "1b9cae96e27f5da2752054a5bba9204d486939ea60c65df4ba4a638458734bda" }
 shellcheck = { checksum_amd64 = "8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198", checksum_arm64 = "12b331c1d2db6b9eb13cfca64306b1b157a86eb69db83023e261eaa7e7c14588" }
 shfmt      = { checksum_amd64 = "fb096c5d1ac6beabbdbaa2874d025badb03ee07929f0c9ff67563ce8c75398b1", checksum_arm64 = "32d92acaa5cd8abb29fc49dac123dc412442d5713967819d8af2c29f1b3857c7" }
 
@@ -283,6 +282,7 @@ extensions = [
     "bierner.markdown-mermaid",
     "golang.go",
     "anthropic.claude-code",
+    "openai.chatgpt"
 ]
 
 [devcontainer.customizations.settings]
