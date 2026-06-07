@@ -299,7 +299,7 @@ func TestLock_MalformedExistingLock(t *testing.T) {
 //
 //nolint:paralleltest // mutates defaultFetcher global + cwd/HOME.
 func TestLock_SourcelessLatestIsSkipped(t *testing.T) {
-	t.Setenv("WORKSPACE_LANG", "en") // pin locale for the English "not lockable" assertion
+	t.Setenv("WORKSPACE_LANG", "en") // pin locale for the English "cannot be locked" assertion
 	lockPath := seedProject(t, `"nosrc"`, map[string]string{"nosrc": noSourcePluginTOML})
 	swapFetcher(t, demoFetcher())
 
