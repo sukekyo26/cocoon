@@ -1,55 +1,35 @@
-# Project instructions
+# AI Agent Rules
 
-## 設計原則
+## Repository Context
 
-- **シンプルな実装を最優先する** — 読んで即座に意図が伝わるコードを書く。巧妙なテクニックより明快さを選ぶ。
-- **DRY原則** — 同じロジックを2箇所以上に書かない。`lib/` の共通関数を活用し、なければそこに追加する。
-- **後方互換性のために実装を複雑にしない** — 非推奨パスや分岐を積み重ねるくらいなら、破壊的変更+マイグレーション手順を選ぶ。互換レイヤーは一時的な措置に留める。
-- **べき等性を保つ** — セットアップ・生成スクリプトは何度実行しても同じ結果になること。既に存在するリソースの再作成や上書きを避ける。
-- **早期失敗と明確なエラー** — 異常は検出した時点で `die()` や `return 1` で即座に中断する。エラーメッセージにはユーザーが次に何をすべきかを含める。
-- **既存の共通基盤を使う** — `lib/` のログ関数・TOML パーサー・バリデーションを再利用する。車輪の再発明をしない。
+cocoon は `cocoon.toml` から `.devcontainer/` を生成する Go CLI です。入口は `cmd/cocoon/main.go`、主要実装は `internal/` 配下にあります。生成対象は Dockerfile、docker-compose.yml、devcontainer.json、entrypoint、`.env`、`manage.sh` です。実行ライフサイクルは Docker Compose と VS Code Dev Containers に委譲します。
 
-## テストとリントのチェック
+## Key Paths
 
- - **コミット前に必ずローカルでテストとリントを通す** — push 後に CI
-で初めて失敗を検知するのは避ける。Go コードを変更したら `just ci`（= `fmt-check` + `vet`
-+ `lint` + `test` + `vuln`）を実行し、グリーンを確認してからコミットする。
- - **修正したら再実行する** — 失敗を直したら無関係な箇所を壊していないか `just ci`
-を再実行して検証する。「あとで CI が拾うから」と未確認のままコミットしない。
- - **CI ワークフロー（`.github/workflows/`）を変更した場合** —
-参照しているスクリプト・ファイルが実在することを確認する。Bash → Go
-移行のように削除済みのパス（例: `lib/generators.sh`）が残っていないか grep で点検する。
- - **CI 失敗の修正コミットを積み上げない** — 同じ PR 内で「ci:
-fix」コミットが連続するのは push
-前チェックを怠っているサイン。失敗の根本原因をローカルで再現してからコミットする。
+- `internal/config/`: 設定探索、schema、validation。
+- `internal/plugin/`: プラグイン manifest、layered loading、pin / lock 関連。
+- `internal/generate/`: Dockerfile、Compose、devcontainer、env、shellrc 生成。
+- `internal/cli/`: cobra コマンド、CLI 入出力、help snapshot。
+- `internal/plugin/catalog/<id>/`: 組み込みプラグイン。
+- `tests/` と `e2e/`: 統合・E2E テスト。
+- `docs/`: 英日ペアのユーザー向けドキュメント。
 
-## コメントの方針
+## Commands
 
-- **デフォルトは書かない** — WHAT が識別子から明らかなら不要。書くのは WHY が非自明 (順序依存・呼び出し契約・workaround・bug 履歴) な時だけ、1〜2 行で。
-- **避ける** — 「Foo returns the foo」式の言い換え / 「Earlier revisions …」式の墓標 / 手順の逐次解説 / PR description の再述。
-- **既存の冗長は引きずらない** — 新規・改修は短く。気付いた既存冗長は別 PR で刈り込み。
+- `just --list`: 利用可能な recipe を確認する。
+- `just build`: `bin/cocoon` をビルドする。
+- `just test`: ビルド後に `go test -shuffle=on ./...` を実行する。
+- `just lint`: `.golangci.yml` に従って lint を実行する。
+- `just ci`: push 前の総合チェックを実行する。
+- `just regen-snapshots`: generator、help、`cocoon init` 出力を意図的に変えた時だけ実行し、更新された `testdata/` を同じ変更に含める。
 
-## Context7 MCP の利用
+## Project-Specific Rules
 
-- **Context7 MCP を利用する** — タスクの実行や情報の取得に Context7 MCP を活用する。必要な情報があれば、Context7 MCP 経由で取得できないかをまず検討する。
-
-## CHANGELOG の更新
-
-- **コード変更時は必ず CHANGELOG を同時に更新する** — 機能追加・バグ修正・変更を行った場合、コミット前に `CHANGELOG.md` と `docs/CHANGELOG.ja.md` の両方を更新する
-- **判断基準**: 「エンドユーザーまたはプラグイン作者の操作・設定・動作が変わるか？」→ No なら記載しない
-- **記載する** ✓: 新しい `cocoon.toml` フィールド・セクション / 新しいプラグイン / 新しい CLI サブコマンド・フラグ / ユーザーが体験していたバグの修正 / BREAKING changes（設定形式変更・オプション削除等）/ セキュリティ修正 / 体感できるパフォーマンス改善
-- **記載しない** ✗: テスト追加・カバレッジ閾値変更 / CI ワークフロー変更（GitHub Actions・SHA pin 等）/ テスト用内部 API 追加（`RunWithRunner` 等の DI ヘルパ）/ 外部動作が変わらないリファクタリング / 開発者向け `just` レシピ追加 / lint・フォーマット設定変更
-
-## ブランチと PR のワークフロー
-
-- **機能単位で `feature/` ブランチを切る** — `develop` に直接コミットせず、関連する変更のまとまりごとに `feature/<short-name>` ブランチを作成して作業する。複数の独立した機能を1つのブランチに混ぜない。
-- **ブランチ単位で `develop` への PR を出す** — 各 `feature/` ブランチは作業完了後に `develop` をベースとした PR を作成してマージする。`main` への直接 PR は行わない（リリース時のみ `develop` → `main`）。
-- **粒度の目安**: 1つの機能追加・1つのバグ修正・1つのリファクタリング = 1ブランチ・1PR。レビューしやすい粒度を優先する。
-
-## Git コミットのワークフロー
-
-- **タスク完了時は必ず変更をコミットする** — ユーザーが明示的に指示しなくても、タスクが完了したら自動的に `git add` + `git commit` を実行する
-- **関連する修正単位でコミットする** — 1つのタスクで複数の変更がある場合、論理的にまとまった単位（例: 機能追加とそのテスト、設定ファイルとドキュメント）でコミットを分ける
-- **Conventional Commits 形式で英語1文のメッセージ** — `feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:` などのプレフィックスを付ける
-- **コミット前に必ず `git status` で確認** — コミット漏れがないよう、全ての変更がステージング・コミット済みであることを検証する。`working tree clean` を確認してからタスク完了を宣言する
-- **`.gitignore` で無視されているファイルはコミットしない** — `git add` 時に `.gitignore` 対象のファイルを明示的に追加しない。`git status --ignored` で確認できる
+- `cocoon gen` は config discovery → plugin layered load → in-memory render → atomic write の流れを保つ。
+- プラグインの優先順位は project `<workspace>/.cocoon/plugins/<id>/`、user `~/.cocoon/plugins/<id>/`、embedded `internal/plugin/catalog/<id>/` の順にする。
+- バージョン pin は `[plugins].enable` の inline 形式（例: `"go=1.23.4"`, `"go=latest"`, `"docker-cli"`）を使う。旧 `[plugins.versions]` は復活させない。
+- 再現可能ビルドは `cocoon lock` で `cocoon.lock` を作り、その後 `cocoon gen` する二段構成を守る。
+- CLI exit code は `ErrCanceled` が 130、usage error が 2、その他が 1。cobra 側は `SilenceErrors=true` の前提を崩さない。
+- ユーザー向け挙動を変えたら `CHANGELOG.md` と `docs/CHANGELOG.ja.md` を同期する。
+- `docs/<topic>.md` と `docs/<topic>.ja.md` は同じ内容に保つ。
+- ドキュメントにプラグイン数などの変動しやすい件数をハードコードしない。
