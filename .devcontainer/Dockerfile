@@ -18,6 +18,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     zsh \
     zsh-autosuggestions \
     bubblewrap \
+    socat \
     xz-utils \
     vim \
     nano \
