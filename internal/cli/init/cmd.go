@@ -78,7 +78,11 @@ func runInit(cmd *cobra.Command, stdout, stderr io.Writer, flags *initFlags) err
 	if err != nil {
 		return clihelpers.FailureWrap(err, "")
 	}
-	target := filepath.Join(cwd, "workspace.toml")
+	// Guard only against overwriting an existing cocoon.toml. A bare
+	// workspace.toml is intentionally NOT checked: it is a supported fallback
+	// name and may belong to a different tool, so creating cocoon.toml beside
+	// it is legitimate and silent (cocoon.toml wins discovery).
+	target := filepath.Join(cwd, config.DefaultConfigFileName)
 	if _, statErr := os.Stat(target); statErr == nil && !flags.Force {
 		return clihelpers.UsageErr("err_initcmd_workspace_exists", target)
 	}
@@ -114,7 +118,7 @@ func runInit(cmd *cobra.Command, stdout, stderr io.Writer, flags *initFlags) err
 		PluginMethods:  ans.PluginMethods,
 		Ports:          ans.Ports,
 	}, cat)
-	if err := os.WriteFile(target, []byte(content), 0o644); err != nil { //nolint:gosec // workspace.toml is user-readable.
+	if err := os.WriteFile(target, []byte(content), 0o644); err != nil { //nolint:gosec // cocoon.toml is user-readable.
 		return clihelpers.FailureWrap(err, "err_initcmd_write_workspace", target)
 	}
 
@@ -194,7 +198,7 @@ func printNextSteps(log *logx.Logger, cat *i18n.Catalog, devcontainer bool) {
 
 // collectAnswers runs the cross-check on both paths so the non-interactive
 // route (`--plugins go --image golang`) fails fast instead of writing a
-// workspace.toml that `cocoon gen` would later reject. The interactive
+// cocoon.toml that `cocoon gen` would later reject. The interactive
 // picker already filters conflicts; the check is a no-op there.
 func collectAnswers(flags *initFlags, cat *i18n.Catalog, plugins map[string]*plugin.Plugin) (initAnswers, error) {
 	ans, err := applyFlags(flags, plugins)

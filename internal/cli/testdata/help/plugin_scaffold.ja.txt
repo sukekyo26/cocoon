@@ -1,7 +1,7 @@
 cocoon plugin scaffold — プロジェクトのプラグインオーバーレイ配下に新しい <id>/ ディレクトリを作成
 
 既定では <workspace>/.cocoon/plugins/<id>/ 配下に新規ディレクトリが作られます
-（最寄りの workspace.toml から自動探索）。--plugins-dir <path> で上書きすると、
+（最寄りの設定ファイルから自動探索）。--plugins-dir <path> で上書きすると、
 パスはそのまま採用され <id> が結合されます。
 
 新規ディレクトリには [install.methods.<category>] エントリを 1 つ宣言した
@@ -21,7 +21,7 @@ apt (apt repo / .deb) / archive (複数ファイル展開) のいずれかです
   -h, --help                 scaffold のヘルプを表示
       --name string          表示名（例: "GitHub CLI"）
       --non-interactive      対話プロンプトをスキップ（上記フィールドの指定が必須）
-      --plugins-dir string   出力先ディレクトリ（既定: workspace.toml から自動探索した <workspace>/.cocoon/plugins）
+      --plugins-dir string   出力先ディレクトリ（既定: 設定ファイルから自動探索した <workspace>/.cocoon/plugins）
       --requires-root        install スクリプトを root で実行
       --template string      install メソッドカテゴリ: installer | binary | apt | archive（カタログ正規名 — docs/plugins.md 参照） (default "installer")
       --url string           上流の URL（例: https://github.com/owner/repo）

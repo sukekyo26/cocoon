@@ -7,7 +7,7 @@
 [日本語版 README](docs/README.ja.md)
 
 > [!WARNING]
-> **Project status: Alpha (v0.x).** cocoon is under active development. By using it, please understand and accept that the CLI flags, `workspace.toml` schema, and plugin contracts may change before 1.0, and that breaking changes can land in any release. Read the **BREAKING** lines in the [CHANGELOG](CHANGELOG.md) before upgrading.
+> **Project status: Alpha (v0.x).** cocoon is under active development. By using it, please understand and accept that the CLI flags, the config file schema, and plugin contracts may change before 1.0, and that breaking changes can land in any release. Read the **BREAKING** lines in the [CHANGELOG](CHANGELOG.md) before upgrading.
 
 ## Why cocoon?
 
@@ -27,7 +27,7 @@ cocoon gen    # .devcontainer/ is regenerated from scratch
 docker compose -f .devcontainer/docker-compose.yml up -d
 ```
 
-A ~30-line `workspace.toml` is the source of truth. `cocoon gen` regenerates the whole `.devcontainer/` from it deterministically, so configuration "magic" never accumulates and every change is a re-run of the generator. The generated artifacts are host-independent, so you can either keep `workspace.toml` as the only checked-in file and regenerate per host, or commit `.devcontainer/` once and have every teammate build it as-is.
+A ~30-line `cocoon.toml` is the source of truth. `cocoon gen` regenerates the whole `.devcontainer/` from it deterministically. To change anything, edit `cocoon.toml` and re-run `cocoon gen` — never hand-edit `.devcontainer/`. The generated artifacts are host-independent, so you can either keep `cocoon.toml` as the only checked-in file and regenerate per host, or commit `.devcontainer/` once and have every teammate build it as-is.
 
 ## What you get
 
@@ -108,7 +108,7 @@ docker compose -f .devcontainer/docker-compose.yml up -d # or VS Code → "Reope
 12. **apt categories** — agent, text-editors, vcs, utilities, build, network, … (multi-select)
 13. **Plugins** to enable from the embedded catalog (multi-select)
 
-Each answer becomes a self-documenting line in `workspace.toml`. Pass `--yes` together with the value flags (`--service-name`, `--username`, `--image`, `--dir`, `--plugins`, `--certificates`, `--ports`, …) to drive it from CI without a TTY.
+Each answer becomes a self-documenting line in the config file. Pass `--yes` together with the value flags (`--service-name`, `--username`, `--image`, `--dir`, `--plugins`, `--certificates`, `--ports`, …) to drive it from CI without a TTY.
 
 ## Plugins
 
@@ -118,7 +118,7 @@ Override or add your own under `~/.cocoon/plugins/<id>/` (user scope) or `<proje
 
 ## Corporate CA support
 
-Need to trust a private CA inside the container (a TLS-intercepting proxy, a dev self-signed cert, etc.)? Run `cocoon init --certificates` (or set `[certificates] enable = true` in `workspace.toml`), then drop the `.crt` / `.cer` files into `~/.cocoon/certs/` on the host. They are picked up automatically at container build time. Cert-free workspaces stay cert-free — no wiring lands in the generated artifacts unless you opt in. See [`[certificates]`](docs/configuration.md#certificates) for the team workflow.
+Need to trust a private CA inside the container (a TLS-intercepting proxy, a dev self-signed cert, etc.)? Run `cocoon init --certificates` (or set `[certificates] enable = true` in the config file), then drop the `.crt` / `.cer` files into `~/.cocoon/certs/` on the host. They are picked up automatically at container build time. Cert-free workspaces stay cert-free — no wiring lands in the generated artifacts unless you opt in. See [`[certificates]`](docs/configuration.md#certificates) for the team workflow.
 
 ## Persistent personal shellrc
 
@@ -126,14 +126,14 @@ cocoon mounts a named Docker volume at `~/.cocoon/` inside the container so per-
 
 ## i18n
 
-Every prompt, error message, and inline `workspace.toml` comment renders in English or Japanese. The locale is detected from `WORKSPACE_LANG`, then `LC_ALL` / `LC_MESSAGES` / `LANG` — any value starting with `ja` selects Japanese.
+Every prompt, error message, and inline config-file comment renders in English or Japanese. The locale is detected from `WORKSPACE_LANG`, then `LC_ALL` / `LC_MESSAGES` / `LANG` — any value starting with `ja` selects Japanese.
 
 ## Documentation
 
 | Topic | English | 日本語 |
 |---|---|---|
 | Architecture | [architecture.md](docs/architecture.md) | [architecture.ja.md](docs/architecture.ja.md) |
-| Configuration (`workspace.toml`) | [configuration.md](docs/configuration.md) | [configuration.ja.md](docs/configuration.ja.md) |
+| Configuration (`cocoon.toml`) | [configuration.md](docs/configuration.md) | [configuration.ja.md](docs/configuration.ja.md) |
 | Commands | [commands.md](docs/commands.md) | [commands.ja.md](docs/commands.ja.md) |
 | Plugin authoring (`plugin.toml`, `install.<category>.sh`, `install_user.sh`) | [plugins.md](docs/plugins.md) | [plugins.ja.md](docs/plugins.ja.md) |
 | Changelog | [CHANGELOG.md](CHANGELOG.md) | [CHANGELOG.ja.md](docs/CHANGELOG.ja.md) |

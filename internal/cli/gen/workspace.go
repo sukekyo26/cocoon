@@ -100,7 +100,7 @@ func runGenWorkspace(
 
 // resolveWorkspaceName follows the precedence: --name > [code_workspace].name
 // > filepath.Base(projectDir). Explicit values (--name or spec.Name) must
-// pass the same validator as the workspace.toml field — passing "." or
+// pass the same validator as the config file field — passing "." or
 // "/foo" would otherwise produce a broken or escape-the-root output path.
 // Derived values (basename of projectDir) are *sanitized* rather than
 // validated, since a basename like "my-project" is benign but a quirky

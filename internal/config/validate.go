@@ -24,7 +24,7 @@ var (
 	// generated initializeCommand as raw shell snippets (cocoon gen / VS
 	// Code run them with /bin/sh), so anything with shell-special meaning
 	// — $, backticks, ; & | < > ( ) * ? ! [ ] { } ~, quotes, backslashes,
-	// whitespace, newlines — would let a repo-provided workspace.toml
+	// whitespace, newlines — would let a repo-provided config file
 	// inject commands into the host shell. Strict whitelist > best-effort
 	// blacklist.
 	rxHomeFilesSegment = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
@@ -248,9 +248,10 @@ func (w *Workspace) runValidate(a *Accumulator) {
 // validate checks [lockfile].name is a single safe basename. An unset or empty
 // name defaults to DefaultLockFileName (matching [workspace].dir's "empty =
 // default" policy), so only a non-empty value is checked. The charset reuses
-// rxCodeWorkspaceName (no slash, so the lock always lands beside workspace.toml
-// and cannot traverse out); "." / ".." and "workspace.toml" are rejected
-// explicitly — the latter would overwrite the user's own config.
+// rxCodeWorkspaceName (no slash, so the lock always lands beside the config
+// file and cannot traverse out); "." / ".." and either config filename
+// (cocoon.toml / workspace.toml) are rejected explicitly — the latter would
+// overwrite the user's own config.
 func (l *LockFileSpec) validate(a *Accumulator) {
 	if l.Name == nil || *l.Name == "" {
 		return
@@ -261,8 +262,8 @@ func (l *LockFileSpec) validate(a *Accumulator) {
 		a.AddCode("err_field_lockfile_name_charset", nil, "name")
 	case name == "." || name == "..":
 		a.AddCode("err_field_name_dot_dotdot", nil, "name")
-	case name == "workspace.toml":
-		a.AddCode("err_field_lockfile_name_workspace_toml", nil, "name")
+	case name == DefaultConfigFileName || name == LegacyConfigFileName:
+		a.AddCode("err_field_lockfile_name_config", nil, "name")
 	}
 }
 
@@ -272,7 +273,7 @@ func (l *LockFileSpec) validate(a *Accumulator) {
 // internal/generate/codeworkspace. The generator does NOT stat each path
 // (cocoon is a pure generator and a path that does not exist yet on the
 // current host is still a legal entry), so validation here only ensures the
-// workspace.toml can be safely consumed.
+// config file can be safely consumed.
 func (c *CodeWorkspaceSpec) validate(a *Accumulator) {
 	if c.Name != "" {
 		switch {
@@ -614,7 +615,7 @@ func containsWhitespaceOrCtrl(s string) bool {
 //
 // Both the plugin-author-side default (plugin.toml's
 // [install.extra_versions].<key>.default) and the user-side override
-// (workspace.toml's [plugins.options].<id>.<key>) are checked through
+// (the config file's [plugins.options].<id>.<key>) are checked through
 // this helper so the failure surfaces at decode/validate time, not at
 // docker build.
 func UnsafeExtraVersionRune(s string) (bool, rune) {
@@ -841,7 +842,7 @@ func (p *PluginsSpec) validate(a *Accumulator) {
 	// Enable entries (id + optional "=<version>"/"latest" constraint) and the
 	// [plugins.options] table are parsed and validated in materializePlugins
 	// before validate runs; by the time we get here Enable holds clean ids and
-	// checksums live in cocoon.lock, not workspace.toml.
+	// checksums live in cocoon.lock, not the config file.
 	// Sort plugin ids so ValidationError.Error()'s "first error"
 	// summary stays stable across runs (map iteration is randomised).
 	methodIDs := slices.Sorted(maps.Keys(p.Methods))

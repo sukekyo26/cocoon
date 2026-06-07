@@ -8,13 +8,18 @@ import (
 	"path/filepath"
 )
 
-// Discover returns the absolute path to the closest workspace.toml
-// reachable from cwd, walking parent directories until a stop boundary.
+// Discover returns the absolute path to the closest config file reachable
+// from cwd, walking parent directories until a stop boundary. cocoon.toml is
+// preferred; workspace.toml is accepted as a fallback so existing projects
+// keep working without a rename.
 //
-// Search order at each directory:
+// Search order at each directory (closer directories still win over the
+// preferred name in a parent — proximity is the primary key):
 //
-//  1. <dir>/workspace.toml
-//  2. <dir>/.cocoon/workspace.toml
+//  1. <dir>/cocoon.toml
+//  2. <dir>/workspace.toml
+//  3. <dir>/.cocoon/cocoon.toml
+//  4. <dir>/.cocoon/workspace.toml
 //
 // Walking stops at the first of:
 //
@@ -34,20 +39,21 @@ func Discover(cwd string) (string, error) {
 	}
 	home, _ := os.UserHomeDir() //nolint:errcheck // empty home just disables the boundary; not fatal
 
+	rels := []string{
+		DefaultConfigFileName,
+		LegacyConfigFileName,
+		filepath.Join(".cocoon", DefaultConfigFileName),
+		filepath.Join(".cocoon", LegacyConfigFileName),
+	}
 	for dir := abs; ; {
-		path, err := candidateAt(dir, "workspace.toml")
-		if err != nil {
-			return "", err
-		}
-		if path != "" {
-			return path, nil
-		}
-		path, err = candidateAt(dir, filepath.Join(".cocoon", "workspace.toml"))
-		if err != nil {
-			return "", err
-		}
-		if path != "" {
-			return path, nil
+		for _, rel := range rels {
+			path, err := candidateAt(dir, rel)
+			if err != nil {
+				return "", err
+			}
+			if path != "" {
+				return path, nil
+			}
 		}
 		marker, err := hasGitMarker(dir)
 		if err != nil {

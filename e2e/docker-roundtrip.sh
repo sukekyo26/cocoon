@@ -80,7 +80,7 @@ catalog_dir="$(cd "$script_dir/../internal/plugin/catalog" && pwd)"
 
 # Wipe any leftover project dir before init so reruns (local debugging,
 # self-hosted runner with cached workspace) are idempotent — `cocoon
-# init` refuses to overwrite an existing workspace.toml without --force.
+# init` refuses to overwrite an existing cocoon.toml without --force.
 rm -rf e2e/test-project
 mkdir -p e2e/test-project
 cd e2e/test-project
@@ -324,7 +324,7 @@ fi
 # so the `docker compose exec dev` step below targets the right service.
 # Using a different service-name (e.g. "e2e") would silently break exec
 # because `exec <service>` resolves against the compose service id, which
-# mirrors workspace.toml's [container].service_name.
+# mirrors the config file's [container].service_name.
 # --certificates opts the workspace into TLS auto-bake from
 # ~/.cocoon/certs/. Required here because the e2e matrix exercises the
 # cert wiring path end-to-end (docker buildx bake consuming

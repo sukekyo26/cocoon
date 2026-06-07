@@ -1,6 +1,6 @@
 // Command cocoon is the project-aware container workspace generator binary.
 //
-// It reads workspace.toml from the current project and generates Dockerfile,
+// It reads the config file from the current project and generates Dockerfile,
 // docker-compose.yml and devcontainer.json tailored to that project.
 package main
 

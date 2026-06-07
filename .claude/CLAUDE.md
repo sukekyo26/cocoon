@@ -14,12 +14,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `CHANGELOG.md`（英）と `docs/CHANGELOG.ja.md`（日）を同期する。
 
-- **記載する ✓**: `workspace.toml` フィールド / プラグイン仕様（`install.sh`, `plugin.toml`）/ `cocoon` サブコマンド・フラグ / BREAKING / セキュリティ修正。
+- **記載する ✓**: `cocoon.toml` フィールド / プラグイン仕様（`install.sh`, `plugin.toml`）/ `cocoon` サブコマンド・フラグ / BREAKING / セキュリティ修正。
 - **記載しない ✗**: テスト用 DI ヘルパ / `just` レシピ追加 / lint・フォーマット設定 / 内部リファクタ。
 
 ## アーキテクチャ
 
-cocoon は純粋なジェネレータ。`workspace.toml` → `.devcontainer/`（Dockerfile + compose + devcontainer.json + entrypoint + .env + manage.sh）。ライフサイクルは `docker compose` / VS Code Dev Containers に委譲。詳細は [`docs/architecture.md`](../docs/architecture.md)。
+cocoon は純粋なジェネレータ。`cocoon.toml` → `.devcontainer/`（Dockerfile + compose + devcontainer.json + entrypoint + .env + manage.sh）。ライフサイクルは `docker compose` / VS Code Dev Containers に委譲。詳細は [`docs/architecture.md`](../docs/architecture.md)。
 
 **`cocoon gen` パイプライン**: `internal/config/discovery.go`（cwd → `.cocoon/` → 親、`.git` / `$HOME` で停止）→ `internal/plugin/layered.go`（3 層オーバーレイ）→ `internal/generate/{dockerfile,compose,devcontainerjson,envfile,shellrc}` がインメモリ描画 → `internal/cli/generate/WriteArtifacts` がアトミック書き込み。
 

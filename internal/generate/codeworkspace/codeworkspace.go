@@ -1,5 +1,5 @@
 // Package codeworkspace generates a VS Code .code-workspace JSON file from
-// the [code_workspace] section of workspace.toml.
+// the [code_workspace] section of the config file.
 //
 // The output is written by callers at the project root as
 // <name>.code-workspace, not under .devcontainer/, because .code-workspace
@@ -11,7 +11,7 @@
 // .code-workspace file is actually written to). When OutputDir is empty
 // the resolver falls back to ctx.ProjectDir, which matches the default
 // `cocoon gen workspace` invocation where the file lands next to
-// workspace.toml. VS Code resolves the result from wherever the
+// the config file. VS Code resolves the result from wherever the
 // .code-workspace file lives, so anchoring on OutputDir keeps the paths
 // correct even when callers pass `--output` to write the file elsewhere.
 package codeworkspace
@@ -37,7 +37,7 @@ var (
 	// output directory (the dir the .code-workspace file is written to).
 	ErrInvalidFolderPath = errors.New("code_workspace: invalid folder path")
 
-	// ErrNoFolders signals that neither workspace.toml nor the caller
+	// ErrNoFolders signals that neither the config file nor the caller
 	// (CLI flag) provided any folders. Generating an empty folders[] would
 	// produce a .code-workspace that VS Code rejects, so we fail fast.
 	ErrNoFolders = errors.New("code_workspace: no folders configured")
@@ -57,12 +57,12 @@ var (
 )
 
 // Options controls Generate. ExtraFolders is appended after the
-// workspace.toml folders so CLI --folder flags supplement the declarative
+// the config file folders so CLI --folder flags supplement the declarative
 // config. HomeDir is injected for testability — production callers pass
 // os.UserHomeDir(). OutputDir is the directory the .code-workspace file
 // will live in; folder paths are relativized against it so VS Code can
 // resolve them from that location. When empty it defaults to
-// ctx.ProjectDir (the common "next to workspace.toml" case).
+// ctx.ProjectDir (the common "next to the config file" case).
 type Options struct {
 	ExtraFolders []config.CodeWorkspaceFolder
 	HomeDir      string
@@ -130,7 +130,7 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 	return indented.String() + "\n", nil
 }
 
-// collectFolders concatenates the workspace.toml folders with any
+// collectFolders concatenates the config file folders with any
 // ExtraFolders supplied by the caller, preserving declaration order. A nil
 // spec is treated as "no folders configured".
 func collectFolders(spec *config.CodeWorkspaceSpec, extra []config.CodeWorkspaceFolder) []config.CodeWorkspaceFolder {
@@ -148,7 +148,7 @@ func collectFolders(spec *config.CodeWorkspaceSpec, extra []config.CodeWorkspace
 }
 
 // resolveFolder expands ~, joins relative paths against projectDir (so
-// "../sibling" stays semantically tied to where workspace.toml lives), then
+// "../sibling" stays semantically tied to where the config file lives), then
 // relativizes against outputDir (where the .code-workspace file lands).
 // The two anchors differ only when the caller passes a custom output
 // directory; in the default flow they're the same path. The returned

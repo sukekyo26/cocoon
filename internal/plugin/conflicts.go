@@ -39,7 +39,7 @@ func CheckConflicts(plugins map[string]*Plugin) error {
 			}
 			return fmt.Errorf(
 				"%w: '%s' (%s) conflicts with '%s' (%s); "+
-					"disable one of them in workspace.toml [plugins].enable",
+					"disable one of them in your config file's [plugins].enable",
 				ErrConflict, nameA, id, nameB, conflictID,
 			)
 		}

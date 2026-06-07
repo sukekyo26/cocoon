@@ -1,5 +1,5 @@
 // Package envfile renders the .env file that docker compose loads alongside
-// .devcontainer/docker-compose.yml. Every value derives from workspace.toml
+// .devcontainer/docker-compose.yml. Every value derives from the config file
 // or the project directory name, so the generated .env is host-independent
 // and safe to commit and share across a team. Host identity (UID/GID and the
 // docker socket group) is resolved at container start by docker-entrypoint.sh,
@@ -18,7 +18,7 @@ import (
 // ErrNilContext is returned when Generate is called with a nil context.
 var ErrNilContext = errors.New("envfile: nil workspace context")
 
-// Generate renders the .env content. Every key derives from workspace.toml
+// Generate renders the .env content. Every key derives from the config file
 // or the project directory name; the result carries no host-specific value,
 // so the file is safe to commit alongside the rest of .devcontainer/.
 func Generate(ctx *generate.WorkspaceContext) (string, error) {

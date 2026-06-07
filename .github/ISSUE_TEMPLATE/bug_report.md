@@ -35,10 +35,10 @@ labels: ["bug"]
 - Locale: <!-- `echo $LANG` -->
 
 ## Related files
-<!-- Pasting workspace.toml plus the relevant generated .devcontainer/* (sanitized of any secrets) speeds up triage. -->
+<!-- Pasting cocoon.toml plus the relevant generated .devcontainer/* (sanitized of any secrets) speeds up triage. -->
 
 ```toml
-(workspace.toml content)
+(cocoon.toml content)
 ```
 
 ## Additional context

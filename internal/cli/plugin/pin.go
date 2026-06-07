@@ -104,7 +104,7 @@ func isVersionStart(b byte) bool {
 	return (b >= '0' && b <= '9') || (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || b == '_'
 }
 
-// runPinWrite discovers workspace.toml and upserts both the constraint line
+// runPinWrite discovers the config file and upserts both the constraint line
 // (always) and the method line (when method != "") in a single
 // read-modify-write cycle via plugin.UpsertPinAndMethod. The single-write
 // path means a transient I/O failure cannot persist the pin without the
@@ -136,7 +136,7 @@ func runPinWrite(stdout, stderr io.Writer, cat *i18n.Catalog, id, spec, method s
 }
 
 // renderPinSnippet returns the stdout block the user pastes into
-// workspace.toml when --write is absent. Empty method emits the enable-array
+// the config file when --write is absent. Empty method emits the enable-array
 // entry alone; a non-empty method appends a [plugins.methods] snippet so the
 // user sees both halves of the pick.
 func renderPinSnippet(cat *i18n.Catalog, id, spec, method string) string {

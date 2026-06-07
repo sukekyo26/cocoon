@@ -1,7 +1,8 @@
 cocoon gen — generate .devcontainer/{Dockerfile, docker-compose.yml, devcontainer.json}
 
-Discovers workspace.toml from the current directory (walking parent
-directories until a .git boundary or $HOME), assembles the layered
+Discovers cocoon.toml (falling back to workspace.toml) from the current
+directory (walking parent directories until a .git boundary or $HOME),
+assembles the layered
 plugin catalog (embedded < user < project), and writes the generated
 artifacts under .devcontainer/. Plugin install scripts are inlined into
 the generated Dockerfile, so the build needs no external context
@@ -19,12 +20,12 @@ Usage:
 
 Available Commands:
   help        Show usage for this command
-  workspace   Generate <name>.code-workspace at the project root from workspace.toml
+  workspace   Generate <name>.code-workspace at the project root from your config file
 
 Flags:
   -h, --help               help for gen
       --locked             fail if any plugin uses "latest" without a lock-file entry (reproducible CI)
-      --output string      project root to write generated artifacts under (default: directory of workspace.toml)
-      --workspace string   path to workspace.toml (default: discovered from cwd)
+      --output string      project root to write generated artifacts under (default: the config file's directory)
+      --workspace string   path to the config file (default: discovered from cwd)
 
 Use "cocoon gen [command] --help" for more information about a command.

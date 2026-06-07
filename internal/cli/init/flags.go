@@ -46,7 +46,7 @@ type initFlags struct {
 	Force          bool
 }
 
-// initAnswers is what gets written into workspace.toml. The *Set companions
+// initAnswers is what gets written into cocoon.toml. The *Set companions
 // distinguish "not yet provided" from a zero value the user actively chose
 // (e.g. devcontainer = false), so the prompt builder doesn't skip groups
 // whose value happens to look empty.

@@ -214,27 +214,27 @@ func TestRunInit_InteractiveSelectOrInput(t *testing.T) {
 				t.Fatalf("cocoon init (interactive): %v\n--- prompts ---\n%s", err, out)
 			}
 
-			target := filepath.Join(work, "workspace.toml")
+			target := filepath.Join(work, "cocoon.toml")
 			info, statErr := os.Stat(target)
 			if statErr != nil {
-				t.Fatalf("stat workspace.toml: %v", statErr)
+				t.Fatalf("stat cocoon.toml: %v", statErr)
 			}
 			if perm := info.Mode().Perm(); perm != 0o644 {
-				t.Errorf("workspace.toml mode = %#o, want 0644", perm)
+				t.Errorf("cocoon.toml mode = %#o, want 0644", perm)
 			}
 			body, readErr := os.ReadFile(target)
 			if readErr != nil {
-				t.Fatalf("read workspace.toml: %v", readErr)
+				t.Fatalf("read cocoon.toml: %v", readErr)
 			}
 			got := string(body)
 			for _, want := range tc.wantContains {
 				if !strings.Contains(got, want) {
-					t.Errorf("workspace.toml missing %q\n--- got ---\n%s", want, got)
+					t.Errorf("cocoon.toml missing %q\n--- got ---\n%s", want, got)
 				}
 			}
 			for _, notWant := range tc.wantNotContains {
 				if strings.Contains(got, notWant) {
-					t.Errorf("workspace.toml unexpectedly contains %q\n--- got ---\n%s", notWant, got)
+					t.Errorf("cocoon.toml unexpectedly contains %q\n--- got ---\n%s", notWant, got)
 				}
 			}
 			for _, want := range tc.wantStdout {
