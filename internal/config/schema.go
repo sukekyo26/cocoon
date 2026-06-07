@@ -188,7 +188,7 @@ func (c *ContainerSpec) DockerSocketEnabled() bool {
 //
 // Every image is apt-based so the cocoon plugin catalog works the same
 // way across all of them. ubuntu pulls its own archive (archive.ubuntu.com);
-// the other six are Debian (bookworm) variants and pull from
+// the other six are Debian-based variants and pull from
 // deb.debian.org. apt-mirror rewriting keys off this distinction via the
 // ImageOSFamily classification — see aptMirrorOriginHosts in
 // internal/generate/dockerfile/dockerfile.go.
@@ -218,8 +218,7 @@ var SupportedShells = []string{"bash", "zsh", "fish"}
 var SupportedImageVersions = map[string][]string{
 	"debian": {"12", "13"}, // 12 (bookworm) is the cocoon default base image; 13 (trixie) selectable.
 	"ubuntu": {"26.04", "24.04", "22.04"},
-	// Language images lead with the bookworm (default) tag and offer a trixie
-	// variant; node also keeps 26 (current) and 24 (LTS).
+	// node lists both the current and the LTS major line, hence four entries.
 	"node":          {"26-bookworm-slim", "26-trixie-slim", "24-bookworm-slim", "24-trixie-slim"},
 	"python":        {"3.14-slim-bookworm", "3.14-slim-trixie"},
 	"golang":        {"1.26-bookworm", "1.26-trixie"},

@@ -95,7 +95,7 @@ Image identity. `service_name`, `username`, `image`, `image_version` are all req
 | `image` | `image_version` (suggestions) | FROM line emitted |
 |---|---|---|
 | `ubuntu` | `26.04`, `24.04`, `22.04` | `FROM ubuntu:<v>` |
-| `debian` | `13`, `12` | `FROM debian:<v>` |
+| `debian` | `12`, `13` | `FROM debian:<v>` |
 | `node` | `26-bookworm-slim`, `26-trixie-slim`, `24-bookworm-slim`, `24-trixie-slim` | `FROM node:<v>` |
 | `python` | `3.14-slim-bookworm`, `3.14-slim-trixie` | `FROM python:<v>` |
 | `golang` | `1.26-bookworm`, `1.26-trixie` | `FROM golang:<v>` |
