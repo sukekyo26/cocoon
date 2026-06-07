@@ -27,7 +27,7 @@ cocoon gen    # .devcontainer/ をフルで再生成
 docker compose -f .devcontainer/docker-compose.yml up -d
 ```
 
-真実の源は 30 行ほどの `cocoon.toml` です。`cocoon gen` はそこから `.devcontainer/` 全体を決定的に再生成するので、設定の "魔法" がリポジトリに溜まらず、すべての変更がジェネレータの再実行になります。生成物はホスト非依存なので、`cocoon.toml` だけをコミットしてホストごとに再生成してもよいですし、`.devcontainer/` を一度コミットしてチーム全員がそのままビルドしてもかまいません。
+真実の源は 30 行ほどの `cocoon.toml` です。`cocoon gen` はそこから `.devcontainer/` 全体を決定的に再生成します。設定を変えるときは `.devcontainer/` を手で編集せず、`cocoon.toml` を直して `cocoon gen` を再実行するだけです。生成物はホスト非依存なので、`cocoon.toml` だけをコミットしてホストごとに再生成してもよいですし、`.devcontainer/` を一度コミットしてチーム全員がそのままビルドしてもかまいません。
 
 ## 何が生成されるか
 
