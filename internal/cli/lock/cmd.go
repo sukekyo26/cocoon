@@ -78,7 +78,7 @@ func runLock(ctx context.Context, stdout, stderr io.Writer, opts lockOptions) er
 		// A skip is a non-reproducible degradation, not a success — use neutral
 		// Info (stdout, no green check). The reproducibility warning is left to
 		// gen's UnlockedLatestPlugins so it is not duplicated here.
-		log.Info(cat.Msg("lock_skipped_sourceless_latest", id))
+		log.Info(cat.Msg("lock_skipped_sourceless_latest", id, id))
 	}
 	existing, err := loadExistingLock(lockPath, opts.check, log, cat)
 	if err != nil {

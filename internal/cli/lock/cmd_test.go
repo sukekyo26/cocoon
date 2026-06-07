@@ -305,7 +305,8 @@ func TestLock_SourcelessLatestIsSkipped(t *testing.T) {
 
 	out, err := runLockCmd(t)
 	require.NoError(t, err, "out=%s", out)
-	require.Contains(t, out, "not lockable")
+	require.Contains(t, out, "cannot be locked")
+	require.Contains(t, out, "nosrc=<version>") // actionable pin hint
 	l, lerr := lockfile.Load(lockPath)
 	require.NoError(t, lerr)
 	_, ok := l.Find("nosrc")
