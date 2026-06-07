@@ -225,7 +225,7 @@ The chosen script receives every standard env var (`$PIN`,
 
 **Multi-method plugins** should fail-fast when the env is missing
 (`: "${COCOON_INSTALL_METHOD:?missing}"`) and reject mismatched values
-so a stale the config file reference is caught before the script pulls
+so a stale config file reference is caught before the script pulls
 down the wrong artifact after a rename. **Single-method plugins** can
 skip this check — the loader's `[install.methods]` enforcement
 guarantees `$COCOON_INSTALL_METHOD` is set, and there is no sibling

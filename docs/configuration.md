@@ -3,7 +3,7 @@
 > [!WARNING]
 > cocoon is in v0.x (alpha). By using it, please understand and accept that the config file schema, the CLI flags, and the plugin contracts may change before 1.0, and that breaking changes can land in any release. See the [CHANGELOG](../CHANGELOG.md) and the README's "Project status" section.
 
-`cocoon.toml` is the single source of truth that drives `cocoon gen`. This page documents every section and field accepted by the schema.
+`cocoon.toml` is the single source of truth that drives `cocoon gen` (a legacy `workspace.toml` is accepted too — see [Discovery order](#discovery-order) below). This page documents every section and field accepted by the schema.
 
 `cocoon init` writes a fresh file with sensible defaults plus commented-out templates for opt-in features. For most projects, editing the generated file is enough; this reference covers every accepted field for when you need it.
 
@@ -180,7 +180,7 @@ The interactive prompt previews the exact keys / values before asking, and the g
 
 `ubuntu` and `debian` do not surface the prompt — they have no language runtime to fix up. `rust` uses `CARGO_INSTALL_ROOT` rather than overriding `CARGO_HOME` so rustup state and `cargo build`'s registry cache continue to live under the image-default `/usr/local/cargo`; only `cargo install`'s output is redirected under `$HOME`.
 
-> **Inline `env = { ... }` and `[container.shell.env]` cannot coexist.** TOML treats them as conflicting definitions of the same `env` key under `[container.shell]` and the parser will reject the file at `cocoon gen` time (`toml: key env should be a table, not a value`). Once the auto-injected subsection is present, append further env keys *inside* that subsection rather than uncommenting the inline-form hint above. The generated the config file carries the same warning in two places (the `[container.shell]` env example block and the auto-comment above the auto-injected subsection) so the constraint stays visible whichever block you edit first.
+> **Inline `env = { ... }` and `[container.shell.env]` cannot coexist.** TOML treats them as conflicting definitions of the same `env` key under `[container.shell]` and the parser will reject the file at `cocoon gen` time (`toml: key env should be a table, not a value`). Once the auto-injected subsection is present, append further env keys *inside* that subsection rather than uncommenting the inline-form hint above. The generated config file carries the same warning in two places (the `[container.shell]` env example block and the auto-comment above the auto-injected subsection) so the constraint stays visible whichever block you edit first.
 
 Enabling the matching cocoon plugin (`node` / `go` / `rust` / `deno`) for the same image is already rejected as a conflict, so the auto-injection only ever pairs with images you are using *without* the cocoon plugin overlay.
 
@@ -604,7 +604,7 @@ team; opted-out workspaces share cert-free artifacts.
 
 ## `[home_files]`
 
-Files persisted via per-file bind mounts. Each path is relative to `~/` (no leading `/`, no `~`, no `..`). Per-segment characters are restricted to `[A-Za-z0-9._-]` because the path is interpolated verbatim into the generated `initializeCommand` shell snippet — anything with shell-special meaning (`$`, backticks, `;`, `&`, `|`, `<`, `>`, `*`, `?`, `!`, quotes, backslashes, whitespace) is rejected so a repo-provided the config file cannot inject commands into the host shell. Use this to share host-side configs like `~/.gitconfig` into the container.
+Files persisted via per-file bind mounts. Each path is relative to `~/` (no leading `/`, no `~`, no `..`). Per-segment characters are restricted to `[A-Za-z0-9._-]` because the path is interpolated verbatim into the generated `initializeCommand` shell snippet — anything with shell-special meaning (`$`, backticks, `;`, `&`, `|`, `<`, `>`, `*`, `?`, `!`, quotes, backslashes, whitespace) is rejected so a repo-provided config file cannot inject commands into the host shell. Use this to share host-side configs like `~/.gitconfig` into the container.
 
 ```toml
 [home_files]

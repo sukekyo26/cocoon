@@ -46,7 +46,7 @@ Generate `cocoon.toml` in the current directory.
 | `--sudo <mode>` | string | In-container sudo policy: `nopasswd` (default, passwordless), `password` (requires `SUDO_PASSWORD` from `.devcontainer/.env.local`, applied via a build secret), or `none` (`no_new_privileges = true`, disables sudo). Interactive `password` prompts for the password and writes `.env.local` (0600). |
 | `--apt-categories <ids>` | string | Comma-separated apt category IDs (skips the prompt). |
 | `--plugins <ids>` | string | Comma-separated plugin IDs to enable. |
-| `--plugin-versions <id>=<ref>,...` | string | Comma-separated `<id>=<ref>` pins for `version_capable` plugins. Each `<id>` must also appear in `--plugins`, must be `version_capable`, and may not repeat. The version is written inline in the generated the config file's `[plugins].enable` array (e.g. `--plugin-versions go=1.23.4` → the element `"go=1.23.4"`); no checksums. |
+| `--plugin-versions <id>=<ref>,...` | string | Comma-separated `<id>=<ref>` pins for `version_capable` plugins. Each `<id>` must also appear in `--plugins`, must be `version_capable`, and may not repeat. The version is written inline in the generated config file's `[plugins].enable` array (e.g. `--plugin-versions go=1.23.4` → the element `"go=1.23.4"`); no checksums. |
 | `--alias-bundles <ids>` | string | Comma-separated shell-alias bundle IDs (e.g. `git,ls`). |
 | `--ports <values>` | string | Comma-separated docker-compose short-form port mappings (e.g. `3000:3000,5432:5432`). Accepts every form documented for `[ports].forward`: container-only `3000`, ranges `3000-3005:3000-3005`, IPv4/IPv6 binds `127.0.0.1:8001:8001` / `[::1]:80:80`, and protocols `6060:6060/udp`. Skips the prompt. Empty / omitted = no active `[ports]` block (the commented-out template stays so the section is discoverable). |
 | `--force` | bool | Overwrite an existing `cocoon.toml`. |
@@ -161,7 +161,7 @@ A generated, committed TOML file — machine-owned, so do **not** hand-edit it; 
 | Field | Meaning |
 |---|---|
 | `id` | Plugin id. |
-| `requested` | The the config file constraint that produced the entry (`"latest"` or `"=x.y.z"`). |
+| `requested` | The config file constraint that produced the entry (`"latest"` or `"=x.y.z"`). |
 | `version` | The concrete resolved version. |
 | `checksum_amd64` / `checksum_arm64` | Per-arch SHA256 of the downloaded artifact. Omitted for plugins that publish no fetchable per-arch hash (e.g. `verify = "pgp"` or `| bash` installers). |
 | `extra` | Frozen subcomponent selectors, when the plugin has them (e.g. android-sdk's `api_level`). |
