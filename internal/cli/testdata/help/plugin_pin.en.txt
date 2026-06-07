@@ -22,4 +22,4 @@ Usage:
 Flags:
   -h, --help            help for pin
       --method string   install method name; only meaningful for plugins that declare [install.methods]. When set, the command pins both [plugins.methods] and the [plugins].enable entry in a single cocoon.toml read-write. When omitted, only the enable entry is updated (the existing [plugins.methods] entry — or the plugin's default_method — stays in effect).
-      --write           upsert the enable entry in cocoon.toml (auto-discovered from cwd)
+      --write           upsert the enable entry in the config file (auto-discovered from cwd)

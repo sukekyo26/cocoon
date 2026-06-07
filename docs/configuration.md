@@ -411,11 +411,11 @@ each flows into the Dockerfile RUN-prefix `KEY="..."` env pair. See the
 ## `[lockfile]`
 
 Optional. Overrides the lock file's name. `cocoon lock` writes it and
-`cocoon gen` reads it, both alongside `cocoon.toml`.
+`cocoon gen` reads it, both alongside the discovered config file.
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `name` | string | `cocoon.lock` | Lock file basename. Must be a single filename of `[A-Za-z0-9._-]` — no `/` (so the lock always lands next to `cocoon.toml`), no `.` / `..`, and not `cocoon.toml` (it would overwrite your config). |
+| `name` | string | `cocoon.lock` | Lock file basename. Must be a single filename of `[A-Za-z0-9._-]` — no `/` (so the lock always lands next to the config file), no `.` / `..`, and not `cocoon.toml` or `workspace.toml` (either would overwrite your config). |
 
 ```toml
 [lockfile]

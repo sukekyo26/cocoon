@@ -15,7 +15,7 @@ import (
 // clihelpers.ErrUsage and genuine system failures to clihelpers.ErrFailure.
 var ErrWorkspaceNotFound = errors.New("cocoon.toml not found in tree")
 
-// resolveLayered drops the project layer silently when no cocoon.toml
+// resolveLayered drops the project layer silently when no config file
 // is discoverable (read-only views like list/show still work from
 // embedded + user alone).
 func resolveLayered() (*plugin.LayeredFS, error) {
@@ -40,7 +40,7 @@ func resolveLayered() (*plugin.LayeredFS, error) {
 }
 
 // projectPluginsDir returns ErrWorkspaceNotFound when discovery walks all
-// the way up without finding cocoon.toml (caller is outside a cocoon
+// the way up without finding the config file (caller is outside a cocoon
 // project), and a wrapped error for genuine system failures.
 func projectPluginsDir() (string, error) {
 	cwd, err := os.Getwd()

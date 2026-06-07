@@ -25,5 +25,5 @@ Flags:
       --folder stringArray   extra folder, appended after [code_workspace].folders; pass "<path>=<name>" to override the auto-derived name
   -h, --help                 help for workspace
       --name string          output file basename without extension (default: [code_workspace].name or project directory basename)
-      --output string        project root to write under (default: directory of cocoon.toml)
-      --workspace string     path to cocoon.toml (default: discovered from cwd)
+      --output string        project root to write under (default: the config file's directory)
+      --workspace string     path to the config file (default: discovered from cwd)

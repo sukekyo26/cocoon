@@ -24,7 +24,7 @@ var (
 	// generated initializeCommand as raw shell snippets (cocoon gen / VS
 	// Code run them with /bin/sh), so anything with shell-special meaning
 	// — $, backticks, ; & | < > ( ) * ? ! [ ] { } ~, quotes, backslashes,
-	// whitespace, newlines — would let a repo-provided cocoon.toml
+	// whitespace, newlines — would let a repo-provided config file
 	// inject commands into the host shell. Strict whitelist > best-effort
 	// blacklist.
 	rxHomeFilesSegment = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
@@ -273,7 +273,7 @@ func (l *LockFileSpec) validate(a *Accumulator) {
 // internal/generate/codeworkspace. The generator does NOT stat each path
 // (cocoon is a pure generator and a path that does not exist yet on the
 // current host is still a legal entry), so validation here only ensures the
-// cocoon.toml can be safely consumed.
+// config file can be safely consumed.
 func (c *CodeWorkspaceSpec) validate(a *Accumulator) {
 	if c.Name != "" {
 		switch {
@@ -615,7 +615,7 @@ func containsWhitespaceOrCtrl(s string) bool {
 //
 // Both the plugin-author-side default (plugin.toml's
 // [install.extra_versions].<key>.default) and the user-side override
-// (cocoon.toml's [plugins.options].<id>.<key>) are checked through
+// (the config file's [plugins.options].<id>.<key>) are checked through
 // this helper so the failure surfaces at decode/validate time, not at
 // docker build.
 func UnsafeExtraVersionRune(s string) (bool, rune) {
@@ -842,7 +842,7 @@ func (p *PluginsSpec) validate(a *Accumulator) {
 	// Enable entries (id + optional "=<version>"/"latest" constraint) and the
 	// [plugins.options] table are parsed and validated in materializePlugins
 	// before validate runs; by the time we get here Enable holds clean ids and
-	// checksums live in cocoon.lock, not cocoon.toml.
+	// checksums live in cocoon.lock, not the config file.
 	// Sort plugin ids so ValidationError.Error()'s "first error"
 	// summary stays stable across runs (map iteration is randomised).
 	methodIDs := slices.Sorted(maps.Keys(p.Methods))

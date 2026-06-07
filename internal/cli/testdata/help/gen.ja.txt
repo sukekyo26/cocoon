@@ -24,7 +24,7 @@ cocoon gen — .devcontainer/{Dockerfile, docker-compose.yml, devcontainer.json}
 フラグ:
   -h, --help               gen のヘルプを表示
       --locked             lock ファイルのエントリ無しで "latest" を使うプラグインがあれば失敗（再現性 CI 用）
-      --output string      生成物の出力先プロジェクトルート（既定: cocoon.toml のあるディレクトリ）
-      --workspace string   cocoon.toml のパス（既定: cwd から探索）
+      --output string      生成物の出力先プロジェクトルート（既定: 設定ファイルのあるディレクトリ）
+      --workspace string   設定ファイルのパス（既定: cwd から探索）
 
 各サブコマンドの詳細は "cocoon gen [command] --help" で確認できます。

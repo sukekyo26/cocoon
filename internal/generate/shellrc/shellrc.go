@@ -1,5 +1,5 @@
 // Package shellrc renders the Dockerfile RUN block that injects the
-// [container.shell] env/aliases from cocoon.toml plus a bootstrap line
+// [container.shell] env/aliases from the config file plus a bootstrap line
 // that sources the user's persistent shellrc (~/.cocoon/.shellrc, or
 // ~/.cocoon/.shellrc.fish for fish) from the cocoon named volume.
 //

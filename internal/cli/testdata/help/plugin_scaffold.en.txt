@@ -21,7 +21,7 @@ Flags:
   -h, --help                 help for scaffold
       --name string          display name (e.g. "GitHub CLI")
       --non-interactive      skip interactive prompts; require all fields above
-      --plugins-dir string   output directory (default: <workspace>/.cocoon/plugins, auto-discovered from cocoon.toml)
+      --plugins-dir string   output directory (default: <workspace>/.cocoon/plugins, auto-discovered from the config file)
       --requires-root        install script runs as root
       --template string      install method category: installer | binary | apt | archive (catalog-canonical names — see docs/plugins.md) (default "installer")
       --url string           upstream URL (e.g. https://github.com/owner/repo)

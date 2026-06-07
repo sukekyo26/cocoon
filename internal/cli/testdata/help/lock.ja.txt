@@ -12,7 +12,7 @@ exact バージョンへの pin が必要です。再実行はべき等で、既
   cocoon lock [flags]
 
 フラグ:
-      --check              解決せずに lock ファイルが cocoon.toml と一致するか検証（ドリフト時は非ゼロ終了・CI 用）
+      --check              解決せずに lock ファイルが設定ファイルと一致するか検証（ドリフト時は非ゼロ終了・CI 用）
   -h, --help               lock のヘルプを表示
       --upgrade            既にロック済みでも "latest" 制約を再解決（exact pin は不変）
-      --workspace string   cocoon.toml のパス（既定: cwd から探索）
+      --workspace string   設定ファイルのパス（既定: cwd から探索）

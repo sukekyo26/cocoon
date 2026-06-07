@@ -14,7 +14,7 @@ Usage:
   cocoon lock [flags]
 
 Flags:
-      --check              verify the lock file matches cocoon.toml without resolving (non-zero exit on drift; for CI)
+      --check              verify the lock file matches the config file without resolving (non-zero exit on drift; for CI)
   -h, --help               help for lock
       --upgrade            re-resolve "latest" constraints even if already locked (exact pins are unchanged)
-      --workspace string   path to cocoon.toml (default: discovered from cwd)
+      --workspace string   path to the config file (default: discovered from cwd)

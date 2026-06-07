@@ -58,7 +58,7 @@ func (e *ValidationError) Error() string {
 }
 
 // Localize renders the first-failure summary in cat's language, satisfying
-// i18n.Localizer so the CLI boundary localizes cocoon.toml validation errors.
+// i18n.Localizer so the CLI boundary localizes the config file validation errors.
 func (e *ValidationError) Localize(cat *i18n.Catalog) string {
 	if len(e.Errors) == 0 {
 		return cat.Msg("err_validation_failed", e.Path)

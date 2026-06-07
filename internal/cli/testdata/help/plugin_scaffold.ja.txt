@@ -21,7 +21,7 @@ apt (apt repo / .deb) / archive (複数ファイル展開) のいずれかです
   -h, --help                 scaffold のヘルプを表示
       --name string          表示名（例: "GitHub CLI"）
       --non-interactive      対話プロンプトをスキップ（上記フィールドの指定が必須）
-      --plugins-dir string   出力先ディレクトリ（既定: cocoon.toml から自動探索した <workspace>/.cocoon/plugins）
+      --plugins-dir string   出力先ディレクトリ（既定: 設定ファイルから自動探索した <workspace>/.cocoon/plugins）
       --requires-root        install スクリプトを root で実行
       --template string      install メソッドカテゴリ: installer | binary | apt | archive（カタログ正規名 — docs/plugins.md 参照） (default "installer")
       --url string           上流の URL（例: https://github.com/owner/repo）

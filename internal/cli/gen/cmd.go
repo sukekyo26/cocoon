@@ -1,6 +1,6 @@
 // Package gencli implements `cocoon gen`, the central generator command.
 //
-// `cocoon gen` discovers cocoon.toml from the current directory (or
+// `cocoon gen` discovers the config file from the current directory (or
 // an explicit --workspace path), assembles the layered plugin catalog
 // (embedded < user < project), and writes Dockerfile,
 // docker-compose.yml, and (when [workspace].devcontainer is true)
@@ -65,9 +65,9 @@ func NewCommand(stdout, stderr io.Writer) *cobra.Command {
 	return cmd
 }
 
-// loadGenContext resolves cocoon.toml from workspaceFlag (falling back
+// loadGenContext resolves the config file from workspaceFlag (falling back
 // to discovery from cwd), determines the output directory (defaulting to
-// the cocoon.toml directory), assembles the layered plugin FS
+// the config file directory), assembles the layered plugin FS
 // (embedded < user < project), and returns a loaded WorkspaceContext.
 // Shared by `cocoon gen` and `cocoon gen workspace` so the discovery
 // rules stay in lockstep.

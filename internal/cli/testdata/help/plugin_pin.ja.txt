@@ -21,4 +21,4 @@ enable エントリと `<id> = "<method>"` 行（[plugins.methods] 向け）の
 フラグ:
   -h, --help            pin のヘルプを表示
       --method string   install メソッド名。[install.methods] を宣言したプラグインのみ意味を持ちます。指定すると単一の cocoon.toml 読み書きで [plugins.methods] と [plugins].enable エントリの両方を pin します。省略時は enable エントリのみ更新されます （既存の [plugins.methods] エントリ、またはプラグインの default_method が引き続き有効）。
-      --write           cocoon.toml の enable エントリを upsert（cwd から自動探索）
+      --write           設定ファイルの enable エントリを upsert（cwd から自動探索）

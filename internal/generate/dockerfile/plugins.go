@@ -320,7 +320,7 @@ func renderEnvBlock(env map[string]string, pluginsFS fs.FS, id string) (string, 
 
 // collectAllUserDirs returns the dirs the user-dirs mkdir block must own:
 // plugin [install].volumes (under /home/${USERNAME}/...) plus `extra`
-// (cocoon.toml [volumes] targets, which can point anywhere). Order
+// (config-file [volumes] targets, which can point anywhere). Order
 // follows `enabled`. Missing plugin entries are skipped (warned elsewhere).
 func collectAllUserDirs(plugins map[string]*plugin.Plugin, enabled, extra []string) []string {
 	out := make([]string, 0)
@@ -549,7 +549,7 @@ func buildInstallEnvPairs(
 }
 
 // appendExtraVersionPairs adds one env pair per [install.extra_versions]
-// entry, with the cocoon.toml override (if any) taking precedence
+// entry, with the config file override (if any) taking precedence
 // over the plugin.toml default. Keys are sorted so the env order is
 // stable across builds (Go map iteration is randomised, which would
 // otherwise drift the generated Dockerfile snapshot).

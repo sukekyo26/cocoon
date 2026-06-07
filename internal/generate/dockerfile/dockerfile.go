@@ -398,7 +398,7 @@ RUN --mount=type=secret,id=%[3]s \
 	)
 }
 
-// warnDuplicateAptExtras flags packages listed in cocoon.toml [apt]
+// warnDuplicateAptExtras flags packages listed in config-file [apt]
 // that cocoon already installs as a MinimalBasePackage. A nil warnings
 // sink silently drops the diagnostics, matching the rest of Generate.
 func warnDuplicateAptExtras(extras []string, basePkgNames map[string]struct{}, warnings *warn.Sink) {
