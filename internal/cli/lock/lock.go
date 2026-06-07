@@ -2,7 +2,6 @@ package lockcli
 
 import (
 	"context"
-	"errors"
 	"maps"
 
 	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
@@ -21,10 +20,15 @@ type pluginSpec struct {
 	override  config.PluginVersionOverride
 }
 
-// requestedSpecs returns the enabled version_capable plugins in enable order,
-// each with its requested constraint ("latest" when the plugin is unpinned).
-func requestedSpecs(wctx *generate.WorkspaceContext) []pluginSpec {
-	var out []pluginSpec
+// requestedSpecs returns the enabled version_capable plugins to lock, in enable
+// order, each with its requested constraint ("latest" when the plugin is
+// unpinned). A plugin with no [version.source] cannot resolve "latest" to a
+// reproducible version, so an unpinned (latest) one is returned in skipped
+// rather than out: `cocoon lock` records no entry for it and leaves it to
+// `cocoon gen`, which installs the latest at build time non-reproducibly (warned
+// by WorkspaceContext.UnlockedLatestPlugins). An exact-pinned sourceless plugin
+// is still locked — its version is reproducible without a source.
+func requestedSpecs(wctx *generate.WorkspaceContext) (out []pluginSpec, skipped []string) {
 	for _, id := range wctx.WS.Plugins.Enable {
 		p, ok := wctx.Plugins[id]
 		if !ok || !p.Version.VersionCapable {
@@ -35,9 +39,13 @@ func requestedSpecs(wctx *generate.WorkspaceContext) []pluginSpec {
 		if ov.Spec != "" {
 			spec = ov.Spec
 		}
+		if p.Version.Source == nil && spec == config.VersionSpecLatest {
+			skipped = append(skipped, id)
+			continue
+		}
 		out = append(out, pluginSpec{id: id, requested: spec, override: ov})
 	}
-	return out
+	return out, skipped
 }
 
 func specHashInput(specs []pluginSpec) map[string]string {
@@ -116,9 +124,7 @@ func buildLock(
 			Arches:   []string{"amd64", "arm64"},
 		})
 		if err != nil {
-			if errors.Is(err, resolve.ErrLatestUnsupported) {
-				return nil, clihelpers.UsageErr("err_lock_latest_unsupported", s.id, s.id)
-			}
+			// Sourceless "latest" never reaches here: requestedSpecs skips it.
 			return nil, clihelpers.FailureWrap(err, "")
 		}
 		entries = append(entries, toLockPlugin(s, res))

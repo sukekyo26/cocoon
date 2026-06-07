@@ -6,6 +6,16 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+### 変更
+
+- `[version.source]` を持たない `version_capable` プラグイン（`aws-cli` /
+  `android-sdk` / `flutter` / `zig`）を `"latest"`（または未 pin）で有効化しても、
+  `cocoon lock` がエラーにならなくなりました。これらは **スキップ** され（lock
+  エントリは書かれず）、`cocoon gen` がビルド時に最新を導入します。このビルドは
+  再現性がありません（`cocoon gen` は警告し、`cocoon gen --locked` は失敗します）
+  ので、再現性が必要なら厳密バージョンを pin してください（例: `"aws-cli=2.34.48"`）。
+  `zig` の `"latest"` は `master` 開発ビルドに解決されます。
+
 ### 修正
 
 - `cocoon init`: バージョンプロンプトのマニュアル入力行で値を入力する際、

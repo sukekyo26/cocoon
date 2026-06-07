@@ -174,9 +174,9 @@ A generated, committed TOML file — machine-owned, so do **not** hand-edit it; 
 | `--check` | bool | Verify `cocoon.lock` matches the config file **without resolving** (no network). Exits non-zero on drift — a missing lock, a changed `inputs_hash`, or any enabled plugin whose recorded `requested` no longer matches. For CI. |
 | `--upgrade` | bool | Re-resolve `"latest"` constraints to the current newest release. Exact pins are untouched. |
 
-### Exact-only plugins
+### Sourceless plugins
 
-A few plugins' upstreams expose no machine-readable "latest": **`aws-cli`** (unversioned download alias), **`android-sdk`** (HTML-scraped build number), and **`flutter`** (release keyed by a commit hash). These cannot resolve `"latest"`; they must be pinned to an exact version inline in the `[plugins].enable` array (e.g. `"flutter=3.44.1"`). Left unpinned or on `latest`, `cocoon lock` errors with a hint to pin them (`"<id>=<version>"`).
+A few plugins' upstreams expose no machine-readable "latest" that cocoon can resolve to a reproducible version: **`aws-cli`** (unversioned download alias), **`android-sdk`** (HTML-scraped build number), **`flutter`** (release keyed by a commit hash), and **`zig`** (only `master`, a rolling dev build). On `latest` (or unpinned), `cocoon lock` cannot lock them, so it **skips** them (no lock entry is written) and leaves them to `cocoon gen`, which installs the latest at build time. That build is **not reproducible**: `cocoon gen` warns and `cocoon gen --locked` fails. Pin an exact version inline in the `[plugins].enable` array (e.g. `"flutter=3.44.1"`) to make them reproducible — `cocoon lock` then records the pin.
 
 ### Examples
 
