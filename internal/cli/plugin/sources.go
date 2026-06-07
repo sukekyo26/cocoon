@@ -49,7 +49,7 @@ func projectPluginsDir() (string, error) {
 	}
 	wsPath, err := config.Discover(cwd)
 	if err != nil {
-		return "", fmt.Errorf("discover cocoon.toml: %w", err)
+		return "", fmt.Errorf("discover the config file: %w", err)
 	}
 	if wsPath == "" {
 		return "", ErrWorkspaceNotFound

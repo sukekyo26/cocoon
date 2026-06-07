@@ -588,7 +588,7 @@ func validateVersionOverrides(
 		override := overrides[id]
 		p, ok := plugins[id]
 		if !ok {
-			return fmt.Errorf("%w: cocoon.toml sets a version or [plugins.options] for '%s', but it is not an "+
+			return fmt.Errorf("%w: the config file sets a version or [plugins.options] for '%s', but it is not an "+
 				"enabled plugin (add it to [plugins].enable, or remove the entry)",
 				ErrInvalidVersionOverride, id)
 		}
