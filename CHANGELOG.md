@@ -6,6 +6,22 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- The generated Dockerfile now installs apt packages in three separate layers —
+  base + login-shell packages, then your `[apt].packages`, then plugin
+  dependencies — ordered least- to most-volatile so the earlier layers stay
+  cached. Editing `[apt].packages` or toggling plugins no longer rebuilds the
+  apt layers before it. The `[apt].packages` layer is independent of plugin
+  selection: a package needed by both your config and a plugin is installed once
+  in the `[apt]` layer and omitted from the plugin layer.
+
+### Fixed
+
+- The generated Dockerfile no longer lists the same apt package twice within one
+  `apt-get install` step. Packages are de-duplicated within each apt layer, and
+  base / login-shell packages are not repeated in the `[apt]` or plugin layers.
+
 ## [0.15.4] - 2026-06-08
 
 ### Changed

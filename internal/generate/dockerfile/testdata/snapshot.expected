@@ -62,6 +62,17 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     locales \
     sudo \
     bash-completion \
+    && sed -i -E -e 's|^# *(en_US\.UTF-8 UTF-8)$|\1|' /etc/locale.gen \
+    && locale-gen \
+    && rm -rf /tmp/* /var/tmp/*
+
+# Plugin apt dependencies. The last apt layer because plugin selection is the
+# most volatile input. Packages already installed by the base or [apt] layer
+# above are omitted here.
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     build-essential \
     libssl-dev \
     zlib1g-dev \
@@ -78,8 +89,6 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     bubblewrap \
     socat \
     jq \
-    && sed -i -E -e 's|^# *(en_US\.UTF-8 UTF-8)$|\1|' /etc/locale.gen \
-    && locale-gen \
     && rm -rf /tmp/* /var/tmp/*
 
 # Dotfiles seeded into the new user's home via /etc/skel

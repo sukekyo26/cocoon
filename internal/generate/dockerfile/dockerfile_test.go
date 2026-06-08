@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -87,6 +88,312 @@ func TestGenerate_Snapshot(t *testing.T) {
 			}
 		})
 	}
+}
+
+// aptUserRunHeader / aptPluginRunHeader anchor the two later apt layers.
+const (
+	aptUserRunHeader   = "# Project-defined [apt].packages"
+	aptPluginRunHeader = "# Plugin apt dependencies"
+)
+
+// TestGenerate_AptDedupAcrossSections pins the layered apt dedup. base+shell is
+// the stable foundation; the [apt] layer dedups only against base+shell, so it
+// stays independent of plugin selection. The plugin layer additionally drops
+// anything the [apt] layer installs, so a package needed by both the user's
+// [apt].packages and a plugin is installed once — in the [apt] layer (which
+// runs first) — and omitted from the plugin layer. Within-layer duplicates
+// still collapse, and the redundancy warning still fires only for [apt] entries
+// that collide with a base package.
+//
+//nolint:paralleltest // mutates ws (shell/Apt.Packages) per case off the shared fixture
+func TestGenerate_AptDedupAcrossSections(t *testing.T) {
+	cases := []struct {
+		name         string
+		shell        string         // "" = default bash
+		extras       []string       // [apt].packages override
+		totalCount   map[string]int // expected occurrences across ALL apt install RUNs
+		inUserRun    []string       // must appear in the [apt] layer
+		inPluginRun  []string       // must appear in the plugin layer
+		absentUser   []string       // must NOT appear in the [apt] layer
+		absentPlugin []string       // must NOT appear in the plugin layer
+		warned       []string       // warn.AptRedundant must fire
+		notWarned    []string       // warn.AptRedundant must NOT fire
+	}{
+		{
+			// zig contributes jq; the user also lists jq. The [apt] layer wins:
+			// jq installs there once and is dropped from the plugin layer.
+			name: "extra-overlaps-plugin-user-wins", extras: []string{"jq", "zzz-sentinel"},
+			totalCount:   map[string]int{"jq": 1, "zzz-sentinel": 1},
+			inUserRun:    []string{"jq", "zzz-sentinel"},
+			absentPlugin: []string{"jq"},
+			notWarned:    []string{"jq"},
+		},
+		{
+			// sudo is a base package: dropped from the [apt] layer AND warned.
+			name: "extra-overlaps-base-dropped-and-warned", extras: []string{"sudo"},
+			totalCount: map[string]int{"sudo": 1},
+			absentUser: []string{"sudo"},
+			warned:     []string{"sudo"},
+		},
+		{
+			// bash-completion is the bash login-shell package: dropped, no warn.
+			name: "extra-overlaps-shell-dropped", extras: []string{"bash-completion"},
+			totalCount: map[string]int{"bash-completion": 1},
+			absentUser: []string{"bash-completion"},
+			notWarned:  []string{"bash-completion"},
+		},
+		{
+			// a package listed twice in [apt] collapses within the layer, no warn.
+			name: "extra-duplicate-collapses", extras: []string{"cowsay", "cowsay"},
+			totalCount: map[string]int{"cowsay": 1},
+			inUserRun:  []string{"cowsay"},
+			notWarned:  []string{"cowsay"},
+		},
+		{
+			// go and proto both declare build-essential: collapses within the
+			// plugin layer (regression guard for plugin↔plugin dedup).
+			name: "plugin-duplicate-collapses", extras: nil,
+			totalCount:  map[string]int{"build-essential": 1},
+			inPluginRun: []string{"build-essential"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sink := warn.New()
+			got := generateForDedup(t, tc.shell, tc.extras, sink)
+			all := aptInstallPackages(t, got)
+			userRun := aptRunPackagesAfter(t, got, aptUserRunHeader)
+			pluginRun := aptRunPackagesAfter(t, got, aptPluginRunHeader)
+
+			for name, want := range tc.totalCount {
+				if g := countPkg(all, name); g != want {
+					t.Errorf("package %q appears %d times across apt RUNs, want %d\n%v", name, g, want, all)
+				}
+			}
+			for _, name := range tc.inUserRun {
+				if countPkg(userRun, name) == 0 {
+					t.Errorf("package %q missing from the [apt] layer\n%v", name, userRun)
+				}
+			}
+			for _, name := range tc.inPluginRun {
+				if countPkg(pluginRun, name) == 0 {
+					t.Errorf("package %q missing from the plugin layer\n%v", name, pluginRun)
+				}
+			}
+			for _, name := range tc.absentUser {
+				if countPkg(userRun, name) != 0 {
+					t.Errorf("package %q must be dropped from the [apt] layer\n%v", name, userRun)
+				}
+			}
+			for _, name := range tc.absentPlugin {
+				if countPkg(pluginRun, name) != 0 {
+					t.Errorf("package %q must be dropped from the plugin layer (the [apt] layer installs it)\n%v", name, pluginRun)
+				}
+			}
+			for _, name := range tc.warned {
+				if !hasAptRedundant(sink, name) {
+					t.Errorf("expected warn.AptRedundant for %q, got %v", name, sink.All())
+				}
+			}
+			for _, name := range tc.notWarned {
+				if hasAptRedundant(sink, name) {
+					t.Errorf("unexpected warn.AptRedundant for %q (warning is base-only)", name)
+				}
+			}
+		})
+	}
+}
+
+// TestGenerate_AptLayerSeparation pins the three-layer apt split: base+shell,
+// [apt].packages, then plugin deps, each a separate RUN. Ordering least→most
+// volatile keeps the [apt] / base layers cached when plugins change.
+func TestGenerate_AptLayerSeparation(t *testing.T) {
+	t.Parallel()
+
+	got := generateForDedup(t, "", []string{"cowsay"}, warn.New())
+
+	// Exactly three non-empty apt install RUNs (the inline ca-cert bootstrap and
+	// the third-party-source RUN carry no continuation-line packages).
+	nonEmpty := 0
+	for _, run := range aptInstallRuns(t, got) {
+		if len(run) > 0 {
+			nonEmpty++
+		}
+	}
+	if nonEmpty != 3 {
+		t.Errorf("want 3 non-empty apt install RUNs (base+shell, [apt], plugin), got %d", nonEmpty)
+	}
+
+	// The [apt] and plugin layers each run their own apt-get update behind two
+	// cache mounts, and neither re-removes docker-clean (the base RUN already
+	// deleted it, and that deletion persists in its layer).
+	for _, hdr := range []string{aptUserRunHeader, aptPluginRunHeader} {
+		block := runBlockAfter(t, got, hdr)
+		if !strings.Contains(block, "apt-get update") {
+			t.Errorf("%s layer missing its own apt-get update:\n%s", hdr, block)
+		}
+		if n := strings.Count(block, "--mount=type=cache"); n != 2 {
+			t.Errorf("%s layer has %d cache mounts, want 2:\n%s", hdr, n, block)
+		}
+		if strings.Contains(block, "docker-clean") {
+			t.Errorf("%s layer must not re-remove docker-clean:\n%s", hdr, block)
+		}
+	}
+	if n := strings.Count(got, "rm -f /etc/apt/apt.conf.d/docker-clean"); n != 1 {
+		t.Errorf("docker-clean removal must appear once (base RUN only), got %d", n)
+	}
+
+	// The base RUN carries base+shell and none of the [apt]/plugin packages.
+	baseRun := aptRunPackagesAfter(t, got, "rm -f /etc/apt/apt.conf.d/docker-clean")
+	for _, want := range []string{"sudo", "bash-completion"} {
+		if countPkg(baseRun, want) == 0 {
+			t.Errorf("base RUN missing %q\n%v", want, baseRun)
+		}
+	}
+	for _, bad := range []string{"cowsay", "build-essential"} {
+		if countPkg(baseRun, bad) != 0 {
+			t.Errorf("base RUN must not contain %q (belongs to a later layer)\n%v", bad, baseRun)
+		}
+	}
+
+	// An empty [apt].packages omits the user layer entirely.
+	if empty := generateForDedup(t, "", nil, warn.New()); strings.Contains(empty, aptUserRunHeader) {
+		t.Error("the [apt] layer must be omitted when [apt].packages is empty")
+	}
+}
+
+// generateForDedup renders the snapshot fixture with an optional shell override
+// and [apt].packages list, routing redundancy warnings to sink.
+func generateForDedup(t *testing.T, shell string, extras []string, sink *warn.Sink) string {
+	t.Helper()
+	root := repoRoot(t)
+	wsPath := filepath.Join(root, "tests", "fixtures", "snapshot.workspace.toml")
+	pluginsDir := filepath.Join(root, "internal", "plugin", "catalog")
+
+	ws, err := config.LoadWorkspace(wsPath)
+	if err != nil {
+		t.Fatalf("load workspace: %v", err)
+	}
+	if shell != "" {
+		ws.Container.Shell = &config.ContainerShellSpec{Default: &shell}
+	}
+	ws.Apt.Packages = extras
+
+	plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, warn.New(), pluginsDir)
+	if err != nil {
+		t.Fatalf("load plugins: %v", err)
+	}
+	ctx := &generate.WorkspaceContext{WS: ws, PluginsFS: os.DirFS(pluginsDir), Plugins: plugins, Warnings: warn.New()}
+	got, err := dockerfile.Generate(ctx, dockerfile.Options{
+		WorkspaceRoot: root, RepoDir: "cocoon", Plugins: plugins, Warnings: sink,
+	})
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	return got
+}
+
+// aptPkgLineRe matches an apt package continuation line of the exact shape
+// "    <token> \" — four leading spaces, one bare package token, a trailing
+// backslash. This excludes the inline bootstrap install, the 8-space
+// multi-token third-party line, comments, --mount lines, and && tails.
+var aptPkgLineRe = regexp.MustCompile(`^ {4}([a-z0-9][a-z0-9.+-]*) \\$`)
+
+const aptInstallMarkerLine = "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends"
+
+// aptInstallRuns returns, for every apt-get install RUN in document order, the
+// list of its continuation-line packages (empty for RUNs whose packages are
+// inline or multi-token, e.g. the bootstrap / third-party RUNs).
+func aptInstallRuns(t *testing.T, dockerfileText string) [][]string {
+	t.Helper()
+	lines := strings.Split(dockerfileText, "\n")
+	var runs [][]string
+	for i, line := range lines {
+		if !strings.Contains(line, aptInstallMarkerLine) {
+			continue
+		}
+		runs = append(runs, collectAptPkgLines(lines[i+1:]))
+	}
+	return runs
+}
+
+// aptRunPackagesAfter returns the continuation-line packages of the first apt
+// install RUN at or after anchor. Returns nil when the anchor is absent (e.g.
+// the [apt] layer is omitted), so callers can assert omission.
+func aptRunPackagesAfter(t *testing.T, dockerfileText, anchor string) []string {
+	t.Helper()
+	idx := strings.Index(dockerfileText, anchor)
+	if idx < 0 {
+		return nil
+	}
+	rest := strings.Split(dockerfileText[idx:], "\n")
+	for i, line := range rest {
+		if strings.Contains(line, aptInstallMarkerLine) {
+			return collectAptPkgLines(rest[i+1:])
+		}
+	}
+	t.Fatalf("no apt install RUN after anchor %q", anchor)
+	return nil
+}
+
+// collectAptPkgLines reads package continuation lines until the && tail or the
+// end of the continuation (a line without a trailing backslash).
+func collectAptPkgLines(lines []string) []string {
+	var pkgs []string
+	for _, line := range lines {
+		if strings.HasPrefix(line, "    &&") || !strings.HasSuffix(strings.TrimSpace(line), `\`) {
+			break
+		}
+		if m := aptPkgLineRe.FindStringSubmatch(line); m != nil {
+			pkgs = append(pkgs, m[1])
+		}
+	}
+	return pkgs
+}
+
+// runBlockAfter returns the text from anchor to the end of that RUN (its
+// "&& rm -rf /tmp" tail), so per-RUN assertions don't bleed into later RUNs.
+func runBlockAfter(t *testing.T, dockerfileText, anchor string) string {
+	t.Helper()
+	idx := strings.Index(dockerfileText, anchor)
+	if idx < 0 {
+		t.Fatalf("anchor %q not found", anchor)
+	}
+	rest := dockerfileText[idx:]
+	end := strings.Index(rest, "&& rm -rf /tmp")
+	if end < 0 {
+		t.Fatalf("RUN tail not found after anchor %q", anchor)
+	}
+	return rest[:end]
+}
+
+func aptInstallPackages(t *testing.T, dockerfileText string) []string {
+	t.Helper()
+	var all []string
+	for _, run := range aptInstallRuns(t, dockerfileText) {
+		all = append(all, run...)
+	}
+	return all
+}
+
+func countPkg(pkgs []string, name string) int {
+	n := 0
+	for _, p := range pkgs {
+		if p == name {
+			n++
+		}
+	}
+	return n
+}
+
+func hasAptRedundant(sink *warn.Sink, pkg string) bool {
+	for _, w := range sink.All() {
+		if w.Code == warn.AptRedundant && len(w.Args) == 1 && w.Args[0] == pkg {
+			return true
+		}
+	}
+	return false
 }
 
 // TestGenerate_FromLineForEachImage catches future SupportedImages drift
