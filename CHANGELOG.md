@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- The generated Dockerfile no longer lists the same apt package more than once
+  in the main `apt-get install` step. Packages are now de-duplicated across the
+  base, login-shell, plugin-dependency, and `[apt].packages` sections — a
+  package contributed by more than one section is installed once, keeping its
+  first occurrence.
+
 ## [0.15.4] - 2026-06-08
 
 ### Changed
