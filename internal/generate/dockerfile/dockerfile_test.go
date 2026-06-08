@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -89,70 +90,99 @@ func TestGenerate_Snapshot(t *testing.T) {
 	}
 }
 
-// TestGenerate_AptDedupAcrossSections pins the cross-section apt dedup: a
-// package contributed by more than one of the base / login-shell / plugin /
-// [apt] sections is installed exactly once, with the first-emitted occurrence
-// (section order base→shell→plugin→extra) kept. The redundancy warning stays
-// scoped to base packages: only an [apt] entry that collides with a base
-// package fires warn.AptRedundant; collisions with shell/plugin packages are
-// deduped silently.
-//
-// plugin×shell is not exercised here: no catalog plugin declares a login-shell
-// apt package as a dependency, so it cannot be constructed via the real
-// catalog. It travels the same shared dropSeen pass as extra×shell, which is
-// covered below.
+// aptUserRunHeader / aptPluginRunHeader anchor the two later apt layers.
+const (
+	aptUserRunHeader   = "# Project-defined [apt].packages"
+	aptPluginRunHeader = "# Plugin apt dependencies"
+)
+
+// TestGenerate_AptDedupAcrossSections pins the layered apt dedup. base+shell is
+// the stable foundation; the [apt] and plugin layers each dedup only against
+// base+shell (and within themselves), NOT against each other, so the [apt]
+// layer stays independent of plugin selection. A package needed by both the
+// user's [apt].packages and a plugin is therefore installed in BOTH the [apt]
+// and plugin layers (a no-op the second time) — it is not de-duplicated across
+// those two layers. Within-layer duplicates still collapse, and the redundancy
+// warning still fires only for [apt] entries that collide with a base package.
 //
 //nolint:paralleltest // mutates ws (shell/Apt.Packages) per case off the shared fixture
 func TestGenerate_AptDedupAcrossSections(t *testing.T) {
-	// baseline (no [apt] packages) records each plugin package's natural slot so
-	// "first occurrence wins" can assert the deduped package did not move.
-	baseline := aptInstallPackages(t, generateForDedup(t, "", nil, warn.New()))
-
 	cases := []struct {
-		name      string
-		shell     string   // "" = default bash
-		extras    []string // [apt].packages override
-		once      []string // must appear exactly once in the apt install block
-		warned    []string // warn.AptRedundant must fire for these
-		notWarned []string // warn.AptRedundant must NOT fire for these
-		keptSlot  string   // must stay at its baseline (plugin-section) index
+		name        string
+		shell       string         // "" = default bash
+		extras      []string       // [apt].packages override
+		totalCount  map[string]int // expected occurrences across ALL apt install RUNs
+		inUserRun   []string       // must appear in the [apt] layer
+		inPluginRun []string       // must appear in the plugin layer
+		absentUser  []string       // must NOT appear in the [apt] layer
+		warned      []string       // warn.AptRedundant must fire
+		notWarned   []string       // warn.AptRedundant must NOT fire
 	}{
 		{
-			// zig contributes jq; an [apt] jq must drop, leaving the plugin one.
-			name: "extra-collides-with-plugin", extras: []string{"jq", "zzz-sentinel"},
-			once: []string{"jq", "zzz-sentinel"}, notWarned: []string{"jq"}, keptSlot: "jq",
+			// zig contributes jq; the user also lists jq. Decoupled: jq lands in
+			// both the [apt] layer and the plugin layer (no-op the 2nd time).
+			name: "extra-overlaps-plugin-kept-in-both", extras: []string{"jq", "zzz-sentinel"},
+			totalCount:  map[string]int{"jq": 2, "zzz-sentinel": 1},
+			inUserRun:   []string{"jq", "zzz-sentinel"},
+			inPluginRun: []string{"jq"},
+			notWarned:   []string{"jq"},
 		},
 		{
-			// sudo is a base package: dedup AND warn (the only warned case).
-			name: "extra-collides-with-base", extras: []string{"sudo"},
-			once: []string{"sudo"}, warned: []string{"sudo"},
+			// sudo is a base package: dropped from the [apt] layer AND warned.
+			name: "extra-overlaps-base-dropped-and-warned", extras: []string{"sudo"},
+			totalCount: map[string]int{"sudo": 1},
+			absentUser: []string{"sudo"},
+			warned:     []string{"sudo"},
 		},
 		{
-			// bash-completion is the bash login-shell package: dedup, no warn.
-			name: "extra-collides-with-shell", extras: []string{"bash-completion"},
-			once: []string{"bash-completion"}, notWarned: []string{"bash-completion"},
+			// bash-completion is the bash login-shell package: dropped, no warn.
+			name: "extra-overlaps-shell-dropped", extras: []string{"bash-completion"},
+			totalCount: map[string]int{"bash-completion": 1},
+			absentUser: []string{"bash-completion"},
+			notWarned:  []string{"bash-completion"},
 		},
 		{
-			// a package listed twice in [apt] collapses to one, no warn.
-			name: "extra-collides-with-itself", extras: []string{"cowsay", "cowsay"},
-			once: []string{"cowsay"}, notWarned: []string{"cowsay"},
+			// a package listed twice in [apt] collapses within the layer, no warn.
+			name: "extra-duplicate-collapses", extras: []string{"cowsay", "cowsay"},
+			totalCount: map[string]int{"cowsay": 1},
+			inUserRun:  []string{"cowsay"},
+			notWarned:  []string{"cowsay"},
 		},
 		{
-			// go and proto both declare build-essential (regression guard for the
-			// plugin×plugin dedup that worked before the refactor).
-			name: "plugin-collides-with-plugin", extras: nil,
-			once: []string{"build-essential"},
+			// go and proto both declare build-essential: collapses within the
+			// plugin layer (regression guard for plugin↔plugin dedup).
+			name: "plugin-duplicate-collapses", extras: nil,
+			totalCount:  map[string]int{"build-essential": 1},
+			inPluginRun: []string{"build-essential"},
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			sink := warn.New()
-			pkgs := aptInstallPackages(t, generateForDedup(t, tc.shell, tc.extras, sink))
+			got := generateForDedup(t, tc.shell, tc.extras, sink)
+			all := aptInstallPackages(t, got)
+			userRun := aptRunPackagesAfter(t, got, aptUserRunHeader)
+			pluginRun := aptRunPackagesAfter(t, got, aptPluginRunHeader)
 
-			for _, name := range tc.once {
-				if got := countPkg(pkgs, name); got != 1 {
-					t.Errorf("package %q appears %d times in apt install block, want 1\n%v", name, got, pkgs)
+			for name, want := range tc.totalCount {
+				if g := countPkg(all, name); g != want {
+					t.Errorf("package %q appears %d times across apt RUNs, want %d\n%v", name, g, want, all)
+				}
+			}
+			for _, name := range tc.inUserRun {
+				if countPkg(userRun, name) == 0 {
+					t.Errorf("package %q missing from the [apt] layer\n%v", name, userRun)
+				}
+			}
+			for _, name := range tc.inPluginRun {
+				if countPkg(pluginRun, name) == 0 {
+					t.Errorf("package %q missing from the plugin layer\n%v", name, pluginRun)
+				}
+			}
+			for _, name := range tc.absentUser {
+				if countPkg(userRun, name) != 0 {
+					t.Errorf("package %q must be dropped from the [apt] layer\n%v", name, userRun)
 				}
 			}
 			for _, name := range tc.warned {
@@ -165,13 +195,65 @@ func TestGenerate_AptDedupAcrossSections(t *testing.T) {
 					t.Errorf("unexpected warn.AptRedundant for %q (warning is base-only)", name)
 				}
 			}
-			if tc.keptSlot != "" {
-				if got, want := indexOfPkg(pkgs, tc.keptSlot), indexOfPkg(baseline, tc.keptSlot); got != want {
-					t.Errorf("%q moved from its plugin-section slot %d to %d; the [apt] duplicate should drop, not the plugin one\n%v",
-						tc.keptSlot, want, got, pkgs)
-				}
-			}
 		})
+	}
+}
+
+// TestGenerate_AptLayerSeparation pins the three-layer apt split: base+shell,
+// [apt].packages, then plugin deps, each a separate RUN. Ordering least→most
+// volatile keeps the [apt] / base layers cached when plugins change.
+//
+//nolint:paralleltest // off the shared fixture, no shared state
+func TestGenerate_AptLayerSeparation(t *testing.T) {
+	got := generateForDedup(t, "", []string{"cowsay"}, warn.New())
+
+	// Exactly three non-empty apt install RUNs (the inline ca-cert bootstrap and
+	// the third-party-source RUN carry no continuation-line packages).
+	nonEmpty := 0
+	for _, run := range aptInstallRuns(t, got) {
+		if len(run) > 0 {
+			nonEmpty++
+		}
+	}
+	if nonEmpty != 3 {
+		t.Errorf("want 3 non-empty apt install RUNs (base+shell, [apt], plugin), got %d", nonEmpty)
+	}
+
+	// The [apt] and plugin layers each run their own apt-get update behind two
+	// cache mounts, and neither re-removes docker-clean (the base RUN already
+	// deleted it, and that deletion persists in its layer).
+	for _, hdr := range []string{aptUserRunHeader, aptPluginRunHeader} {
+		block := runBlockAfter(t, got, hdr)
+		if !strings.Contains(block, "apt-get update") {
+			t.Errorf("%s layer missing its own apt-get update:\n%s", hdr, block)
+		}
+		if n := strings.Count(block, "--mount=type=cache"); n != 2 {
+			t.Errorf("%s layer has %d cache mounts, want 2:\n%s", hdr, n, block)
+		}
+		if strings.Contains(block, "docker-clean") {
+			t.Errorf("%s layer must not re-remove docker-clean:\n%s", hdr, block)
+		}
+	}
+	if n := strings.Count(got, "rm -f /etc/apt/apt.conf.d/docker-clean"); n != 1 {
+		t.Errorf("docker-clean removal must appear once (base RUN only), got %d", n)
+	}
+
+	// The base RUN carries base+shell and none of the [apt]/plugin packages.
+	baseRun := aptRunPackagesAfter(t, got, "rm -f /etc/apt/apt.conf.d/docker-clean")
+	for _, want := range []string{"sudo", "bash-completion"} {
+		if countPkg(baseRun, want) == 0 {
+			t.Errorf("base RUN missing %q\n%v", want, baseRun)
+		}
+	}
+	for _, bad := range []string{"cowsay", "build-essential"} {
+		if countPkg(baseRun, bad) != 0 {
+			t.Errorf("base RUN must not contain %q (belongs to a later layer)\n%v", bad, baseRun)
+		}
+	}
+
+	// An empty [apt].packages omits the user layer entirely.
+	if empty := generateForDedup(t, "", nil, warn.New()); strings.Contains(empty, aptUserRunHeader) {
+		t.Error("the [apt] layer must be omitted when [apt].packages is empty")
 	}
 }
 
@@ -206,29 +288,87 @@ func generateForDedup(t *testing.T, shell string, extras []string, sink *warn.Si
 	return got
 }
 
-// aptInstallPackages returns the package names from the main apt-get install
-// RUN block (the "    pkg \" continuation lines between the install command and
-// the locale-gen tail), in emission order.
-func aptInstallPackages(t *testing.T, dockerfileText string) []string {
+// aptPkgLineRe matches an apt package continuation line of the exact shape
+// "    <token> \" — four leading spaces, one bare package token, a trailing
+// backslash. This excludes the inline bootstrap install, the 8-space
+// multi-token third-party line, comments, --mount lines, and && tails.
+var aptPkgLineRe = regexp.MustCompile(`^ {4}([a-z0-9][a-z0-9.+-]*) \\$`)
+
+const aptInstallMarkerLine = "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends"
+
+// aptInstallRuns returns, for every apt-get install RUN in document order, the
+// list of its continuation-line packages (empty for RUNs whose packages are
+// inline or multi-token, e.g. the bootstrap / third-party RUNs).
+func aptInstallRuns(t *testing.T, dockerfileText string) [][]string {
 	t.Helper()
-	const startMarker = "apt-get install -y --no-install-recommends"
-	const endMarker = "&& sed -i -E"
-	start := strings.Index(dockerfileText, startMarker)
-	if start < 0 {
-		t.Fatalf("apt install block start marker not found:\n%s", dockerfileText)
+	lines := strings.Split(dockerfileText, "\n")
+	var runs [][]string
+	for i, line := range lines {
+		if !strings.Contains(line, aptInstallMarkerLine) {
+			continue
+		}
+		runs = append(runs, collectAptPkgLines(lines[i+1:]))
 	}
-	rest := dockerfileText[start+len(startMarker):]
-	end := strings.Index(rest, endMarker)
-	if end < 0 {
-		t.Fatalf("apt install block end marker not found:\n%s", dockerfileText)
+	return runs
+}
+
+// aptRunPackagesAfter returns the continuation-line packages of the first apt
+// install RUN at or after anchor. Returns nil when the anchor is absent (e.g.
+// the [apt] layer is omitted), so callers can assert omission.
+func aptRunPackagesAfter(t *testing.T, dockerfileText, anchor string) []string {
+	t.Helper()
+	idx := strings.Index(dockerfileText, anchor)
+	if idx < 0 {
+		return nil
 	}
+	rest := strings.Split(dockerfileText[idx:], "\n")
+	for i, line := range rest {
+		if strings.Contains(line, aptInstallMarkerLine) {
+			return collectAptPkgLines(rest[i+1:])
+		}
+	}
+	t.Fatalf("no apt install RUN after anchor %q", anchor)
+	return nil
+}
+
+// collectAptPkgLines reads package continuation lines until the && tail or the
+// end of the continuation (a line without a trailing backslash).
+func collectAptPkgLines(lines []string) []string {
 	var pkgs []string
-	for _, line := range strings.Split(rest[:end], "\n") {
-		if s := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(line), `\`)); s != "" {
-			pkgs = append(pkgs, s)
+	for _, line := range lines {
+		if strings.HasPrefix(line, "    &&") || !strings.HasSuffix(strings.TrimSpace(line), `\`) {
+			break
+		}
+		if m := aptPkgLineRe.FindStringSubmatch(line); m != nil {
+			pkgs = append(pkgs, m[1])
 		}
 	}
 	return pkgs
+}
+
+// runBlockAfter returns the text from anchor to the end of that RUN (its
+// "&& rm -rf /tmp" tail), so per-RUN assertions don't bleed into later RUNs.
+func runBlockAfter(t *testing.T, dockerfileText, anchor string) string {
+	t.Helper()
+	idx := strings.Index(dockerfileText, anchor)
+	if idx < 0 {
+		t.Fatalf("anchor %q not found", anchor)
+	}
+	rest := dockerfileText[idx:]
+	end := strings.Index(rest, "&& rm -rf /tmp")
+	if end < 0 {
+		t.Fatalf("RUN tail not found after anchor %q", anchor)
+	}
+	return rest[:end]
+}
+
+func aptInstallPackages(t *testing.T, dockerfileText string) []string {
+	t.Helper()
+	var all []string
+	for _, run := range aptInstallRuns(t, dockerfileText) {
+		all = append(all, run...)
+	}
+	return all
 }
 
 func countPkg(pkgs []string, name string) int {
@@ -239,15 +379,6 @@ func countPkg(pkgs []string, name string) int {
 		}
 	}
 	return n
-}
-
-func indexOfPkg(pkgs []string, name string) int {
-	for i, p := range pkgs {
-		if p == name {
-			return i
-		}
-	}
-	return -1
 }
 
 func hasAptRedundant(sink *warn.Sink, pkg string) bool {

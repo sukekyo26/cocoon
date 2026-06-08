@@ -126,15 +126,34 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 {{- with .AptShellPackages }}
 {{ . }}
 {{- end }}
-{{- with .AptPluginPackages }}
-{{ . }}
-{{- end }}
-{{- with .AptExtraPackages }}
-{{ . }}
-{{- end }}
     && sed -i -E {{ .LocaleSedScript }} /etc/locale.gen \
     && locale-gen \
     && rm -rf /tmp/* /var/tmp/*
+
+{{ with .AptExtraPackages -}}
+# Project-defined [apt].packages from cocoon.toml. A separate layer, before the
+# plugin layer and independent of plugin selection, so editing this list or
+# toggling plugins reuses the most build cache.
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+{{ . }}
+    && rm -rf /tmp/* /var/tmp/*
+
+{{ end -}}
+{{ with .AptPluginPackages -}}
+# Plugin apt dependencies. The last apt layer because plugin selection is the
+# most volatile input; a package already installed by the base or [apt] layer
+# above is a no-op here.
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+{{ . }}
+    && rm -rf /tmp/* /var/tmp/*
+
+{{ end -}}
 
 {{ with .DockerfilePreUserSetup -}}
 {{ . }}
@@ -758,24 +777,28 @@ func pluginAptPackages(p *plugin.Plugin) []string {
 }
 
 // aptSections assembles the four apt package sections (base, login-shell,
-// plugin, [apt]) as TrimRight'd Dockerfile continuation blocks, with a single
-// dedup pass threaded in emission order (base→shell→plugin→extra): each package
-// is installed once and the first-emitted occurrence wins. basePkgNames stays
-// base-only because the redundancy warning only flags [apt] entries that
-// duplicate a base package; shell/plugin collisions are deduped silently.
+// plugin, [apt]) as TrimRight'd Dockerfile continuation blocks. base+shell form
+// the stable foundation; the [apt] and plugin sections each dedup ONLY against
+// base+shell (and within themselves), NOT against each other, because they are
+// emitted as separate cache layers (least→most volatile: base+shell, [apt],
+// plugin). Keeping the [apt] layer independent of plugin selection is the whole
+// point — a package both the user and a plugin need is installed in the [apt]
+// layer and is a harmless no-op in the plugin layer. Within-section dedup still
+// prevents `apt-get install jq jq`. basePkgNames stays base-only because the
+// redundancy warning only flags [apt] entries that duplicate a base package.
 func aptSections(
 	ctx *generate.WorkspaceContext, plugins map[string]*plugin.Plugin, enabled []string, warnings *warn.Sink,
 ) (base, shell, pluginPkgs, extra string) {
 	aptBase := baseAptPackagesBlock()
 	basePkgNames := parseBasePackages(aptBase)
-	seen := maps.Clone(basePkgNames)
 
-	shellList := dropSeen(ctx.LoginShellAptPackages(), seen)
-	pluginList := dropSeen(pluginAptPackagesList(plugins, enabled), seen)
+	baseShellSeen := maps.Clone(basePkgNames)
+	shellList := dropSeen(ctx.LoginShellAptPackages(), baseShellSeen) // baseShellSeen now = base ∪ shell
 
 	extras := ctx.AptExtraPackages()
 	warnDuplicateAptExtras(extras, basePkgNames, warnings)
-	extraList := dropSeen(extras, seen)
+	extraList := dropSeen(extras, maps.Clone(baseShellSeen))
+	pluginList := dropSeen(pluginAptPackagesList(plugins, enabled), maps.Clone(baseShellSeen))
 
 	return strings.TrimRight(aptBase, "\n"),
 		strings.TrimRight(formatAptContinuations(shellList), "\n"),
