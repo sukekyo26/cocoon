@@ -457,11 +457,10 @@ func cocoonEntrypointPaths(ctx *generate.WorkspaceContext) (workspace, bindPaths
 	return workspace, strings.Join(paths, ":")
 }
 
-// dropSeen returns pkgs with any entry already present in seen removed,
-// registering each kept package into seen. It is threaded across the apt
-// sections in emission order (base→shell→plugin→extra) so every package is
-// installed once; the first-emitted occurrence wins (a later plugin/[apt] entry
-// repeating an earlier package is dropped, not re-listed).
+// dropSeen returns pkgs with any entry already present in seen removed, and
+// registers each kept package into seen (so duplicates within pkgs collapse
+// too). aptSections composes the per-layer seen set that decides what each apt
+// layer drops — see there.
 func dropSeen(pkgs []string, seen map[string]struct{}) []string {
 	out := make([]string, 0, len(pkgs))
 	for _, p := range pkgs {
@@ -776,9 +775,9 @@ func pluginAptPackages(p *plugin.Plugin) []string {
 	return p.Apt.Packages
 }
 
-// aptSections assembles the four apt package sections (base, login-shell,
-// plugin, [apt]) as TrimRight'd Dockerfile continuation blocks, emitted as three
-// cache layers in least→most volatile order: base+shell, [apt], plugin. The
+// aptSections assembles the apt install blocks as TrimRight'd Dockerfile
+// continuation strings, emitted as three cache layers in least→most volatile
+// order: base+login-shell, then [apt].packages, then plugin dependencies. The
 // [apt] layer dedups only against base+shell, so it stays cached when plugins
 // change (independent of plugin selection). The plugin layer additionally drops
 // anything the [apt] layer already installs, so a package both the user and a
