@@ -208,9 +208,9 @@ func TestGenerate_AptDedupAcrossSections(t *testing.T) {
 // TestGenerate_AptLayerSeparation pins the three-layer apt split: base+shell,
 // [apt].packages, then plugin deps, each a separate RUN. Ordering least→most
 // volatile keeps the [apt] / base layers cached when plugins change.
-//
-//nolint:paralleltest // off the shared fixture, no shared state
 func TestGenerate_AptLayerSeparation(t *testing.T) {
+	t.Parallel()
+
 	got := generateForDedup(t, "", []string{"cowsay"}, warn.New())
 
 	// Exactly three non-empty apt install RUNs (the inline ca-cert bootstrap and
