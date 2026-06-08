@@ -89,6 +89,176 @@ func TestGenerate_Snapshot(t *testing.T) {
 	}
 }
 
+// TestGenerate_AptDedupAcrossSections pins the cross-section apt dedup: a
+// package contributed by more than one of the base / login-shell / plugin /
+// [apt] sections is installed exactly once, with the first-emitted occurrence
+// (section order base→shell→plugin→extra) kept. The redundancy warning stays
+// scoped to base packages: only an [apt] entry that collides with a base
+// package fires warn.AptRedundant; collisions with shell/plugin packages are
+// deduped silently.
+//
+// plugin×shell is not exercised here: no catalog plugin declares a login-shell
+// apt package as a dependency, so it cannot be constructed via the real
+// catalog. It travels the same shared dropSeen pass as extra×shell, which is
+// covered below.
+//
+//nolint:paralleltest // mutates ws (shell/Apt.Packages) per case off the shared fixture
+func TestGenerate_AptDedupAcrossSections(t *testing.T) {
+	// baseline (no [apt] packages) records each plugin package's natural slot so
+	// "first occurrence wins" can assert the deduped package did not move.
+	baseline := aptInstallPackages(t, generateForDedup(t, "", nil, warn.New()))
+
+	cases := []struct {
+		name      string
+		shell     string   // "" = default bash
+		extras    []string // [apt].packages override
+		once      []string // must appear exactly once in the apt install block
+		warned    []string // warn.AptRedundant must fire for these
+		notWarned []string // warn.AptRedundant must NOT fire for these
+		keptSlot  string   // must stay at its baseline (plugin-section) index
+	}{
+		{
+			// zig contributes jq; an [apt] jq must drop, leaving the plugin one.
+			name: "extra-collides-with-plugin", extras: []string{"jq", "zzz-sentinel"},
+			once: []string{"jq", "zzz-sentinel"}, notWarned: []string{"jq"}, keptSlot: "jq",
+		},
+		{
+			// sudo is a base package: dedup AND warn (the only warned case).
+			name: "extra-collides-with-base", extras: []string{"sudo"},
+			once: []string{"sudo"}, warned: []string{"sudo"},
+		},
+		{
+			// bash-completion is the bash login-shell package: dedup, no warn.
+			name: "extra-collides-with-shell", extras: []string{"bash-completion"},
+			once: []string{"bash-completion"}, notWarned: []string{"bash-completion"},
+		},
+		{
+			// a package listed twice in [apt] collapses to one, no warn.
+			name: "extra-collides-with-itself", extras: []string{"cowsay", "cowsay"},
+			once: []string{"cowsay"}, notWarned: []string{"cowsay"},
+		},
+		{
+			// go and proto both declare build-essential (regression guard for the
+			// plugin×plugin dedup that worked before the refactor).
+			name: "plugin-collides-with-plugin", extras: nil,
+			once: []string{"build-essential"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sink := warn.New()
+			pkgs := aptInstallPackages(t, generateForDedup(t, tc.shell, tc.extras, sink))
+
+			for _, name := range tc.once {
+				if got := countPkg(pkgs, name); got != 1 {
+					t.Errorf("package %q appears %d times in apt install block, want 1\n%v", name, got, pkgs)
+				}
+			}
+			for _, name := range tc.warned {
+				if !hasAptRedundant(sink, name) {
+					t.Errorf("expected warn.AptRedundant for %q, got %v", name, sink.All())
+				}
+			}
+			for _, name := range tc.notWarned {
+				if hasAptRedundant(sink, name) {
+					t.Errorf("unexpected warn.AptRedundant for %q (warning is base-only)", name)
+				}
+			}
+			if tc.keptSlot != "" {
+				if got, want := indexOfPkg(pkgs, tc.keptSlot), indexOfPkg(baseline, tc.keptSlot); got != want {
+					t.Errorf("%q moved from its plugin-section slot %d to %d; the [apt] duplicate should drop, not the plugin one\n%v",
+						tc.keptSlot, want, got, pkgs)
+				}
+			}
+		})
+	}
+}
+
+// generateForDedup renders the snapshot fixture with an optional shell override
+// and [apt].packages list, routing redundancy warnings to sink.
+func generateForDedup(t *testing.T, shell string, extras []string, sink *warn.Sink) string {
+	t.Helper()
+	root := repoRoot(t)
+	wsPath := filepath.Join(root, "tests", "fixtures", "snapshot.workspace.toml")
+	pluginsDir := filepath.Join(root, "internal", "plugin", "catalog")
+
+	ws, err := config.LoadWorkspace(wsPath)
+	if err != nil {
+		t.Fatalf("load workspace: %v", err)
+	}
+	if shell != "" {
+		ws.Container.Shell = &config.ContainerShellSpec{Default: &shell}
+	}
+	ws.Apt.Packages = extras
+
+	plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, warn.New(), pluginsDir)
+	if err != nil {
+		t.Fatalf("load plugins: %v", err)
+	}
+	ctx := &generate.WorkspaceContext{WS: ws, PluginsFS: os.DirFS(pluginsDir), Plugins: plugins, Warnings: warn.New()}
+	got, err := dockerfile.Generate(ctx, dockerfile.Options{
+		WorkspaceRoot: root, RepoDir: "cocoon", Plugins: plugins, Warnings: sink,
+	})
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	return got
+}
+
+// aptInstallPackages returns the package names from the main apt-get install
+// RUN block (the "    pkg \" continuation lines between the install command and
+// the locale-gen tail), in emission order.
+func aptInstallPackages(t *testing.T, dockerfileText string) []string {
+	t.Helper()
+	const startMarker = "apt-get install -y --no-install-recommends"
+	const endMarker = "&& sed -i -E"
+	start := strings.Index(dockerfileText, startMarker)
+	if start < 0 {
+		t.Fatalf("apt install block start marker not found:\n%s", dockerfileText)
+	}
+	rest := dockerfileText[start+len(startMarker):]
+	end := strings.Index(rest, endMarker)
+	if end < 0 {
+		t.Fatalf("apt install block end marker not found:\n%s", dockerfileText)
+	}
+	var pkgs []string
+	for _, line := range strings.Split(rest[:end], "\n") {
+		if s := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(line), `\`)); s != "" {
+			pkgs = append(pkgs, s)
+		}
+	}
+	return pkgs
+}
+
+func countPkg(pkgs []string, name string) int {
+	n := 0
+	for _, p := range pkgs {
+		if p == name {
+			n++
+		}
+	}
+	return n
+}
+
+func indexOfPkg(pkgs []string, name string) int {
+	for i, p := range pkgs {
+		if p == name {
+			return i
+		}
+	}
+	return -1
+}
+
+func hasAptRedundant(sink *warn.Sink, pkg string) bool {
+	for _, w := range sink.All() {
+		if w.Code == warn.AptRedundant && len(w.Args) == 1 && w.Args[0] == pkg {
+			return true
+		}
+	}
+	return false
+}
+
 // TestGenerate_FromLineForEachImage catches future SupportedImages drift
 // (new image, dropped image, renamed deno vendor namespace) that would
 // otherwise only surface as a `docker build` runtime error.

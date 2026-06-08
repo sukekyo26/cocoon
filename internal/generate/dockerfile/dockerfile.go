@@ -278,13 +278,7 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 
 	mirrorRewritePre, mirrorRewrite, proxyConfPre := splitAptSetupForBootstrap(ctx)
 
-	aptBase := baseAptPackagesBlock()
-	basePkgNames := parseBasePackages(aptBase)
-	aptPlugin := collectPluginAptPackages(opts.Plugins, enabled, basePkgNames)
-
-	aptExtraPkgs := ctx.AptExtraPackages()
-	warnDuplicateAptExtras(aptExtraPkgs, basePkgNames, opts.Warnings)
-	aptExtra := formatAptContinuations(aptExtraPkgs)
+	aptBaseBlock, aptShellBlock, aptPluginBlock, aptExtraBlock := aptSections(ctx, opts.Plugins, enabled, opts.Warnings)
 
 	preUser, postPlugins := buildDockerfileHooks(ctx, opts.Warnings)
 	_, lang, language := ctx.ResolveLocale()
@@ -295,7 +289,6 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 
 	loginShell := ctx.LoginShell()
 	rcPath := ctx.RCFilePath()
-	aptShellList := filterShellPackages(ctx.LoginShellAptPackages(), basePkgNames)
 
 	customShellRC, err := shellrc.RenderDockerfileBlock(ctx)
 	if err != nil {
@@ -313,10 +306,10 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 		AptCABootstrap:         aptCABootstrap,
 		AptMirrorRewrite:       mirrorRewrite,
 		AptThirdParty:          buildAptThirdParty(ctx),
-		AptBasePackages:        strings.TrimRight(aptBase, "\n"),
-		AptShellPackages:       strings.TrimRight(formatAptContinuations(aptShellList), "\n"),
-		AptPluginPackages:      strings.TrimRight(aptPlugin, "\n"),
-		AptExtraPackages:       strings.TrimRight(aptExtra, "\n"),
+		AptBasePackages:        aptBaseBlock,
+		AptShellPackages:       aptShellBlock,
+		AptPluginPackages:      aptPluginBlock,
+		AptExtraPackages:       aptExtraBlock,
 		LocaleSedScript:        localeSed,
 		LocaleLang:             lang,
 		LocaleLanguage:         language,
@@ -445,14 +438,18 @@ func cocoonEntrypointPaths(ctx *generate.WorkspaceContext) (workspace, bindPaths
 	return workspace, strings.Join(paths, ":")
 }
 
-// filterShellPackages drops any LoginShellAptPackages() entry that's already
-// in the base package set (e.g. when a user adds bash-completion to base).
-func filterShellPackages(pkgs []string, base map[string]struct{}) []string {
+// dropSeen returns pkgs with any entry already present in seen removed,
+// registering each kept package into seen. It is threaded across the apt
+// sections in emission order (base→shell→plugin→extra) so every package is
+// installed once; the first-emitted occurrence wins (a later plugin/[apt] entry
+// repeating an earlier package is dropped, not re-listed).
+func dropSeen(pkgs []string, seen map[string]struct{}) []string {
 	out := make([]string, 0, len(pkgs))
 	for _, p := range pkgs {
-		if _, dup := base[p]; dup {
+		if _, dup := seen[p]; dup {
 			continue
 		}
+		seen[p] = struct{}{}
 		out = append(out, p)
 	}
 	return out
@@ -760,28 +757,45 @@ func pluginAptPackages(p *plugin.Plugin) []string {
 	return p.Apt.Packages
 }
 
-func collectPluginAptPackages(
-	plugins map[string]*plugin.Plugin, enabled []string, basePackages map[string]struct{},
-) string {
-	seen := map[string]struct{}{}
+// aptSections assembles the four apt package sections (base, login-shell,
+// plugin, [apt]) as TrimRight'd Dockerfile continuation blocks, with a single
+// dedup pass threaded in emission order (base→shell→plugin→extra): each package
+// is installed once and the first-emitted occurrence wins. basePkgNames stays
+// base-only because the redundancy warning only flags [apt] entries that
+// duplicate a base package; shell/plugin collisions are deduped silently.
+func aptSections(
+	ctx *generate.WorkspaceContext, plugins map[string]*plugin.Plugin, enabled []string, warnings *warn.Sink,
+) (base, shell, pluginPkgs, extra string) {
+	aptBase := baseAptPackagesBlock()
+	basePkgNames := parseBasePackages(aptBase)
+	seen := maps.Clone(basePkgNames)
+
+	shellList := dropSeen(ctx.LoginShellAptPackages(), seen)
+	pluginList := dropSeen(pluginAptPackagesList(plugins, enabled), seen)
+
+	extras := ctx.AptExtraPackages()
+	warnDuplicateAptExtras(extras, basePkgNames, warnings)
+	extraList := dropSeen(extras, seen)
+
+	return strings.TrimRight(aptBase, "\n"),
+		strings.TrimRight(formatAptContinuations(shellList), "\n"),
+		strings.TrimRight(formatAptContinuations(pluginList), "\n"),
+		strings.TrimRight(formatAptContinuations(extraList), "\n")
+}
+
+// pluginAptPackagesList flattens the apt dependencies of the enabled plugins in
+// enable order. Deduplication (plugin↔plugin and against the base/shell
+// sections) is left to the shared dropSeen pass in aptSections.
+func pluginAptPackagesList(plugins map[string]*plugin.Plugin, enabled []string) []string {
 	var packages []string
 	for _, id := range enabled {
 		p, ok := plugins[id]
 		if !ok {
 			continue
 		}
-		for _, pkg := range pluginAptPackages(p) {
-			if _, dup := seen[pkg]; dup {
-				continue
-			}
-			if _, base := basePackages[pkg]; base {
-				continue
-			}
-			seen[pkg] = struct{}{}
-			packages = append(packages, pkg)
-		}
+		packages = append(packages, pluginAptPackages(p)...)
 	}
-	return formatAptContinuations(packages)
+	return packages
 }
 
 // generateCertificateInstall returns the cert install RUN block + the
