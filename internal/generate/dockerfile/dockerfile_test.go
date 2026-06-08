@@ -97,35 +97,36 @@ const (
 )
 
 // TestGenerate_AptDedupAcrossSections pins the layered apt dedup. base+shell is
-// the stable foundation; the [apt] and plugin layers each dedup only against
-// base+shell (and within themselves), NOT against each other, so the [apt]
-// layer stays independent of plugin selection. A package needed by both the
-// user's [apt].packages and a plugin is therefore installed in BOTH the [apt]
-// and plugin layers (a no-op the second time) — it is not de-duplicated across
-// those two layers. Within-layer duplicates still collapse, and the redundancy
-// warning still fires only for [apt] entries that collide with a base package.
+// the stable foundation; the [apt] layer dedups only against base+shell, so it
+// stays independent of plugin selection. The plugin layer additionally drops
+// anything the [apt] layer installs, so a package needed by both the user's
+// [apt].packages and a plugin is installed once — in the [apt] layer (which
+// runs first) — and omitted from the plugin layer. Within-layer duplicates
+// still collapse, and the redundancy warning still fires only for [apt] entries
+// that collide with a base package.
 //
 //nolint:paralleltest // mutates ws (shell/Apt.Packages) per case off the shared fixture
 func TestGenerate_AptDedupAcrossSections(t *testing.T) {
 	cases := []struct {
-		name        string
-		shell       string         // "" = default bash
-		extras      []string       // [apt].packages override
-		totalCount  map[string]int // expected occurrences across ALL apt install RUNs
-		inUserRun   []string       // must appear in the [apt] layer
-		inPluginRun []string       // must appear in the plugin layer
-		absentUser  []string       // must NOT appear in the [apt] layer
-		warned      []string       // warn.AptRedundant must fire
-		notWarned   []string       // warn.AptRedundant must NOT fire
+		name         string
+		shell        string         // "" = default bash
+		extras       []string       // [apt].packages override
+		totalCount   map[string]int // expected occurrences across ALL apt install RUNs
+		inUserRun    []string       // must appear in the [apt] layer
+		inPluginRun  []string       // must appear in the plugin layer
+		absentUser   []string       // must NOT appear in the [apt] layer
+		absentPlugin []string       // must NOT appear in the plugin layer
+		warned       []string       // warn.AptRedundant must fire
+		notWarned    []string       // warn.AptRedundant must NOT fire
 	}{
 		{
-			// zig contributes jq; the user also lists jq. Decoupled: jq lands in
-			// both the [apt] layer and the plugin layer (no-op the 2nd time).
-			name: "extra-overlaps-plugin-kept-in-both", extras: []string{"jq", "zzz-sentinel"},
-			totalCount:  map[string]int{"jq": 2, "zzz-sentinel": 1},
-			inUserRun:   []string{"jq", "zzz-sentinel"},
-			inPluginRun: []string{"jq"},
-			notWarned:   []string{"jq"},
+			// zig contributes jq; the user also lists jq. The [apt] layer wins:
+			// jq installs there once and is dropped from the plugin layer.
+			name: "extra-overlaps-plugin-user-wins", extras: []string{"jq", "zzz-sentinel"},
+			totalCount:   map[string]int{"jq": 1, "zzz-sentinel": 1},
+			inUserRun:    []string{"jq", "zzz-sentinel"},
+			absentPlugin: []string{"jq"},
+			notWarned:    []string{"jq"},
 		},
 		{
 			// sudo is a base package: dropped from the [apt] layer AND warned.
@@ -183,6 +184,11 @@ func TestGenerate_AptDedupAcrossSections(t *testing.T) {
 			for _, name := range tc.absentUser {
 				if countPkg(userRun, name) != 0 {
 					t.Errorf("package %q must be dropped from the [apt] layer\n%v", name, userRun)
+				}
+			}
+			for _, name := range tc.absentPlugin {
+				if countPkg(pluginRun, name) != 0 {
+					t.Errorf("package %q must be dropped from the plugin layer (the [apt] layer installs it)\n%v", name, pluginRun)
 				}
 			}
 			for _, name := range tc.warned {

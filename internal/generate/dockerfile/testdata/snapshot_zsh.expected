@@ -68,8 +68,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     && rm -rf /tmp/* /var/tmp/*
 
 # Plugin apt dependencies. The last apt layer because plugin selection is the
-# most volatile input; a package already installed by the base or [apt] layer
-# above is a no-op here.
+# most volatile input. Packages already installed by the base or [apt] layer
+# above are omitted here.
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && \

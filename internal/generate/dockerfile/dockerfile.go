@@ -144,8 +144,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 {{ end -}}
 {{ with .AptPluginPackages -}}
 # Plugin apt dependencies. The last apt layer because plugin selection is the
-# most volatile input; a package already installed by the base or [apt] layer
-# above is a no-op here.
+# most volatile input. Packages already installed by the base or [apt] layer
+# above are omitted here.
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && \
@@ -777,15 +777,18 @@ func pluginAptPackages(p *plugin.Plugin) []string {
 }
 
 // aptSections assembles the four apt package sections (base, login-shell,
-// plugin, [apt]) as TrimRight'd Dockerfile continuation blocks. base+shell form
-// the stable foundation; the [apt] and plugin sections each dedup ONLY against
-// base+shell (and within themselves), NOT against each other, because they are
-// emitted as separate cache layers (least→most volatile: base+shell, [apt],
-// plugin). Keeping the [apt] layer independent of plugin selection is the whole
-// point — a package both the user and a plugin need is installed in the [apt]
-// layer and is a harmless no-op in the plugin layer. Within-section dedup still
-// prevents `apt-get install jq jq`. basePkgNames stays base-only because the
-// redundancy warning only flags [apt] entries that duplicate a base package.
+// plugin, [apt]) as TrimRight'd Dockerfile continuation blocks, emitted as three
+// cache layers in least→most volatile order: base+shell, [apt], plugin. The
+// [apt] layer dedups only against base+shell, so it stays cached when plugins
+// change (independent of plugin selection). The plugin layer additionally drops
+// anything the [apt] layer already installs, so a package both the user and a
+// plugin need is installed once — in the [apt] layer, which runs first — and
+// omitted from the plugin layer. This costs no cache: the plugin layer is
+// downstream of the [apt] layer and so rebuilds on an [apt] edit regardless,
+// and while the [apt] layer is unchanged the dropped set is unchanged too.
+// Within-section dedup still prevents `apt-get install jq jq`. basePkgNames
+// stays base-only because the redundancy warning only flags [apt] entries that
+// duplicate a base package.
 func aptSections(
 	ctx *generate.WorkspaceContext, plugins map[string]*plugin.Plugin, enabled []string, warnings *warn.Sink,
 ) (base, shell, pluginPkgs, extra string) {
@@ -798,7 +801,12 @@ func aptSections(
 	extras := ctx.AptExtraPackages()
 	warnDuplicateAptExtras(extras, basePkgNames, warnings)
 	extraList := dropSeen(extras, maps.Clone(baseShellSeen))
-	pluginList := dropSeen(pluginAptPackagesList(plugins, enabled), maps.Clone(baseShellSeen))
+
+	pluginSeen := maps.Clone(baseShellSeen)
+	for _, p := range extraList {
+		pluginSeen[p] = struct{}{}
+	}
+	pluginList := dropSeen(pluginAptPackagesList(plugins, enabled), pluginSeen)
 
 	return strings.TrimRight(aptBase, "\n"),
 		strings.TrimRight(formatAptContinuations(shellList), "\n"),
