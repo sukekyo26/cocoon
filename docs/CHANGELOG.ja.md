@@ -6,6 +6,24 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+## [0.15.5] - 2026-06-09
+
+### 変更
+
+- 生成される Dockerfile が apt パッケージを 3 つのレイヤー（base + ログインシェル、
+  次に `[apt].packages`、最後にプラグイン依存）に分けてインストールするように
+  なりました。変動の少ない順に並べてあるため、`[apt].packages` の編集やプラグインの
+  切り替えを行っても、それより前の apt レイヤーは再ビルドされずキャッシュが
+  再利用されます。`[apt].packages` レイヤーはプラグイン選択から独立しており、設定と
+  プラグインの双方が必要とするパッケージは `[apt]` レイヤーで 1 回だけインストールされ、
+  プラグインレイヤーからは除外されます。
+
+### 修正
+
+- 生成される Dockerfile が同一の `apt-get install` ステップ内で同じ apt パッケージを
+  2 回列挙しないようになりました。各 apt レイヤー内で重複排除し、base / ログインシェル
+  のパッケージは `[apt]` / プラグインレイヤーで重複しません。
+
 ## [0.15.4] - 2026-06-08
 
 ### 変更
@@ -725,7 +743,8 @@ cocoon の主要な変更を記録します。フォーマットは
 - `COMPOSE_PROJECT_NAME` をプロジェクトディレクトリの basename から導出するように変更。docker compose の namespace がホストディレクトリと一致する。
 - 国際化 (英語 / 日本語) カタログを追加。CLI プロンプト・エラーメッセージ・`workspace.toml` インラインコメントすべてを `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` で切替可能。
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.15.4...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.15.5...HEAD
+[0.15.5]: https://github.com/sukekyo26/cocoon/compare/v0.15.4...v0.15.5
 [0.15.3]: https://github.com/sukekyo26/cocoon/compare/v0.15.2...v0.15.3
 [0.15.2]: https://github.com/sukekyo26/cocoon/compare/v0.15.1...v0.15.2
 [0.15.1]: https://github.com/sukekyo26/cocoon/compare/v0.15.0...v0.15.1
