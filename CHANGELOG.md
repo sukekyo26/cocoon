@@ -13,8 +13,8 @@ adheres to [Semantic Versioning](https://semver.org/).
   dependencies — ordered least- to most-volatile so the earlier layers stay
   cached. Editing `[apt].packages` or toggling plugins no longer rebuilds the
   apt layers before it. The `[apt].packages` layer is independent of plugin
-  selection: a package needed by both your config and a plugin is installed in
-  the `[apt]` layer and is a no-op in the plugin layer.
+  selection: a package needed by both your config and a plugin is installed once
+  in the `[apt]` layer and omitted from the plugin layer.
 
 ### Fixed
 
