@@ -63,7 +63,9 @@ func (l *LockFileSpec) NameOrDefault() string {
 // WorkspaceSpec models the optional [workspace] section. Defaults apply when
 // the section is missing or fields are zero.
 type WorkspaceSpec struct {
-	// MountRoot selects which host directory is bind-mounted at /workspace.
+	// MountRoot selects which slice of the host filesystem is bind-mounted
+	// into the container under /home/<user>/<dir> (a cwd-only "." mount nests
+	// the project at <dir>/<service> — see IsNestedMount / HostMountPath).
 	//
 	//   "."     — mount the project directory itself (default).
 	//   ".."    — mount the parent directory so sibling repos are visible.
