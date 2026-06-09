@@ -287,6 +287,15 @@ func promptMountAndDir(ans *initAnswers, cat *i18n.Catalog) error {
 		if err := runSingleFieldForm(mountRootSelect(cat, &ans.MountRoot)); err != nil {
 			return err
 		}
+		// The custom option only records a sentinel; collect the real ".."
+		// chain in a follow-up prompt (mirrors the sudo-password second step).
+		if ans.MountRoot == mountRootCustom {
+			var raw string
+			if err := runSingleFieldForm(mountRootCustomInput(cat, &raw)); err != nil {
+				return err
+			}
+			ans.MountRoot = raw
+		}
 		ans.MountRootSet = true
 	}
 	if !ans.DirSet {

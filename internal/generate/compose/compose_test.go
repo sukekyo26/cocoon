@@ -134,6 +134,33 @@ func TestGenerate_Snapshot(t *testing.T) {
 	}
 }
 
+// TestGenerate_DeepMountChain verifies that a multi-level mount_root chain
+// emits the grandparent bind mount (one extra ".." for the compose-relative
+// path) and, like the single ".." parent mount, omits the working_dir override
+// that only a cwd-only mount carries.
+func TestGenerate_DeepMountChain(t *testing.T) {
+	t.Parallel()
+	ws := &config.Workspace{
+		Workspace: &config.WorkspaceSpec{MountRoot: "../.."},
+		Container: config.ContainerSpec{
+			ServiceName: "dev", Username: "dev", Image: "ubuntu", ImageVersion: "24.04",
+		},
+		Plugins: config.PluginsSpec{Enable: []string{}},
+	}
+	warns := warn.New()
+	ctx := &generate.WorkspaceContext{WS: ws, Plugins: map[string]*plugin.Plugin{}, Warnings: warns}
+	got, err := compose.Generate(ctx, compose.Options{Plugins: map[string]*plugin.Plugin{}, Warnings: warns})
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	if !strings.Contains(got, `"../../..:/home/${USERNAME}/workspace:cached"`) {
+		t.Errorf("expected grandparent bind mount in:\n%s", got)
+	}
+	if strings.Contains(got, "working_dir") {
+		t.Errorf("parent mount must not emit working_dir:\n%s", got)
+	}
+}
+
 // TestGenerate_CertificatesDisabled_NoAdditionalContexts verifies that
 // when [certificates] is absent (or enable=false), the compose generator
 // emits no `additional_contexts` mapping at all. Cert-free teams commit

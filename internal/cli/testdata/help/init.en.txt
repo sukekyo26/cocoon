@@ -34,7 +34,7 @@ Flags:
       --image string             base image: ubuntu, debian, node, python, golang, rust, denoland/deno
       --image-path-fix           force the language-image PATH/install-prefix auto-injection (requires --image=node|python|golang|rust|denoland/deno; default on for those)
       --image-version string     base image tag — any well-formed Docker tag is accepted; --image must also be set
-      --mount-root string        mount range: "." (cwd, default) or ".." (parent)
+      --mount-root string        mount range: "." (cwd, default), ".." (parent), or a deeper ".." chain (e.g. "../..")
       --no-certificates          skip the [certificates] section (default off)
       --no-devcontainer          skip .devcontainer/devcontainer.json output
       --no-image-path-fix        skip the language-image PATH/install-prefix auto-injection (requires --image=node|python|golang|rust|denoland/deno)

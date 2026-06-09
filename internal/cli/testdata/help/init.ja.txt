@@ -33,7 +33,7 @@ CI など非対話実行では --yes に加えて --service-name / --username
       --image string             ベースイメージ: ubuntu, debian, node, python, golang, rust, denoland/deno
       --image-path-fix           言語イメージの PATH / インストール先自動設定を強制有効化（--image=node|python|golang|rust|denoland/deno が必須。それらは既定 on）
       --image-version string     ベースイメージのタグ（任意の妥当な Docker タグを受け付け。--image も併せて指定が必要）
-      --mount-root string        マウント範囲: "."（cwd、既定）または ".."（親ディレクトリ）
+      --mount-root string        マウント範囲: "."（cwd、既定）/ ".."（親）/ より深い ".." 連結（例 "../.."）
       --no-certificates          [certificates] セクションをスキップ（既定 off）
       --no-devcontainer          .devcontainer/devcontainer.json の生成をスキップ
       --no-image-path-fix        言語イメージの PATH / インストール先自動設定をスキップ（--image=node|python|golang|rust|denoland/deno が必須）

@@ -2,7 +2,7 @@
 # Edit freely; re-run `cocoon gen` to regenerate .devcontainer/.
 
 # [workspace] — generation-wide knobs.
-#   mount_root: how much of your filesystem to expose. "." = cwd only, ".." = parent (siblings visible).
+#   mount_root: how much of your filesystem to expose. "." = cwd only, ".." = parent (siblings visible), "../.." = further ancestors.
 #   dir: in-container workdir parent under /home/<user>/. Default "workspace"; slashes allowed for nested paths.
 #   devcontainer: emit .devcontainer/devcontainer.json for VS Code Reopen-in-Container.
 [workspace]

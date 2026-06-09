@@ -183,7 +183,7 @@ func applyImageFlags(flags *initFlags, ans *initAnswers) error {
 		ans.Shell, ans.ShellSet = flags.Shell, true
 	}
 	if flags.MountRoot != "" {
-		if flags.MountRoot != "." && flags.MountRoot != ".." {
+		if !config.IsValidMountRoot(flags.MountRoot) {
 			return clihelpers.UsageErr("err_initflags_mount_root_invalid")
 		}
 		ans.MountRoot, ans.MountRootSet = flags.MountRoot, true

@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- `[workspace] mount_root` now accepts a chain of `".."` segments (`"../.."`,
+  `"../../.."`, …) in addition to `"."` and `".."`, mounting an ancestor that
+  many levels above the project. Use it when the project is nested several
+  levels deep on the host but a higher-level ancestor and its siblings must be
+  visible inside the container. `cocoon init` gains a "Custom" mount-range
+  option that prompts for the chain, and `--mount-root` accepts the same values.
+  The `"."` and `".."` behaviours are unchanged.
+
 ## [0.15.5] - 2026-06-09
 
 ### Changed

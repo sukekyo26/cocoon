@@ -55,6 +55,13 @@ func shellSelect(cat *i18n.Catalog, target *string) *huh.Select[string] {
 		Value(target)
 }
 
+// mountRootCustom is the sentinel selected when the user wants a deeper
+// ancestor mount than the two curated options. promptMountAndDir detects it
+// and runs mountRootCustomInput to collect the actual ".." chain. The value
+// is never a valid mount_root (IsValidMountRoot rejects it), so it cannot leak
+// into a generated cocoon.toml.
+const mountRootCustom = "custom"
+
 func mountRootSelect(cat *i18n.Catalog, target *string) *huh.Select[string] {
 	return huh.NewSelect[string]().
 		Title(cat.Msg("init_prompt_mount_root")).
@@ -62,8 +69,34 @@ func mountRootSelect(cat *i18n.Catalog, target *string) *huh.Select[string] {
 		Options(
 			huh.NewOption(cat.Msg("init_option_mount_cwd"), "."),
 			huh.NewOption(cat.Msg("init_option_mount_parent"), ".."),
+			huh.NewOption(cat.Msg("init_option_mount_custom"), mountRootCustom),
 		).
 		Value(target)
+}
+
+// mountRootCustomInput collects a deeper ".." chain after the picker's custom
+// option is chosen. A blank entry is rejected — the custom path exists to type
+// something deeper than ".", so falling back to "." silently would surprise
+// the user who deliberately picked "custom".
+func mountRootCustomInput(cat *i18n.Catalog, target *string) *huh.Input {
+	return huh.NewInput().
+		Title(cat.Msg("init_prompt_mount_root_custom")).
+		Description(cat.Msg("init_desc_mount_root_custom")).
+		Validate(mountRootInputValidator(cat)).
+		Value(target)
+}
+
+// mountRootInputValidator localizes the rejection for inline TUI display.
+// Separate from config.IsValidMountRoot so the prompt can also reject blank
+// input (IsValidMountRoot treats "" as the "." default, which the custom
+// branch must not accept).
+func mountRootInputValidator(cat *i18n.Catalog) func(string) error {
+	return func(s string) error {
+		if s == "" || !config.IsValidMountRoot(s) {
+			return errors.New(cat.Msg("init_err_mount_root_fmt")) //nolint:err113 // user-facing prompt
+		}
+		return nil
+	}
 }
 
 // dirInput accepts blank input (caller treats blank as "keep default

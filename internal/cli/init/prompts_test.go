@@ -318,6 +318,70 @@ func TestPromptDir_AppliesWorkspaceDefaultOnBlank(t *testing.T) {
 	}
 }
 
+// TestPromptMountAndDir_CustomBranchPromptsAgain pins that picking the custom
+// mount-range option fires a second prompt for the chain and that the sentinel
+// never survives into MountRoot (the follow-up always overwrites it).
+//
+//nolint:paralleltest // mutates the package-level runSingleFieldForm seam
+func TestPromptMountAndDir_CustomBranchPromptsAgain(t *testing.T) {
+	calls := 0
+	ans := fullyPopulatedAnswers()
+	ans.MountRootSet = false
+	// First prompt (the picker) simulates the user choosing "custom"; the
+	// second (the chain input) leaves raw untouched so the test only proves
+	// the follow-up ran and replaced the sentinel.
+	withFakePrompt(t, func(huh.Field) error {
+		calls++
+		if calls == 1 {
+			ans.MountRoot = mountRootCustom
+		}
+		return nil
+	})
+
+	if err := promptMountAndDir(&ans, i18n.New(i18n.LangEN)); err != nil {
+		t.Fatalf("promptMountAndDir: %v", err)
+	}
+	if calls != 2 {
+		t.Errorf("calls = %d, want 2 (picker + custom follow-up)", calls)
+	}
+	if ans.MountRoot == mountRootCustom {
+		t.Error("custom sentinel leaked into MountRoot; follow-up assignment did not run")
+	}
+	if !ans.MountRootSet {
+		t.Error("MountRootSet must be true after promptMountAndDir runs")
+	}
+}
+
+// TestMountRootInputValidator covers the custom-chain validator: it accepts
+// "." and pure ".." chains but, unlike config.IsValidMountRoot, rejects blank
+// input (the custom branch must not silently fall back to ".").
+func TestMountRootInputValidator(t *testing.T) {
+	t.Parallel()
+	validate := mountRootInputValidator(i18n.New(i18n.LangEN))
+	cases := []struct {
+		in      string
+		wantErr bool
+	}{
+		{".", false},
+		{"..", false},
+		{"../..", false},
+		{"../../..", false},
+		{"", true},
+		{"../foo", true},
+		{"foo", true},
+		{"/abs", true},
+		{"...", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.in, func(t *testing.T) {
+			t.Parallel()
+			if err := validate(tc.in); (err != nil) != tc.wantErr {
+				t.Errorf("validate(%q) err=%v, wantErr=%v", tc.in, err, tc.wantErr)
+			}
+		})
+	}
+}
+
 // TestPromptPluginsWithRetry_SucceedsOnFirstAttempt covers the no-conflict
 // happy path: target is non-conflicting on entry, fake returns nil, loop
 // returns after a single attempt.
