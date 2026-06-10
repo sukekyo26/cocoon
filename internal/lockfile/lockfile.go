@@ -50,6 +50,14 @@ var (
 	ErrBadChecksum = errors.New("lockfile: checksum is not 64 lowercase hex chars")
 	// ErrEmptyVersion is returned by Load when a plugin entry has no version.
 	ErrEmptyVersion = errors.New("lockfile: plugin entry has an empty version")
+	// ErrUnsafeVersion is returned when a plugin entry's version contains a
+	// character that is unsafe to interpolate into the generated Dockerfile's
+	// PIN="..." env pair (newline, CR, double quote, backslash, $, or
+	// backtick). Load rejects a hand-tampered lock; Save refuses to record a
+	// version resolved from a malicious upstream. The enable-array pin is
+	// already bounded by config.rxImageVersion, so this closes the lock as the
+	// one remaining unvalidated path into that sink.
+	ErrUnsafeVersion = errors.New("lockfile: plugin version contains an unsafe character")
 	// ErrMissingVersion is returned by Load when the file has no lock_version
 	// (decoded as 0): a malformed or foreign lock that must be regenerated.
 	ErrMissingVersion = errors.New("lockfile: missing lock_version (regenerate with `cocoon lock`)")
@@ -126,6 +134,9 @@ func (l *Lock) validate() error {
 		if p.Version == "" {
 			return fmt.Errorf("plugin %q: %w", p.ID, ErrEmptyVersion)
 		}
+		if bad, r := config.UnsafeExtraVersionRune(p.Version); bad {
+			return fmt.Errorf("plugin %q: %w (%q)", p.ID, ErrUnsafeVersion, r)
+		}
 		for _, cs := range []string{p.ChecksumAMD64, p.ChecksumARM64} {
 			if cs != "" && !rxSha256.MatchString(cs) {
 				return fmt.Errorf("plugin %q: %w", p.ID, ErrBadChecksum)
@@ -148,8 +159,13 @@ func Marshal(l *Lock) ([]byte, error) {
 	return append([]byte(header), body...), nil
 }
 
-// Save atomically writes the lock to path (0o644).
+// Save atomically writes the lock to path (0o644). It validates first so an
+// invalid lock (e.g. a version resolved from a malicious upstream) is never
+// written — Save and Load enforce the same invariant.
 func Save(path string, l *Lock) error {
+	if err := l.validate(); err != nil {
+		return fmt.Errorf("%s: %w", path, err)
+	}
 	data, err := Marshal(l)
 	if err != nil {
 		return err

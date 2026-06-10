@@ -133,6 +133,67 @@ func TestLoad_Errors(t *testing.T) {
 	}
 }
 
+// TestLoad_RejectsUnsafeVersion pins that Load rejects a hand-tampered lock
+// whose version carries a character that would break out of the generated
+// Dockerfile's PIN="..." env pair (the build-time injection vector). The
+// equivalent enable-array pin is already bounded by config.rxImageVersion, so
+// this is the lock-side half of the same guard.
+func TestLoad_RejectsUnsafeVersion(t *testing.T) {
+	t.Parallel()
+	const head = "lock_version = 1\ninputs_hash = 'x'\n\n[[plugins]]\nid = 'go'\nrequested = 'latest'\n"
+	cases := []struct{ name, versionLine string }{
+		// TOML basic string: \n decodes to a real newline (the PoC payload that
+		// splits PIN="..." and injects standalone RUN instructions).
+		{"newline", `version = "1.0\nRUN touch /tmp/pwned"`},
+		// TOML literal string: the double quote is preserved verbatim and would
+		// close PIN="..." early.
+		{"double_quote", `version = '1.0" CHECKSUM_AMD64="x'`},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			path := filepath.Join(t.TempDir(), lockfile.FileName)
+			require.NoError(t, os.WriteFile(path, []byte(head+tc.versionLine+"\n"), 0o600))
+			_, err := lockfile.Load(path)
+			require.ErrorIs(t, err, lockfile.ErrUnsafeVersion)
+		})
+	}
+}
+
+// TestSave_RejectsUnsafeVersion pins that Save refuses to record a version
+// resolved from a malicious upstream (the second injection vector) and never
+// writes the file when it does. Covers every rune the sink treats as unsafe.
+func TestSave_RejectsUnsafeVersion(t *testing.T) {
+	t.Parallel()
+	cases := []struct{ name, version string }{
+		{"newline", "1.0\nRUN touch /tmp/pwned"},
+		{"carriage_return", "1.0\rRUN touch /tmp/pwned"},
+		{"double_quote", `1.0" CHECKSUM_AMD64="x`},
+		{"backslash", `1.0\x`},
+		{"dollar", "1.0$(touch /tmp/pwned)"},
+		{"backtick", "1.0`touch /tmp/pwned`"},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			l := &lockfile.Lock{
+				LockVersion: lockfile.Version,
+				InputsHash:  "x",
+				Plugins: []lockfile.LockPlugin{
+					{ID: "go", Requested: "latest", Version: tc.version}, //nolint:exhaustruct // no checksum/extra
+				},
+			}
+			path := filepath.Join(t.TempDir(), lockfile.FileName)
+			err := lockfile.Save(path, l)
+			require.ErrorIs(t, err, lockfile.ErrUnsafeVersion)
+			_, statErr := os.Stat(path)
+			require.Truef(t, os.IsNotExist(statErr), "Save must not write an invalid lock; stat err = %v", statErr)
+		})
+	}
+}
+
 func TestComputeInputsHash(t *testing.T) {
 	t.Parallel()
 	base := map[string]string{"go": "=1.23.4", "node": "latest"}

@@ -135,6 +135,53 @@ func TestGen_LoadFailureHasSingleFailurePrefix(t *testing.T) {
 	}
 }
 
+// TestGen_RejectsMaliciousLockVersion pins that `cocoon gen` refuses a lock
+// whose version embeds a Dockerfile/shell metacharacter, rather than
+// interpolating it verbatim into the install step's PIN="..." env pair. A
+// hand-tampered cocoon.lock with a newline-bearing version is the build-time
+// RCE vector; gen must fail before writing any artifact.
+func TestGen_RejectsMaliciousLockVersion(t *testing.T) {
+	// No t.Parallel(): t.Setenv/t.Chdir block parallel execution.
+	work := t.TempDir()
+	home := filepath.Join(work, "home")
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		t.Fatalf("mkdir home: %v", err)
+	}
+	t.Setenv("HOME", home)
+	pinEnglish(t)
+	t.Chdir(work)
+
+	ws := strings.ReplaceAll(minimalWorkspaceTOML, "enable = []", `enable = ["go=latest"]`)
+	if err := os.WriteFile(filepath.Join(work, "workspace.toml"), []byte(ws), 0o600); err != nil {
+		t.Fatalf("write workspace.toml: %v", err)
+	}
+	// version's \n is a TOML basic-string escape: go-toml decodes it to a real
+	// newline, which (unguarded) would split PIN="..." and inject a RUN.
+	lock := "lock_version = 1\ninputs_hash = 'x'\n\n[[plugins]]\nid = 'go'\nrequested = 'latest'\n" +
+		"version = \"1.0\\nRUN touch /tmp/pwned\"\n"
+	if err := os.WriteFile(filepath.Join(work, "cocoon.lock"), []byte(lock), 0o600); err != nil {
+		t.Fatalf("write cocoon.lock: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	cmd := gencli.NewCommand(&stdout, &stderr)
+	cmd.SetArgs(nil)
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected gen to reject a lock with an unsafe version")
+	}
+	if !errors.Is(err, clihelpers.ErrFailure) {
+		t.Errorf("expected ErrFailure, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "unsafe character") {
+		t.Errorf("error should explain the unsafe version, got %q", err.Error())
+	}
+	// gen must fail before writing: no injected Dockerfile on disk.
+	if _, statErr := os.Stat(filepath.Join(work, ".devcontainer/Dockerfile")); !os.IsNotExist(statErr) {
+		t.Errorf(".devcontainer/Dockerfile must not be written when the lock is rejected (stat err = %v)", statErr)
+	}
+}
+
 // certsEnabledWorkspaceTOML is `minimalWorkspaceTOML` plus an explicit
 // `[certificates] enable = true` so cert auto-bake (mkdir + notice) is
 // turned on for the test.
