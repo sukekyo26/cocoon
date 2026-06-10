@@ -95,7 +95,11 @@ func BuildArtifacts(ctx *generate.WorkspaceContext) ([]Artifact, error) {
 
 	body, err := compose.Generate(ctx, compose.Options{Plugins: ctx.Plugins, Warnings: ctx.Warnings})
 	if err != nil {
-		return nil, clihelpers.FailureWrap(err, "err_generate_compose")
+		// Each generator already prefixes its error with the artifact name
+		// ("compose: …", "dockerfile: …", …), so wrap with an empty key to
+		// render the cause verbatim; an i18n key here would double the prefix
+		// (defensive-coding §3).
+		return nil, clihelpers.FailureWrap(err, "")
 	}
 	arts = append(arts, Artifact{Rel: ".devcontainer/docker-compose.yml", Body: body, Mode: 0})
 
@@ -106,14 +110,14 @@ func BuildArtifacts(ctx *generate.WorkspaceContext) ([]Artifact, error) {
 		Warnings:      ctx.Warnings,
 	})
 	if err != nil {
-		return nil, clihelpers.FailureWrap(err, "err_generate_dockerfile")
+		return nil, clihelpers.FailureWrap(err, "")
 	}
 	arts = append(arts, Artifact{Rel: ".devcontainer/Dockerfile", Body: body, Mode: 0})
 
 	if ctx.WS.Workspace.DevContainerOrDefault() {
 		body, err = devcontainerjson.Generate(ctx)
 		if err != nil {
-			return nil, clihelpers.FailureWrap(err, "err_generate_devcontainerjson")
+			return nil, clihelpers.FailureWrap(err, "")
 		}
 		arts = append(arts, Artifact{Rel: ".devcontainer/devcontainer.json", Body: body, Mode: 0})
 	}
@@ -132,7 +136,7 @@ func BuildArtifacts(ctx *generate.WorkspaceContext) ([]Artifact, error) {
 
 	envBody, err := envfile.Generate(ctx)
 	if err != nil {
-		return nil, clihelpers.FailureWrap(err, "err_generate_envfile")
+		return nil, clihelpers.FailureWrap(err, "")
 	}
 	arts = append(arts, Artifact{Rel: ".devcontainer/.env", Body: envBody, Mode: 0o600})
 	// NB: in password sudo mode .devcontainer/.gitignore is NOT a generated
