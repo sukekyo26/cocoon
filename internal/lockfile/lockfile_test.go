@@ -86,38 +86,51 @@ func TestLoad_Errors(t *testing.T) {
 		require.Error(t, err)
 		require.True(t, lockfile.IsNotExist(err), "want IsNotExist, got %v", err)
 	})
+	// An unknown field is rejected at decode time (config.StrictUnmarshal),
+	// before validate's sentinels come into play, so it surfaces as a
+	// *config.ValidationError rather than a lockfile sentinel.
+	t.Run("unknown_field", func(t *testing.T) {
+		t.Parallel()
+		path := filepath.Join(t.TempDir(), lockfile.FileName)
+		require.NoError(t, os.WriteFile(path, []byte("lock_version = 1\ninputs_hash = 'x'\nbogus = true\n"), 0o600))
+		_, err := lockfile.Load(path)
+		var verr *config.ValidationError
+		require.ErrorAsf(t, err, &verr, "expected *config.ValidationError, got %T: %v", err, err)
+		require.Contains(t, err.Error(), "unknown field")
+	})
 	cases := []struct {
 		name, body, wantContains string
+		wantIs                   error
 	}{
 		{
 			name:         "unsupported_version",
 			body:         "lock_version = 999\ninputs_hash = 'x'\n",
 			wantContains: "unsupported lock_version",
+			wantIs:       lockfile.ErrUnsupportedVersion,
 		},
 		{
 			name:         "bad_checksum",
 			body:         "lock_version = 1\ninputs_hash = 'x'\n\n[[plugins]]\nid = 'go'\nrequested = '=1.0'\nversion = '1.0'\nchecksum_amd64 = 'NOPE'\n",
 			wantContains: "64 lowercase hex",
+			wantIs:       lockfile.ErrBadChecksum,
 		},
 		{
 			name:         "empty_version",
 			body:         "lock_version = 1\ninputs_hash = 'x'\n\n[[plugins]]\nid = 'go'\nrequested = 'latest'\nversion = ''\n",
 			wantContains: "empty version",
+			wantIs:       lockfile.ErrEmptyVersion,
 		},
 		{
 			name:         "missing_lock_version",
 			body:         "inputs_hash = 'x'\n",
 			wantContains: "missing lock_version",
+			wantIs:       lockfile.ErrMissingVersion,
 		},
 		{
 			name:         "duplicate_plugin_id",
 			body:         "lock_version = 1\ninputs_hash = 'x'\n\n[[plugins]]\nid = 'go'\nrequested = '=1.0'\nversion = '1.0'\n\n[[plugins]]\nid = 'go'\nrequested = '=1.1'\nversion = '1.1'\n",
 			wantContains: "duplicate plugin id",
-		},
-		{
-			name:         "unknown_field",
-			body:         "lock_version = 1\ninputs_hash = 'x'\nbogus = true\n",
-			wantContains: "unknown field",
+			wantIs:       lockfile.ErrDuplicatePlugin,
 		},
 	}
 	for _, tc := range cases {
@@ -127,7 +140,7 @@ func TestLoad_Errors(t *testing.T) {
 			path := filepath.Join(t.TempDir(), lockfile.FileName)
 			require.NoError(t, os.WriteFile(path, []byte(tc.body), 0o600))
 			_, err := lockfile.Load(path)
-			require.Error(t, err)
+			require.ErrorIs(t, err, tc.wantIs)
 			require.Contains(t, err.Error(), tc.wantContains)
 		})
 	}
