@@ -16,6 +16,10 @@ cocoon の主要な変更を記録します。フォーマットは
   脱出し、`docker build` 時に実行される任意の `RUN` 命令を注入できました。
   `[plugins].enable` のピンと `[plugins.options]` の値は同じ文字集合で既に検証済みで、
   本修正でビルド引数へ至る最後の経路となっていた lock を塞ぎます。
+- `cocoon gen` の生成失敗メッセージで artifact 名プレフィックスが二重化していた問題
+  （`dockerfile: dockerfile: …` / `compose: compose: …` / `envfile: envfile: …`）を
+  解消しました。各ジェネレータが既に artifact 名をプレフィックスとして付けているため、
+  CLI はその原因を一度だけ表示するようになりました。
 
 ## [0.15.6] - 2026-06-10
 

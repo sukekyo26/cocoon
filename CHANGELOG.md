@@ -18,6 +18,10 @@ adheres to [Semantic Versioning](https://semver.org/).
   `[plugins].enable` pin and `[plugins.options]` values were already validated
   against the same character set; this closes the lock as the one remaining path
   into those build arguments.
+- `cocoon gen` no longer doubles the artifact-name prefix in generation failure
+  messages (`dockerfile: dockerfile: …`, `compose: compose: …`,
+  `envfile: envfile: …`). Each generator already prefixes its error with the
+  artifact name, so the CLI now renders the cause once.
 
 ## [0.15.6] - 2026-06-10
 
