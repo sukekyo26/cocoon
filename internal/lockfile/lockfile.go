@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -25,11 +26,6 @@ import (
 )
 
 const (
-	// FileName is the default lock file basename, written at the workspace
-	// root alongside the discovered config file when [lockfile].name is unset. It aliases
-	// config.DefaultLockFileName (the schema accessor's source of truth) so
-	// the two never drift.
-	FileName = config.DefaultLockFileName
 	// Version is the current lock-format version. A lock with a newer
 	// Version is rejected so an older cocoon does not silently misread it.
 	Version = 1
@@ -50,6 +46,15 @@ var (
 	ErrBadChecksum = errors.New("lockfile: checksum is not 64 lowercase hex chars")
 	// ErrEmptyVersion is returned by Load when a plugin entry has no version.
 	ErrEmptyVersion = errors.New("lockfile: plugin entry has an empty version")
+	// ErrUnsafeVersion is returned when a plugin entry's version or an extra
+	// value contains a character that is unsafe to interpolate into the
+	// generated Dockerfile's env pairs (PIN="..." and the per-plugin
+	// [install.extra_versions] vars) — newline, CR, double quote, backslash,
+	// $, or backtick. Load rejects a hand-tampered lock; Save refuses to record
+	// values resolved from a malicious upstream. The enable-array pin and the
+	// [plugins.options] extras are already bounded by the same guard, so this
+	// closes the lock as the one remaining unvalidated path into those sinks.
+	ErrUnsafeVersion = errors.New("lockfile: plugin version or extra value contains an unsafe character")
 	// ErrMissingVersion is returned by Load when the file has no lock_version
 	// (decoded as 0): a malformed or foreign lock that must be regenerated.
 	ErrMissingVersion = errors.New("lockfile: missing lock_version (regenerate with `cocoon lock`)")
@@ -126,6 +131,17 @@ func (l *Lock) validate() error {
 		if p.Version == "" {
 			return fmt.Errorf("plugin %q: %w", p.ID, ErrEmptyVersion)
 		}
+		if bad, r := config.UnsafeExtraVersionRune(p.Version); bad {
+			return fmt.Errorf("plugin %q: %w (%q)", p.ID, ErrUnsafeVersion, r)
+		}
+		// Extra values land in the same Dockerfile env pairs as the version
+		// (the per-plugin [install.extra_versions] vars), so they need the same
+		// guard. Sorted so the reported rune is deterministic across runs.
+		for _, k := range slices.Sorted(maps.Keys(p.Extra)) {
+			if bad, r := config.UnsafeExtraVersionRune(p.Extra[k]); bad {
+				return fmt.Errorf("plugin %q extra %q: %w (%q)", p.ID, k, ErrUnsafeVersion, r)
+			}
+		}
 		for _, cs := range []string{p.ChecksumAMD64, p.ChecksumARM64} {
 			if cs != "" && !rxSha256.MatchString(cs) {
 				return fmt.Errorf("plugin %q: %w", p.ID, ErrBadChecksum)
@@ -135,9 +151,9 @@ func (l *Lock) validate() error {
 	return nil
 }
 
-// Marshal renders the lock to its canonical on-disk bytes (a fixed header
+// marshal renders the lock to its canonical on-disk bytes (a fixed header
 // comment plus TOML). Plugins are sorted by ID so the output is stable.
-func Marshal(l *Lock) ([]byte, error) {
+func marshal(l *Lock) ([]byte, error) {
 	sorted := make([]LockPlugin, len(l.Plugins))
 	copy(sorted, l.Plugins)
 	slices.SortFunc(sorted, func(a, b LockPlugin) int { return strings.Compare(a.ID, b.ID) })
@@ -148,9 +164,16 @@ func Marshal(l *Lock) ([]byte, error) {
 	return append([]byte(header), body...), nil
 }
 
-// Save atomically writes the lock to path (0o644).
+// Save atomically writes the lock to path (0o644) in canonical form: a fixed
+// header comment plus TOML with plugins sorted by ID, byte-stable across runs
+// so a committed lock diffs cleanly. It validates first so an invalid lock
+// (e.g. a version resolved from a malicious upstream) is never written — Save
+// and Load enforce the same invariant.
 func Save(path string, l *Lock) error {
-	data, err := Marshal(l)
+	if err := l.validate(); err != nil {
+		return fmt.Errorf("%s: %w", path, err)
+	}
+	data, err := marshal(l)
 	if err != nil {
 		return err
 	}

@@ -10,6 +10,7 @@ import (
 
 	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
 	gencli "github.com/sukekyo26/cocoon/internal/cli/gen"
+	"github.com/sukekyo26/cocoon/internal/generate/compose"
 )
 
 // pinEnglish forces the i18n catalog to English for assertion stability.
@@ -132,6 +133,104 @@ func TestGen_LoadFailureHasSingleFailurePrefix(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "failure: failure") {
 		t.Errorf("doubled \"failure:\" prefix in error: %q", err.Error())
+	}
+}
+
+// TestGen_GenerateFailureHasSinglePrefix pins that a generator-stage failure
+// surfaces with a single artifact prefix ("compose: …"), not the doubled
+// "compose: compose: …" that resulted when BuildArtifacts re-wrapped an
+// already-prefixed error with an i18n key equal to the artifact name
+// (defensive-coding §3: wrap once per call chain). A reserved [volumes] name
+// passes config validation but collides inside compose.Generate, so the
+// failure originates in BuildArtifacts rather than LoadContext.
+func TestGen_GenerateFailureHasSinglePrefix(t *testing.T) {
+	work := t.TempDir()
+	home := filepath.Join(work, "home")
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		t.Fatalf("mkdir home: %v", err)
+	}
+	t.Setenv("HOME", home)
+	pinEnglish(t)
+	t.Chdir(work)
+
+	bad := minimalWorkspaceTOML + "\n[volumes]\ncocoon = \"/home/alice/state\"\n"
+	if err := os.WriteFile(filepath.Join(work, "workspace.toml"), []byte(bad), 0o600); err != nil {
+		t.Fatalf("write workspace.toml: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	cmd := gencli.NewCommand(&stdout, &stderr)
+	cmd.SetArgs(nil)
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected an error for a reserved [volumes] name")
+	}
+	if !errors.Is(err, clihelpers.ErrFailure) {
+		t.Errorf("expected ErrFailure, got %v", err)
+	}
+	if !errors.Is(err, compose.ErrVolumeNameConflict) {
+		t.Errorf("expected ErrVolumeNameConflict, got %v", err)
+	}
+	if strings.Contains(err.Error(), "compose: compose:") {
+		t.Errorf("doubled artifact prefix in error: %q", err.Error())
+	}
+	if !strings.Contains(err.Error(), "compose:") {
+		t.Errorf("expected single \"compose:\" prefix in error: %q", err.Error())
+	}
+}
+
+// TestGen_RejectsMaliciousLockVersion pins that `cocoon gen` refuses a lock
+// whose version embeds a Dockerfile/shell metacharacter, rather than
+// interpolating it verbatim into the install step's PIN="..." env pair. A
+// hand-tampered cocoon.lock with a newline-bearing version is the build-time
+// RCE vector; gen must fail before writing any artifact.
+func TestGen_RejectsMaliciousLockVersion(t *testing.T) {
+	// No t.Parallel(): t.Setenv/t.Chdir block parallel execution.
+	work := t.TempDir()
+	home := filepath.Join(work, "home")
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		t.Fatalf("mkdir home: %v", err)
+	}
+	t.Setenv("HOME", home)
+	pinEnglish(t)
+	t.Chdir(work)
+
+	ws := strings.ReplaceAll(minimalWorkspaceTOML, "enable = []", `enable = ["go=latest"]`)
+	if err := os.WriteFile(filepath.Join(work, "workspace.toml"), []byte(ws), 0o600); err != nil {
+		t.Fatalf("write workspace.toml: %v", err)
+	}
+	// version's \n is a TOML basic-string escape: go-toml decodes it to a real
+	// newline, which (unguarded) would split PIN="..." and inject a RUN.
+	lock := "lock_version = 1\ninputs_hash = 'x'\n\n[[plugins]]\nid = 'go'\nrequested = 'latest'\n" +
+		"version = \"1.0\\nRUN touch /tmp/pwned\"\n"
+	if err := os.WriteFile(filepath.Join(work, "cocoon.lock"), []byte(lock), 0o600); err != nil {
+		t.Fatalf("write cocoon.lock: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	cmd := gencli.NewCommand(&stdout, &stderr)
+	cmd.SetArgs(nil)
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected gen to reject a lock with an unsafe version")
+	}
+	if !errors.Is(err, clihelpers.ErrFailure) {
+		t.Errorf("expected ErrFailure, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "unsafe character") {
+		t.Errorf("error should explain the unsafe version, got %q", err.Error())
+	}
+	// gen must fail before writing any artifact: assert no partial
+	// .devcontainer/ output, not just the Dockerfile.
+	for _, rel := range []string{
+		".devcontainer/Dockerfile",
+		".devcontainer/docker-compose.yml",
+		".devcontainer/devcontainer.json",
+		".devcontainer/manage.sh",
+	} {
+		if _, statErr := os.Stat(filepath.Join(work, rel)); !os.IsNotExist(statErr) {
+			t.Errorf("%s must not be written when the lock is rejected (stat err = %v)", rel, statErr)
+		}
 	}
 }
 

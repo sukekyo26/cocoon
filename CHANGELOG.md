@@ -6,6 +6,25 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.15.7] - 2026-06-10
+
+### Fixed
+
+- **Security**: `cocoon gen` and `cocoon lock` now reject a `cocoon.lock` whose
+  recorded plugin `version` — or any `[plugins.extra]` value — contains a
+  character that is unsafe to embed in the generated Dockerfile (newline,
+  carriage return, `"`, `\`, `$`, or backtick). A hand-edited lock, or a value
+  resolved from a compromised upstream, could otherwise break out of the
+  install step's `PIN="..."` (or a per-plugin extra-version) env pair and inject
+  arbitrary `RUN` instructions that run at `docker build` time. The
+  `[plugins].enable` pin and `[plugins.options]` values were already validated
+  against the same character set; this closes the lock as the one remaining path
+  into those build arguments.
+- `cocoon gen` no longer doubles the artifact-name prefix in generation failure
+  messages (`dockerfile: dockerfile: …`, `compose: compose: …`,
+  `envfile: envfile: …`). Each generator already prefixes its error with the
+  artifact name, so the CLI now renders the cause once.
+
 ## [0.15.6] - 2026-06-10
 
 ### Changed
@@ -762,7 +781,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Add `COMPOSE_PROJECT_NAME` derivation from the project directory basename so docker compose namespacing matches the host directory.
 - Add i18n catalog (English / Japanese) covering every CLI prompt, error message, and inline `workspace.toml` comment, switched via `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG`.
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.15.6...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.15.7...HEAD
+[0.15.7]: https://github.com/sukekyo26/cocoon/compare/v0.15.6...v0.15.7
 [0.15.6]: https://github.com/sukekyo26/cocoon/compare/v0.15.5...v0.15.6
 [0.15.5]: https://github.com/sukekyo26/cocoon/compare/v0.15.4...v0.15.5
 [0.15.3]: https://github.com/sukekyo26/cocoon/compare/v0.15.2...v0.15.3
