@@ -6,6 +6,8 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+## [0.15.6] - 2026-06-10
+
 ### 変更
 
 - `[workspace] mount_root` が `"."`・`".."` に加えて `".."` の連結（`"../.."`、
@@ -752,7 +754,8 @@ cocoon の主要な変更を記録します。フォーマットは
 - `COMPOSE_PROJECT_NAME` をプロジェクトディレクトリの basename から導出するように変更。docker compose の namespace がホストディレクトリと一致する。
 - 国際化 (英語 / 日本語) カタログを追加。CLI プロンプト・エラーメッセージ・`workspace.toml` インラインコメントすべてを `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` で切替可能。
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.15.5...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.15.6...HEAD
+[0.15.6]: https://github.com/sukekyo26/cocoon/compare/v0.15.5...v0.15.6
 [0.15.5]: https://github.com/sukekyo26/cocoon/compare/v0.15.4...v0.15.5
 [0.15.3]: https://github.com/sukekyo26/cocoon/compare/v0.15.2...v0.15.3
 [0.15.2]: https://github.com/sukekyo26/cocoon/compare/v0.15.1...v0.15.2
