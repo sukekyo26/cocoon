@@ -6,6 +6,19 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Security**: `cocoon gen` and `cocoon lock` now reject a `cocoon.lock` whose
+  recorded plugin `version` — or any `[plugins.extra]` value — contains a
+  character that is unsafe to embed in the generated Dockerfile (newline,
+  carriage return, `"`, `\`, `$`, or backtick). A hand-edited lock, or a value
+  resolved from a compromised upstream, could otherwise break out of the
+  install step's `PIN="..."` (or a per-plugin extra-version) env pair and inject
+  arbitrary `RUN` instructions that run at `docker build` time. The
+  `[plugins].enable` pin and `[plugins.options]` values were already validated
+  against the same character set; this closes the lock as the one remaining path
+  into those build arguments.
+
 ## [0.15.6] - 2026-06-10
 
 ### Changed

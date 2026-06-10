@@ -6,6 +6,17 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+### 修正
+
+- **Security**: `cocoon gen` と `cocoon lock` が、記録されたプラグイン `version`
+  または `[plugins.extra]` の値に、生成 Dockerfile へ埋め込むと危険な文字（改行・
+  復帰・`"`・`\`・`$`・backtick）を含む `cocoon.lock` を拒否するようになりました。
+  従来はこうした lock（手で編集されたもの、または侵害された upstream から解決された
+  値）が install ステップの `PIN="..."`（やプラグインごとの extra-version）env を
+  脱出し、`docker build` 時に実行される任意の `RUN` 命令を注入できました。
+  `[plugins].enable` のピンと `[plugins.options]` の値は同じ文字集合で既に検証済みで、
+  本修正でビルド引数へ至る最後の経路となっていた lock を塞ぎます。
+
 ## [0.15.6] - 2026-06-10
 
 ### 変更
