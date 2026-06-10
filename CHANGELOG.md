@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.15.7] - 2026-06-10
+
 ### Fixed
 
 - **Security**: `cocoon gen` and `cocoon lock` now reject a `cocoon.lock` whose
@@ -779,7 +781,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Add `COMPOSE_PROJECT_NAME` derivation from the project directory basename so docker compose namespacing matches the host directory.
 - Add i18n catalog (English / Japanese) covering every CLI prompt, error message, and inline `workspace.toml` comment, switched via `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG`.
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.15.6...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.15.7...HEAD
+[0.15.7]: https://github.com/sukekyo26/cocoon/compare/v0.15.6...v0.15.7
 [0.15.6]: https://github.com/sukekyo26/cocoon/compare/v0.15.5...v0.15.6
 [0.15.5]: https://github.com/sukekyo26/cocoon/compare/v0.15.4...v0.15.5
 [0.15.3]: https://github.com/sukekyo26/cocoon/compare/v0.15.2...v0.15.3
