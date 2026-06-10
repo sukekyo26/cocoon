@@ -59,7 +59,7 @@ Generation-wide knobs. All fields optional; defaults apply when omitted.
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `mount_root` | string | `"."` | `"."` mounts cwd as the project, `".."` mounts the parent directory so sibling repos are visible. |
+| `mount_root` | string | `"."` | `"."` mounts cwd as the project; a chain of `".."` segments mounts an ancestor that many levels up (`".."` = parent so sibling repos are visible, `"../.."` = grandparent, …). Only `"."` or a pure `".."` chain is accepted. |
 | `dir` | string | `"workspace"` | In-container workdir parent under `/home/<user>/`. Slashes allowed for nested paths (e.g. `"work/myproject"`). Useful when a tool like AWS SAM expects a specific in-container path. Allowed chars: `[A-Za-z0-9._-]` per segment; no leading/trailing slash, no `.` or `..` segments. |
 | `devcontainer` | bool | `true` | Emit `.devcontainer/devcontainer.json` for VS Code Reopen-in-Container. |
 
@@ -70,7 +70,7 @@ dir = "workspace"
 devcontainer = true
 ```
 
-With `mount_root = "."` (default) the in-container path is `/home/<user>/<dir>/<service>`; with `mount_root = ".."` it is `/home/<user>/<dir>`.
+With `mount_root = "."` (default) the in-container path is `/home/<user>/<dir>/<service>`; with any parent mount (`".."`, `"../.."`, …) the mounted ancestor maps flat onto `/home/<user>/<dir>` and the project sits at its original depth beneath it. Use a deeper chain when the project is nested several levels down on the host but you still need its higher-level siblings visible — e.g. cwd `…/org/workspace/app` with `mount_root = "../../.."` exposes the `org` parent.
 
 ---
 

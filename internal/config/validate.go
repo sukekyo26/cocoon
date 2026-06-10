@@ -125,6 +125,25 @@ func IsValidWorkspaceDir(s string) bool {
 	return true
 }
 
+// IsValidMountRoot reports whether s is an accepted [workspace].mount_root:
+// empty (defaults to "."), ".", or a chain of one-or-more ".." segments
+// ("..", "../..", "../../..", …). Absolute paths, named segments, and any
+// mix of "."/".." are rejected so the generated bind mount stays a pure
+// ancestor of the project directory. Shared by WorkspaceSpec.validate and
+// the `cocoon init` --mount-root flag / prompt so all three reject the same
+// inputs.
+func IsValidMountRoot(s string) bool {
+	if s == "" || s == "." {
+		return true
+	}
+	for _, seg := range strings.Split(s, "/") {
+		if seg != ".." {
+			return false
+		}
+	}
+	return true
+}
+
 // IsValidCodeWorkspaceName lets `cocoon gen workspace --name` reject bad
 // input before the output path is computed. Mirrors
 // CodeWorkspaceSpec.validate's two-step check (charset + "not `.` or `..`").
@@ -292,8 +311,8 @@ func (c *CodeWorkspaceSpec) validate(a *Accumulator) {
 }
 
 func (w *WorkspaceSpec) validate(a *Accumulator) {
-	if w.MountRoot != "" && w.MountRoot != "." && w.MountRoot != ".." {
-		a.AddCode("err_field_mount_root_dot_dotdot", nil, "mount_root")
+	if !IsValidMountRoot(w.MountRoot) {
+		a.AddCode("err_field_mount_root_invalid", nil, "mount_root")
 	}
 	if w.Dir == "" {
 		return

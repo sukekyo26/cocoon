@@ -213,6 +213,12 @@ func TestGenerateWorkspaceDirOverride(t *testing.T) {
 			svc:    "svc",
 			expect: `"workspaceFolder": "/home/developer/myapp"`,
 		},
+		{
+			name:   "chain_mount_is_flat",
+			spec:   &config.WorkspaceSpec{MountRoot: "../..", Dir: "myapp"},
+			svc:    "svc",
+			expect: `"workspaceFolder": "/home/developer/myapp"`,
+		},
 	}
 	for _, tc := range cases {
 		tc := tc

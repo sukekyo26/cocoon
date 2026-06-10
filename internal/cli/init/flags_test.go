@@ -149,9 +149,26 @@ func TestApplyFlags_ImageVersionWhitelistedPair(t *testing.T) {
 func TestApplyFlags_InvalidMountRoot(t *testing.T) {
 	t.Parallel()
 	plugins := loadPluginsForTest(t)
-	_, err := applyFlags(&initFlags{MountRoot: "/abs"}, plugins)
-	if !errors.Is(err, clihelpers.ErrUsage) {
-		t.Errorf("expected ErrUsage for /abs mount-root, got %v", err)
+	for _, mountRoot := range []string{"/abs", "../foo", "foo", "./..", "..."} {
+		_, err := applyFlags(&initFlags{MountRoot: mountRoot}, plugins)
+		if !errors.Is(err, clihelpers.ErrUsage) {
+			t.Errorf("--mount-root %q: expected ErrUsage, got %v", mountRoot, err)
+		}
+	}
+}
+
+func TestApplyFlags_MountRootAccepted(t *testing.T) {
+	t.Parallel()
+	plugins := loadPluginsForTest(t)
+	for _, mountRoot := range []string{".", "..", "../..", "../../.."} {
+		ans, err := applyFlags(&initFlags{MountRoot: mountRoot}, plugins)
+		if err != nil {
+			t.Errorf("--mount-root %q rejected: %v", mountRoot, err)
+			continue
+		}
+		if ans.MountRoot != mountRoot || !ans.MountRootSet {
+			t.Errorf("MountRoot = %q MountRootSet=%v want %q true", ans.MountRoot, ans.MountRootSet, mountRoot)
+		}
 	}
 }
 

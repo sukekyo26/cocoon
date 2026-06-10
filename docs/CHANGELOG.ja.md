@@ -6,6 +6,17 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+## [0.15.6] - 2026-06-10
+
+### 変更
+
+- `[workspace] mount_root` が `"."`・`".."` に加えて `".."` の連結（`"../.."`、
+  `"../../.."`、…）を受け付けるようになり、プロジェクトから指定段数だけ上の祖先を
+  マウントできます。ホスト上で数段深くネストしたプロジェクトでも、上位の祖先とその
+  兄弟をコンテナ内に見せたいときに使います。`cocoon init` のマウント範囲に連結を
+  入力する「カスタム」選択肢が増え、`--mount-root` も同じ値を受け付けます。`"."` と
+  `".."` の挙動は変わりません。
+
 ## [0.15.5] - 2026-06-09
 
 ### 変更
@@ -743,7 +754,8 @@ cocoon の主要な変更を記録します。フォーマットは
 - `COMPOSE_PROJECT_NAME` をプロジェクトディレクトリの basename から導出するように変更。docker compose の namespace がホストディレクトリと一致する。
 - 国際化 (英語 / 日本語) カタログを追加。CLI プロンプト・エラーメッセージ・`workspace.toml` インラインコメントすべてを `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` で切替可能。
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.15.5...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.15.6...HEAD
+[0.15.6]: https://github.com/sukekyo26/cocoon/compare/v0.15.5...v0.15.6
 [0.15.5]: https://github.com/sukekyo26/cocoon/compare/v0.15.4...v0.15.5
 [0.15.3]: https://github.com/sukekyo26/cocoon/compare/v0.15.2...v0.15.3
 [0.15.2]: https://github.com/sukekyo26/cocoon/compare/v0.15.1...v0.15.2

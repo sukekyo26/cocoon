@@ -59,7 +59,7 @@
 
 | フィールド | 型 | デフォルト | 説明 |
 |---|---|---|---|
-| `mount_root` | string | `"."` | `"."` は cwd をプロジェクトとしてマウント、`".."` は親ディレクトリをマウントして兄弟リポジトリも見える状態にする。 |
+| `mount_root` | string | `"."` | `"."` は cwd をプロジェクトとしてマウント。`".."` を連結すると、その段数だけ上の祖先をマウントする（`".."` = 親で兄弟リポも見える、`"../.."` = 2 段上、…）。受け付けるのは `"."` か `".."` のみの連結だけ。 |
 | `dir` | string | `"workspace"` | コンテナ内 workdir の親ディレクトリ (`/home/<user>/` 配下)。スラッシュで多段階層も可 (例: `"work/myproject"`)。AWS SAM などコンテナ内パスをホスト構成に合わせたいツール向け。許容文字はセグメントごとに `[A-Za-z0-9._-]`。先頭/末尾スラッシュ・`.`/`..` セグメント禁止。 |
 | `devcontainer` | bool | `true` | VS Code Reopen-in-Container 用の `.devcontainer/devcontainer.json` を生成。 |
 
@@ -70,7 +70,7 @@ dir = "workspace"
 devcontainer = true
 ```
 
-`mount_root = "."` (デフォルト) ではコンテナ内パスは `/home/<user>/<dir>/<service>`、`mount_root = ".."` では `/home/<user>/<dir>`。
+`mount_root = "."` (デフォルト) ではコンテナ内パスは `/home/<user>/<dir>/<service>`。親マウント (`".."`, `"../.."`, …) ではマウントした祖先が `/home/<user>/<dir>` にフラットに対応し、プロジェクトはその下の元の深さに位置する。ホスト上で数段深くネストしたプロジェクトでも上位の兄弟群を見せたいときに深い連結を使う — 例: cwd が `…/org/workspace/app` のとき `mount_root = "../../.."` で `org` の親まで見える。
 
 ---
 

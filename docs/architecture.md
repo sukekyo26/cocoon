@@ -103,6 +103,9 @@ Each artifact is rendered into memory first, then written atomically through `in
 |---|---|---|---|
 | `"."` (default) | cwd | `/home/$USER/<dir>/<service>` | Single-repo development |
 | `".."` | parent of cwd | `/home/$USER/<dir>` | Fat workspace where sibling repos must be visible |
+| `"../.."`, … | the ancestor N levels above cwd | `/home/$USER/<dir>` | Project nested several levels deep on the host, but a higher-level ancestor (and its siblings) must be visible |
+
+Only `"."` or a pure `".."` chain is accepted; the generated bind mount always resolves to an ancestor of the project directory. Every parent mount maps the chosen ancestor flat onto `/home/$USER/<dir>` (only `"."` nests under `<service>`).
 
 `<dir>` defaults to `workspace` and can be overridden via `[workspace] dir` (e.g. `dir = "work/myproject"`) when the in-container path needs to mirror a specific host layout — useful for tools like AWS SAM that key off absolute paths. Multi-segment values land verbatim under `/home/$USER/`.
 

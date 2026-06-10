@@ -161,6 +161,18 @@ func TestWorkspaceBindMount(t *testing.T) {
 			svcName: "dev",
 			want:    "../..:/home/${USERNAME}/myapp:cached",
 		},
+		{
+			name:    "chain_mounts_grandparent_flat",
+			wsSpec:  &config.WorkspaceSpec{MountRoot: "../.."},
+			svcName: "dev",
+			want:    "../../..:/home/${USERNAME}/workspace:cached",
+		},
+		{
+			name:    "deep_chain_with_dir_override",
+			wsSpec:  &config.WorkspaceSpec{MountRoot: "../../..", Dir: "myapp"},
+			svcName: "dev",
+			want:    "../../../..:/home/${USERNAME}/myapp:cached",
+		},
 	}
 
 	for _, tc := range cases {

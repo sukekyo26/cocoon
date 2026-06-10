@@ -19,12 +19,67 @@ func TestWorkspaceSpec_MountRootOrDefault(t *testing.T) {
 		{"empty mount_root", &config.WorkspaceSpec{}, "."},
 		{"explicit dot", &config.WorkspaceSpec{MountRoot: "."}, "."},
 		{"explicit dotdot", &config.WorkspaceSpec{MountRoot: ".."}, ".."},
+		{"chain", &config.WorkspaceSpec{MountRoot: "../.."}, "../.."},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			if got := tc.spec.MountRootOrDefault(); got != tc.want {
 				t.Fatalf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestWorkspaceSpec_IsNestedMount pins the doc claim that only mount_root "."
+// nests the project under <dir>/<service>; every parent mount maps flat.
+func TestWorkspaceSpec_IsNestedMount(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		spec *config.WorkspaceSpec
+		want bool
+	}{
+		{"nil section defaults to nested", nil, true},
+		{"empty defaults to nested", &config.WorkspaceSpec{}, true},
+		{"dot nests", &config.WorkspaceSpec{MountRoot: "."}, true},
+		{"parent is flat", &config.WorkspaceSpec{MountRoot: ".."}, false},
+		{"chain is flat", &config.WorkspaceSpec{MountRoot: "../.."}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := tc.spec.IsNestedMount(); got != tc.want {
+				t.Fatalf("IsNestedMount() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestWorkspaceSpec_HostMountPath pins the doc claim that the compose-relative
+// source carries exactly one extra ".." over mount_root (compose resolves bind
+// paths against .devcontainer/).
+func TestWorkspaceSpec_HostMountPath(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		spec *config.WorkspaceSpec
+		want string
+	}{
+		{"nil section", nil, ".."},
+		{"empty", &config.WorkspaceSpec{}, ".."},
+		{"dot", &config.WorkspaceSpec{MountRoot: "."}, ".."},
+		{"parent", &config.WorkspaceSpec{MountRoot: ".."}, "../.."},
+		{"grandparent", &config.WorkspaceSpec{MountRoot: "../.."}, "../../.."},
+		{"three levels", &config.WorkspaceSpec{MountRoot: "../../.."}, "../../../.."},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := tc.spec.HostMountPath(); got != tc.want {
+				t.Fatalf("HostMountPath() = %q, want %q", got, tc.want)
 			}
 		})
 	}
@@ -58,28 +113,33 @@ func TestWorkspaceSpec_DevContainerOrDefault(t *testing.T) {
 func TestWorkspace_ValidateRejectsBadMountRoot(t *testing.T) {
 	t.Parallel()
 
-	ws := &config.Workspace{
-		Workspace: &config.WorkspaceSpec{MountRoot: "../.."},
-		Container: config.ContainerSpec{
-			ServiceName:  "dev",
-			Username:     "shogo",
-			Image:        "ubuntu",
-			ImageVersion: "24.04",
-		},
-	}
-	err := ws.Validate("test.toml")
-	if err == nil {
-		t.Fatal("expected validation error for mount_root = '../..'")
-	}
-	if !strings.Contains(err.Error(), "mount_root") {
-		t.Fatalf("error did not mention mount_root: %v", err)
+	for _, mountRoot := range []string{"../foo", "foo", "/abs", "./..", "...", "../"} {
+		t.Run(mountRoot, func(t *testing.T) {
+			t.Parallel()
+			ws := &config.Workspace{
+				Workspace: &config.WorkspaceSpec{MountRoot: mountRoot},
+				Container: config.ContainerSpec{
+					ServiceName:  "dev",
+					Username:     "shogo",
+					Image:        "ubuntu",
+					ImageVersion: "24.04",
+				},
+			}
+			err := ws.Validate("test.toml")
+			if err == nil {
+				t.Fatalf("expected validation error for mount_root = %q", mountRoot)
+			}
+			if !strings.Contains(err.Error(), "mount_root") {
+				t.Fatalf("error did not mention mount_root: %v", err)
+			}
+		})
 	}
 }
 
 func TestWorkspace_ValidateAcceptsValidMountRoot(t *testing.T) {
 	t.Parallel()
 
-	for _, mountRoot := range []string{"", ".", ".."} {
+	for _, mountRoot := range []string{"", ".", "..", "../..", "../../.."} {
 		ws := &config.Workspace{
 			Workspace: &config.WorkspaceSpec{MountRoot: mountRoot},
 			Container: config.ContainerSpec{
@@ -202,6 +262,37 @@ func TestIsValidWorkspaceDir(t *testing.T) {
 			t.Parallel()
 			if got := config.IsValidWorkspaceDir(tc.in); got != tc.want {
 				t.Fatalf("IsValidWorkspaceDir(%q) = %v, want %v", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestIsValidMountRoot(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		in   string
+		want bool
+	}{
+		{"", true},
+		{".", true},
+		{"..", true},
+		{"../..", true},
+		{"../../..", true},
+		{"../foo", false},
+		{"foo", false},
+		{"/abs", false},
+		{"./..", false},
+		{"...", false},
+		{"../", false},
+		{"..//..", false},
+		{"../.", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.in, func(t *testing.T) {
+			t.Parallel()
+			if got := config.IsValidMountRoot(tc.in); got != tc.want {
+				t.Fatalf("IsValidMountRoot(%q) = %v, want %v", tc.in, got, tc.want)
 			}
 		})
 	}
