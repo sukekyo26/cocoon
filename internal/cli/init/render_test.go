@@ -55,6 +55,20 @@ func TestRenderWorkspaceToml_WithPackages(t *testing.T) {
 	}
 }
 
+// TestRenderWorkspaceToml_DeepMountChain pins that a multi-level mount_root
+// chain round-trips verbatim into the generated toml.
+func TestRenderWorkspaceToml_DeepMountChain(t *testing.T) {
+	t.Parallel()
+	cat := i18n.New(i18n.LangEN)
+	got := renderWorkspaceToml(containerSpec{
+		ServiceName: "svc", Username: "dev", Image: "ubuntu", ImageVersion: "24.04",
+		Shell: "bash", MountRoot: "../..", Devcontainer: true, Packages: nil,
+	}, cat)
+	if !strings.Contains(got, `mount_root = "../.."`) {
+		t.Errorf("output missing `mount_root = \"../..\"`\n--- got ---\n%s", got)
+	}
+}
+
 func TestRenderWorkspaceToml_WithPlugins(t *testing.T) {
 	t.Parallel()
 	cat := i18n.New(i18n.LangEN)

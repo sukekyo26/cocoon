@@ -63,13 +63,18 @@ func (l *LockFileSpec) NameOrDefault() string {
 // WorkspaceSpec models the optional [workspace] section. Defaults apply when
 // the section is missing or fields are zero.
 type WorkspaceSpec struct {
-	// MountRoot selects which host directory is bind-mounted at /workspace.
+	// MountRoot selects which slice of the host filesystem is bind-mounted
+	// into the container under /home/<user>/<dir> (a cwd-only "." mount nests
+	// the project at <dir>/<service> — see IsNestedMount / HostMountPath).
 	//
-	//   "."  — mount the project directory itself (default).
-	//   ".." — mount the parent directory so sibling repos are visible.
+	//   "."     — mount the project directory itself (default).
+	//   ".."    — mount the parent directory so sibling repos are visible.
+	//   "../.." — mount an ancestor N levels up; any chain of ".." segments
+	//             is accepted to reach a higher "fat workspace" root.
 	//
-	// The picker in `cocoon init` writes one of these two values and
-	// nothing else; loaders enforce the same constraint.
+	// IsValidMountRoot is the single gate: empty, ".", or a chain of ".."
+	// segments. The `cocoon init` picker offers "."/".." plus a free-text
+	// entry for deeper chains, and the loader enforces the same constraint.
 	MountRoot string `toml:"mount_root,omitempty"`
 
 	// Dir overrides the in-container workdir parent directory under
@@ -92,6 +97,27 @@ func (w *WorkspaceSpec) MountRootOrDefault() string {
 		return "."
 	}
 	return w.MountRoot
+}
+
+// IsNestedMount reports whether only the project directory is bind-mounted
+// (mount_root "."), in which case the host source already carries the project
+// basename and the container path nests it under <dir>/<service>. Any parent
+// mount ("..", "../..", …) maps the host directory flat onto <dir>.
+func (w *WorkspaceSpec) IsNestedMount() bool {
+	return w.MountRootOrDefault() == "."
+}
+
+// HostMountPath returns the bind-mount source path relative to the generated
+// compose file, which lives in .devcontainer/. Compose resolves relative bind
+// paths against the compose file's directory, so reaching the project root
+// (mount_root ".") takes one ".." and every extra ancestor level adds another:
+// "." → "..", ".." → "../..", "../.." → "../../..".
+func (w *WorkspaceSpec) HostMountPath() string {
+	mr := w.MountRootOrDefault()
+	if mr == "." {
+		return ".."
+	}
+	return "../" + mr
 }
 
 func (w *WorkspaceSpec) DirOrDefault() string {

@@ -230,27 +230,26 @@ type volPair struct {
 }
 
 // workspaceBindMount returns the host:container bind mount line for the
-// workspace, choosing between cwd-only and parent-dir mounts based on
-// [workspace] mount_root.
+// workspace. The host source and the nesting of the container target both
+// derive from [workspace] mount_root via WorkspaceSpec helpers.
 //
-// docker-compose resolves bind mount relative paths against the
-// directory that holds the compose file, not the current working
-// directory. The generated compose file lives at
-// .devcontainer/docker-compose.yml, so reaching the project root takes
-// `..` and reaching the project's parent (the sibling-repos workspace
-// requested by mount_root = "..") takes `../..`.
+// docker-compose resolves bind mount relative paths against the directory
+// that holds the compose file, not the current working directory. The
+// generated compose file lives at .devcontainer/docker-compose.yml, so the
+// source path carries one extra ".." (HostMountPath owns that mapping). A
+// cwd-only mount (IsNestedMount) keeps the project basename on the host side,
+// so the container target nests it under <dir>/<service>; any parent mount
+// maps the host directory flat onto <dir>.
 //
 // The :cached flag is a no-op on Linux but is the macOS performance
 // hint v1 used to set in the override compose file; keeping it in the
 // generated output preserves that behaviour.
 func workspaceBindMount(ctx *generate.WorkspaceContext) string {
-	dir := ctx.WS.Workspace.DirOrDefault()
-	switch ctx.WS.Workspace.MountRootOrDefault() {
-	case "..":
-		return "../..:/home/${USERNAME}/" + dir + ":cached"
-	default:
-		return "..:/home/${USERNAME}/" + dir + "/" + ctx.ServiceName() + ":cached"
+	target := "/home/${USERNAME}/" + ctx.WS.Workspace.DirOrDefault()
+	if ctx.WS.Workspace.IsNestedMount() {
+		target += "/" + ctx.ServiceName()
 	}
+	return ctx.WS.Workspace.HostMountPath() + ":" + target + ":cached"
 }
 
 func buildVolumeMounts(
@@ -359,7 +358,7 @@ func buildService(ctx *generate.WorkspaceContext, mounts []*yaml.Node) *yaml.Nod
 		pairs = append(pairs, yamlx.Pair{Key: "sysctls", Value: yamlx.Map(entries...)})
 	}
 	pairs = append(pairs, runtimeOptionPairs(ctx)...)
-	if ctx.WS.Workspace.MountRootOrDefault() == "." {
+	if ctx.WS.Workspace.IsNestedMount() {
 		// `mount_root = "."` mounts only the project so the host bind point
 		// already includes the project basename. Emit a matching
 		// working_dir so `cocoon exec` lands inside the project tree
