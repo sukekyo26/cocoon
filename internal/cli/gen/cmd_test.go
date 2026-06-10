@@ -176,9 +176,17 @@ func TestGen_RejectsMaliciousLockVersion(t *testing.T) {
 	if !strings.Contains(err.Error(), "unsafe character") {
 		t.Errorf("error should explain the unsafe version, got %q", err.Error())
 	}
-	// gen must fail before writing: no injected Dockerfile on disk.
-	if _, statErr := os.Stat(filepath.Join(work, ".devcontainer/Dockerfile")); !os.IsNotExist(statErr) {
-		t.Errorf(".devcontainer/Dockerfile must not be written when the lock is rejected (stat err = %v)", statErr)
+	// gen must fail before writing any artifact: assert no partial
+	// .devcontainer/ output, not just the Dockerfile.
+	for _, rel := range []string{
+		".devcontainer/Dockerfile",
+		".devcontainer/docker-compose.yml",
+		".devcontainer/devcontainer.json",
+		".devcontainer/manage.sh",
+	} {
+		if _, statErr := os.Stat(filepath.Join(work, rel)); !os.IsNotExist(statErr) {
+			t.Errorf("%s must not be written when the lock is rejected (stat err = %v)", rel, statErr)
+		}
 	}
 }
 
