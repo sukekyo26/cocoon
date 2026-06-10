@@ -19,7 +19,7 @@ func sampleLock() *lockfile.Lock {
 		LockVersion: lockfile.Version,
 		InputsHash:  "deadbeef",
 		Plugins: []lockfile.LockPlugin{
-			// Intentionally unsorted to prove Marshal sorts by ID.
+			// Intentionally unsorted to prove Save sorts by ID.
 			{ID: "node", Requested: "latest", Version: "22.15.0", ChecksumAMD64: hexA, ChecksumARM64: hexA},               //nolint:exhaustruct // no extras
 			{ID: "go", Requested: "=1.23.4", Version: "1.23.4"},                                                           //nolint:exhaustruct // no checksum
 			{ID: "android-sdk", Requested: "=14742923", Version: "14742923", Extra: map[string]string{"api_level": "35"}}, //nolint:exhaustruct // no checksum
@@ -27,11 +27,14 @@ func sampleLock() *lockfile.Lock {
 	}
 }
 
-// TestMarshal_SortedAndOmitEmpty pins that Marshal emits the header, sorts
-// plugins by id (deterministic diffs), and omits empty checksums.
-func TestMarshal_SortedAndOmitEmpty(t *testing.T) {
+// TestSave_CanonicalSortedAndOmitEmpty pins that Save writes the canonical
+// form: the header, plugins sorted by id (deterministic diffs), and omitted
+// empty checksums.
+func TestSave_CanonicalSortedAndOmitEmpty(t *testing.T) {
 	t.Parallel()
-	got, err := lockfile.Marshal(sampleLock())
+	path := filepath.Join(t.TempDir(), config.DefaultLockFileName)
+	require.NoError(t, lockfile.Save(path, sampleLock()))
+	got, err := os.ReadFile(path)
 	require.NoError(t, err)
 	s := string(got)
 	require.True(t, strings.HasPrefix(s, "# cocoon.lock"), "missing header:\n%s", s)
@@ -49,13 +52,18 @@ func TestMarshal_SortedAndOmitEmpty(t *testing.T) {
 	require.Contains(t, s, "[plugins.extra]")
 }
 
-// TestMarshal_StableAcrossRuns pins byte-for-byte determinism (the whole
+// TestSave_StableAcrossRuns pins byte-for-byte determinism (the whole
 // reason cocoon.lock is committed and diffed).
-func TestMarshal_StableAcrossRuns(t *testing.T) {
+func TestSave_StableAcrossRuns(t *testing.T) {
 	t.Parallel()
-	a, err := lockfile.Marshal(sampleLock())
+	dir := t.TempDir()
+	pathA := filepath.Join(dir, "a.lock")
+	pathB := filepath.Join(dir, "b.lock")
+	require.NoError(t, lockfile.Save(pathA, sampleLock()))
+	require.NoError(t, lockfile.Save(pathB, sampleLock()))
+	a, err := os.ReadFile(pathA)
 	require.NoError(t, err)
-	b, err := lockfile.Marshal(sampleLock())
+	b, err := os.ReadFile(pathB)
 	require.NoError(t, err)
 	require.Equal(t, string(a), string(b))
 }
@@ -63,7 +71,7 @@ func TestMarshal_StableAcrossRuns(t *testing.T) {
 // TestSaveLoad_RoundTrip pins that Save → Load preserves the (sorted) lock.
 func TestSaveLoad_RoundTrip(t *testing.T) {
 	t.Parallel()
-	path := filepath.Join(t.TempDir(), lockfile.FileName)
+	path := filepath.Join(t.TempDir(), config.DefaultLockFileName)
 	require.NoError(t, lockfile.Save(path, sampleLock()))
 
 	got, err := lockfile.Load(path)
@@ -91,7 +99,7 @@ func TestLoad_Errors(t *testing.T) {
 	// *config.ValidationError rather than a lockfile sentinel.
 	t.Run("unknown_field", func(t *testing.T) {
 		t.Parallel()
-		path := filepath.Join(t.TempDir(), lockfile.FileName)
+		path := filepath.Join(t.TempDir(), config.DefaultLockFileName)
 		require.NoError(t, os.WriteFile(path, []byte("lock_version = 1\ninputs_hash = 'x'\nbogus = true\n"), 0o600))
 		_, err := lockfile.Load(path)
 		var verr *config.ValidationError
@@ -137,7 +145,7 @@ func TestLoad_Errors(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			path := filepath.Join(t.TempDir(), lockfile.FileName)
+			path := filepath.Join(t.TempDir(), config.DefaultLockFileName)
 			require.NoError(t, os.WriteFile(path, []byte(tc.body), 0o600))
 			_, err := lockfile.Load(path)
 			require.ErrorIs(t, err, tc.wantIs)
@@ -169,7 +177,7 @@ func TestLoad_RejectsUnsafeVersion(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			path := filepath.Join(t.TempDir(), lockfile.FileName)
+			path := filepath.Join(t.TempDir(), config.DefaultLockFileName)
 			require.NoError(t, os.WriteFile(path, []byte(head+tc.body+"\n"), 0o600))
 			_, err := lockfile.Load(path)
 			require.ErrorIs(t, err, lockfile.ErrUnsafeVersion)
@@ -207,7 +215,7 @@ func TestSave_RejectsUnsafeVersion(t *testing.T) {
 					{ID: "go", Requested: "latest", Version: tc.version, Extra: tc.extra}, //nolint:exhaustruct // no checksum
 				},
 			}
-			path := filepath.Join(t.TempDir(), lockfile.FileName)
+			path := filepath.Join(t.TempDir(), config.DefaultLockFileName)
 			err := lockfile.Save(path, l)
 			require.ErrorIs(t, err, lockfile.ErrUnsafeVersion)
 			_, statErr := os.Stat(path)
@@ -238,13 +246,13 @@ func TestFind_NilSafe(t *testing.T) {
 }
 
 // TestPathFor pins the lock path resolution: with no [lockfile] section the
-// basename defaults to FileName; with a configured name it wins. Both join to
-// the workspace.toml directory.
+// basename defaults to config.DefaultLockFileName; with a configured name it
+// wins. Both join to the workspace.toml directory.
 func TestPathFor(t *testing.T) {
 	t.Parallel()
 	wsPath := filepath.Join("proj", "workspace.toml")
 	require.Equal(t,
-		filepath.Join("proj", lockfile.FileName),
+		filepath.Join("proj", config.DefaultLockFileName),
 		lockfile.PathFor(wsPath, &config.Workspace{}))
 	name := "custom.lock"
 	require.Equal(t,

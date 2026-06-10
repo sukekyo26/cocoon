@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/sukekyo26/cocoon/internal/cli/clihelpers"
+	"github.com/sukekyo26/cocoon/internal/config"
 	"github.com/sukekyo26/cocoon/internal/lockfile"
 	"github.com/sukekyo26/cocoon/internal/plugin/resolve"
 )
@@ -119,7 +120,7 @@ build_tools = { env = "DEMO_BUILD_TOOLS", default = "35.0.0" }
 // default cocoon.lock path.
 func seedProject(t *testing.T, enable string, plugins map[string]string) string {
 	t.Helper()
-	return filepath.Join(seedProjectExtra(t, enable, "", plugins), lockfile.FileName)
+	return filepath.Join(seedProjectExtra(t, enable, "", plugins), config.DefaultLockFileName)
 }
 
 // seedProjectExtra is seedProject with an extra block of top-level TOML
@@ -380,7 +381,7 @@ func TestLock_ExtraDriftRelocksWithoutNetwork(t *testing.T) {
 	}
 	proj := seedProjectExtra(t, `"demo=1.2.3"`, opt("34.0.0"),
 		map[string]string{"demo": extraSourcePluginTOML})
-	lockPath := filepath.Join(proj, lockfile.FileName)
+	lockPath := filepath.Join(proj, config.DefaultLockFileName)
 	f := demoFetcher()
 	swapFetcher(t, f)
 
