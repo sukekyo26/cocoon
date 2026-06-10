@@ -434,8 +434,9 @@ func pickRepoDir(override, root string) string {
 // colon-joined set of bind-mount paths at or under the user's home. docker-entrypoint.sh
 // stats the workspace to detect the host uid/gid, and must never chown a bind
 // mount (that rewrites ownership on the host). The nesting branch mirrors
-// compose.workspaceBindMount: only a cwd-only mount (IsNestedMount) carries the
-// project basename, so any parent mount ("..", "../..", …) stays flat at <dir>.
+// compose.workspaceBindMount: only a cwd-only mount (IsNestedMount) nests the
+// workspace under <dir>/<service> (ctx.ServiceName()), so any parent mount
+// ("..", "../..", …) stays flat at <dir>.
 func cocoonEntrypointPaths(ctx *generate.WorkspaceContext) (workspace, bindPaths string) {
 	user := ctx.Username()
 	home := "/home/" + user
