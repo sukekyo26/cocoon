@@ -26,11 +26,6 @@ import (
 )
 
 const (
-	// FileName is the default lock file basename, written at the workspace
-	// root alongside the discovered config file when [lockfile].name is unset. It aliases
-	// config.DefaultLockFileName (the schema accessor's source of truth) so
-	// the two never drift.
-	FileName = config.DefaultLockFileName
 	// Version is the current lock-format version. A lock with a newer
 	// Version is rejected so an older cocoon does not silently misread it.
 	Version = 1
@@ -156,9 +151,9 @@ func (l *Lock) validate() error {
 	return nil
 }
 
-// Marshal renders the lock to its canonical on-disk bytes (a fixed header
+// marshal renders the lock to its canonical on-disk bytes (a fixed header
 // comment plus TOML). Plugins are sorted by ID so the output is stable.
-func Marshal(l *Lock) ([]byte, error) {
+func marshal(l *Lock) ([]byte, error) {
 	sorted := make([]LockPlugin, len(l.Plugins))
 	copy(sorted, l.Plugins)
 	slices.SortFunc(sorted, func(a, b LockPlugin) int { return strings.Compare(a.ID, b.ID) })
@@ -169,14 +164,16 @@ func Marshal(l *Lock) ([]byte, error) {
 	return append([]byte(header), body...), nil
 }
 
-// Save atomically writes the lock to path (0o644). It validates first so an
-// invalid lock (e.g. a version resolved from a malicious upstream) is never
-// written — Save and Load enforce the same invariant.
+// Save atomically writes the lock to path (0o644) in canonical form: a fixed
+// header comment plus TOML with plugins sorted by ID, byte-stable across runs
+// so a committed lock diffs cleanly. It validates first so an invalid lock
+// (e.g. a version resolved from a malicious upstream) is never written — Save
+// and Load enforce the same invariant.
 func Save(path string, l *Lock) error {
 	if err := l.validate(); err != nil {
 		return fmt.Errorf("%s: %w", path, err)
 	}
-	data, err := Marshal(l)
+	data, err := marshal(l)
 	if err != nil {
 		return err
 	}
