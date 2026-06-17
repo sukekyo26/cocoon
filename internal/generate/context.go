@@ -234,24 +234,10 @@ func (c *WorkspaceContext) SkelEntries() []config.SkelEntry {
 // (seccomp, apparmor, no-new-privileges) so generated YAML is deterministic.
 // Returns nil when the section is absent or empty.
 func (c *WorkspaceContext) SecurityOptions() []string {
-	if c.WS == nil || c.WS.Container.SecurityOpt == nil {
+	if c.WS == nil {
 		return nil
 	}
-	s := c.WS.Container.SecurityOpt
-	out := make([]string, 0, 3)
-	if s.Seccomp != nil {
-		out = append(out, "seccomp="+*s.Seccomp)
-	}
-	if s.AppArmor != nil {
-		out = append(out, "apparmor="+*s.AppArmor)
-	}
-	if s.NoNewPrivileges != nil && *s.NoNewPrivileges {
-		out = append(out, "no-new-privileges:true")
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
+	return c.WS.Container.SecurityOpt.ComposeArgs()
 }
 
 // GroupAdd returns the user-configured Compose `group_add:` list. Never

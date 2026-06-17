@@ -17,6 +17,7 @@ func TestGenerate_WithSidecars(t *testing.T) {
 	t.Parallel()
 
 	restart := config.RestartUnlessStopped
+	seccomp := "unconfined"
 	ws := &config.Workspace{
 		Container: config.ContainerSpec{
 			ServiceName: "dev", Username: "dev", Image: "ubuntu", ImageVersion: "24.04",
@@ -39,6 +40,13 @@ func TestGenerate_WithSidecars(t *testing.T) {
 				Ports:     []any{6379},
 				DependsOn: []string{"db"},
 			},
+			"emu": {
+				Image:        "redroid/redroid:13.0.0-latest",
+				Privileged:   true,
+				Devices:      []string{"/dev/binder:/dev/binder"},
+				Capabilities: &config.CapabilitiesSpec{Add: []string{"SYS_ADMIN"}, Drop: []string{"NET_RAW"}},
+				SecurityOpt:  &config.SecurityOptSpec{Seccomp: &seccomp},
+			},
 		},
 	}
 
@@ -58,6 +66,15 @@ func TestGenerate_WithSidecars(t *testing.T) {
 		"healthcheck:",
 		`restart: "unless-stopped"`,
 		"pgdata:", // named volume from sidecar volumes
+		"redroid/redroid:13.0.0-latest",
+		"privileged: true",
+		"/dev/binder:/dev/binder",
+		"cap_add:",
+		"SYS_ADMIN", // cap_add value, not just the key
+		"cap_drop:",
+		"NET_RAW", // cap_drop value, not just the key
+		"security_opt:",
+		"seccomp=unconfined",
 	} {
 		if !strings.Contains(got, sub) {
 			t.Errorf("missing %q in:\n%s", sub, got)

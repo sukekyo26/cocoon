@@ -6,6 +6,20 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-06-17
+
+### Added
+
+- `[services.<name>]` sidecars now accept `privileged`, `devices`,
+  `[services.<name>.capabilities]` (`add` / `drop`), and `security_opt`.
+  `devices`, `capabilities`, and `security_opt` mirror the existing
+  `[container]` fields; `privileged` is new (the main container has no
+  `privileged` option). This lets a sidecar inject host devices and kernel
+  features, e.g. an Android emulator (redroid) that needs `privileged` and
+  `/dev/binder`. Capability and device values are validated like the
+  container's; the entrypoint-required-drop guard does not apply to sidecars
+  (they run their own image).
+
 ## [0.15.7] - 2026-06-10
 
 ### Fixed
@@ -781,7 +795,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Add `COMPOSE_PROJECT_NAME` derivation from the project directory basename so docker compose namespacing matches the host directory.
 - Add i18n catalog (English / Japanese) covering every CLI prompt, error message, and inline `workspace.toml` comment, switched via `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG`.
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.15.7...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/sukekyo26/cocoon/compare/v0.15.7...v0.16.0
 [0.15.7]: https://github.com/sukekyo26/cocoon/compare/v0.15.6...v0.15.7
 [0.15.6]: https://github.com/sukekyo26/cocoon/compare/v0.15.5...v0.15.6
 [0.15.5]: https://github.com/sukekyo26/cocoon/compare/v0.15.4...v0.15.5

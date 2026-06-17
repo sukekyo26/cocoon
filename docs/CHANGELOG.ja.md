@@ -6,6 +6,20 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-06-17
+
+### 追加
+
+- `[services.<name>]` サイドカーで `privileged` / `devices` /
+  `[services.<name>.capabilities]` (`add` / `drop`) / `security_opt` を
+  指定できるようにした。`devices` / `capabilities` / `security_opt` は既存の
+  `[container]` のフィールドと同じもので、`privileged` は新規追加 (メイン
+  コンテナに `privileged` オプションは無い)。これによりサイドカーが
+  ホストデバイスやカーネル機能を注入できる (例: `privileged` と
+  `/dev/binder` を要する Android エミュレータ redroid)。capability と
+  device の値はメインコンテナと同様に検証する。entrypoint 必須 cap の
+  drop 禁止チェックはサイドカーには適用されない (自前のイメージで動くため)。
+
 ## [0.15.7] - 2026-06-10
 
 ### 修正
@@ -771,7 +785,8 @@ cocoon の主要な変更を記録します。フォーマットは
 - `COMPOSE_PROJECT_NAME` をプロジェクトディレクトリの basename から導出するように変更。docker compose の namespace がホストディレクトリと一致する。
 - 国際化 (英語 / 日本語) カタログを追加。CLI プロンプト・エラーメッセージ・`workspace.toml` インラインコメントすべてを `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` で切替可能。
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.15.7...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/sukekyo26/cocoon/compare/v0.15.7...v0.16.0
 [0.15.7]: https://github.com/sukekyo26/cocoon/compare/v0.15.6...v0.15.7
 [0.15.6]: https://github.com/sukekyo26/cocoon/compare/v0.15.5...v0.15.6
 [0.15.5]: https://github.com/sukekyo26/cocoon/compare/v0.15.4...v0.15.5

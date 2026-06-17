@@ -686,6 +686,19 @@ var entrypointRequiredCaps = map[string]struct{}{
 }
 
 func (cs *CapabilitiesSpec) validate(a *Accumulator) {
+	cs.validateCommon(a)
+	for i, c := range cs.Drop {
+		if _, required := entrypointRequiredCaps[strings.TrimPrefix(c, "CAP_")]; required {
+			a.AddCode("err_field_cap_required_drop", []any{c}, "drop", fmt.Sprintf("%d", i))
+		}
+	}
+}
+
+// validateCommon checks capability-name syntax, duplicates, and add/drop
+// conflicts — the rules that hold for any container. The main container layers
+// an entrypoint-required-drop check on top (see validate); sidecars run their
+// own image without cocoon's entrypoint, so they call this directly.
+func (cs *CapabilitiesSpec) validateCommon(a *Accumulator) {
 	checkCapList(a.At("add"), cs.Add)
 	checkCapList(a.At("drop"), cs.Drop)
 	addSet := make(map[string]struct{}, len(cs.Add))
@@ -696,11 +709,6 @@ func (cs *CapabilitiesSpec) validate(a *Accumulator) {
 		if _, conflict := addSet[c]; conflict {
 			a.AddCode("err_field_cap_add_drop_conflict", []any{c})
 			break
-		}
-	}
-	for i, c := range cs.Drop {
-		if _, required := entrypointRequiredCaps[strings.TrimPrefix(c, "CAP_")]; required {
-			a.AddCode("err_field_cap_required_drop", []any{c}, "drop", fmt.Sprintf("%d", i))
 		}
 	}
 }
@@ -1087,6 +1095,15 @@ func (w *Workspace) validateServices(a *Accumulator) {
 		}
 		if spec.Restart != nil && !validRestart(*spec.Restart) {
 			scope.AddCode("err_field_restart_invalid", []any{*spec.Restart}, "restart")
+		}
+		validateDevices(scope.At("devices"), spec.Devices)
+		// validateCommon, not validate: the entrypoint-required-drop check is
+		// about cocoon's docker-entrypoint.sh, which sidecars don't run.
+		if spec.Capabilities != nil {
+			spec.Capabilities.validateCommon(scope.At("capabilities"))
+		}
+		if spec.SecurityOpt != nil {
+			spec.SecurityOpt.validate(scope.At("security_opt"))
 		}
 	}
 }
