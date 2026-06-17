@@ -59,8 +59,11 @@ func buildSidecar(name string, spec config.SidecarService) (*yaml.Node, []yamlx.
 }
 
 // sidecarRuntimePairs emits the optional privileged / capability / security /
-// device fields in a fixed order, mirroring runtimeOptionPairs for the main
-// container. Each entry is omitted when its source is unset.
+// device fields in a fixed order so generated YAML is deterministic. This is
+// the set that applies to a sidecar; it is NOT a 1:1 mirror of the main
+// container's runtimeOptionPairs — that set has no privileged and additionally
+// covers group_add / ipc / gpus. Each entry is omitted when its source is
+// unset.
 func sidecarRuntimePairs(spec config.SidecarService) []yamlx.Pair {
 	pairs := make([]yamlx.Pair, 0, 5)
 	if spec.Privileged {
