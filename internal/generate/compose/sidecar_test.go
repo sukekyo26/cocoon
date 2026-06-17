@@ -70,7 +70,9 @@ func TestGenerate_WithSidecars(t *testing.T) {
 		"privileged: true",
 		"/dev/binder:/dev/binder",
 		"cap_add:",
+		"SYS_ADMIN", // cap_add value, not just the key
 		"cap_drop:",
+		"NET_RAW", // cap_drop value, not just the key
 		"security_opt:",
 		"seccomp=unconfined",
 	} {
