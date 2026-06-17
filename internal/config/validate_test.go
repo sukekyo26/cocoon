@@ -1434,6 +1434,45 @@ func TestValidate_ContainerDevicesRejectsBadEntries(t *testing.T) {
 	}
 }
 
+func TestValidate_ServiceAcceptsPrivilegedDevicesCaps(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[services.emu]\nimage = \"redroid/redroid:13\"\nprivileged = true\ndevices = [\"/dev/binder:/dev/binder\"]\n" +
+		"\n[services.emu.capabilities]\nadd = [\"SYS_ADMIN\"]\n" +
+		"\n[services.emu.security_opt]\nseccomp = \"unconfined\"\n"
+	require.NoError(t, loadWS(t, body))
+}
+
+func TestValidate_ServiceRejectsBadDevice(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[services.emu]\nimage = \"redroid/redroid:13\"\ndevices = [\"dev/binder:/dev/binder\"]\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "host path must be absolute")
+}
+
+func TestValidate_ServiceRejectsLowercaseCapability(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[services.emu]\nimage = \"redroid/redroid:13\"\n" +
+		"\n[services.emu.capabilities]\nadd = [\"sys_admin\"]\n"
+	err := loadWS(t, body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "capability does not match")
+}
+
+// A sidecar runs its own image without cocoon's docker-entrypoint.sh, so the
+// entrypoint-required-drop rule that guards the main container does NOT apply:
+// dropping CHOWN on a sidecar is accepted.
+func TestValidate_ServiceAllowsDroppingEntrypointCaps(t *testing.T) {
+	t.Parallel()
+	body := minimalWorkspace() +
+		"\n[services.emu]\nimage = \"redroid/redroid:13\"\n" +
+		"\n[services.emu.capabilities]\ndrop = [\"CHOWN\"]\n"
+	require.NoError(t, loadWS(t, body))
+}
+
 func TestValidate_ContainerIPCAcceptsValid(t *testing.T) {
 	t.Parallel()
 	for _, mode := range []string{

@@ -330,6 +330,30 @@ type SecurityOptSpec struct {
 	NoNewPrivileges *bool   `toml:"no_new_privileges,omitempty"`
 }
 
+// ComposeArgs renders the security_opt entries in a fixed order (seccomp,
+// apparmor, no-new-privileges) so generated YAML is deterministic. Safe on a
+// nil receiver; returns nil when nothing is set. Shared by the main container
+// (WorkspaceContext.SecurityOptions) and sidecar rendering.
+func (s *SecurityOptSpec) ComposeArgs() []string {
+	if s == nil {
+		return nil
+	}
+	out := make([]string, 0, 3)
+	if s.Seccomp != nil {
+		out = append(out, "seccomp="+*s.Seccomp)
+	}
+	if s.AppArmor != nil {
+		out = append(out, "apparmor="+*s.AppArmor)
+	}
+	if s.NoNewPrivileges != nil && *s.NoNewPrivileges {
+		out = append(out, "no-new-privileges:true")
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
 // Sudo mode values for [container.sudo].mode. The set is intentionally just
 // two: "nopasswd" (the default, passwordless sudo) and "password" (sudo
 // requires a password set from the .env.local build secret). There is NO
@@ -578,6 +602,20 @@ type SidecarService struct {
 	DependsOn   []string          `toml:"depends_on,omitempty"`
 	Healthcheck HealthcheckSpec   `toml:"healthcheck,omitempty"`
 	Restart     *SidecarRestart   `toml:"restart,omitempty"`
+
+	// Privileged runs the sidecar in Compose `privileged:` mode. Needed by
+	// images that inject host devices or kernel features — e.g. an Android
+	// emulator (redroid) that requires /dev/binder.
+	Privileged bool `toml:"privileged,omitempty"`
+	// Capabilities adds / drops Linux capabilities (Compose `cap_add:` /
+	// `cap_drop:`). Same shape as [container.capabilities].
+	Capabilities *CapabilitiesSpec `toml:"capabilities,omitempty"`
+	// SecurityOpt sets Compose `security_opt:` entries. Same shape as
+	// [container.security_opt].
+	SecurityOpt *SecurityOptSpec `toml:"security_opt,omitempty"`
+	// Devices maps host devices into the sidecar as Compose `devices:` entries
+	// (`HOST:CONTAINER[:rwm]`). Same shape as [container].devices.
+	Devices []string `toml:"devices,omitempty"`
 }
 
 // Devcontainer is a passthrough map: dump-devcontainer emits entries verbatim.

@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `[services.<name>]` sidecars now accept `privileged`, `devices`,
+  `[services.<name>.capabilities]` (`add` / `drop`), and `security_opt` —
+  the same runtime-security fields the main `[container]` already supported.
+  This lets a sidecar inject host devices and kernel features, e.g. an Android
+  emulator (redroid) that needs `privileged` and `/dev/binder`. Capability and
+  device values are validated like the container's; the entrypoint-required-drop
+  guard does not apply to sidecars (they run their own image).
+
 ## [0.15.7] - 2026-06-10
 
 ### Fixed

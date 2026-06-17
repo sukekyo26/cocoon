@@ -51,10 +51,34 @@ func buildSidecar(name string, spec config.SidecarService) (*yaml.Node, []yamlx.
 	if len(spec.Healthcheck) > 0 {
 		pairs = append(pairs, yamlx.Pair{Key: "healthcheck", Value: anyMap(spec.Healthcheck)})
 	}
+	pairs = append(pairs, sidecarRuntimePairs(spec)...)
 	if spec.Restart != nil {
 		pairs = append(pairs, yamlx.Pair{Key: "restart", Value: yamlx.Quoted(string(*spec.Restart))})
 	}
 	return yamlx.Map(pairs...), vols
+}
+
+// sidecarRuntimePairs emits the optional privileged / capability / security /
+// device fields in a fixed order, mirroring runtimeOptionPairs for the main
+// container. Each entry is omitted when its source is unset.
+func sidecarRuntimePairs(spec config.SidecarService) []yamlx.Pair {
+	pairs := make([]yamlx.Pair, 0, 5)
+	if spec.Privileged {
+		pairs = append(pairs, yamlx.Pair{Key: "privileged", Value: yamlx.Bool(true)})
+	}
+	if spec.Capabilities != nil && len(spec.Capabilities.Add) > 0 {
+		pairs = append(pairs, yamlx.Pair{Key: "cap_add", Value: stringSeq(spec.Capabilities.Add)})
+	}
+	if spec.Capabilities != nil && len(spec.Capabilities.Drop) > 0 {
+		pairs = append(pairs, yamlx.Pair{Key: "cap_drop", Value: stringSeq(spec.Capabilities.Drop)})
+	}
+	if sec := spec.SecurityOpt.ComposeArgs(); len(sec) > 0 {
+		pairs = append(pairs, yamlx.Pair{Key: "security_opt", Value: stringSeq(sec)})
+	}
+	if len(spec.Devices) > 0 {
+		pairs = append(pairs, yamlx.Pair{Key: "devices", Value: stringSeq(spec.Devices)})
+	}
+	return pairs
 }
 
 func buildSidecarVolumes(name string, spec config.SidecarService) ([]*yaml.Node, []yamlx.Pair) {
