@@ -640,12 +640,23 @@ RUN apt-get update && apt-get install -y my-extra-pkg
 | `depends_on` | array of strings | no | 他のサイドカー名のみ。自分自身やメインサービスは不可。 |
 | `healthcheck` | table | no | Compose にそのまま転送。 |
 | `restart` | string | no | `no` / `always` / `on-failure` / `unless-stopped` のいずれか。 |
+| `privileged` | bool | no | Compose `privileged:`。ホストデバイスやカーネル機能を注入するイメージ向け (例: `/dev/binder` を要する Android エミュレータ)。 |
+| `devices` | `[]string` | no | `HOST:CONTAINER[:rwm]`、両パス絶対。`[container].devices` と同形式。 |
+| `[services.<name>.capabilities]` | table | no | Linux capabilities の `add` / `drop`。`[container.capabilities]` と同形式。(サイドカーは自前のイメージで動くため、entrypoint 必須 cap の drop 禁止は適用されない。) |
+| `security_opt` | table | no | `[container.security_opt]` と同形式 (`seccomp` / `apparmor` / `no_new_privileges`)。 |
 
 ```toml
 [services.postgres]
 image       = "postgres:16-alpine"
 environment = { POSTGRES_PASSWORD = "dev" }
 ports       = ["5432:5432"]
+
+# ホストデバイスを伴う privileged サイドカー — 例: Android エミュレータ (redroid)。
+[services.emulator]
+image      = "redroid/redroid:13.0.0-latest"
+privileged = true
+devices    = ["/dev/binder:/dev/binder"]
+ports      = ["5555:5555"]
 ```
 
 ---

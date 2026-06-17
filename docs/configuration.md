@@ -663,12 +663,23 @@ Sidecar services on the same Compose network (e.g. postgres, redis). Each `<name
 | `depends_on` | array of strings | no | Other sidecar names. May not reference itself or the main service. |
 | `healthcheck` | table | no | Forwarded to Compose. |
 | `restart` | string | no | One of `no`, `always`, `on-failure`, `unless-stopped`. |
+| `privileged` | bool | no | Compose `privileged:`. For images that inject host devices or kernel features (e.g. an Android emulator needing `/dev/binder`). |
+| `devices` | `[]string` | no | `HOST:CONTAINER[:rwm]`; both paths absolute. Same shape as `[container].devices`. |
+| `[services.<name>.capabilities]` | table | no | `add` / `drop` Linux capabilities, same shape as `[container.capabilities]`. (Sidecars run their own image, so the entrypoint-required-drop guard does not apply.) |
+| `security_opt` | table | no | Same shape as `[container.security_opt]` (`seccomp` / `apparmor` / `no_new_privileges`). |
 
 ```toml
 [services.postgres]
 image       = "postgres:16-alpine"
 environment = { POSTGRES_PASSWORD = "dev" }
 ports       = ["5432:5432"]
+
+# Privileged sidecar with host devices — e.g. an Android emulator (redroid).
+[services.emulator]
+image      = "redroid/redroid:13.0.0-latest"
+privileged = true
+devices    = ["/dev/binder:/dev/binder"]
+ports      = ["5555:5555"]
 ```
 
 ---

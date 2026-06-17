@@ -6,6 +6,18 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+### 追加
+
+- `[services.<name>]` サイドカーで `privileged` / `devices` /
+  `[services.<name>.capabilities]` (`add` / `drop`) / `security_opt` を
+  指定できるようにした。`devices` / `capabilities` / `security_opt` は既存の
+  `[container]` のフィールドと同じもので、`privileged` は新規追加 (メイン
+  コンテナに `privileged` オプションは無い)。これによりサイドカーが
+  ホストデバイスやカーネル機能を注入できる (例: `privileged` と
+  `/dev/binder` を要する Android エミュレータ redroid)。capability と
+  device の値はメインコンテナと同様に検証する。entrypoint 必須 cap の
+  drop 禁止チェックはサイドカーには適用されない (自前のイメージで動くため)。
+
 ## [0.15.7] - 2026-06-10
 
 ### 修正
