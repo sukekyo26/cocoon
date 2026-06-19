@@ -6,6 +6,18 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-06-20
+
+### 追加
+
+- `rtk` プラグインを追加 ([rtk-ai/rtk](https://github.com/rtk-ai/rtk)、よくある
+  開発コマンドの LLM トークン消費を削減する CLI プロキシ)。インストール方法を
+  2 つ提供する: `installer` (デフォルト。上流の `install.sh` を pipe する) と
+  `binary` (GitHub Releases のリリース tarball を直接ダウンロードする)。
+  `raw.githubusercontent.com` がブロックされる環境 (例: Zscaler) や
+  `curl | sh` のパイプがポリシーで禁止されている環境では、`cocoon.toml` の
+  `[plugins.methods] rtk = "binary"` で `binary` を選択する。
+
 ## [0.16.0] - 2026-06-17
 
 ### 追加
@@ -785,7 +797,8 @@ cocoon の主要な変更を記録します。フォーマットは
 - `COMPOSE_PROJECT_NAME` をプロジェクトディレクトリの basename から導出するように変更。docker compose の namespace がホストディレクトリと一致する。
 - 国際化 (英語 / 日本語) カタログを追加。CLI プロンプト・エラーメッセージ・`workspace.toml` インラインコメントすべてを `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` で切替可能。
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/sukekyo26/cocoon/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/sukekyo26/cocoon/compare/v0.15.7...v0.16.0
 [0.15.7]: https://github.com/sukekyo26/cocoon/compare/v0.15.6...v0.15.7
 [0.15.6]: https://github.com/sukekyo26/cocoon/compare/v0.15.5...v0.15.6

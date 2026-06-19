@@ -1,0 +1,35 @@
+[metadata]
+name = "RTK"
+description = "CLI proxy that cuts LLM token usage on common dev commands"
+url = "https://github.com/rtk-ai/rtk"
+default = false
+
+[install]
+requires_root = false
+default_method = "installer"
+
+[install.methods.installer]
+description = "Install via the upstream install.sh (default)"
+
+[install.methods.binary]
+description = "Direct binary tarball from GitHub Releases — for environments where raw.githubusercontent.com is blocked (e.g. Zscaler) or where piping curl|sh into a shell is forbidden by policy"
+
+[install.env]
+PATH = "/home/${USERNAME}/.local/bin:$PATH"
+
+[version]
+version_capable = true
+
+[version.source.latest]
+type = "github-release"
+repo = "rtk-ai/rtk"
+strip_prefix = "v"
+
+[version.source.checksum]
+type = "shasums-file"
+manifest_url = "https://github.com/rtk-ai/rtk/releases/download/v${version}/checksums.txt"
+asset_name = "rtk-${arch}.tar.gz"
+
+[version.source.arch]
+amd64 = "x86_64-unknown-linux-musl"
+arm64 = "aarch64-unknown-linux-gnu"

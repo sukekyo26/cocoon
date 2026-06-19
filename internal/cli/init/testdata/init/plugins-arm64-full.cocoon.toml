@@ -145,6 +145,7 @@ enable = [
     "shfmt=3.10.0",
     "just=1.51.0",
     "cocoon=0.7.4",
+    "rtk=0.42.4",
 ]
 
 # [plugins.methods] — for plugins that declare multiple [install.methods],
