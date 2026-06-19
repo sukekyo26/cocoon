@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- New `rtk` plugin ([rtk-ai/rtk](https://github.com/rtk-ai/rtk), a CLI proxy
+  that cuts LLM token usage on common dev commands). It ships two install
+  methods: `installer` (default; pipes the upstream `install.sh`) and `binary`
+  (downloads the release tarball straight from GitHub Releases). Select
+  `binary` via `[plugins.methods] rtk = "binary"` in environments where
+  `raw.githubusercontent.com` is blocked (e.g. Zscaler) or where piping
+  `curl | sh` is forbidden by policy.
+
 ## [0.16.0] - 2026-06-17
 
 ### Added

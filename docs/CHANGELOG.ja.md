@@ -6,6 +6,16 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+### 追加
+
+- `rtk` プラグインを追加 ([rtk-ai/rtk](https://github.com/rtk-ai/rtk)、よくある
+  開発コマンドの LLM トークン消費を削減する CLI プロキシ)。インストール方法を
+  2 つ提供する: `installer` (デフォルト。上流の `install.sh` を pipe する) と
+  `binary` (GitHub Releases のリリース tarball を直接ダウンロードする)。
+  `raw.githubusercontent.com` がブロックされる環境 (例: Zscaler) や
+  `curl | sh` のパイプがポリシーで禁止されている環境では、`cocoon.toml` の
+  `[plugins.methods] rtk = "binary"` で `binary` を選択する。
+
 ## [0.16.0] - 2026-06-17
 
 ### 追加
