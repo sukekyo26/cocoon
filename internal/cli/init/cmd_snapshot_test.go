@@ -93,8 +93,8 @@ func TestRunInit_Snapshot(t *testing.T) {
 				// Mirrors the e2e amd64-full preset's --plugin-methods so the
 				// snapshot stays in lockstep with what the real Docker
 				// round-trip generates. arm64-full intentionally omits this
-				// flag (its e2e counterpart exercises the default gh-cli
-				// method).
+				// flag (its e2e counterpart exercises each plugin's default
+				// installer method).
 				"--plugin-methods", "copilot-cli=binary,rtk=binary",
 			},
 		},
