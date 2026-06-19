@@ -172,6 +172,21 @@ func TestPluginContracts(t *testing.T) {
 			mustNotContain: append(append([]string{}, noPlaceholders...), "api.github.com", "| jq "),
 		},
 		{
+			id: "rtk", name: "RTK",
+			requiresRoot: false, versionCapable: true,
+			mustContain: []string{
+				"curl -fsSL", "retry 3", "tlsv1.2",
+				// installer method (install.installer.sh)
+				"raw.githubusercontent.com/rtk-ai/rtk", "RTK_INSTALL_DIR",
+				// binary method (install.binary.sh)
+				"github.com/rtk-ai/rtk", "sha256sum -c -", "checksums.txt",
+				"dpkg --print-architecture",
+				// method-aware fail-fast
+				`COCOON_INSTALL_METHOD`,
+			},
+			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
+		},
+		{
 			id: "docker-cli", name: "Docker CLI",
 			requiresRoot: true,
 			mustContain: []string{

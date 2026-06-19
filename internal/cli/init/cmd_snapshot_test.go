@@ -83,19 +83,19 @@ func TestRunInit_Snapshot(t *testing.T) {
 				"docker-cli,docker-buildx,aws-cli,aws-sam-cli,azure-cli,gcloud,github-cli,gitleaks,claude-code,copilot-cli,codex," +
 					"proto,mise,uv,bun,node,deno,dart,flutter,zig,rust,go,golangci-lint,lazygit,starship," +
 					"nerd-fonts,google-chrome,terraform,opentofu," +
-					"kubectl,helm,shellcheck,shfmt,just,cocoon",
+					"kubectl,helm,shellcheck,shfmt,just,cocoon,rtk",
 				"--plugin-versions",
 				"aws-cli=2.34.48,aws-sam-cli=1.160.1,bun=1.3.3,cocoon=0.7.4,codex=0.135.0,copilot-cli=1.0.47,dart=3.12.0,deno=2.7.14," +
 					"docker-buildx=0.24.0,flutter=3.44.0,gitleaks=8.30.1,go=1.23.4,golangci-lint=2.12.2,helm=3.16.0,just=1.51.0," +
 					"kubectl=1.31.0,lazygit=0.44.1,mise=2025.12.0,nerd-fonts=3.4.0,node=24.15.0," +
 					"opentofu=1.9.0,proto=0.46.1,shellcheck=0.10.0,shfmt=3.10.0,starship=1.21.1," +
-					"terraform=1.10.5,uv=0.5.7,zig=0.13.0",
+					"terraform=1.10.5,uv=0.5.7,zig=0.13.0,rtk=0.42.4",
 				// Mirrors the e2e amd64-full preset's --plugin-methods so the
 				// snapshot stays in lockstep with what the real Docker
 				// round-trip generates. arm64-full intentionally omits this
 				// flag (its e2e counterpart exercises the default gh-cli
 				// method).
-				"--plugin-methods", "copilot-cli=binary",
+				"--plugin-methods", "copilot-cli=binary,rtk=binary",
 			},
 		},
 		{
@@ -109,12 +109,12 @@ func TestRunInit_Snapshot(t *testing.T) {
 				"--plugins",
 				"docker-cli,docker-buildx,aws-cli,aws-sam-cli,azure-cli,gcloud,github-cli,gitleaks,claude-code,copilot-cli,codex," +
 					"proto,mise,uv,bun,node,deno,dart,rust,go,golangci-lint,nerd-fonts,terraform,opentofu," +
-					"kubectl,helm,shellcheck,shfmt,just,cocoon",
+					"kubectl,helm,shellcheck,shfmt,just,cocoon,rtk",
 				"--plugin-versions",
 				"aws-cli=2.34.48,aws-sam-cli=1.160.1,bun=1.3.3,cocoon=0.7.4,codex=0.135.0,copilot-cli=1.0.47,dart=3.12.0,deno=2.7.14," +
 					"docker-buildx=0.24.0,gitleaks=8.30.1,go=1.23.4,golangci-lint=2.12.2,helm=3.16.0,just=1.51.0,kubectl=1.31.0,mise=2025.12.0," +
 					"nerd-fonts=3.4.0,node=24.15.0,opentofu=1.9.0,proto=0.46.1,shellcheck=0.10.0," +
-					"shfmt=3.10.0,terraform=1.10.5,uv=0.5.7",
+					"shfmt=3.10.0,terraform=1.10.5,uv=0.5.7,rtk=0.42.4",
 			},
 		},
 		{

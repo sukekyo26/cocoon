@@ -150,12 +150,14 @@ enable = [
     "shfmt=3.10.0",
     "just=1.51.0",
     "cocoon=0.7.4",
+    "rtk=0.42.4",
 ]
 
 # [plugins.methods] — install method picked for plugins that declare multiple methods.
 #   Plugins with a single declared method ignore this section.
 [plugins.methods]
 copilot-cli = "binary"
+rtk = "binary"
 
 # [plugins.options] — extra per-plugin knobs for the enabled plugins above.
 #   Pin versions inline in the enable array (e.g. "go=1.22.5", "starship=latest");

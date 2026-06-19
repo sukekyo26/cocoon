@@ -150,6 +150,7 @@ pin_entries=(
   node=24.15.0
   opentofu=1.9.0
   proto=0.46.1
+  rtk=0.42.4
   shellcheck=0.10.0
   shfmt=3.10.0
   starship=1.21.1
@@ -217,11 +218,11 @@ case "$PRESET" in
     enabled=("${all_plugins[@]}")
     plugins="$(join_csv "${enabled[@]}")"
     pins="$(pins_for "${enabled[@]}")"
-    # Exercise the [install.methods]=binary path for copilot-cli on this
-    # preset (matches the offline / no-curl|sh use case the method was added
-    # for). arm64-full keeps the default gh-cli method so both install
-    # paths get real docker-build coverage per release.
-    methods="copilot-cli=binary"
+    # Exercise the [install.methods]=binary path for copilot-cli and rtk on
+    # this preset (matches the offline / no-curl|sh use case the method was
+    # added for). arm64-full keeps each plugin's default installer method so
+    # both install paths get real docker-build coverage per release.
+    methods="copilot-cli=binary,rtk=binary"
     ;;
   arm64-full)
     enabled=()
