@@ -218,11 +218,13 @@ case "$PRESET" in
     enabled=("${all_plugins[@]}")
     plugins="$(join_csv "${enabled[@]}")"
     pins="$(pins_for "${enabled[@]}")"
-    # Exercise the [install.methods]=binary path for copilot-cli and rtk on
-    # this preset (matches the offline / no-curl|sh use case the method was
-    # added for). arm64-full keeps each plugin's default installer method so
-    # both install paths get real docker-build coverage per release.
-    methods="copilot-cli=binary,rtk=binary"
+    # Exercise each plugin's non-default install method on this preset so both
+    # paths get real docker-build coverage per release; arm64-full keeps the
+    # default method. For copilot-cli / rtk the non-default is binary (the
+    # offline / no-curl|sh use case). For codex the non-default is installer
+    # (the upstream chatgpt.com/codex/install.sh channel that keeps in-CLI
+    # `codex update` working).
+    methods="copilot-cli=binary,rtk=binary,codex=installer"
     ;;
   arm64-full)
     enabled=()

@@ -417,10 +417,10 @@ Use these embedded plugins as templates when writing your own:
   root → user split.
 - **`lazygit`** — `binary` method, no `[install.env]`. Smallest
   versioned plugin in the catalog.
-- **`copilot-cli`** — the only catalog plugin shipping two methods
-  (`installer` + `binary`). Read both `install.installer.sh` and
-  `install.binary.sh` to see the multi-method `$COCOON_INSTALL_METHOD`
-  fail-fast pattern in action.
+- **`copilot-cli`** — ships two methods (`installer` + `binary`). Read
+  both `install.installer.sh` and `install.binary.sh` to see the
+  multi-method `$COCOON_INSTALL_METHOD` fail-fast pattern in action.
+  (`rtk` and `codex` follow the same two-method shape.)
 - **`android-sdk`** — `archive` method that downloads a ZIP and then
   drives a follow-up installer (`sdkmanager`) inside the same RUN.
   Reference for `[install.extra_versions]`: `api_level` and
