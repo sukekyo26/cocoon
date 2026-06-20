@@ -1,11 +1,22 @@
 #!/usr/bin/env bash
-# Install OpenAI Codex CLI (https://github.com/openai/codex)
+# Install OpenAI Codex CLI from a GitHub Release tarball.
+# Method category: binary — version-pinnable and reproducible, but the in-CLI
+#                  `codex update` cannot self-update this channel (it writes no
+#                  standalone package metadata). Pick install.installer.sh when
+#                  you want `codex update` to work.
 #
 # Inputs (env):
-#   PIN              : Codex version without the "rust-v" tag prefix (e.g. "0.135.0"); empty = latest
-#   CHECKSUM_AMD64   : sha256 of the x86_64 tarball; empty to skip verification
-#   CHECKSUM_ARM64   : sha256 of the aarch64 tarball; empty to skip verification
+#   PIN                   : Codex version without the "rust-v" tag prefix (e.g. "0.135.0"); empty = latest
+#   CHECKSUM_AMD64        : sha256 of the x86_64 tarball; empty to skip verification
+#   CHECKSUM_ARM64        : sha256 of the aarch64 tarball; empty to skip verification
+#   COCOON_INSTALL_METHOD : selected install method; must equal "binary"
 set -euo pipefail
+
+: "${COCOON_INSTALL_METHOD:?missing}"
+if [ "$COCOON_INSTALL_METHOD" != "binary" ]; then
+  echo "install.binary.sh invoked with COCOON_INSTALL_METHOD=$COCOON_INSTALL_METHOD; expected binary" >&2
+  exit 1
+fi
 
 # Yellow WARNING when stderr is a TTY (and NO_COLOR is unset) or
 # FORCE_COLOR is set. NO_COLOR wins per no-color.org.
@@ -63,7 +74,8 @@ else
 fi
 
 # The tarball holds one entry named with the full target triple
-# (codex-<triple>, no leading directory); land it as /usr/local/bin/codex.
+# (codex-<triple>, no leading directory); land it as ~/.local/bin/codex.
+mkdir -p "$HOME/.local/bin"
 tar -xzf "/tmp/${TARBALL}" -C /tmp "codex-${triple}"
-install -o root -g root -m 0755 "/tmp/codex-${triple}" /usr/local/bin/codex
+install -m 0755 "/tmp/codex-${triple}" "$HOME/.local/bin/codex"
 rm "/tmp/${TARBALL}" "/tmp/codex-${triple}"
