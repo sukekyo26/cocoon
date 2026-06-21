@@ -6,6 +6,17 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+## [0.17.1] - 2026-06-22
+
+### 追加
+
+- `.devcontainer/manage.sh` に `exec <cmd...>` サブコマンドを追加。生成された
+  `.env` の値（`--user`）を使い、コンテナ内でコマンドをユーザー権限で実行する。
+  コンテナは UID remap のため root で起動する（entrypoint の `setpriv` でドロップ）
+  ため、素の `docker compose exec` だと root で入ってしまい shell 環境（starship・
+  alias・履歴）が一切効かない。`./manage.sh exec zsh` なら正しいユーザーで入れる。
+  引数はそのまま渡されるので、`exec ls -la` のようにフラグもコンテナへ届く。
+
 ## [0.17.0] - 2026-06-20
 
 ### 追加
@@ -797,7 +808,8 @@ cocoon の主要な変更を記録します。フォーマットは
 - `COMPOSE_PROJECT_NAME` をプロジェクトディレクトリの basename から導出するように変更。docker compose の namespace がホストディレクトリと一致する。
 - 国際化 (英語 / 日本語) カタログを追加。CLI プロンプト・エラーメッセージ・`workspace.toml` インラインコメントすべてを `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` で切替可能。
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.17.0...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.17.1...HEAD
+[0.17.1]: https://github.com/sukekyo26/cocoon/compare/v0.17.0...v0.17.1
 [0.17.0]: https://github.com/sukekyo26/cocoon/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/sukekyo26/cocoon/compare/v0.15.7...v0.16.0
 [0.15.7]: https://github.com/sukekyo26/cocoon/compare/v0.15.6...v0.15.7

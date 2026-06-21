@@ -1,2 +1,0 @@
-# cocoon: local sudo password secret (build secret) — never commit
-.env.local

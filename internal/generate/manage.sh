@@ -33,6 +33,9 @@ Commands:
                      locally-built image is kept (fast rebuild).
   rebuild            Rebuild the image with --no-cache and recreate the
                      container. Volumes are kept.
+  exec <cmd...>      Run <cmd> in the running container as the remap target
+                     user (--user from .env), e.g. exec zsh. Args pass through
+                     verbatim, so flags like -la reach the container.
   prune-cache        Prune the GLOBAL Docker build cache. THIS AFFECTS
                      EVERY Docker project on this host, not just this one.
 
@@ -78,11 +81,26 @@ require_buildx() {
   exit 1
 }
 
+# env_value reads the first KEY=... value from the generated .env (a flat
+# KEY=value file written by `cocoon gen` — no quoting/interpolation). A missing
+# key prints nothing so callers decide how to handle absence; any other grep
+# failure (e.g. an unreadable .env) aborts rather than masquerading as "key
+# unset", which would otherwise surface as a misleading "X not set" downstream.
+env_value() {
+  local line rc
+  line="$(grep -m1 -E "^$1=" "$ENV_FILE")" && rc=0 || rc=$?
+  case "$rc" in
+    0) printf '%s\n' "${line#*=}" ;;
+    1) ;; # no match: key absent
+    *) die "failed to read ${ENV_FILE} (grep exited ${rc})" ;;
+  esac
+}
+
 # project_name reads COMPOSE_PROJECT_NAME from .env for display only; the
 # actual scoping is done by docker compose via -f/--env-file.
 project_name() {
   local name
-  name="$(grep -m1 -E '^COMPOSE_PROJECT_NAME=' "$ENV_FILE" | cut -d= -f2- || true)"
+  name="$(env_value COMPOSE_PROJECT_NAME)"
   echo "${name:-unknown}"
 }
 
@@ -143,6 +161,22 @@ cmd_rebuild() {
   echo "done."
 }
 
+# cmd_exec runs a command in the already-running container as the remap target
+# user. The container starts as root (USER root + setpriv drop in
+# docker-entrypoint.sh), so a bare `docker compose exec` lands you as root with
+# none of the user's shell environment; --user <USERNAME> restores the right
+# identity. Service and user both come from the generated .env; the caller
+# supplies the command explicitly, like `docker compose exec`.
+cmd_exec() {
+  [ "$#" -gt 0 ] || die "exec needs a command, e.g. ./manage.sh exec zsh"
+  local user service
+  user="$(env_value USERNAME)"
+  service="$(env_value CONTAINER_SERVICE_NAME)"
+  [ -n "$user" ] || die "USERNAME not set in ${ENV_FILE} (run 'cocoon gen' first)"
+  [ -n "$service" ] || die "CONTAINER_SERVICE_NAME not set in ${ENV_FILE} (run 'cocoon gen' first)"
+  dc exec --user "$user" "$service" "$@"
+}
+
 cmd_prune_cache() {
   echo "WARNING: this prunes the GLOBAL Docker build cache." >&2
   echo "         It affects every Docker project on this host, not just this one." >&2
@@ -152,6 +186,31 @@ cmd_prune_cache() {
 }
 
 main() {
+  # Consume the leading global options first so the `exec` fast-path is reached
+  # even after them — the documented grammar is `[-y] <command>`. Parsing stops
+  # at the first non-option token (the command); anything unrecognised is left
+  # for the per-command parser below to reject.
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -y | --yes) ASSUME_YES=1 ;;
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      *) break ;;
+    esac
+    shift
+  done
+
+  # `exec` forwards its entire command line to the container verbatim, so it
+  # must bypass the option parser below (which would reject e.g. `-la`).
+  if [ "${1:-}" = exec ]; then
+    shift
+    preflight
+    cmd_exec "$@"
+    return
+  fi
+
   local args=()
   while [ "$#" -gt 0 ]; do
     case "$1" in
