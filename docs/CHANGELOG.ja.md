@@ -6,6 +6,23 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+### 追加
+
+- `codex` プラグインに `installer` インストール方式を追加。OpenAI 公式の
+  standalone インストーラ（`curl -fsSL https://chatgpt.com/codex/install.sh | sh`）
+  をパイプ実行する。デフォルトの `binary` 方式と異なり、コンテナ内での
+  `codex update`（CLI 自身による更新）が機能する唯一のチャネル。常に最新版を
+  インストールし、バージョン pin はできない（pin 指定時は警告して無視）。
+  `[plugins.methods] codex = "installer"` で選択する。デフォルトは引き続き
+  `binary`（再現可能・バージョン pin 可能）。
+
+### 変更
+
+- `codex` プラグインのインストール先をユーザー所有の `~/.local/bin` に変更し、
+  root を不要にした（`requires_root = false`、`rtk` プラグインと同様）。従来は
+  `/usr/local/bin` に配置していた。どちらも `PATH` 上にあるため通常利用では
+  透過的。
+
 ## [0.17.0] - 2026-06-20
 
 ### 追加

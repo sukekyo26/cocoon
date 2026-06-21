@@ -6,6 +6,23 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Add an `installer` install method to the `codex` plugin that pipes the
+  upstream standalone installer (`curl -fsSL https://chatgpt.com/codex/install.sh
+  | sh`). Unlike the default `binary` method, this is the only channel that
+  keeps the in-CLI `codex update` self-update working. It always installs the
+  latest Codex and cannot pin a version (a pin is warned about and ignored).
+  Select it via `[plugins.methods] codex = "installer"`; the default stays
+  `binary` (reproducible and version-pinnable).
+
+### Changed
+
+- The `codex` plugin now installs to the user-owned `~/.local/bin` and no longer
+  requires root (`requires_root = false`), matching the `rtk` plugin. The binary
+  was previously placed in `/usr/local/bin`. Both locations are on `PATH`, so
+  this is transparent in normal use.
+
 ## [0.17.0] - 2026-06-20
 
 ### Added

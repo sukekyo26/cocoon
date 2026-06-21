@@ -145,12 +145,19 @@ func TestPluginContracts(t *testing.T) {
 		},
 		{
 			id: "codex", name: "OpenAI Codex CLI",
-			requiresRoot: true, versionCapable: true, firstVolume: "codex",
+			requiresRoot: false, versionCapable: true, firstVolume: "codex",
 			mustContain: []string{
-				"codex", "github.com/openai/codex", "sha256sum -c -",
-				"tlsv1.2", "retry 3", "dpkg --print-architecture", "tar -xz",
-				// musl target triple + the rust-v<semver> release tag scheme.
-				"unknown-linux-musl", "rust-v",
+				"codex", "curl -fsSL", "tlsv1.2", "retry 3",
+				// binary method (install.binary.sh): musl target triple + the
+				// rust-v<semver> release tag scheme, user-owned ~/.local/bin.
+				"github.com/openai/codex", "sha256sum -c -",
+				"dpkg --print-architecture", "tar -xz",
+				"unknown-linux-musl", "rust-v", `$HOME/.local/bin`,
+				// installer method (install.installer.sh): standalone channel
+				// that keeps in-CLI `codex update` working, non-interactive.
+				"chatgpt.com/codex/install.sh", "CODEX_NON_INTERACTIVE",
+				// method-aware fail-fast
+				"COCOON_INSTALL_METHOD",
 			},
 			// No upstream checksum manifest: warn-and-skip like shfmt/shellcheck,
 			// so the API-digest fallback (api.github.com + jq) must stay absent.

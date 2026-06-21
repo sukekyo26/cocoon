@@ -392,10 +392,10 @@ android-sdk = { api_level = "36", build_tools = "36.0.0" }
   `install_user.sh` を持つ。root → user 境界の見本として両ファイルを併読する。
 - **`lazygit`** — `binary` メソッド、`[install.env]` 無し。
   versioned プラグインの最小構成。
-- **`copilot-cli`** — 2 メソッド (`installer` + `binary`) を持つ唯一の
-  catalog プラグイン。`install.installer.sh` / `install.binary.sh` を
-  併読すると、multi-method 専用の `$COCOON_INSTALL_METHOD` fail-fast
-  パターンが見られる。
+- **`copilot-cli`** — 2 メソッド (`installer` + `binary`) を持つ。
+  `install.installer.sh` / `install.binary.sh` を併読すると、
+  multi-method 専用の `$COCOON_INSTALL_METHOD` fail-fast パターンが
+  見られる。（`rtk` と `codex` も同じ 2 メソッド構成。）
 - **`android-sdk`** — `archive` メソッド。ZIP を取得した上で同じ RUN 内で
   追加のインストーラ (`sdkmanager`) を走らせる例。`[install.extra_versions]`
   の参考にもなる: `commandline-tools` の `pin` とは独立に platform /

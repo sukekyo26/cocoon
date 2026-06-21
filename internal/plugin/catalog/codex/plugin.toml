@@ -8,12 +8,18 @@ default = false
 packages = ["bubblewrap"]
 
 [install]
-requires_root = true
+requires_root = false
 volumes = ["/home/${USERNAME}/.codex"]
 default_method = "binary"
 
+[install.env]
+PATH = "/home/${USERNAME}/.local/bin:$PATH"
+
 [install.methods.binary]
-description = "Single codex binary extracted from a GitHub Release tarball"
+description = "Single codex binary extracted from a GitHub Release tarball (version-pinnable, reproducible; no in-CLI `codex update`)"
+
+[install.methods.installer]
+description = "Upstream chatgpt.com/codex/install.sh — the standalone channel that keeps in-CLI `codex update` working; always installs the latest (cannot pin)"
 
 [version]
 version_capable = true
