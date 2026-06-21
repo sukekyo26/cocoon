@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.17.1] - 2026-06-22
+
 ### Added
 
 - `.devcontainer/manage.sh` gained an `exec <cmd...>` subcommand that runs a
@@ -817,7 +819,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Add `COMPOSE_PROJECT_NAME` derivation from the project directory basename so docker compose namespacing matches the host directory.
 - Add i18n catalog (English / Japanese) covering every CLI prompt, error message, and inline `workspace.toml` comment, switched via `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG`.
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.17.0...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.17.1...HEAD
+[0.17.1]: https://github.com/sukekyo26/cocoon/compare/v0.17.0...v0.17.1
 [0.17.0]: https://github.com/sukekyo26/cocoon/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/sukekyo26/cocoon/compare/v0.15.7...v0.16.0
 [0.15.7]: https://github.com/sukekyo26/cocoon/compare/v0.15.6...v0.15.7
