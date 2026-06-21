@@ -17,7 +17,7 @@ import (
 // embedded script runs as a subprocess with PATH pointing only at a stub
 // directory, so `docker` is a logging shim under our control. The docker stub
 // appends "docker\t<args>" to $STUB_LOG; assertions read that log to pin which
-// compose commands run, with which flags. dirname/grep/cut/cat are passed
+// compose commands run, with which flags. dirname/grep/cat are passed
 // through to the real binaries (manage.sh needs them for SCRIPT_DIR resolution,
 // project-name lookup, and usage output).
 //
@@ -61,12 +61,11 @@ func runManage(t *testing.T, o manageOpts) manageRun {
 	logPath := filepath.Join(t.TempDir(), "calls.log")
 
 	// docker logs every call, honours STUB_BUILDX_EXIT for the buildx probe,
-	// and otherwise succeeds. dirname/grep/cut/cat delegate to the real binary.
+	// and otherwise succeeds. dirname/grep/cat delegate to the real binary.
 	passthrough := func(name string) string { return "exec " + lookOrSkip(name) + " \"$@\"" }
 	stubs := map[string]string{
 		"dirname": passthrough("dirname"),
 		"grep":    passthrough("grep"),
-		"cut":     passthrough("cut"),
 		"cat":     passthrough("cat"),
 	}
 	if !o.omitDocker {
@@ -299,6 +298,67 @@ func TestManage_ExecPassesThroughDashFlags(t *testing.T) {
 	}
 	if !logHasDocker(r.log, "exec --user tama svc ls -la") {
 		t.Errorf("exec did not forward `-la` to the container\nlog:\n%s", r.log)
+	}
+}
+
+// TestManage_ExecAfterGlobalYesFlag pins that a leading `-y` is consumed before
+// the exec fast-path (documented grammar `[-y] <command>`), so `-y exec …` still
+// forwards the command — including its dash-flags — to the container verbatim
+// instead of dying in the option parser.
+//
+//nolint:paralleltest // subprocess + PATH stubs
+func TestManage_ExecAfterGlobalYesFlag(t *testing.T) {
+	r := runManage(t, manageOpts{
+		args:     []string{"-y", "exec", "ls", "-la"},
+		envExtra: "USERNAME=tama\nCONTAINER_SERVICE_NAME=svc\n",
+	})
+	if r.exitCode != 0 {
+		t.Fatalf("exit = %d, want 0\nstderr: %s\nlog:\n%s", r.exitCode, r.stderr, r.log)
+	}
+	if !logHasDocker(r.log, "exec --user tama svc ls -la") {
+		t.Errorf("`-y exec ls -la` did not reach the container verbatim\nlog:\n%s", r.log)
+	}
+}
+
+// TestManage_ExecFailsClosedWithoutUsername pins that `exec` aborts before
+// touching docker when USERNAME is absent from .env — a half-generated env must
+// not silently drop the user into the container as the wrong (root) identity.
+//
+//nolint:paralleltest // subprocess + PATH stubs
+func TestManage_ExecFailsClosedWithoutUsername(t *testing.T) {
+	r := runManage(t, manageOpts{
+		args:     []string{"exec", "zsh"},
+		envExtra: "CONTAINER_SERVICE_NAME=svc\n",
+	})
+	if r.exitCode != 1 {
+		t.Fatalf("exit = %d, want 1 (missing USERNAME must fail closed)\nstderr: %s", r.exitCode, r.stderr)
+	}
+	if !strings.Contains(r.stderr, "USERNAME not set") {
+		t.Errorf("stderr = %q, want 'USERNAME not set'", r.stderr)
+	}
+	if logHasDocker(r.log, "exec --user") {
+		t.Errorf("exec ran `compose exec` despite the missing-USERNAME guard\nlog:\n%s", r.log)
+	}
+}
+
+// TestManage_ExecFailsClosedWithoutService pins that `exec` aborts before
+// touching docker when CONTAINER_SERVICE_NAME is absent from .env, rather than
+// invoking `compose exec` against an unknown service.
+//
+//nolint:paralleltest // subprocess + PATH stubs
+func TestManage_ExecFailsClosedWithoutService(t *testing.T) {
+	r := runManage(t, manageOpts{
+		args:     []string{"exec", "zsh"},
+		envExtra: "USERNAME=tama\n",
+	})
+	if r.exitCode != 1 {
+		t.Fatalf("exit = %d, want 1 (missing CONTAINER_SERVICE_NAME must fail closed)\nstderr: %s", r.exitCode, r.stderr)
+	}
+	if !strings.Contains(r.stderr, "CONTAINER_SERVICE_NAME not set") {
+		t.Errorf("stderr = %q, want 'CONTAINER_SERVICE_NAME not set'", r.stderr)
+	}
+	if logHasDocker(r.log, "exec --user") {
+		t.Errorf("exec ran `compose exec` despite the missing-service guard\nlog:\n%s", r.log)
 	}
 }
 
