@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `.devcontainer/manage.sh` gained an `exec <cmd...>` subcommand that runs a
+  command in the running container as the remap target user (`--user` resolved
+  from the generated `.env`). Because the container starts as root (UID remap
+  via the entrypoint's `setpriv` drop), a bare `docker compose exec` lands you
+  as root with none of your shell environment (starship, aliases, history);
+  `./manage.sh exec zsh` enters as the right user instead. Arguments pass
+  through verbatim, so flags like `exec ls -la` reach the container.
+
 ## [0.17.0] - 2026-06-20
 
 ### Added

@@ -6,6 +6,15 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+### 追加
+
+- `.devcontainer/manage.sh` に `exec <cmd...>` サブコマンドを追加。生成された
+  `.env` の値（`--user`）を使い、コンテナ内でコマンドをユーザー権限で実行する。
+  コンテナは UID remap のため root で起動する（entrypoint の `setpriv` でドロップ）
+  ため、素の `docker compose exec` だと root で入ってしまい shell 環境（starship・
+  alias・履歴）が一切効かない。`./manage.sh exec zsh` なら正しいユーザーで入れる。
+  引数はそのまま渡されるので、`exec ls -la` のようにフラグもコンテナへ届く。
+
 ## [0.17.0] - 2026-06-20
 
 ### 追加

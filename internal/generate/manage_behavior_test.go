@@ -37,9 +37,10 @@ type manageRun struct {
 
 type manageOpts struct {
 	args          []string
-	omitDocker    bool // drop the docker stub so `command -v docker` fails
-	omitProjFiles bool // skip writing docker-compose.yml / .env (preflight guard)
-	buildxExit    int  // exit code of the `docker buildx version` probe (0 = present)
+	omitDocker    bool   // drop the docker stub so `command -v docker` fails
+	omitProjFiles bool   // skip writing docker-compose.yml / .env (preflight guard)
+	buildxExit    int    // exit code of the `docker buildx version` probe (0 = present)
+	envExtra      string // extra KEY=value lines appended to the generated .env
 }
 
 // runManage writes manage.sh next to a stub compose/env pair, stubs PATH, and
@@ -90,7 +91,7 @@ func runManage(t *testing.T, o manageOpts) manageRun {
 		if writeErr := os.WriteFile(filepath.Join(projDir, "docker-compose.yml"), []byte("services: {}\n"), 0o600); writeErr != nil {
 			t.Fatalf("write compose: %v", writeErr)
 		}
-		if writeErr := os.WriteFile(filepath.Join(projDir, ".env"), []byte("COMPOSE_PROJECT_NAME=testproj\n"), 0o600); writeErr != nil {
+		if writeErr := os.WriteFile(filepath.Join(projDir, ".env"), []byte("COMPOSE_PROJECT_NAME=testproj\n"+o.envExtra), 0o600); writeErr != nil {
 			t.Fatalf("write env: %v", writeErr)
 		}
 	}
@@ -248,6 +249,56 @@ func TestManage_PruneCacheTargetsGlobalBuilder(t *testing.T) {
 	}
 	if !strings.Contains(r.stderr, "GLOBAL") {
 		t.Errorf("prune-cache must warn the prune is GLOBAL\nstderr: %s", r.stderr)
+	}
+}
+
+// TestManage_ExecRunsAsRemapUser pins that `exec` runs the command in the
+// container as the .env USERNAME (the container starts as root, so without
+// --user the user's shell environment is lost), scoped to the .env service.
+//
+//nolint:paralleltest // subprocess + PATH stubs
+func TestManage_ExecRunsAsRemapUser(t *testing.T) {
+	r := runManage(t, manageOpts{
+		args:     []string{"exec", "zsh", "-c", "whoami"},
+		envExtra: "USERNAME=tama\nCONTAINER_SERVICE_NAME=svc\n",
+	})
+	if r.exitCode != 0 {
+		t.Fatalf("exit = %d, want 0\nstderr: %s\nlog:\n%s", r.exitCode, r.stderr, r.log)
+	}
+	if !logHasDocker(r.log, "exec --user tama svc zsh -c whoami") {
+		t.Errorf("exec did not run `compose exec --user tama svc zsh -c whoami`\nlog:\n%s", r.log)
+	}
+}
+
+// TestManage_ExecNoArgsErrors pins that `exec` with no command fails closed
+// (it must not drop into an unintended default).
+//
+//nolint:paralleltest // subprocess + PATH stubs
+func TestManage_ExecNoArgsErrors(t *testing.T) {
+	r := runManage(t, manageOpts{args: []string{"exec"}})
+	if r.exitCode != 1 {
+		t.Fatalf("exit = %d, want 1 (exec with no command must fail)\nstderr: %s", r.exitCode, r.stderr)
+	}
+	if !strings.Contains(r.stderr, "exec needs a command") {
+		t.Errorf("stderr = %q, want 'exec needs a command'", r.stderr)
+	}
+}
+
+// TestManage_ExecPassesThroughDashFlags pins that `exec` forwards its argv to
+// the container verbatim — dash-flags must reach docker, not be swallowed by
+// manage.sh's option parser.
+//
+//nolint:paralleltest // subprocess + PATH stubs
+func TestManage_ExecPassesThroughDashFlags(t *testing.T) {
+	r := runManage(t, manageOpts{
+		args:     []string{"exec", "ls", "-la"},
+		envExtra: "USERNAME=tama\nCONTAINER_SERVICE_NAME=svc\n",
+	})
+	if r.exitCode != 0 {
+		t.Fatalf("exit = %d, want 0\nstderr: %s\nlog:\n%s", r.exitCode, r.stderr, r.log)
+	}
+	if !logHasDocker(r.log, "exec --user tama svc ls -la") {
+		t.Errorf("exec did not forward `-la` to the container\nlog:\n%s", r.log)
 	}
 }
 

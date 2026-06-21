@@ -21,7 +21,7 @@ func TestManageScript_NotEmpty(t *testing.T) {
 }
 
 // TestManageScript_ShebangAndCommands pins that the embedded script is a
-// bash script exposing the clean / rebuild / prune-cache commands and
+// bash script exposing the clean / rebuild / exec / prune-cache commands and
 // drives docker compose for project scoping.
 func TestManageScript_ShebangAndCommands(t *testing.T) {
 	t.Parallel()
@@ -30,7 +30,7 @@ func TestManageScript_ShebangAndCommands(t *testing.T) {
 		t.Error("manage.sh missing #!/usr/bin/env bash shebang")
 	}
 	for _, want := range []string{
-		"clean", "rebuild", "prune-cache", "docker compose -f",
+		"clean", "rebuild", "exec", "prune-cache", "docker compose -f",
 	} {
 		if !strings.Contains(s, want) {
 			t.Errorf("manage.sh missing %q", want)
