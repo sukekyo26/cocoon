@@ -86,6 +86,7 @@ packages = []
 				{path: ".devcontainer/manage.sh", mustContain: []string{
 					"#!/usr/bin/env bash", "prune-cache",
 					"docker compose -f", "down --volumes --rmi local",
+					"exec --user", "cmd_exec",
 				}},
 			},
 		},
