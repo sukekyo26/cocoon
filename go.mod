@@ -10,7 +10,7 @@ require (
 	github.com/charmbracelet/x/exp/teatest v0.0.0-20260602025833-85a30b5e440a
 	github.com/google/go-cmp v0.7.0
 	github.com/mattn/go-isatty v0.0.22
-	github.com/pelletier/go-toml/v2 v2.4.0
+	github.com/pelletier/go-toml/v2 v2.4.2
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
 	gopkg.in/yaml.v3 v3.0.1
