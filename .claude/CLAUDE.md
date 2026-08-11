@@ -33,3 +33,12 @@ cocoon は `cocoon.toml` から `.devcontainer/` を生成する Go CLI です�
 - ユーザー向け挙動を変えたら `CHANGELOG.md` と `docs/CHANGELOG.ja.md` を同期する。
 - `docs/<topic>.md` と `docs/<topic>.ja.md` は同じ内容に保つ。
 - ドキュメントにプラグイン数などの変動しやすい件数をハードコードしない。
+
+## Branch and PR Workflow
+
+グローバル CLAUDE.md の「`develop` への直接コミットは許可」は **このリポジトリでは適用しない**。ruleset で develop / main とも PR 必須になっており、直接 push は reject される。
+
+- `develop` への変更は必ずブランチ + PR 経由にする。バージョンバンプ・typo 修正などの小さな変更も例外にしない。
+- develop への PR は squash merge（feature / fix などの使い捨てブランチ）か merge commit（`main` → `develop` の戻しマージ）を選ぶ。rebase merge は使わない。
+- `develop` → `main` のリリース PR は **merge commit 一択**（ruleset が squash / rebase を禁止している）。squash すると main が develop の履歴から分岐し、次のリリースで全ファイルがコンフリクトする。
+- develop / main の PR は Go CI・ShellCheck・shfmt の 7 チェックが必須。
