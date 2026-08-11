@@ -6,6 +6,14 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+## [0.17.2] - 2026-08-12
+
+### 修正
+
+- **セキュリティ**: ビルドに使う Go を 1.26.4 から 1.26.5 に更新し、`crypto/tls` の
+  GO-2026-5856 (Encrypted Client Hello 利用時のプライバシー漏洩) の修正を取り込んだ。
+  リリースバイナリは HTTPS 通信 (リリース確認・プラグイン解決) でこの経路を通る。
+
 ## [0.17.1] - 2026-06-22
 
 ### 追加
@@ -808,7 +816,8 @@ cocoon の主要な変更を記録します。フォーマットは
 - `COMPOSE_PROJECT_NAME` をプロジェクトディレクトリの basename から導出するように変更。docker compose の namespace がホストディレクトリと一致する。
 - 国際化 (英語 / 日本語) カタログを追加。CLI プロンプト・エラーメッセージ・`workspace.toml` インラインコメントすべてを `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` で切替可能。
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.17.1...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.17.2...HEAD
+[0.17.2]: https://github.com/sukekyo26/cocoon/compare/v0.17.1...v0.17.2
 [0.17.1]: https://github.com/sukekyo26/cocoon/compare/v0.17.0...v0.17.1
 [0.17.0]: https://github.com/sukekyo26/cocoon/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/sukekyo26/cocoon/compare/v0.15.7...v0.16.0
