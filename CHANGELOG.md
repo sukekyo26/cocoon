@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.17.2] - 2026-08-12
+
 ### Fixed
 
 - **Security**: Build cocoon with Go 1.26.5 (was 1.26.4) to pick up the
@@ -826,7 +828,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Add `COMPOSE_PROJECT_NAME` derivation from the project directory basename so docker compose namespacing matches the host directory.
 - Add i18n catalog (English / Japanese) covering every CLI prompt, error message, and inline `workspace.toml` comment, switched via `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG`.
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.17.1...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.17.2...HEAD
+[0.17.2]: https://github.com/sukekyo26/cocoon/compare/v0.17.1...v0.17.2
 [0.17.1]: https://github.com/sukekyo26/cocoon/compare/v0.17.0...v0.17.1
 [0.17.0]: https://github.com/sukekyo26/cocoon/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/sukekyo26/cocoon/compare/v0.15.7...v0.16.0
