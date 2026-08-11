@@ -65,7 +65,7 @@ jobs:
       include: ${{ steps.set.outputs.include }}
       any: ${{ steps.set.outputs.any }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Full history so the PR diff has both endpoint commits locally.
           fetch-depth: 0
@@ -175,8 +175,8 @@ jobs:
       matrix:
         include: ${{ fromJSON(needs.detect.outputs.include) }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache: true
@@ -185,7 +185,9 @@ jobs:
       # as plain env vars so the raw `docker buildx bake` invocation in the
       # script can talk to the GHA cache backend.
       - uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
-      - uses: taiki-e/install-action@b1fb785e72add1aaabe1e13115c2292ca8925d3f # v2.75.27 (just)
+      - uses: taiki-e/install-action@7f4eb899022d8fe70b20c4f3de697aa85c309026 # v2.85.11
+        with:
+          tool: just
       - name: Build cocoon binary
         run: just build
       - name: Build ${{ matrix.plugin }} on debian 12 (pinned + latest)
