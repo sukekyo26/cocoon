@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Security**: Build cocoon with Go 1.26.5 (was 1.26.4) to pick up the
+  `crypto/tls` fix for GO-2026-5856 (privacy leak when Encrypted Client Hello
+  is in use), which the release binaries reach through their HTTPS calls
+  (release check, plugin resolution).
+
 ## [0.17.1] - 2026-06-22
 
 ### Added
