@@ -68,8 +68,6 @@ jobs:
       - uses: taiki-e/install-action@7f4eb899022d8fe70b20c4f3de697aa85c309026 # v2.85.11
         with:
           tool: just
-        with:
-          tool: just
 
       - name: Build release assets
         env:
