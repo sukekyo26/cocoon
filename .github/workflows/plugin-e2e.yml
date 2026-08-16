@@ -185,7 +185,7 @@ jobs:
       # as plain env vars so the raw `docker buildx bake` invocation in the
       # script can talk to the GHA cache backend.
       - uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
-      - uses: taiki-e/install-action@7f4eb899022d8fe70b20c4f3de697aa85c309026 # v2.85.11
+      - uses: taiki-e/install-action@b20dedce73af6905cdc30d6611090c9b67557c8d # v2.85.12
         with:
           tool: just
       - name: Build cocoon binary
