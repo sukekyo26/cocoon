@@ -11,12 +11,23 @@ on:
     branches: ["feature/*", "fix/*", "refactor/*", develop]
   pull_request:
     branches: [develop, main]
+  schedule:
+    # Mon 06:00 UTC — same window as the other weekly canaries. This one
+    # exists for govulncheck: the vulnerability database moves on its own
+    # schedule, so the Go patch pinned in go.mod goes stale with no commit to
+    # trigger a run. Without this the first unrelated PR of the week is what
+    # discovers it, and its author pays for a bump that is not theirs.
+    - cron: "0 6 * * 1"
   workflow_dispatch:
   workflow_call:
 
 # Cancel earlier in-progress runs on the same branch when a new push arrives.
+# event_name is part of the key because the weekly run lands on the default
+# branch, where release.yml's workflow_call also runs: without it the two
+# would share a group and cancel each other, so a Monday release could lose
+# its validation to a cron run.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref_name }}
+  group: ${{ github.workflow }}-${{ github.ref_name }}-${{ github.event_name }}
   cancel-in-progress: true
 
 permissions:
