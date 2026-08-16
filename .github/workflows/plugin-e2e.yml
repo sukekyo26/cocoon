@@ -23,6 +23,12 @@ name: Plugin E2E
 #   - schedule:     every plugin — the weekly upstream-drift canary.
 #   - workflow_dispatch: one plugin (inputs.plugin) or all (empty).
 #
+# Each amd64 leg also runs the build-free Trivy gates (`just trivy-static`)
+# over the .devcontainer/ it generated. `trivy image` is impossible here —
+# build-only means no image is ever loaded — but plugin install scripts are
+# inlined verbatim into the Dockerfile as quoted heredocs, so scanning that
+# one file covers the plugin completely. Base-image CVEs are e2e.yml's job.
+#
 # Each selected plugin builds twice: PIN_MODE=pinned (reproducible
 # baseline) and PIN_MODE=latest (floats to upstream LATEST to catch
 # packaging drift — a moved URL, a removed checksum manifest — before
@@ -185,9 +191,11 @@ jobs:
       # as plain env vars so the raw `docker buildx bake` invocation in the
       # script can talk to the GHA cache backend.
       - uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
+      # trivy has no version pin of its own: install-action resolves an
+      # omitted version from its own release, so the SHA above pins both.
       - uses: taiki-e/install-action@b20dedce73af6905cdc30d6611090c9b67557c8d # v2.85.12
         with:
-          tool: just
+          tool: just,trivy
       - name: Build cocoon binary
         run: just build
       - name: Build ${{ matrix.plugin }} on debian 12 (pinned + latest)
@@ -207,6 +215,19 @@ jobs:
             PIN_MODE="$mode" bash "$GITHUB_WORKSPACE/e2e/docker-roundtrip.sh"
             echo "::endgroup::"
           done
+
+      # Build-free Trivy gates. The single preset forces BUILD_ONLY
+      # (e2e/docker-roundtrip.sh) so no image is ever loaded and `trivy image`
+      # is impossible here — but the plugin's install script is inlined
+      # verbatim into the generated Dockerfile as a quoted heredoc, so the
+      # misconfig and secret scans cover this plugin completely from that one
+      # file. The loop above leaves the `latest` generation on disk; pinned
+      # and latest differ only in version strings, so one scan is enough.
+      # amd64 only: generation is host-independent, so the arm64 leg would
+      # produce a byte-identical Dockerfile.
+      - name: Trivy misconfig + secret (gating)
+        if: matrix.arch == 'amd64'
+        run: just trivy-static
 
   # Stable required-check target: matrix job names vary per run, so branch
   # protection points at this job instead of individual {plugin}/{arch}

@@ -81,6 +81,9 @@ catalog_dir="$(cd "$script_dir/../internal/plugin/catalog" && pwd)"
 # Wipe any leftover project dir before init so reruns (local debugging,
 # self-hosted runner with cached workspace) are idempotent — `cocoon
 # init` refuses to overwrite an existing cocoon.toml without --force.
+# The tree must survive the run: .github/workflows/{e2e,plugin-e2e}.yml scan
+# it with `just trivy-static` after this script exits, so the cleanup belongs
+# here (before init) and not in the EXIT trap.
 rm -rf e2e/test-project
 mkdir -p e2e/test-project
 cd e2e/test-project

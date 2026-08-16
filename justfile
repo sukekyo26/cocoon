@@ -8,6 +8,13 @@ cover_file := "coverage.out"
 # Override at build time with e.g. `VERSION=1.2.3 just build`.
 version    := env_var_or_default("VERSION", trim(`cat VERSION 2>/dev/null || echo 0.0.0-dev`))
 ldflags    := "-s -w -X github.com/sukekyo26/cocoon/internal/version.Version=" + version
+# Trivy scan target: the generated .devcontainer/ tree to audit. cocoon's own
+# repo has no .devcontainer/, so the default points at the sandbox
+# e2e/docker-roundtrip.sh leaves behind (CI's target; its trap tears down
+# containers, not the directory). Override per invocation, e.g.
+# `just trivy-static ~/myproject/.devcontainer`.
+devcontainer_dir := "e2e/test-project/.devcontainer"
+trivy_ignore     := justfile_directory() + "/.trivyignore.yaml"
 
 # List available recipes
 default:
@@ -40,6 +47,8 @@ setup:
         | sh -s -- -b "${bindir}" v2.11.4
     command -v shellcheck >/dev/null 2>&1 \
         || echo >&2 "NOTE: shellcheck not found — install via 'apt-get install shellcheck' or 'brew install shellcheck'"
+    command -v trivy >/dev/null 2>&1 \
+        || echo >&2 "NOTE: trivy not found — see https://github.com/aquasecurity/trivy/releases or 'brew install trivy' (only needed for the trivy-* recipes; not part of 'just ci')"
     echo "Done. Ensure ${bindir} is on your PATH, then run 'just ci'."
 
 # Format Go source with gofumpt + goimports (via golangci-lint formatters)
@@ -143,5 +152,51 @@ shfmt-check:
     @command -v shfmt >/dev/null 2>&1 || { echo >&2 "shfmt not installed; see https://github.com/mvdan/sh/releases or 'brew install shfmt'"; exit 1; }
     shfmt -i 2 -ci -d $(find . -type f -name '*.sh' -not -path './.git/*' -not -path './bin/*')
 
-# Composite pre-push gate mirroring the GitHub Actions pipeline.
+# Trivy misconfiguration scan of a generated .devcontainer/. Only the
+# Dockerfile is in scope: Trivy ships no misconfig checks for Compose, so
+# docker-compose.yml is a no-op here (compose posture is asserted instead by
+# the SUDO_MODE checks in e2e/docker-roundtrip.sh). CI gate: any finding not
+# justified in .trivyignore.yaml exits 1.
+# Scan a generated .devcontainer/ for Dockerfile misconfigurations.
+trivy-config dir=devcontainer_dir:
+    @command -v trivy >/dev/null 2>&1 || { echo >&2 "trivy not installed; see https://github.com/aquasecurity/trivy/releases or 'brew install trivy'"; exit 1; }
+    trivy config --quiet --exit-code 1 --misconfig-scanners dockerfile --ignorefile "{{trivy_ignore}}" "{{dir}}"
+
+# Trivy secret scan of a generated .devcontainer/. Matters most for the
+# Dockerfile: plugin install scripts are inlined verbatim as quoted heredocs,
+# so a token committed into a catalog install.sh surfaces here. Needs no
+# vulnerability DB. CI gate: any hit exits 1.
+# Scan a generated .devcontainer/ for leaked secrets.
+trivy-secret dir=devcontainer_dir:
+    @command -v trivy >/dev/null 2>&1 || { echo >&2 "trivy not installed; see https://github.com/aquasecurity/trivy/releases or 'brew install trivy'"; exit 1; }
+    trivy fs --quiet --scanners secret --exit-code 1 --ignorefile "{{trivy_ignore}}" "{{dir}}"
+
+# Both build-free gates in one shot. They read the generated Dockerfile alone,
+# which is what makes them usable from plugin-e2e.yml, where the single preset
+# forces BUILD_ONLY and never loads an image.
+# Run both build-free Trivy gates over a generated .devcontainer/.
+trivy-static dir=devcontainer_dir: (trivy-config dir) (trivy-secret dir)
+
+# Report-only CVE scan of a built image. Deliberately never gates: base image
+# CVEs are upstream and unfixable here, so a red check would train reviewers
+# to ignore it.
+# Report HIGH/CRITICAL CVEs in a built image (never fails).
+trivy-image image:
+    @command -v trivy >/dev/null 2>&1 || { echo >&2 "trivy not installed; see https://github.com/aquasecurity/trivy/releases or 'brew install trivy'"; exit 1; }
+    trivy image --quiet --exit-code 0 --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed "{{image}}"
+
+# Same misconfig gate against the committed generator snapshots. Needs no
+# docker and no `cocoon gen`, so it runs on a bare checkout — the local smoke
+# test before touching the Dockerfile generator. Covers the shell variants
+# only; the CI gates above cover real output across every plugin.
+# Run the misconfig gate against the committed Dockerfile snapshots.
+trivy-golden:
+    @command -v trivy >/dev/null 2>&1 || { echo >&2 "trivy not installed; see https://github.com/aquasecurity/trivy/releases or 'brew install trivy'"; exit 1; }
+    trivy config --quiet --exit-code 1 --misconfig-scanners dockerfile --ignorefile "{{trivy_ignore}}" --file-patterns 'dockerfile:.*\.expected' internal/generate/dockerfile/testdata
+
+# Composite pre-push gate mirroring the GitHub Actions pipeline. The trivy-*
+# recipes are deliberately excluded: they audit `cocoon gen` OUTPUT, which
+# this repo does not carry and CI produces via e2e/docker-roundtrip.sh (which
+# local WSL2 cannot run). Use `just trivy-golden` for the build-free local
+# smoke test.
 ci: fmt-check vet lint test cover-check vuln mod-verify shellcheck shfmt-check
