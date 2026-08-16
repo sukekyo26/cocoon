@@ -175,10 +175,20 @@ jobs:
         continue-on-error: true
         run: |
           set -euo pipefail
-          image="$(docker compose \
+          # Capture the whole list, then take the first line in the shell.
+          # Piping into `head -1` would let head close the pipe on a
+          # multi-service compose file, so compose dies on SIGPIPE and
+          # pipefail fails the step for a reason that has nothing to do with
+          # the scan.
+          images="$(docker compose \
             --env-file e2e/test-project/.devcontainer/.env \
             -f e2e/test-project/.devcontainer/docker-compose.yml \
-            config --images | head -1)"
+            config --images)"
+          image="${images%%$'\n'*}"
+          if [ -z "$image" ]; then
+            echo "docker compose config --images produced no image name" >&2
+            exit 1
+          fi
           {
             echo "### Trivy image CVEs — ${{ matrix.label }} (\`${image}\`)"
             echo '```'
