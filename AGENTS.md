@@ -21,6 +21,7 @@ cocoon は `cocoon.toml` から `.devcontainer/` を生成する Go CLI です�
 - `just test`: ビルド後に `go test -shuffle=on ./...` を実行する。
 - `just lint`: `.golangci.yml` に従って lint を実行する。
 - `just ci`: push 前の総合チェックを実行する。
+- `just trivy-golden`: 生成 Dockerfile のスナップショットに Trivy misconfig スキャンをかける。実際の生成物への gate は E2E ワークフローが `just trivy-static` で実行する。
 - `just regen-snapshots`: generator、help、`cocoon init` 出力を意図的に変えた時だけ実行し、更新された `testdata/` を同じ変更に含める。
 
 ## Project-Specific Rules

@@ -27,6 +27,17 @@ name: E2E
 # changed plugin and weekly for the rest; plugin-vs-plugin coverage is
 # dropped (init-time conflict validation catches most).
 #
+# Each leg also runs the build-free Trivy gates (`just trivy-static`) over the
+# .devcontainer/ it generated: misconfiguration and secret findings fail the
+# job, with the two intentional Dockerfile misconfigs justified in
+# .trivyignore.yaml. Image CVEs are reported, never gated — they are upstream
+# base-image issues, so they land in the job summary as a delta signal for
+# SupportedImageVersions bumps instead of a red check. The plugin-side
+# counterpart lives in plugin-e2e.yml: that workflow cannot run `trivy image`
+# (its single preset forces BUILD_ONLY, so no image is ever loaded), but
+# plugin install scripts are inlined verbatim into the Dockerfile, so the
+# static gates cover every plugin there without a build.
+#
 # Local WSL2 cannot run these (gcc missing for `-race`); GitHub-hosted
 # ubuntu-latest / ubuntu-24.04-arm both ship docker + buildx out of the
 # box.
@@ -56,35 +67,45 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # scan-image marks the legs whose base image is distinct. The CVE
+        # report is per base image, so the arm64 and sudo=* ubuntu legs below
+        # would only re-report ubuntu 26.04 three more times.
         include:
           - label: amd64 / ubuntu
             runs-on: ubuntu-latest
             image: ubuntu
             image-version: "26.04"
+            scan-image: true
           - label: amd64 / debian
             runs-on: ubuntu-latest
             image: debian
             image-version: "12"
+            scan-image: true
           - label: amd64 / node
             runs-on: ubuntu-latest
             image: node
             image-version: "26-bookworm-slim"
+            scan-image: true
           - label: amd64 / python
             runs-on: ubuntu-latest
             image: python
             image-version: "3.14-slim-bookworm"
+            scan-image: true
           - label: amd64 / golang
             runs-on: ubuntu-latest
             image: golang
             image-version: "1.26-bookworm"
+            scan-image: true
           - label: amd64 / rust
             runs-on: ubuntu-latest
             image: rust
             image-version: "1.96-bookworm"
+            scan-image: true
           - label: amd64 / denoland/deno
             runs-on: ubuntu-latest
             image: denoland/deno
             image-version: "debian-2.8.2"
+            scan-image: true
           - label: arm64 / ubuntu
             runs-on: ubuntu-24.04-arm
             image: ubuntu
@@ -121,9 +142,11 @@ jobs:
       # automatically; a hand-written shell step does not, so we surface
       # them explicitly here.
       - uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
-      - uses: taiki-e/install-action@7f4eb899022d8fe70b20c4f3de697aa85c309026 # v2.85.11
+      # trivy has no version pin of its own: install-action resolves an
+      # omitted version from its own release, so the SHA above pins both.
+      - uses: taiki-e/install-action@b20dedce73af6905cdc30d6611090c9b67557c8d # v2.85.12
         with:
-          tool: just
+          tool: just,trivy
       - name: Build cocoon binary
         run: just build
       - name: cocoon init + gen + docker compose round-trip
@@ -134,3 +157,41 @@ jobs:
           IMAGE_VERSION: ${{ matrix.image-version }}
           SUDO_MODE: ${{ matrix.sudo-mode }}
         run: bash "$GITHUB_WORKSPACE/e2e/docker-roundtrip.sh"
+
+      # Build-free Trivy gates on the tree `cocoon gen` just wrote. The script
+      # above leaves e2e/test-project/ in place (its trap only runs `compose
+      # down -v`), so this reads the exact artifact that was built, with no
+      # second `cocoon gen` to drift from it.
+      - name: Trivy misconfig + secret (gating)
+        run: just trivy-static
+
+      # Report-only: base image CVEs are upstream and unfixable in this repo.
+      # The value is the delta a SupportedImageVersions bump shows in the job
+      # summary. continue-on-error also absorbs operational failures (DB pull
+      # rate limit, registry outage) instead of turning an informational scan
+      # into a red check.
+      - name: Trivy image CVE report
+        if: matrix.scan-image
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          # Capture the whole list, then take the first line in the shell.
+          # Piping into `head -1` would let head close the pipe on a
+          # multi-service compose file, so compose dies on SIGPIPE and
+          # pipefail fails the step for a reason that has nothing to do with
+          # the scan.
+          images="$(docker compose \
+            --env-file e2e/test-project/.devcontainer/.env \
+            -f e2e/test-project/.devcontainer/docker-compose.yml \
+            config --images)"
+          image="${images%%$'\n'*}"
+          if [ -z "$image" ]; then
+            echo "docker compose config --images produced no image name" >&2
+            exit 1
+          fi
+          {
+            echo "### Trivy image CVEs — ${{ matrix.label }} (\`${image}\`)"
+            echo '```'
+            just trivy-image "$image"
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
