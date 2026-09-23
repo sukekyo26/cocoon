@@ -6,6 +6,27 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `[apt].packages` (in both `cocoon.toml` and a plugin's `plugin.toml`) accepts
+  Debian-style alternatives: `"libasound2t64 | libasound2"` installs the first
+  candidate that is installable on the image, tried left to right at build
+  time, and prints the choice to the build log. This covers libraries renamed
+  by the 64-bit `time_t` transition, which have no single name that works on
+  every supported image. The build stops with an error when no candidate is
+  installable. Layers without alternatives render exactly as before.
+
+### Fixed
+
+- **Security**: Validate every `[apt].packages` entry in `cocoon.toml` and
+  `plugin.toml` before it is written into the generated Dockerfile. Values were
+  interpolated verbatim, so a newline or shell syntax in a package name could
+  inject Dockerfile instructions or commands into the build. Each entry (or
+  `|` candidate) must now be `name[:arch][=version|/release]` with a lowercase
+  Debian name; whitespace, shell characters, and apt-get options such as
+  `"-t"` are rejected. To pull a package from a specific release, write
+  `"pkg/release"` instead of passing `-t` as a separate entry.
+
 ## [0.17.2] - 2026-08-12
 
 ### Fixed

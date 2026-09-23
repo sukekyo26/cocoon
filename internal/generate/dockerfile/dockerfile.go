@@ -63,7 +63,9 @@ type templateData struct {
 	AptBasePackages        string
 	AptShellPackages       string
 	AptPluginPackages      string
+	AptPluginPick          string
 	AptExtraPackages       string
+	AptExtraPick           string
 	LocaleSedScript        string
 	LocaleLang             string
 	LocaleLanguage         string
@@ -137,6 +139,9 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && \
+{{- with $.AptExtraPick }}
+{{ . }}
+{{- end }}
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
 {{ . }}
     && rm -rf /tmp/* /var/tmp/*
@@ -149,6 +154,9 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && \
+{{- with $.AptPluginPick }}
+{{ . }}
+{{- end }}
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
 {{ . }}
     && rm -rf /tmp/* /var/tmp/*
@@ -297,7 +305,7 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 
 	mirrorRewritePre, mirrorRewrite, proxyConfPre := splitAptSetupForBootstrap(ctx)
 
-	aptBaseBlock, aptShellBlock, aptPluginBlock, aptExtraBlock := aptSections(ctx, opts.Plugins, enabled, opts.Warnings)
+	apt := aptSections(ctx, opts.Plugins, enabled, opts.Warnings)
 
 	preUser, postPlugins := buildDockerfileHooks(ctx, opts.Warnings)
 	_, lang, language := ctx.ResolveLocale()
@@ -325,10 +333,12 @@ func Generate(ctx *generate.WorkspaceContext, opts Options) (string, error) {
 		AptCABootstrap:         aptCABootstrap,
 		AptMirrorRewrite:       mirrorRewrite,
 		AptThirdParty:          buildAptThirdParty(ctx),
-		AptBasePackages:        aptBaseBlock,
-		AptShellPackages:       aptShellBlock,
-		AptPluginPackages:      aptPluginBlock,
-		AptExtraPackages:       aptExtraBlock,
+		AptBasePackages:        apt.base,
+		AptShellPackages:       apt.shell,
+		AptPluginPackages:      apt.plugin,
+		AptPluginPick:          apt.pluginPick,
+		AptExtraPackages:       apt.extra,
+		AptExtraPick:           apt.extraPick,
 		LocaleSedScript:        localeSed,
 		LocaleLang:             lang,
 		LocaleLanguage:         language,
@@ -413,6 +423,7 @@ RUN --mount=type=secret,id=%[3]s \
 // warnDuplicateAptExtras flags packages listed in config-file [apt]
 // that cocoon already installs as a MinimalBasePackage. A nil warnings
 // sink silently drops the diagnostics, matching the rest of Generate.
+// An "a | b" group is one key, so its candidates are never flagged.
 func warnDuplicateAptExtras(extras []string, basePkgNames map[string]struct{}, warnings *warn.Sink) {
 	for _, pkg := range extras {
 		if _, dup := basePkgNames[pkg]; dup {
@@ -520,18 +531,42 @@ func buildShellHistoryInit(shell, rcFile string) string {
 	return ""
 }
 
-// formatAptContinuations renders one RUN-continuation line per package
-// ("    pkg \\\n"). Returns "" when packages is empty.
-func formatAptContinuations(packages []string) string {
-	if len(packages) == 0 {
-		return ""
+// aptInstallArgs renders one apt layer's install arguments as RUN continuation
+// lines ("    pkg \\\n"). An entry with "|" alternatives becomes a
+// "$cocoon_alt_N" argument, resolved by the returned pick lines that run
+// between apt-get update and apt-get install. pick is "" when no entry has
+// alternatives, so such layers render exactly as before.
+func aptInstallArgs(packages []string) (pick, args string) {
+	var p, b strings.Builder
+	n := 0
+	for _, entry := range packages {
+		cands := config.SplitAptAlternatives(entry)
+		if len(cands) == 1 {
+			b.WriteString("    " + shellx.ShellQuote(cands[0]) + " \\\n")
+			continue
+		}
+		n++
+		if n == 1 {
+			p.WriteString(aptPickFunc)
+		}
+		quoted := make([]string, len(cands))
+		for i, c := range cands {
+			quoted[i] = shellx.ShellQuote(c)
+		}
+		fmt.Fprintf(&p, "    cocoon_alt_%d=$(cocoon_apt_pick %s) && \\\n", n, strings.Join(quoted, " "))
+		fmt.Fprintf(&b, "    \"$cocoon_alt_%d\" \\\n", n)
 	}
-	var b strings.Builder
-	for _, p := range packages {
-		b.WriteString("    " + p + " \\\n")
-	}
-	return b.String()
+	return p.String(), b.String()
 }
+
+// aptPickFunc prints the first installable candidate. `apt-get install -s`
+// (not apt-cache show) so a virtual package with a single provider counts as
+// installable. Each pick is a `var=$(...)` assignment, whose exit status is
+// the substitution's, so an unresolvable group stops the && chain.
+//
+//nolint:lll // shell RUN lines cannot be wrapped without changing semantics.
+const aptPickFunc = `    cocoon_apt_pick() { for p in "$@"; do if apt-get install -s -qq "$p" >/dev/null 2>&1; then echo "cocoon: apt alternative -> $p" >&2; echo "$p"; return 0; fi; done; echo "cocoon: none of the apt alternatives [$*] is installable on this image; fix the '|' candidates in [apt].packages" >&2; return 1; } && \
+`
 
 // splitAptSetupForBootstrap places [apt.mirror] / [apt.proxy] relative
 // to the bootstrap apt activity (cert install RUN / AptCABootstrap):
@@ -792,14 +827,14 @@ func pluginAptPackages(p *plugin.Plugin) []string {
 // duplicate a base package.
 func aptSections(
 	ctx *generate.WorkspaceContext, plugins map[string]*plugin.Plugin, enabled []string, warnings *warn.Sink,
-) (base, shell, pluginPkgs, extra string) {
+) aptLayers {
 	aptBase := baseAptPackagesBlock()
 	basePkgNames := parseBasePackages(aptBase)
 
 	baseShellSeen := maps.Clone(basePkgNames)
 	shellList := dropSeen(ctx.LoginShellAptPackages(), baseShellSeen) // baseShellSeen now = base ∪ shell
 
-	extras := ctx.AptExtraPackages()
+	extras := normalizeAptEntries(ctx.AptExtraPackages())
 	warnDuplicateAptExtras(extras, basePkgNames, warnings)
 	extraList := dropSeen(extras, maps.Clone(baseShellSeen))
 
@@ -807,12 +842,37 @@ func aptSections(
 	for _, p := range extraList {
 		pluginSeen[p] = struct{}{}
 	}
-	pluginList := dropSeen(pluginAptPackagesList(plugins, enabled), pluginSeen)
+	pluginList := dropSeen(normalizeAptEntries(pluginAptPackagesList(plugins, enabled)), pluginSeen)
 
-	return strings.TrimRight(aptBase, "\n"),
-		strings.TrimRight(formatAptContinuations(shellList), "\n"),
-		strings.TrimRight(formatAptContinuations(pluginList), "\n"),
-		strings.TrimRight(formatAptContinuations(extraList), "\n")
+	// Login-shell packages are fixed single names, so their pick is always "".
+	_, shellArgs := aptInstallArgs(shellList)
+	extraPick, extraArgs := aptInstallArgs(extraList)
+	pluginPick, pluginArgs := aptInstallArgs(pluginList)
+	trim := func(s string) string { return strings.TrimRight(s, "\n") }
+	return aptLayers{
+		base:       trim(aptBase),
+		shell:      trim(shellArgs),
+		extra:      trim(extraArgs),
+		extraPick:  trim(extraPick),
+		plugin:     trim(pluginArgs),
+		pluginPick: trim(pluginPick),
+	}
+}
+
+// aptLayers holds the rendered apt install blocks; *Pick are the "|"
+// alternative resolver lines of the matching layer ("" when it has none).
+type aptLayers struct {
+	base, shell, extra, extraPick, plugin, pluginPick string
+}
+
+// normalizeAptEntries rewrites each entry to its canonical "a | b" spelling so
+// dedup treats differently spaced copies of one alternative group as equal.
+func normalizeAptEntries(pkgs []string) []string {
+	out := make([]string, len(pkgs))
+	for i, p := range pkgs {
+		out[i] = strings.Join(config.SplitAptAlternatives(p), " | ")
+	}
+	return out
 }
 
 // pluginAptPackagesList flattens the apt dependencies of the enabled plugins in

@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/sukekyo26/cocoon/internal/config"
 	"github.com/sukekyo26/cocoon/internal/plugin"
 )
 
@@ -49,6 +50,45 @@ version_capable = false
 	_, err := plugin.Load(tmp)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "duplicate")
+}
+
+// TestValidate_AptPackages pins that plugin.toml [apt].packages goes through
+// the same gate as cocoon.toml: "|" alternatives load, shell syntax does not.
+func TestValidate_AptPackages(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name  string
+		entry string
+		code  string // "" = accepted
+	}{
+		{name: "single", entry: "unzip"},
+		{name: "alternatives", entry: "libasound2t64 | libasound2"},
+		{name: "empty-candidate", entry: "libasound2t64 |", code: "err_field_apt_package_empty_alternative"},
+		{name: "shell-injection", entry: "jq && curl x | sh", code: "err_field_apt_package_pattern"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			p := &plugin.Plugin{
+				Metadata: validMetadata(),
+				Install: plugin.Install{
+					DefaultMethod: "binary",
+					Methods:       map[string]plugin.InstallMethod{"binary": {Description: "x"}},
+				},
+				Apt: &plugin.Apt{Packages: []string{"jq", tc.entry}},
+			}
+			err := p.Validate("test/plugin.toml")
+			if tc.code == "" {
+				require.NoError(t, err)
+				return
+			}
+			var verr *config.ValidationError
+			require.ErrorAs(t, err, &verr)
+			require.Len(t, verr.Errors, 1)
+			require.Equal(t, tc.code, verr.Errors[0].Code)
+			require.Equal(t, []string{"apt", "packages", "1"}, verr.Errors[0].Loc)
+		})
+	}
 }
 
 // TestValidate_BuildArgsRejectsReservedEnv covers the cases where a
