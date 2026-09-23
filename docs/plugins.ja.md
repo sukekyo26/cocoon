@@ -117,7 +117,7 @@ install snippet が出ないだけ。
 | `[metadata]` | `url`             | string             | —     | ✓ | 上流プロジェクト URL (`https://...`、空白不可)。`cocoon init` のバージョン入力プロンプト、`cocoon plugin show` の `url:` 行、`cocoon plugin list` の `URL` 列で表示される |
 | `[metadata]` | `default`         | bool               | `false` |   | true なら `cocoon init` のデフォルト選択肢に含まれる |
 | `[metadata]` | `conflicts`       | list of strings    | `[]`  |   | 同時に enable できない id 群 |
-| `[apt]`      | `packages`        | list of strings    | `[]`  |   | `install.<name>.sh` の前に apt-get install されるパッケージ |
+| `[apt]`      | `packages`        | list of strings    | `[]`  |   | `install.<name>.sh` の前に apt-get install されるパッケージ。`cocoon.toml` の `[apt].packages` と同じ検証を受ける。イメージによって名前が違うパッケージは `"a \| b"` と書ける（[`[apt]`](configuration.ja.md#apt) 参照） |
 | `[install]`  | `requires_root`   | bool               | —     | ✓ | true なら `install.<name>.sh` を root で実行、false なら非特権ユーザー |
 | `[install]`  | `build_args`      | list of strings    | `[]`  |   | プラグインが消費するビルド時変数名群。ジェネレータは `ARG <name>` 行をプラグインごとに 1 回 (`install.<name>.sh` / `install_user.sh` のうち先に走る方の直前) 出力し、両 hook の per-RUN env prefix に `<name>="${<name>}"` を載せる。これにより `install.<name>.sh` も `install_user.sh` も `$<name>` を通常の環境変数として読める。ARG のスコープは stage 全体なので、宣言は 1 回で両 RUN をカバーする。`^[A-Z_][A-Z0-9_]*$` に一致し、cocoon 予約 env 名 (`PIN` / `CHECKSUM_AMD64` / `CHECKSUM_ARM64` / `RC_FILE` / `RC_SYNTAX` / `LOGIN_SHELL` / `COCOON_INSTALL_METHOD` / `USERNAME`) と衝突しないこと — `build_args` ペアは framework value の後に RUN プレフィックスへ追加されるため、衝突すると silent shadow になる |
 | `[install]`  | `env`             | map<string,string> | `{}`  |   | install 後に出力される `ENV` 行。値内で先行 `ENV`/`ARG` を参照可 |

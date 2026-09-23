@@ -433,7 +433,23 @@ it is not part of the lock's `inputs_hash`, so renaming it does not trip
 
 | Field | Type | Description |
 |---|---|---|
-| `packages` | array of strings | Extra Debian packages installed on top of cocoon's minimal base + selected init categories. |
+| `packages` | array of strings | Extra Debian packages installed on top of cocoon's minimal base + selected init categories. Each entry is `name[:arch][=version\|/release]` with a lowercase Debian name (`^[a-z0-9][a-z0-9+.-]+$`). Surrounding whitespace is trimmed; whitespace inside a name, shell characters, and apt-get options are rejected. List fallbacks for a package that is named differently per image as `"a \| b"` (see below). |
+
+#### Alternatives (`"a | b"`)
+
+Some libraries are renamed between releases (e.g. the 64-bit `time_t` transition turned `libasound2` into `libasound2t64` on Debian 13 / Ubuntu 24.04), so no single name installs on every supported image. Write the candidates in one entry, separated by `|`:
+
+```toml
+[apt]
+packages = ["libasound2t64 | libasound2", "fonts-noto-cjk"]
+```
+
+- Candidates are tried left to right at build time with `apt-get install -s`; the first installable one is installed and printed to the build log (`cocoon: apt alternative -> …`). A virtual package with a single provider counts as installable.
+- If none is installable, the build stops with an error naming the candidates.
+- Whitespace around `|` is optional. An empty candidate (`"a |"`, `"a || b"`) is rejected.
+- The same syntax works in a plugin's `plugin.toml` `[apt].packages`.
+- Deduplication treats a group as one entry: identical groups (ignoring spacing) collapse, but a candidate inside a group is not compared with single-name entries, and the base-package redundancy warning does not fire for groups.
+- A layer without any group renders exactly as before.
 
 ### `[apt.mirror]`
 

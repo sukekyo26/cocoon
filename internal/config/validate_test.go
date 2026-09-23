@@ -884,6 +884,65 @@ func TestValidate_AptMirrorRejectsSedDelimiter(t *testing.T) {
 	}
 }
 
+// TestValidate_AptPackages pins the [apt].packages gate: each "|" candidate is
+// one apt-get install argument, anything else (shell syntax, options, empty
+// candidates) is rejected at the entry's index.
+func TestValidate_AptPackages(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name  string
+		entry string
+		code  string // "" = accepted
+	}{
+		{name: "single", entry: "fonts-noto-cjk"},
+		{name: "plus-and-dot", entry: "libstdc++6"},
+		{name: "alternatives", entry: "libasound2t64 | libasound2"},
+		{name: "alternatives-no-space", entry: "libasound2t64|libasound2"},
+		{name: "arch", entry: "libc6:amd64"},
+		{name: "version", entry: "curl=7.88.1-10+deb12u5"},
+		{name: "version-epoch-tilde", entry: "foo=1:2.0~rc1"},
+		{name: "release", entry: "golang/bookworm-backports"},
+		{name: "arch-and-version", entry: "libc6:arm64=2.36-9"},
+		{name: "trailing-empty", entry: "a1 |", code: "err_field_apt_package_empty_alternative"},
+		{name: "leading-empty", entry: "| b1", code: "err_field_apt_package_empty_alternative"},
+		{name: "double-bar", entry: "a1 || b1", code: "err_field_apt_package_empty_alternative"},
+		{name: "empty", entry: "", code: "err_field_apt_package_empty_alternative"},
+		{name: "semicolon", entry: "jq; touch /x", code: "err_field_apt_package_pattern"},
+		{name: "dollar", entry: "jq$(id)", code: "err_field_apt_package_pattern"},
+		{name: "newline", entry: "jq\nRUN echo pwn", code: "err_field_apt_package_pattern"},
+		{name: "inner-space", entry: "jq curl", code: "err_field_apt_package_pattern"},
+		{name: "option", entry: "-t", code: "err_field_apt_package_pattern"},
+		{name: "uppercase", entry: "Jq", code: "err_field_apt_package_pattern"},
+		{name: "one-char", entry: "a", code: "err_field_apt_package_pattern"},
+		{name: "bad-candidate-in-group", entry: "a1 | b&c", code: "err_field_apt_package_pattern"},
+		{name: "version-not-digit", entry: "jq=~1", code: "err_field_apt_package_pattern"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			body := minimalWorkspace() +
+				"\n[apt]\npackages = [\"git\", " + tomlQuote(tc.entry) + "]\n"
+			err := loadWS(t, body)
+			if tc.code == "" {
+				require.NoError(t, err)
+				return
+			}
+			var verr *config.ValidationError
+			require.ErrorAs(t, err, &verr)
+			require.Len(t, verr.Errors, 1)
+			require.Equal(t, tc.code, verr.Errors[0].Code)
+			require.Equal(t, []string{"apt", "packages", "1"}, verr.Errors[0].Loc)
+		})
+	}
+}
+
+func TestSplitAptAlternatives(t *testing.T) {
+	t.Parallel()
+	require.Equal(t, []string{"jq"}, config.SplitAptAlternatives("jq"))
+	require.Equal(t, []string{"a1", "b1", "c1"}, config.SplitAptAlternatives(" a1 |b1|  c1 "))
+	require.Equal(t, []string{"a1", ""}, config.SplitAptAlternatives("a1 |"))
+}
+
 // tomlString escapes s for embedding inside a TOML basic-string literal so
 // the parser can round-trip control characters that we want to send through
 // validation.

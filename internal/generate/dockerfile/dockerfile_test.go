@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/sukekyo26/cocoon/internal/config"
 	"github.com/sukekyo26/cocoon/internal/generate"
 	"github.com/sukekyo26/cocoon/internal/generate/dockerfile"
@@ -27,13 +29,19 @@ func TestGenerate_Snapshot(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name     string
-		shell    string // "" = no [container.shell] section (defaults to bash)
-		expected string
+		name        string
+		shell       string   // "" = no [container.shell] section (defaults to bash)
+		aptPackages []string // nil = keep the fixture's [apt].packages
+		expected    string
 	}{
 		{name: "default-bash", shell: "", expected: "snapshot.expected"},
 		{name: "zsh", shell: "zsh", expected: "snapshot_zsh.expected"},
 		{name: "fish", shell: "fish", expected: "snapshot_fish.expected"},
+		{
+			name:        "apt-alternatives",
+			aptPackages: []string{"libasound2t64 | libasound2", "fonts-noto-cjk", "libgtk-3-0t64 | libgtk-3-0"},
+			expected:    "snapshot_apt_alternatives.expected",
+		},
 	}
 
 	for _, tc := range cases {
@@ -51,6 +59,9 @@ func TestGenerate_Snapshot(t *testing.T) {
 			if tc.shell != "" {
 				shell := tc.shell
 				ws.Container.Shell = &config.ContainerShellSpec{Default: &shell}
+			}
+			if tc.aptPackages != nil {
+				ws.Apt.Packages = tc.aptPackages
 			}
 
 			plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, warn.New(), pluginsDir)
@@ -267,6 +278,20 @@ func TestGenerate_AptLayerSeparation(t *testing.T) {
 // and [apt].packages list, routing redundancy warnings to sink.
 func generateForDedup(t *testing.T, shell string, extras []string, sink *warn.Sink) string {
 	t.Helper()
+	return generateFixture(t, func(ws *config.Workspace) {
+		if shell != "" {
+			ws.Container.Shell = &config.ContainerShellSpec{Default: &shell}
+		}
+		ws.Apt.Packages = extras
+	}, nil, sink)
+}
+
+// generateFixture renders the snapshot fixture after applying the optional
+// workspace and loaded-plugin mutators, routing warnings to sink.
+func generateFixture(
+	t *testing.T, mutWS func(*config.Workspace), mutPlugins func(map[string]*plugin.Plugin), sink *warn.Sink,
+) string {
+	t.Helper()
 	root := repoRoot(t)
 	wsPath := filepath.Join(root, "tests", "fixtures", "snapshot.workspace.toml")
 	pluginsDir := filepath.Join(root, "internal", "plugin", "catalog")
@@ -275,14 +300,16 @@ func generateForDedup(t *testing.T, shell string, extras []string, sink *warn.Si
 	if err != nil {
 		t.Fatalf("load workspace: %v", err)
 	}
-	if shell != "" {
-		ws.Container.Shell = &config.ContainerShellSpec{Default: &shell}
+	if mutWS != nil {
+		mutWS(ws)
 	}
-	ws.Apt.Packages = extras
 
 	plugins, err := plugin.LoadEnabledFromFS(os.DirFS(pluginsDir), ws.Plugins.Enable, warn.New(), pluginsDir)
 	if err != nil {
 		t.Fatalf("load plugins: %v", err)
+	}
+	if mutPlugins != nil {
+		mutPlugins(plugins)
 	}
 	ctx := &generate.WorkspaceContext{WS: ws, PluginsFS: os.DirFS(pluginsDir), Plugins: plugins, Warnings: warn.New()}
 	got, err := dockerfile.Generate(ctx, dockerfile.Options{
@@ -292,6 +319,51 @@ func generateForDedup(t *testing.T, shell string, extras []string, sink *warn.Si
 		t.Fatalf("generate: %v", err)
 	}
 	return got
+}
+
+// TestGenerate_AptAlternatives pins the "|" alternative rendering: each group
+// is resolved by cocoon_apt_pick into $cocoon_alt_N before apt-get install, in
+// both the [apt] and plugin layers, and dedup keys on the normalized spelling.
+//
+//nolint:paralleltest // mutates the shared fixture per case
+func TestGenerate_AptAlternatives(t *testing.T) {
+	got := generateFixture(t,
+		func(ws *config.Workspace) {
+			ws.Apt.Packages = []string{"libasound2t64 | libasound2", "libasound2t64|libasound2", "fonts-noto-cjk"}
+		},
+		func(plugins map[string]*plugin.Plugin) {
+			plugins["zig"].Apt.Packages = []string{"jq", " libasound2t64 |  libasound2 ", "libgtk-3-0t64 | libgtk-3-0"}
+		},
+		warn.New())
+
+	userRun := aptRunText(t, got, aptUserRunHeader)
+	require.Equal(t, 1, strings.Count(userRun, "cocoon_apt_pick() {"), userRun)
+	require.Contains(t, userRun, "    cocoon_alt_1=$(cocoon_apt_pick libasound2t64 libasound2) && \\\n")
+	require.NotContains(t, userRun, "cocoon_alt_2", "the respaced duplicate group must collapse")
+	require.Contains(t, userRun, "    \"$cocoon_alt_1\" \\\n    fonts-noto-cjk \\\n")
+	require.Less(t, strings.Index(userRun, "cocoon_alt_1="), strings.Index(userRun, aptInstallMarkerLine))
+
+	pluginRun := aptRunText(t, got, aptPluginRunHeader)
+	require.NotContains(t, pluginRun, "cocoon_apt_pick libasound2t64", "a group the [apt] layer installs is dropped from the plugin layer")
+	require.Contains(t, pluginRun, "    cocoon_alt_1=$(cocoon_apt_pick libgtk-3-0t64 libgtk-3-0) && \\\n")
+	require.Contains(t, pluginRun, "    \"$cocoon_alt_1\" \\\n")
+
+	// Without groups neither layer carries the resolver.
+	plain := generateForDedup(t, "", []string{"fonts-noto-cjk"}, warn.New())
+	require.NotContains(t, plain, "cocoon_apt_pick")
+}
+
+// aptRunText returns the RUN instruction that follows anchor, up to the next
+// blank line.
+func aptRunText(t *testing.T, dockerfileText, anchor string) string {
+	t.Helper()
+	idx := strings.Index(dockerfileText, anchor)
+	require.GreaterOrEqual(t, idx, 0, "anchor %q not found", anchor)
+	rest := dockerfileText[idx:]
+	if end := strings.Index(rest, "\n\n"); end >= 0 {
+		rest = rest[:end]
+	}
+	return rest
 }
 
 // aptPkgLineRe matches an apt package continuation line of the exact shape
