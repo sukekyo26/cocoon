@@ -426,6 +426,25 @@ Use these embedded plugins as templates when writing your own:
   Reference for `[install.extra_versions]`: `api_level` and
   `build_tools` are declared so users can pin platform / build-tools
   versions independently of the `commandline-tools` `pin`.
+- **`android-studio`** — `archive` method for a multi-GB IDE (~1.5 GB
+  download, ~3.5 GB installed under `/opt/android-studio`), x86_64 only.
+  The tarball name carries a release codename, so the pin is
+  `"android-studio=<version>-<codename>"` (e.g.
+  `"android-studio=2026.1.4.8-quail4-patch1"`; both parts are in the
+  `.../ide-zips/<version>/android-studio-<codename>-linux.tar.gz` URL on the
+  [archive page](https://developer.android.com/studio/archive)). The
+  SHA-256 comes from `checksum_amd64` in `[plugins.options].android-studio`,
+  else from the /studio download table when the pin is the current release;
+  an older pin without `checksum_amd64` installs unverified with a warning.
+  Launch it with `android-studio`, a wrapper that points `WAYLAND_DISPLAY` at
+  the WSLg socket when `/mnt/wslg` is mounted. IDE settings persist in the
+  `~/.config` volume and IDE-installed plugins in `~/.local`; `~/.cache`
+  (indexes) is rebuilt after a container rebuild. With the `android-sdk`
+  plugin, choose `/usr/local/android-sdk` as the SDK location in the setup
+  wizard — the default `~/Android/Sdk` is lost on rebuild. The NDK's `lldb`
+  needs ncurses libraries the plugin does not install; add them to `[apt]`
+  for native debugging. Excluded from the automatic plugin-e2e runs
+  (`e2e/plugin-e2e-exclude.txt`).
 
 ## Troubleshooting
 

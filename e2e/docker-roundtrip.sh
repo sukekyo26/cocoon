@@ -131,6 +131,7 @@ done <"$script_dir/apt-categories.txt"
 # amd64-full and arm64-full. Bump an entry to roll a pinned version
 # (surfaces as a deliberate diff in the e2e logs).
 pin_entries=(
+  android-studio=2026.1.4.8-quail4-patch1
   aws-cli=2.34.48
   aws-sam-cli=1.160.1
   bun=1.3.3

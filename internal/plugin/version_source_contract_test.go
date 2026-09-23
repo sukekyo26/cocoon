@@ -14,8 +14,8 @@ import (
 // sourcelessPlugins are version_capable plugins that intentionally ship no
 // [version.source] because their upstream exposes no machine-readable "latest"
 // cocoon can resolve to a reproducible version: aws-cli's download URL is an
-// unversioned alias, android-sdk's build number is only on an HTML page,
-// flutter keys releases by commit hash, and zig's only floating key is the
+// unversioned alias, android-sdk's build number and android-studio's
+// version/codename are only on an HTML page, flutter keys releases by commit hash, and zig's only floating key is the
 // rolling "master" dev build. `cocoon lock` does not error on "latest" for
 // these — it skips them (records no lock entry) and `cocoon gen` installs the
 // latest at build time, non-reproducibly (warned by UnlockedLatestPlugins).
@@ -24,10 +24,11 @@ import (
 //
 //nolint:gochecknoglobals // pin-down allowlist for the coverage contract.
 var sourcelessPlugins = map[string]bool{
-	"aws-cli":     true,
-	"android-sdk": true,
-	"flutter":     true,
-	"zig":         true,
+	"aws-cli":        true,
+	"android-sdk":    true,
+	"android-studio": true,
+	"flutter":        true,
+	"zig":            true,
 }
 
 // TestCatalog_VersionSourceCoverage asserts that every version_capable catalog

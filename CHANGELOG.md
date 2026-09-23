@@ -8,6 +8,18 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- New `android-studio` plugin (Android Studio IDE for Linux, x86_64 only;
+  ~1.5 GB download, ~3.5 GB installed under `/opt/android-studio`). Pin it as
+  `"android-studio=<version>-<codename>"` (e.g.
+  `"android-studio=2026.1.4.8-quail4-patch1"`), since the tarball name carries
+  the release codename; unpinned installs the current release from
+  https://developer.android.com/studio. The download is verified against
+  `checksum_amd64` in `[plugins.options].android-studio`, or the SHA-256 the
+  /studio page lists when the pin is the current release; an older pin without
+  a checksum installs unverified with a warning. Start it with
+  `android-studio`, which uses the WSLg Wayland socket when `/mnt/wslg` is
+  mounted (VS Code terminals otherwise point `WAYLAND_DISPLAY` at a socket that
+  does not reach WSLg). IDE settings persist through a `~/.config` volume.
 - `[apt].packages` (in both `cocoon.toml` and a plugin's `plugin.toml`) accepts
   Debian-style alternatives: `"libasound2t64 | libasound2"` installs the first
   candidate that is installable on the image, tried left to right at build

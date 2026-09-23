@@ -151,6 +151,7 @@ enable = [
     "just=1.51.0",
     "cocoon=0.7.4",
     "rtk=0.42.4",
+    "android-studio=2026.1.4.8-quail4-patch1",
 ]
 
 # [plugins.methods] — install method picked for plugins that declare multiple methods.

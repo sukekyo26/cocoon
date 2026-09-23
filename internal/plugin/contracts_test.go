@@ -83,6 +83,19 @@ func TestPluginContracts(t *testing.T) {
 
 	specs := []spec{
 		{
+			id: "android-studio", name: "Android Studio",
+			requiresRoot: true, versionCapable: true, firstVolume: "config",
+			mustContain: []string{
+				"developer.android.com/studio", "dl.google.com/android/studio/ide-zips",
+				"-linux.tar.gz", "sha256sum -c -", "CHECKSUM_AMD64",
+				"tlsv1.2", "retry 3", "dpkg --print-architecture", "x86_64 only",
+				"/opt/android-studio", "/usr/local/bin/android-studio",
+				"/mnt/wslg/runtime-dir/wayland-0", "WAYLAND_DISPLAY",
+				"rm -f /tmp/android-studio.tar.gz", "PIN",
+			},
+			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),
+		},
+		{
 			id: "android-sdk", name: "Android SDK",
 			requiresRoot: true, versionCapable: true, firstVolume: "android",
 			mustContain: []string{

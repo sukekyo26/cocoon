@@ -401,6 +401,25 @@ android-sdk = { api_level = "36", build_tools = "36.0.0" }
   の参考にもなる: `commandline-tools` の `pin` とは独立に platform /
   build-tools のバージョンをユーザーが指定できるよう `api_level` /
   `build_tools` を宣言している。
+- **`android-studio`** — 数 GB の IDE（ダウンロード約 1.5 GB、`/opt/android-studio`
+  に展開して約 3.5 GB）を入れる `archive` メソッド。x86_64 専用。tar.gz の
+  ファイル名にリリースのコードネームが入るため、pin は
+  `"android-studio=<version>-<codename>"` の形になる（例:
+  `"android-studio=2026.1.4.8-quail4-patch1"`。どちらも
+  [アーカイブページ](https://developer.android.com/studio/archive) の
+  `.../ide-zips/<version>/android-studio-<codename>-linux.tar.gz` の URL にある）。
+  SHA-256 は `[plugins.options].android-studio` の `checksum_amd64`、無ければ
+  pin が現行リリースのときに限り /studio のダウンロード表から取る。
+  `checksum_amd64` の無い古い pin は、警告を出したうえで検証なしで入れる。
+  起動は `android-studio` で行う。これは `/mnt/wslg` がマウントされていれば
+  `WAYLAND_DISPLAY` を WSLg のソケットに向けるラッパー。IDE の設定は
+  `~/.config` のボリューム、IDE から入れたプラグインは `~/.local` に残るが、
+  `~/.cache`（インデックス）はコンテナの再ビルド後に作り直される。
+  `android-sdk` プラグインと併用するときは、初回のウィザードで SDK の場所に
+  `/usr/local/android-sdk` を指定する（既定の `~/Android/Sdk` は再ビルドで消える）。
+  NDK の `lldb` が要る ncurses 系ライブラリは入れないので、ネイティブデバッグを
+  するなら `[apt]` に追加する。自動で走る plugin-e2e からは除外している
+  （`e2e/plugin-e2e-exclude.txt`）。
 
 ## トラブルシューティング
 

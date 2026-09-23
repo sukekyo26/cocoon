@@ -4,6 +4,7 @@
 # (skips the arm64 matrix entry for these) and by docker-roundtrip.sh's
 # PRESET=arm64-full; internal/plugin/e2e_arm64_exclude_test.go guards that
 # every id here is a real catalog plugin.
+android-studio
 flutter
 google-chrome
 lazygit

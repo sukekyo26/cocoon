@@ -1,0 +1,50 @@
+[metadata]
+name = "Android Studio"
+description = "Android Studio IDE (Linux x86_64 only). Large: ~1.5 GB download, ~3.5 GB installed"
+url = "https://developer.android.com/studio"
+default = false
+
+[apt]
+packages = [
+  # Runtime libraries of the bundled JBR (X11 / Wayland toolkits, sound, fonts)
+  # and the IDE's Skiko renderer, taken from ldd plus the JBR's dlopen names
+  # (libXrandr / libXinerama / libXcomposite). The NDK plugin's ncurses libs
+  # are left out: they only serve native debugging with lldb.
+  # 64-bit time_t renamed libasound2 on debian 13 / ubuntu 24.04.
+  "libasound2t64 | libasound2",
+  "libx11-6",
+  "libxext6",
+  "libxrender1",
+  "libxrandr2",
+  "libxinerama1",
+  "libxcomposite1",
+  "libxkbcommon0",
+  "libwayland-client0",
+  "libwayland-cursor0",
+  "libgl1",
+  "libfreetype6",
+  "libfontconfig1",
+  "fontconfig",
+  # Without CJK fonts, Japanese / Chinese / Korean text renders as tofu.
+  "fonts-noto-cjk",
+  # Gemini (bundled AI plugin) native runtime.
+  "libgomp1",
+  "libvulkan1",
+  "curl",
+  "ca-certificates",
+]
+
+[install]
+requires_root = true
+# Persist IDE settings (~/.config/Google). The volume validator only accepts a
+# single segment under $HOME, so the whole ~/.config is the volume, shared with
+# other plugins that declare it. IDE-installed plugins live under
+# ~/.local/share/Google, already persisted by cocoon's ~/.local volume.
+volumes = ["/home/${USERNAME}/.config"]
+default_method = "archive"
+
+[install.methods.archive]
+description = "Android Studio Linux tarball from dl.google.com/android/studio/ide-zips"
+
+[version]
+version_capable = true

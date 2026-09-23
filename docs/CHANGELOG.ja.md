@@ -8,6 +8,18 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ### 追加
 
+- `android-studio` プラグインを追加（Linux 版 Android Studio IDE。x86_64 専用。
+  ダウンロード約 1.5 GB、`/opt/android-studio` に展開して約 3.5 GB）。tar.gz の
+  ファイル名にリリースのコードネームが入るため、pin は
+  `"android-studio=<version>-<codename>"` の形で書く（例:
+  `"android-studio=2026.1.4.8-quail4-patch1"`）。pin しない場合は
+  https://developer.android.com/studio の現行リリースを入れる。ダウンロードは
+  `[plugins.options].android-studio` の `checksum_amd64`、または pin が現行リリース
+  のときは /studio ページに載っている SHA-256 で検証する。チェックサムの無い古い
+  pin は、警告を出したうえで検証なしで入れる。起動は `android-studio` で行い、
+  `/mnt/wslg` がマウントされていれば WSLg の Wayland ソケットを使う（VS Code の
+  端末は `WAYLAND_DISPLAY` を WSLg に届かないソケットに向けるため）。IDE の設定は
+  `~/.config` のボリュームで残る。
 - `[apt].packages`（`cocoon.toml` とプラグインの `plugin.toml` の両方）で
   Debian 式の代替記法を追加。`"libasound2t64 | libasound2"` と書くと、ビルド時に
   左から順に試してイメージでインストールできる最初の候補を入れ、選んだ候補を
