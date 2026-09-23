@@ -39,8 +39,11 @@ applyTo: "internal/plugin/catalog/**"
   `pin_entries` に書けるのは **version_capable のみ** — 非対応 id を入れると e2e が
   `not version_capable; it cannot be pinned` で fail-fast するので指摘。
 - arm64 で動かない（amd64 ハードコード・fail-fast）プラグインは
-  `e2e/arm64-exclude.txt` に `<id>` を追加。`TestArm64ExcludeIDsExist` が実在 id を
+  `e2e/arm64-exclude.txt` に `<id>` を追加。`TestE2EExcludeIDsExist` が実在 id を
   ガードする。追加漏れは arm64 で壊れたまま素通りするので指摘。
+- 数 GB 級で自動の plugin-e2e に載せないプラグインは `e2e/plugin-e2e-exclude.txt` に
+  `<id>` を追加（PR・週次・plugin 未指定の dispatch から外れる）。一度きりの確認は
+  `workflow_dispatch` で `plugin=<id>` を指定して行う。
 - **init スナップショットの手動ミラー** — `internal/cli/init/cmd_snapshot_test.go` の
   `plugins-amd64-full` / `plugins-arm64-full` の `--plugins`（version_capable なら
   `--plugin-versions` も）はハードコードで、e2e full preset と整合させる必要がある。
