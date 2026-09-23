@@ -426,7 +426,7 @@ lock の `inputs_hash` には含まれないため、リネームしても `coco
 
 | フィールド | 型 | 説明 |
 |---|---|---|
-| `packages` | array of strings | cocoon の最小ベース + init で選択したカテゴリに追加する Debian パッケージ。各要素は `name[:arch][=version\|/release]` の形で、名前は小文字の Debian パッケージ名（`^[a-z0-9][a-z0-9+.-]+$`）。空白・シェル記号・apt-get のオプションは拒否される。イメージによって名前が違うパッケージは `"a \| b"` の形で代替候補を並べられる（下記）。 |
+| `packages` | array of strings | cocoon の最小ベース + init で選択したカテゴリに追加する Debian パッケージ。各要素は `name[:arch][=version\|/release]` の形で、名前は小文字の Debian パッケージ名（`^[a-z0-9][a-z0-9+.-]+$`）。前後の空白は取り除かれるが、名前の途中の空白・シェル記号・apt-get のオプションは拒否される。イメージによって名前が違うパッケージは `"a \| b"` の形で代替候補を並べられる（下記）。 |
 
 #### 代替候補（`"a | b"`）
 

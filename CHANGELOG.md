@@ -23,9 +23,10 @@ adheres to [Semantic Versioning](https://semver.org/).
   interpolated verbatim, so a newline or shell syntax in a package name could
   inject Dockerfile instructions or commands into the build. Each entry (or
   `|` candidate) must now be `name[:arch][=version|/release]` with a lowercase
-  Debian name; whitespace, shell characters, and apt-get options such as
-  `"-t"` are rejected. To pull a package from a specific release, write
-  `"pkg/release"` instead of passing `-t` as a separate entry.
+  Debian name; surrounding whitespace is trimmed, but whitespace inside a
+  name, shell characters, and apt-get options such as `"-t"` are rejected. To
+  pull a package from a specific release, write `"pkg/release"` instead of
+  passing `-t` as a separate entry.
 
 ## [0.17.2] - 2026-08-12
 

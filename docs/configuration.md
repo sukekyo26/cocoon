@@ -433,7 +433,7 @@ it is not part of the lock's `inputs_hash`, so renaming it does not trip
 
 | Field | Type | Description |
 |---|---|---|
-| `packages` | array of strings | Extra Debian packages installed on top of cocoon's minimal base + selected init categories. Each entry is `name[:arch][=version\|/release]` with a lowercase Debian name (`^[a-z0-9][a-z0-9+.-]+$`); whitespace, shell characters, and apt-get options are rejected. List fallbacks for a package that is named differently per image as `"a \| b"` (see below). |
+| `packages` | array of strings | Extra Debian packages installed on top of cocoon's minimal base + selected init categories. Each entry is `name[:arch][=version\|/release]` with a lowercase Debian name (`^[a-z0-9][a-z0-9+.-]+$`). Surrounding whitespace is trimmed; whitespace inside a name, shell characters, and apt-get options are rejected. List fallbacks for a package that is named differently per image as `"a \| b"` (see below). |
 
 #### Alternatives (`"a | b"`)
 
