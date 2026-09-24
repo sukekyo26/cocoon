@@ -61,7 +61,7 @@ Docker は未使用のイメージ・ボリューム・ビルドキャッシュ�
 
 ## 動作要件
 
-- Linux / macOS / WSL2
+- Linux / macOS 13 Ventura 以上 / WSL2
 - Docker 23 以上 (BuildKit 有効) + `docker compose` v2.18 以上
 - Go 1.27 以上 (ソースビルド時のみ)
 

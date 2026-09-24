@@ -30,7 +30,9 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- Build cocoon with Go 1.27.1 (was 1.26.6). Building from source now requires
+- Build cocoon with Go 1.27.1 (was 1.26.6). The prebuilt macOS binaries now
+  require macOS 13 Ventura or later (a Go 1.27 requirement); on macOS 12 or
+  earlier, stay on the current release. Building from source now requires
   Go 1.27 or later.
 
 ### Fixed

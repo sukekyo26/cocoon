@@ -61,7 +61,7 @@ Destructive commands ask for confirmation first; pass `-y` to skip it. Build cac
 
 ## Requirements
 
-- Linux, macOS, or WSL2
+- Linux, macOS 13 Ventura+, or WSL2
 - Docker 23+ with BuildKit, and `docker compose` v2.18+
 - Go 1.27+ (only when building from source)
 
