@@ -37,14 +37,14 @@ setup:
     mkdir -p "${bindir}"
     echo "Installing dev tools into ${bindir} ..."
     # govulncheck — keep in sync with .github/workflows/go-ci.yml
-    go install golang.org/x/vuln/cmd/govulncheck@v1.3.0
+    go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
     # shfmt — keep in sync with SHFMT_VERSION in .github/workflows/shfmt.yml
     go install mvdan.cc/sh/v3/cmd/shfmt@v3.10.0
     # golangci-lint — keep in sync with .github/workflows/go-ci.yml; the pinned
     # install.sh SHA256-verifies the downloaded binary.
     curl -sSfL --proto '=https' --tlsv1.2 \
-        https://raw.githubusercontent.com/golangci/golangci-lint/8f3b0c7ed018e57905fbd873c697e0b1ede605a5/install.sh \
-        | sh -s -- -b "${bindir}" v2.11.4
+        https://raw.githubusercontent.com/golangci/golangci-lint/114493f9b3e7257d29e4130f2b4a4aadefbb6845/install.sh \
+        | sh -s -- -b "${bindir}" v2.14.0
     command -v shellcheck >/dev/null 2>&1 \
         || echo >&2 "NOTE: shellcheck not found — install via 'apt-get install shellcheck' or 'brew install shellcheck'"
     command -v trivy >/dev/null 2>&1 \
