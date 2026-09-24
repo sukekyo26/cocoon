@@ -23,10 +23,13 @@ const (
 // do: one plugin id per line, skipping blanks and #-comments. The TrimSpace
 // mirrors the scripts' trimming reader — keep them in lockstep so a stray
 // surrounding space can't pass this guard yet fail to match at runtime.
+// CRLF is rejected: TrimSpace would drop the '\r', but the shell's default
+// IFS keeps it and the id never matches.
 func readE2EIDList(t *testing.T, path string) []string {
 	t.Helper()
 	data, err := os.ReadFile(path)
 	require.NoError(t, err)
+	require.NotContainsf(t, string(data), "\r", "%s has CRLF line endings; save it with LF", path)
 	var ids []string
 	for _, line := range strings.Split(string(data), "\n") {
 		line = strings.TrimSpace(line)
