@@ -61,9 +61,9 @@ Docker は未使用のイメージ・ボリューム・ビルドキャッシュ�
 
 ## 動作要件
 
-- Linux / macOS / WSL2
+- Linux / macOS 13 Ventura 以上 / WSL2
 - Docker 23 以上 (BuildKit 有効) + `docker compose` v2.18 以上
-- Go 1.26 以上 (ソースビルド時のみ)
+- Go 1.27 以上 (ソースビルド時のみ)
 
 ## インストール
 
@@ -77,7 +77,7 @@ curl -fsSL https://raw.githubusercontent.com/sukekyo26/cocoon/main/install.sh | 
 curl -fsSL https://sukekyo26.github.io/cocoon/install.sh | \
   COCOON_PAGES_BASE=https://sukekyo26.github.io/cocoon sh
 
-# ソースビルド (Go 1.26 以上)
+# ソースビルド (Go 1.27 以上)
 go install github.com/sukekyo26/cocoon/cmd/cocoon@latest
 ```
 
