@@ -79,8 +79,13 @@ curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-erro
 if [ -n "$CHECKSUM" ]; then
   echo "${CHECKSUM}  /tmp/android-studio.tar.gz" | sha256sum -c -
 else
-  printf '%sWARNING: SHA256 verification skipped for Android Studio %s (not the current release on /studio; set checksum_amd64 in [plugins.options].android-studio)%s\n' \
-    "$C_YEL" "$VERSION" "$C_RST" >&2
+  if [ -z "$STUDIO_HTML" ]; then
+    REASON="could not fetch https://developer.android.com/studio"
+  else
+    REASON="https://developer.android.com/studio lists no SHA-256 for ${TARBALL}: not the current release, or the page layout changed"
+  fi
+  printf '%sWARNING: SHA256 verification skipped for Android Studio %s (%s; set checksum_amd64 in [plugins.options].android-studio)%s\n' \
+    "$C_YEL" "$VERSION" "$REASON" "$C_RST" >&2
 fi
 
 rm -rf /opt/android-studio
