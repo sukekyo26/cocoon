@@ -63,7 +63,7 @@ Destructive commands ask for confirmation first; pass `-y` to skip it. Build cac
 
 - Linux, macOS, or WSL2
 - Docker 23+ with BuildKit, and `docker compose` v2.18+
-- Go 1.26+ (only when building from source)
+- Go 1.27+ (only when building from source)
 
 ## Install
 
@@ -77,7 +77,7 @@ curl -fsSL https://raw.githubusercontent.com/sukekyo26/cocoon/main/install.sh | 
 curl -fsSL https://sukekyo26.github.io/cocoon/install.sh | \
   COCOON_PAGES_BASE=https://sukekyo26.github.io/cocoon sh
 
-# From source (Go 1.26+)
+# From source (Go 1.27+)
 go install github.com/sukekyo26/cocoon/cmd/cocoon@latest
 ```
 

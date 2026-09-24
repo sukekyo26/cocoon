@@ -28,6 +28,11 @@ adheres to [Semantic Versioning](https://semver.org/).
   every supported image. The build stops with an error when no candidate is
   installable. Layers without alternatives render exactly as before.
 
+### Changed
+
+- Build cocoon with Go 1.27.1 (was 1.26.6). Building from source now requires
+  Go 1.27 or later.
+
 ### Fixed
 
 - **Security**: Validate every `[apt].packages` entry in `cocoon.toml` and
