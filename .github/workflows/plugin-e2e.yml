@@ -23,6 +23,16 @@ name: Plugin E2E
 #   - schedule:     every plugin — the weekly upstream-drift canary.
 #   - workflow_dispatch: one plugin (inputs.plugin) or all (empty).
 #
+# Plugins in e2e/plugin-e2e-exclude.txt (multi-GB installs) are dropped from
+# the PR, weekly and dispatch-all selections; only an explicit
+# workflow_dispatch plugin builds them, for one-off verification.
+#
+# Each amd64 leg also runs the build-free Trivy gates (`just trivy-static`)
+# over the .devcontainer/ it generated. `trivy image` is impossible here —
+# build-only means no image is ever loaded — but plugin install scripts are
+# inlined verbatim into the Dockerfile as quoted heredocs, so scanning that
+# one file covers the plugin completely. Base-image CVEs are e2e.yml's job.
+#
 # Each selected plugin builds twice: PIN_MODE=pinned (reproducible
 # baseline) and PIN_MODE=latest (floats to upstream LATEST to catch
 # packaging drift — a moved URL, a removed checksum manifest — before
@@ -86,6 +96,7 @@ jobs:
 
           # Resolve the plugin set for this trigger.
           plugins=()
+          harness_changed=""
           case "$EVENT" in
             schedule)
               mapfile -t plugins < <(all_plugins)
@@ -117,9 +128,9 @@ jobs:
               for id in "${changed[@]}"; do
                 [ -d "$catalog/$id" ] && plugins+=("$id")
               done
-              if [ "${#plugins[@]}" -eq 0 ] && printf '%s\n' "$diff" | grep -qE \
-                '^(e2e/docker-roundtrip\.sh|e2e/arm64-exclude\.txt|e2e/apt-categories\.txt|\.github/workflows/plugin-e2e\.yml)$'; then
-                plugins=(go)
+              if printf '%s\n' "$diff" | grep -qE \
+                '^(e2e/docker-roundtrip\.sh|e2e/arm64-exclude\.txt|e2e/plugin-e2e-exclude\.txt|e2e/apt-categories\.txt|\.github/workflows/plugin-e2e\.yml)$'; then
+                harness_changed=1
               fi
               ;;
             *)
@@ -128,9 +139,37 @@ jobs:
               ;;
           esac
 
+          # Plugins too heavy for the automatic runs (e.g. a multi-GB IDE),
+          # listed in e2e/plugin-e2e-exclude.txt and validated against the
+          # catalog by internal/plugin/e2e_exclude_test.go. Only an explicit
+          # workflow_dispatch plugin still builds them, for one-off checks.
+          if [ -z "$DISPATCH_PLUGIN" ]; then
+            heavy=()
+            while read -r line || [ -n "$line" ]; do
+              case "$line" in '' | '#'*) continue ;; esac
+              heavy+=("$line")
+            done <e2e/plugin-e2e-exclude.txt
+            kept=()
+            for id in "${plugins[@]}"; do
+              skip=""
+              for h in "${heavy[@]}"; do [ "$h" = "$id" ] && skip=1; done
+              if [ -n "$skip" ]; then
+                echo "detect: skipping $id (e2e/plugin-e2e-exclude.txt)" >&2
+              else
+                kept+=("$id")
+              fi
+            done
+            plugins=("${kept[@]}")
+          fi
+          # Smoke after the exclusion, so a PR touching only an excluded
+          # plugin plus the harness still builds 'go'.
+          if [ "${#plugins[@]}" -eq 0 ] && [ -n "$harness_changed" ]; then
+            plugins=(go)
+          fi
+
           # arm64-unsafe plugins (install.sh amd64-only / fails fast on
           # arm64), shared with e2e/docker-roundtrip.sh and validated
-          # against the catalog by internal/plugin/e2e_arm64_exclude_test.go.
+          # against the catalog by internal/plugin/e2e_exclude_test.go.
           exclude=()
           while read -r line || [ -n "$line" ]; do
             case "$line" in '' | '#'*) continue ;; esac
@@ -180,14 +219,16 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       # Exposes ACTIONS_RUNTIME_TOKEN / ACTIONS_CACHE_URL / ACTIONS_RESULTS_URL
       # as plain env vars so the raw `docker buildx bake` invocation in the
       # script can talk to the GHA cache backend.
       - uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
-      - uses: taiki-e/install-action@7f4eb899022d8fe70b20c4f3de697aa85c309026 # v2.85.11
+      # trivy has no version pin of its own: install-action resolves an
+      # omitted version from its own release, so the SHA above pins both.
+      - uses: taiki-e/install-action@94c31af3204a9f15ab40b35ad084410b905bbc73 # v2.87.17
         with:
-          tool: just
+          tool: just,trivy
       - name: Build cocoon binary
         run: just build
       - name: Build ${{ matrix.plugin }} on debian 12 (pinned + latest)
@@ -207,6 +248,19 @@ jobs:
             PIN_MODE="$mode" bash "$GITHUB_WORKSPACE/e2e/docker-roundtrip.sh"
             echo "::endgroup::"
           done
+
+      # Build-free Trivy gates. The single preset forces BUILD_ONLY
+      # (e2e/docker-roundtrip.sh) so no image is ever loaded and `trivy image`
+      # is impossible here — but the plugin's install script is inlined
+      # verbatim into the generated Dockerfile as a quoted heredoc, so the
+      # misconfig and secret scans cover this plugin completely from that one
+      # file. The loop above leaves the `latest` generation on disk; pinned
+      # and latest differ only in version strings, so one scan is enough.
+      # amd64 only: generation is host-independent, so the arm64 leg would
+      # produce a byte-identical Dockerfile.
+      - name: Trivy misconfig + secret (gating)
+        if: matrix.arch == 'amd64'
+        run: just trivy-static
 
   # Stable required-check target: matrix job names vary per run, so branch
   # protection points at this job instead of individual {plugin}/{arch}

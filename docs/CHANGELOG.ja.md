@@ -6,6 +6,46 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-09-25
+
+### 追加
+
+- `android-studio` プラグインを追加（Linux 版 Android Studio IDE。x86_64 専用。
+  ダウンロード約 1.5 GB、`/opt/android-studio` に展開して約 3.5 GB）。tar.gz の
+  ファイル名にリリースのコードネームが入るため、pin は
+  `"android-studio=<version>-<codename>"` の形で書く（例:
+  `"android-studio=2026.1.4.8-quail4-patch1"`）。pin しない場合は
+  https://developer.android.com/studio の現行リリースを入れる。ダウンロードは
+  `[plugins.options].android-studio` の `checksum_amd64`、または pin が現行リリース
+  のときは /studio ページに載っている SHA-256 で検証する。チェックサムの無い古い
+  pin は、警告を出したうえで検証なしで入れる。起動は `android-studio` で行う。
+  画面の転送（`[[mounts]]` での X11 / Wayland ソケットのマウントと `[env]` での
+  `DISPLAY` / `WAYLAND_DISPLAY`）と CJK フォントは `cocoon.toml` 側で設定する。
+  IDE の設定は `~/.config` のボリュームで残る。
+- `[apt].packages`（`cocoon.toml` とプラグインの `plugin.toml` の両方）で
+  Debian 式の代替記法を追加。`"libasound2t64 | libasound2"` と書くと、ビルド時に
+  左から順に試してイメージでインストールできる最初の候補を入れ、選んだ候補を
+  ビルドログに出す。64bit `time_t` 移行で改名され、対応イメージすべてで通る名前が
+  無いライブラリに対応するためのもの。どの候補も入らない場合はエラーでビルドが
+  止まる。代替候補を含まない層の出力はこれまでと変わらない。
+
+### 変更
+
+- ビルドに使う Go を 1.26.6 から 1.27.1 に更新した。macOS 向けのビルド済み
+  バイナリは macOS 13 Ventura 以上が必要になる（Go 1.27 の要件）。macOS 12 以前では
+  現行リリースを使い続けること。ソースからビルドするには Go 1.27 以上が必要になる。
+
+### 修正
+
+- **セキュリティ**: `cocoon.toml` と `plugin.toml` の `[apt].packages` の各要素を、
+  生成 Dockerfile に書き込む前に検証するよう修正。これまでは値がそのまま埋め込まれて
+  いたため、パッケージ名に改行やシェル構文を含めると Dockerfile の命令やビルド時の
+  コマンドを注入できた。各要素（または `|` の各候補）は
+  `name[:arch][=version|/release]` の形で、名前は小文字の Debian パッケージ名で
+  ある必要がある。前後の空白は取り除かれるが、名前の途中の空白・シェル記号・
+  `"-t"` のような apt-get のオプションは拒否される。特定のリリースから入れたい
+  場合は、`-t` を別要素で渡す代わりに `"pkg/release"` と書く。
+
 ## [0.17.2] - 2026-08-12
 
 ### 修正
@@ -816,7 +856,8 @@ cocoon の主要な変更を記録します。フォーマットは
 - `COMPOSE_PROJECT_NAME` をプロジェクトディレクトリの basename から導出するように変更。docker compose の namespace がホストディレクトリと一致する。
 - 国際化 (英語 / 日本語) カタログを追加。CLI プロンプト・エラーメッセージ・`workspace.toml` インラインコメントすべてを `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` で切替可能。
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.17.2...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.18.0...HEAD
+[0.18.0]: https://github.com/sukekyo26/cocoon/compare/v0.17.2...v0.18.0
 [0.17.2]: https://github.com/sukekyo26/cocoon/compare/v0.17.1...v0.17.2
 [0.17.1]: https://github.com/sukekyo26/cocoon/compare/v0.17.0...v0.17.1
 [0.17.0]: https://github.com/sukekyo26/cocoon/compare/v0.16.0...v0.17.0

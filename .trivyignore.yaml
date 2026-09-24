@@ -1,0 +1,33 @@
+# Trivy suppressions for the .devcontainer/ tree `cocoon gen` emits.
+# Passed via --ignorefile by the trivy-* recipes in justfile, which
+# .github/workflows/{e2e,plugin-e2e}.yml call. Every entry carries a
+# statement explaining why the finding is intentional;
+# internal/generate/dockerfile/trivyignore_test.go fails the build if one is
+# missing, if an unreviewed third suppression appears, or if the DS-0002
+# premise stops matching what the generator emits.
+
+misconfigurations:
+  - id: AVD-DS-0002
+    statement: >-
+      Last USER is root by design. The generated Dockerfile ends on
+      `USER root` (internal/generate/dockerfile/dockerfile.go, the entrypoint
+      COPY block) so docker-entrypoint.sh starts privileged, remaps the
+      container user's UID/GID onto the host owner of the bind-mounted
+      workspace, then drops privileges via `setpriv --reuid/--regid` and
+      re-execs itself (internal/generate/dockerfile/entrypoint.sh). Nothing
+      the developer interacts with runs as root. The generated
+      docker-compose.yml emits no `user:` key, so this root-then-drop
+      entrypoint is the only mechanism available for the host-independent UID
+      remap the whole design rests on; the UID/GID assertions in
+      e2e/docker-roundtrip.sh prove at runtime that the drop happens.
+  - id: AVD-DS-0026
+    statement: >-
+      No HEALTHCHECK by design. This is an interactive development container
+      whose lifecycle is owned by VS Code Dev Containers or a developer's
+      `docker compose up`, not by an orchestrator that restarts unhealthy
+      replicas. There is no service to probe, so a HEALTHCHECK would add
+      build surface and a status nobody consumes.
+
+# No `vulnerabilities:` entries, by design: the image CVE scan is
+# report-only, so an entry would only hide rows from a report that gates
+# nothing.

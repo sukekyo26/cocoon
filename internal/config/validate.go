@@ -61,6 +61,9 @@ var (
 	rxAptSuite      = regexp.MustCompile(`^[a-z][a-z0-9._-]*$`)
 	rxAptComponent  = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
 	rxAptArch       = regexp.MustCompile(`^(amd64|arm64|i386|armhf|ppc64el|s390x)$`)
+	// rxAptPackage is one apt-get install argument: a Debian Policy package
+	// name, an optional :arch, then an optional =version or /release.
+	rxAptPackage = regexp.MustCompile(`^[a-z0-9][a-z0-9+.-]+(:[a-z0-9-]+)?(=[0-9][A-Za-z0-9.+~:-]*|/[A-Za-z0-9.+_-]+)?$`)
 	// rxImageVersion bounds image_version to the Docker tag character set
 	// minus the colon and the registry-path slash, both of which would let
 	// a user smuggle a second `<image>:<tag>` segment past the FROM
@@ -895,10 +898,41 @@ func (s *AptSpec) validate(a *Accumulator) {
 	if s.Proxy != nil {
 		s.Proxy.validate(a.At("proxy"))
 	}
+	ValidateAptPackages(a, s.Packages)
 	seenNames := map[string]int{}
 	for i, src := range s.Sources {
 		idx := fmt.Sprintf("%d", i)
 		src.validate(a.At("sources", idx), i, seenNames)
+	}
+}
+
+// SplitAptAlternatives splits one [apt].packages entry on "|" into its
+// candidates, trimming surrounding whitespace. An entry without "|" yields a
+// single candidate.
+func SplitAptAlternatives(entry string) []string {
+	cands := strings.Split(entry, "|")
+	for i, c := range cands {
+		cands[i] = strings.TrimSpace(c)
+	}
+	return cands
+}
+
+// ValidateAptPackages checks every candidate of every [apt].packages entry
+// against rxAptPackage. The values are interpolated into a generated RUN, so
+// this is also the injection gate for both cocoon.toml and plugin.toml.
+func ValidateAptPackages(a *Accumulator, pkgs []string) {
+	for i, entry := range pkgs {
+		idx := fmt.Sprintf("%d", i)
+		for _, c := range SplitAptAlternatives(entry) {
+			if c == "" {
+				a.AddCode("err_field_apt_package_empty_alternative", []any{entry}, "packages", idx)
+				break
+			}
+			if !rxAptPackage.MatchString(c) {
+				a.AddCode("err_field_apt_package_pattern", []any{c, entry}, "packages", idx)
+				break
+			}
+		}
 	}
 }
 

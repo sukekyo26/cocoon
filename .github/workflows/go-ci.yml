@@ -11,12 +11,23 @@ on:
     branches: ["feature/*", "fix/*", "refactor/*", develop]
   pull_request:
     branches: [develop, main]
+  schedule:
+    # Mon 06:00 UTC — same window as the other weekly canaries. This one
+    # exists for govulncheck: the vulnerability database moves on its own
+    # schedule, so the Go patch pinned in go.mod goes stale with no commit to
+    # trigger a run. Without this the first unrelated PR of the week is what
+    # discovers it, and its author pays for a bump that is not theirs.
+    - cron: "0 6 * * 1"
   workflow_dispatch:
   workflow_call:
 
 # Cancel earlier in-progress runs on the same branch when a new push arrives.
+# event_name is part of the key because the weekly run lands on the default
+# branch, where release.yml's workflow_call also runs: without it the two
+# would share a group and cancel each other, so a Monday release could lose
+# its validation to a cron run.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref_name }}
+  group: ${{ github.workflow }}-${{ github.ref_name }}-${{ github.event_name }}
   cancel-in-progress: true
 
 permissions:
@@ -32,15 +43,15 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - uses: taiki-e/install-action@7f4eb899022d8fe70b20c4f3de697aa85c309026 # v2.85.11
+      - uses: taiki-e/install-action@94c31af3204a9f15ab40b35ad084410b905bbc73 # v2.87.17
         with:
           tool: just
-      # install.sh pinned to the golangci-lint v2.11.4 commit so the fetched
+      # install.sh pinned to the golangci-lint v2.14.0 commit so the fetched
       # script is immutable; the script itself SHA256-verifies the binary.
-      - name: Install golangci-lint v2.11.4
+      - name: Install golangci-lint v2.14.0
         run: |
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/8f3b0c7ed018e57905fbd873c697e0b1ede605a5/install.sh | \
-            sh -s -- -b "$(go env GOPATH)/bin" v2.11.4
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/114493f9b3e7257d29e4130f2b4a4aadefbb6845/install.sh | \
+            sh -s -- -b "$(go env GOPATH)/bin" v2.14.0
       - run: just lint
       - run: just fmt-check
 
@@ -53,7 +64,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - uses: taiki-e/install-action@7f4eb899022d8fe70b20c4f3de697aa85c309026 # v2.85.11
+      - uses: taiki-e/install-action@94c31af3204a9f15ab40b35ad084410b905bbc73 # v2.87.17
         with:
           tool: just
       - run: just vet
@@ -69,7 +80,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - uses: taiki-e/install-action@7f4eb899022d8fe70b20c4f3de697aa85c309026 # v2.85.11
+      - uses: taiki-e/install-action@94c31af3204a9f15ab40b35ad084410b905bbc73 # v2.87.17
         with:
           tool: just
       - run: just cover-check
@@ -83,11 +94,11 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - uses: taiki-e/install-action@7f4eb899022d8fe70b20c4f3de697aa85c309026 # v2.85.11
+      - uses: taiki-e/install-action@94c31af3204a9f15ab40b35ad084410b905bbc73 # v2.87.17
         with:
           tool: just
       - name: Install govulncheck
-        run: go install golang.org/x/vuln/cmd/govulncheck@v1.3.0
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
       - run: just vuln
 
   build:
@@ -99,7 +110,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - uses: taiki-e/install-action@7f4eb899022d8fe70b20c4f3de697aa85c309026 # v2.85.11
+      - uses: taiki-e/install-action@94c31af3204a9f15ab40b35ad084410b905bbc73 # v2.87.17
         with:
           tool: just
       - run: just build-all

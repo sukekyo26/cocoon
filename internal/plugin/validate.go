@@ -83,6 +83,9 @@ func (p *Plugin) runValidate(a *config.Accumulator) {
 	p.Metadata.validate(a.At("metadata"))
 	p.Install.validate(a.At("install"))
 	p.Version.validate(a.At("version"))
+	if p.Apt != nil {
+		config.ValidateAptPackages(a.At("apt"), p.Apt.Packages)
+	}
 }
 
 func (v *Version) validate(a *config.Accumulator) {

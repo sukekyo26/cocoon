@@ -6,6 +6,49 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-09-25
+
+### Added
+
+- New `android-studio` plugin (Android Studio IDE for Linux, x86_64 only;
+  ~1.5 GB download, ~3.5 GB installed under `/opt/android-studio`). Pin it as
+  `"android-studio=<version>-<codename>"` (e.g.
+  `"android-studio=2026.1.4.8-quail4-patch1"`), since the tarball name carries
+  the release codename; unpinned installs the current release from
+  https://developer.android.com/studio. The download is verified against
+  `checksum_amd64` in `[plugins.options].android-studio`, or the SHA-256 the
+  /studio page lists when the pin is the current release; an older pin without
+  a checksum installs unverified with a warning. Start it with
+  `android-studio`; display forwarding (`[[mounts]]` for the X11 / Wayland
+  socket and `DISPLAY` / `WAYLAND_DISPLAY` in `[env]`) and CJK fonts are left to
+  your `cocoon.toml`. IDE settings persist through a `~/.config` volume.
+- `[apt].packages` (in both `cocoon.toml` and a plugin's `plugin.toml`) accepts
+  Debian-style alternatives: `"libasound2t64 | libasound2"` installs the first
+  candidate that is installable on the image, tried left to right at build
+  time, and prints the choice to the build log. This covers libraries renamed
+  by the 64-bit `time_t` transition, which have no single name that works on
+  every supported image. The build stops with an error when no candidate is
+  installable. Layers without alternatives render exactly as before.
+
+### Changed
+
+- Build cocoon with Go 1.27.1 (was 1.26.6). The prebuilt macOS binaries now
+  require macOS 13 Ventura or later (a Go 1.27 requirement); on macOS 12 or
+  earlier, stay on the current release. Building from source now requires
+  Go 1.27 or later.
+
+### Fixed
+
+- **Security**: Validate every `[apt].packages` entry in `cocoon.toml` and
+  `plugin.toml` before it is written into the generated Dockerfile. Values were
+  interpolated verbatim, so a newline or shell syntax in a package name could
+  inject Dockerfile instructions or commands into the build. Each entry (or
+  `|` candidate) must now be `name[:arch][=version|/release]` with a lowercase
+  Debian name; surrounding whitespace is trimmed, but whitespace inside a
+  name, shell characters, and apt-get options such as `"-t"` are rejected. To
+  pull a package from a specific release, write `"pkg/release"` instead of
+  passing `-t` as a separate entry.
+
 ## [0.17.2] - 2026-08-12
 
 ### Fixed
@@ -828,7 +871,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Add `COMPOSE_PROJECT_NAME` derivation from the project directory basename so docker compose namespacing matches the host directory.
 - Add i18n catalog (English / Japanese) covering every CLI prompt, error message, and inline `workspace.toml` comment, switched via `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG`.
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.17.2...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.18.0...HEAD
+[0.18.0]: https://github.com/sukekyo26/cocoon/compare/v0.17.2...v0.18.0
 [0.17.2]: https://github.com/sukekyo26/cocoon/compare/v0.17.1...v0.17.2
 [0.17.1]: https://github.com/sukekyo26/cocoon/compare/v0.17.0...v0.17.1
 [0.17.0]: https://github.com/sukekyo26/cocoon/compare/v0.16.0...v0.17.0

@@ -243,8 +243,12 @@ vendor ドメインが落ちる環境向けの「代替経路」設計の参考�
   入れる。**この追記を怠ってもカタログとリストがドリフトするだけで `just ci` は落ちない**
   ので忘れやすい — 必ず手動で追記する。
 - **arm64 非対応** — amd64 をハードコード／fail-fast するプラグインは
-  `e2e/arm64-exclude.txt` に `<id>` を追加する（`TestArm64ExcludeIDsExist` が実在 id を
+  `e2e/arm64-exclude.txt` に `<id>` を追加する（`TestE2EExcludeIDsExist` が実在 id を
   ガード）。追加漏れは arm64 で壊れたまま素通りする。
+- **CI に重すぎるプラグイン** — 数 GB 級のダウンロードなどで自動の plugin-e2e に
+  載せないプラグインは `e2e/plugin-e2e-exclude.txt` に `<id>` を追加する（PR・週次・
+  plugin 未指定の dispatch から外れる。同じテストが実在 id をガード）。動作確認は
+  `gh workflow run plugin-e2e.yml --ref <branch> -f plugin=<id>` で一度だけ行う。
 
 ## ステップ 5: ローカル検証
 

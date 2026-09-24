@@ -221,7 +221,8 @@ formatters:
         - default
         - prefix(github.com/sukekyo26/cocoon)
     gofumpt:
-      extra-rules: true
+      extra:
+        group-params: true
 
 issues:
   max-issues-per-linter: 0

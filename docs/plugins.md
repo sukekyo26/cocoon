@@ -126,7 +126,7 @@ of the install phase and the named-volume declaration in
 | `[metadata]` | `url`             | string             | —     | ✓ | Upstream project URL (`https://...`, no whitespace). Surfaced by `cocoon init`'s per-plugin version picker, `cocoon plugin show` (`url:` row), and `cocoon plugin list` (`URL` column). |
 | `[metadata]` | `default`         | bool               | `false` |   | If true, `cocoon init`'s default plugin set includes this id. |
 | `[metadata]` | `conflicts`       | list of strings    | `[]`  |   | Plugin ids that must not be enabled at the same time. |
-| `[apt]`      | `packages`        | list of strings    | `[]`  |   | Apt packages installed before the install scripts run. |
+| `[apt]`      | `packages`        | list of strings    | `[]`  |   | Apt packages installed before the install scripts run. Validated like `cocoon.toml` `[apt].packages`; write `"a \| b"` for a package named differently per image (see [`[apt]`](configuration.md#apt)). |
 | `[install]`  | `requires_root`   | bool               | —     | ✓ | If true, the `install.<name>.sh` scripts run as root; otherwise as the unprivileged user. |
 | `[install]`  | `build_args`      | list of strings    | `[]`  |   | Names of build-time variables the plugin consumes. The generator emits matching `ARG <name>` lines once per plugin (next to whichever of the install scripts runs first) and threads `<name>="${<name>}"` into the per-RUN env prefix of every hook, so both `install.<name>.sh` and `install_user.sh` can read `$<name>` as a normal env var. ARG scope is stage-wide, so a single declaration covers both RUNs. Names match `^[A-Z_][A-Z0-9_]*$` and must not collide with cocoon-reserved env variables (`PIN`, `CHECKSUM_AMD64`, `CHECKSUM_ARM64`, `RC_FILE`, `RC_SYNTAX`, `LOGIN_SHELL`, `COCOON_INSTALL_METHOD`, `USERNAME`) — the `build_args` pair is appended to the RUN prefix after the framework values and would silently shadow them. |
 | `[install]`  | `env`             | map<string,string> | `{}`  |   | `ENV` lines emitted after the install runs. Values can reference earlier `ENV`/`ARG` vars. |
@@ -426,6 +426,28 @@ Use these embedded plugins as templates when writing your own:
   Reference for `[install.extra_versions]`: `api_level` and
   `build_tools` are declared so users can pin platform / build-tools
   versions independently of the `commandline-tools` `pin`.
+- **`android-studio`** — `archive` method for a multi-GB IDE (~1.5 GB
+  download, ~3.5 GB installed under `/opt/android-studio`), x86_64 only.
+  The tarball name carries a release codename, so the pin is
+  `"android-studio=<version>-<codename>"` (e.g.
+  `"android-studio=2026.1.4.8-quail4-patch1"`; both parts are in the
+  `.../ide-zips/<version>/android-studio-<codename>-linux.tar.gz` URL on the
+  [archive page](https://developer.android.com/studio/archive)). The
+  SHA-256 comes from `checksum_amd64` in `[plugins.options].android-studio`,
+  else from the /studio download table when the pin is the current release;
+  an older pin without `checksum_amd64` installs unverified with a warning.
+  Launch it with `android-studio`. The plugin does not forward the display:
+  bind-mount your host's X11 / Wayland socket with `[[mounts]]` and set
+  `DISPLAY` / `WAYLAND_DISPLAY` in `[env]` for your environment. No CJK fonts
+  are installed; add e.g. `fonts-noto-cjk` to `[apt]` if Japanese / Chinese /
+  Korean text renders as boxes. IDE settings persist in the
+  `~/.config` volume and IDE-installed plugins in `~/.local`; `~/.cache`
+  (indexes) is rebuilt after a container rebuild. With the `android-sdk`
+  plugin, choose `/usr/local/android-sdk` as the SDK location in the setup
+  wizard — the default `~/Android/Sdk` is lost on rebuild. The NDK's `lldb`
+  needs ncurses libraries the plugin does not install; add them to `[apt]`
+  for native debugging. Excluded from the automatic plugin-e2e runs
+  (`e2e/plugin-e2e-exclude.txt`).
 
 ## Troubleshooting
 
