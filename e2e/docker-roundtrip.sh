@@ -99,7 +99,7 @@ for d in "$catalog_dir"/*/; do
 done
 
 # arm64-unsafe plugins, kept in a shared data file that
-# internal/plugin/e2e_arm64_exclude_test.go validates against the catalog.
+# internal/plugin/e2e_exclude_test.go validates against the catalog.
 # Trim each line (plain `read`, default IFS) so this parser matches that
 # Go guard, which TrimSpace's before comparing; a trailing space must not
 # turn an excluded id into a silent no-op.
@@ -131,6 +131,7 @@ done <"$script_dir/apt-categories.txt"
 # amd64-full and arm64-full. Bump an entry to roll a pinned version
 # (surfaces as a deliberate diff in the e2e logs).
 pin_entries=(
+  android-studio=2026.1.4.8-quail4-patch1
   aws-cli=2.34.48
   aws-sam-cli=1.160.1
   bun=1.3.3
