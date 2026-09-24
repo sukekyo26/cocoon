@@ -25,8 +25,6 @@ packages = [
   "libfreetype6",
   "libfontconfig1",
   "fontconfig",
-  # Without CJK fonts, Japanese / Chinese / Korean text renders as tofu.
-  "fonts-noto-cjk",
   # Gemini (bundled AI plugin) native runtime.
   "libgomp1",
   "libvulkan1",

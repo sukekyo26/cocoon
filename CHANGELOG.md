@@ -17,9 +17,9 @@ adheres to [Semantic Versioning](https://semver.org/).
   `checksum_amd64` in `[plugins.options].android-studio`, or the SHA-256 the
   /studio page lists when the pin is the current release; an older pin without
   a checksum installs unverified with a warning. Start it with
-  `android-studio`, which uses the WSLg Wayland socket when `/mnt/wslg` is
-  mounted (VS Code terminals otherwise point `WAYLAND_DISPLAY` at a socket that
-  does not reach WSLg). IDE settings persist through a `~/.config` volume.
+  `android-studio`; display forwarding (`[[mounts]]` for the X11 / Wayland
+  socket and `DISPLAY` / `WAYLAND_DISPLAY` in `[env]`) and CJK fonts are left to
+  your `cocoon.toml`. IDE settings persist through a `~/.config` volume.
 - `[apt].packages` (in both `cocoon.toml` and a plugin's `plugin.toml`) accepts
   Debian-style alternatives: `"libasound2t64 | libasound2"` installs the first
   candidate that is installable on the image, tried left to right at build

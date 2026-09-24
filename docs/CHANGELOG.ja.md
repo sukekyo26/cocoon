@@ -16,10 +16,10 @@ cocoon の主要な変更を記録します。フォーマットは
   https://developer.android.com/studio の現行リリースを入れる。ダウンロードは
   `[plugins.options].android-studio` の `checksum_amd64`、または pin が現行リリース
   のときは /studio ページに載っている SHA-256 で検証する。チェックサムの無い古い
-  pin は、警告を出したうえで検証なしで入れる。起動は `android-studio` で行い、
-  `/mnt/wslg` がマウントされていれば WSLg の Wayland ソケットを使う（VS Code の
-  端末は `WAYLAND_DISPLAY` を WSLg に届かないソケットに向けるため）。IDE の設定は
-  `~/.config` のボリュームで残る。
+  pin は、警告を出したうえで検証なしで入れる。起動は `android-studio` で行う。
+  画面の転送（`[[mounts]]` での X11 / Wayland ソケットのマウントと `[env]` での
+  `DISPLAY` / `WAYLAND_DISPLAY`）と CJK フォントは `cocoon.toml` 側で設定する。
+  IDE の設定は `~/.config` のボリュームで残る。
 - `[apt].packages`（`cocoon.toml` とプラグインの `plugin.toml` の両方）で
   Debian 式の代替記法を追加。`"libasound2t64 | libasound2"` と書くと、ビルド時に
   左から順に試してイメージでインストールできる最初の候補を入れ、選んだ候補を

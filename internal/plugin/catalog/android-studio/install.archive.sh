@@ -88,13 +88,11 @@ tar -xzf /tmp/android-studio.tar.gz -C /opt
 rm -f /tmp/android-studio.tar.gz
 test -x /opt/android-studio/bin/studio.sh
 
-# Launcher. VS Code points its terminals' WAYLAND_DISPLAY at its own forwarding
-# socket, which does not reach WSLg; prefer the WSLg socket when it is mounted.
-# shellcheck disable=SC2016 # the launcher expands $wslg / $@ at run time
+# Launcher. Display forwarding (DISPLAY / WAYLAND_DISPLAY and the socket
+# mounts) is host-specific and left to the user's cocoon.toml.
+# shellcheck disable=SC2016 # the launcher expands $@ at run time
 printf '%s\n' \
   '#!/bin/sh' \
-  'wslg=/mnt/wslg/runtime-dir/wayland-0' \
-  'if [ -S "$wslg" ]; then export WAYLAND_DISPLAY="$wslg"; fi' \
   'exec /opt/android-studio/bin/studio.sh "$@"' \
   >/usr/local/bin/android-studio
 chmod 0755 /usr/local/bin/android-studio

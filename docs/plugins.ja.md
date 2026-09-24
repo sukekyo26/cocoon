@@ -411,8 +411,10 @@ android-sdk = { api_level = "36", build_tools = "36.0.0" }
   SHA-256 は `[plugins.options].android-studio` の `checksum_amd64`、無ければ
   pin が現行リリースのときに限り /studio のダウンロード表から取る。
   `checksum_amd64` の無い古い pin は、警告を出したうえで検証なしで入れる。
-  起動は `android-studio` で行う。これは `/mnt/wslg` がマウントされていれば
-  `WAYLAND_DISPLAY` を WSLg のソケットに向けるラッパー。IDE の設定は
+  起動は `android-studio` で行う。画面の転送はプラグインでは行わないので、
+  環境に合わせて `[[mounts]]` でホストの X11 / Wayland ソケットをマウントし、
+  `[env]` で `DISPLAY` / `WAYLAND_DISPLAY` を設定する。CJK フォントは入れないので、
+  日本語・中国語・韓国語が豆腐になる場合は `[apt]` に `fonts-noto-cjk` などを追加する。IDE の設定は
   `~/.config` のボリューム、IDE から入れたプラグインは `~/.local` に残るが、
   `~/.cache`（インデックス）はコンテナの再ビルド後に作り直される。
   `android-sdk` プラグインと併用するときは、初回のウィザードで SDK の場所に

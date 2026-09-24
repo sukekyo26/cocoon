@@ -90,7 +90,6 @@ func TestPluginContracts(t *testing.T) {
 				"-linux.tar.gz", "sha256sum -c -", "CHECKSUM_AMD64",
 				"tlsv1.2", "retry 3", "dpkg --print-architecture", "x86_64 only",
 				"/opt/android-studio", "/usr/local/bin/android-studio",
-				"/mnt/wslg/runtime-dir/wayland-0", "WAYLAND_DISPLAY",
 				"rm -f /tmp/android-studio.tar.gz", "PIN",
 			},
 			mustNotContain: append(append([]string{}, noPlaceholders...), noApiNoJq...),

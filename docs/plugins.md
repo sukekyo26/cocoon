@@ -436,8 +436,11 @@ Use these embedded plugins as templates when writing your own:
   SHA-256 comes from `checksum_amd64` in `[plugins.options].android-studio`,
   else from the /studio download table when the pin is the current release;
   an older pin without `checksum_amd64` installs unverified with a warning.
-  Launch it with `android-studio`, a wrapper that points `WAYLAND_DISPLAY` at
-  the WSLg socket when `/mnt/wslg` is mounted. IDE settings persist in the
+  Launch it with `android-studio`. The plugin does not forward the display:
+  bind-mount your host's X11 / Wayland socket with `[[mounts]]` and set
+  `DISPLAY` / `WAYLAND_DISPLAY` in `[env]` for your environment. No CJK fonts
+  are installed; add e.g. `fonts-noto-cjk` to `[apt]` if Japanese / Chinese /
+  Korean text renders as boxes. IDE settings persist in the
   `~/.config` volume and IDE-installed plugins in `~/.local`; `~/.cache`
   (indexes) is rebuilt after a container rebuild. With the `android-sdk`
   plugin, choose `/usr/local/android-sdk` as the SDK location in the setup
