@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- The `android-studio` launcher now starts the IDE through the native launcher
+  `bin/studio` instead of the script launcher `bin/studio.sh`, so Android
+  Studio no longer shows the "launched with a script launcher" notification on
+  every start. A pinned release that ships no `bin/studio` fails at build time
+  with an error asking for a newer pin.
+
 ## [0.18.0] - 2026-09-25
 
 ### Added
