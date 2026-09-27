@@ -395,6 +395,8 @@ android-sdk = { api_level = "36", build_tools = "36.0.0", extra_packages = [
 
 要素は空白 1 つで連結されて install スクリプトに渡るため、各要素は 1 つの
 トークンである必要があります。空文字列や空白を含む要素は拒否されます。
+プラグインが単一値として宣言しているキーに配列を書いた場合
+（`api_level = ["36", "37"]`）も拒否されます。
 
 **手動 checksum（エスケープハッチ）。** per-arch checksum は通常 `cocoon.lock` に
 あり、`cocoon lock` が自動記録します。ただし一部のプラグインは上流が機械可読な

@@ -401,7 +401,8 @@ android-sdk = { api_level = "36", build_tools = "36.0.0", extra_packages = [
 
 Elements are joined with a single space on the way to the install script, so
 each one must be a single token: an empty or whitespace-containing element is
-rejected.
+rejected. An array written for a key the plugin declares as a single value
+(`api_level = ["36", "37"]`) is rejected too.
 
 **Manual checksums (escape hatch).** Per-arch checksums normally live in
 `cocoon.lock`, recorded automatically by `cocoon lock`. A few plugins' upstreams

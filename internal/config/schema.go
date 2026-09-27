@@ -461,13 +461,18 @@ type PluginsSpec struct {
 // checksum may instead carry a manual value from [plugins.options]. Extra
 // carries any [plugins.options] knobs a plugin opts into via
 // [install.extra_versions] (e.g. Android SDK's api_level / build_tools);
-// it is nil when no extra keys are set.
+// it is nil when no extra keys are set. ExtraArrays is the subset of those
+// keys the config file wrote as a TOML array: the array is already joined
+// into Extra here, but the plugin manifest is not available at load time, so
+// the generator uses this set to reject an array on a knob the plugin did not
+// declare with list = true.
 type PluginVersionOverride struct {
 	Spec          string
 	Pin           string
 	ChecksumAmd64 *string
 	ChecksumArm64 *string
 	Extra         map[string]string
+	ExtraArrays   map[string]struct{}
 }
 
 // IsLatest reports whether the constraint is the floating "latest" form

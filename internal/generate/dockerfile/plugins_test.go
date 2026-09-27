@@ -1022,6 +1022,74 @@ func TestValidateVersionOverrides_UnknownExtraKey(t *testing.T) {
 	}
 }
 
+// TestValidateVersionOverrides_ExtraArrayNeedsListKnob pins the list = true
+// opt-in: the loader accepts an array for any [plugins.options] key (it has no
+// manifest yet), so this stage is where an array on a single-value knob has to
+// fail. Without it, api_level = ["36", "37"] would render the multi-token
+// selector "platforms;android-36 37" and only break inside docker build.
+func TestValidateVersionOverrides_ExtraArrayNeedsListKnob(t *testing.T) {
+	t.Parallel()
+	newPlugins := func() map[string]*plugin.Plugin {
+		return map[string]*plugin.Plugin{"android-sdk": {
+			Metadata: plugin.Metadata{Name: "android-sdk", URL: "https://example.com/x"},
+			Install: plugin.Install{
+				DefaultMethod: "archive",
+				Methods:       map[string]plugin.InstallMethod{"archive": {Description: "x"}},
+				ExtraVersions: map[string]plugin.ExtraVersionSpec{
+					"api_level":      {Env: "ANDROID_SDK_API_LEVEL", Default: "35"},
+					"extra_packages": {Env: "ANDROID_SDK_EXTRA_PACKAGES", Default: "", List: true},
+				},
+			},
+			Version: plugin.Version{VersionCapable: true},
+		}}
+	}
+
+	t.Run("scalar_knob_rejects_array", func(t *testing.T) {
+		t.Parallel()
+		overrides := map[string]config.PluginVersionOverride{
+			"android-sdk": {
+				Pin:         "14742923",
+				Extra:       map[string]string{"api_level": "36 37"},
+				ExtraArrays: map[string]struct{}{"api_level": {}},
+			},
+		}
+		err := validateVersionOverrides(newPlugins(), overrides, nil, warn.New())
+		if !errors.Is(err, ErrInvalidVersionOverride) {
+			t.Fatalf("err = %v, want errors.Is(.., ErrInvalidVersionOverride)", err)
+		}
+		if !strings.Contains(err.Error(), "api_level") {
+			t.Errorf("error message should name the offending key: %v", err)
+		}
+	})
+	t.Run("list_knob_accepts_array", func(t *testing.T) {
+		t.Parallel()
+		overrides := map[string]config.PluginVersionOverride{
+			"android-sdk": {
+				Pin:         "14742923",
+				Extra:       map[string]string{"extra_packages": "emulator ndk;27.0.0"},
+				ExtraArrays: map[string]struct{}{"extra_packages": {}},
+			},
+		}
+		if err := validateVersionOverrides(newPlugins(), overrides, nil, warn.New()); err != nil {
+			t.Fatalf("validateVersionOverrides: %v", err)
+		}
+	})
+	t.Run("unknown_key_reported_as_unknown", func(t *testing.T) {
+		t.Parallel()
+		overrides := map[string]config.PluginVersionOverride{
+			"android-sdk": {
+				Pin:         "14742923",
+				Extra:       map[string]string{"extra_pkgs": "emulator"},
+				ExtraArrays: map[string]struct{}{"extra_pkgs": {}},
+			},
+		}
+		err := validateVersionOverrides(newPlugins(), overrides, nil, warn.New())
+		if !errors.Is(err, ErrUnknownExtraVersion) {
+			t.Fatalf("err = %v, want errors.Is(.., ErrUnknownExtraVersion)", err)
+		}
+	})
+}
+
 // TestValidateVersionOverrides_DeclaredExtraKeyOK pins the happy path:
 // a workspace override whose Extra keys are all declared by the plugin
 // passes validation without error.

@@ -383,6 +383,8 @@ android-sdk = { api_level = "36", build_tools = "36.0.0", extra_packages = [
 `[install.extra_versions]` で宣言されていないキーが書かれていると
 `cocoon gen` は `ErrUnknownExtraVersion` で拒否する（typo
 （例: `api_levle = "..."`）が default に落ちないようにするため）。
+`list = true` で宣言されていないキーに配列を書いた場合も同様に拒否される
+（`ErrInvalidVersionOverride`）。複数トークンに連結された値が黙って通ることはない。
 `cocoon plugin pin <id> <ref> --write` は `enable` 配列のバージョン pin
 のみを書き換え、プラグインの `[plugins.options]` エントリには触らない。
 

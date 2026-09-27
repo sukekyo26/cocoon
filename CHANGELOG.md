@@ -30,7 +30,9 @@ adheres to [Semantic Versioning](https://semver.org/).
   string, for the knobs a plugin declares as a list (`list = true` under
   `[install.extra_versions]`). The elements are joined with a single space
   before reaching the install script; an empty or whitespace-containing
-  element is rejected when the config file is read.
+  element is rejected when the config file is read, and an array written for
+  a knob the plugin declares as a single value (`api_level = ["36", "37"]`) is
+  rejected by `cocoon gen`.
 
 ### Changed
 

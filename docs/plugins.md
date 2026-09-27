@@ -407,7 +407,10 @@ android-sdk = { api_level = "36", build_tools = "36.0.0", extra_packages = [
 Keys that are **not** declared under the plugin's
 `[install.extra_versions]` are rejected by `cocoon gen` with
 `ErrUnknownExtraVersion` so a typo (`api_levle = "..."`) does not
-silently fall through to the default. `cocoon plugin pin <id> <ref>
+silently fall through to the default. An array written for a key the
+plugin did **not** declare with `list = true` is rejected the same way
+(`ErrInvalidVersionOverride`), rather than silently joining into a
+multi-token value. `cocoon plugin pin <id> <ref>
 --write` rewrites only the version pin in the `enable` array — it leaves
 the plugin's `[plugins.options]` entry untouched.
 

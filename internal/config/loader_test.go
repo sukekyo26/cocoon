@@ -285,15 +285,27 @@ android-sdk = { ` + extraExpr + ` }`)
 		t.Parallel()
 		ws, err := load(t, `extra_packages = ["emulator", "system-images;android-36;google_apis;x86_64"]`)
 		require.NoError(t, err)
+		ov := ws.Plugins.Versions["android-sdk"]
 		require.Equal(t,
 			"emulator system-images;android-36;google_apis;x86_64",
-			ws.Plugins.Versions["android-sdk"].Extra["extra_packages"])
+			ov.Extra["extra_packages"])
+		// The array shape is recorded for the generator, which is the first
+		// stage able to check it against the plugin's list = true declaration.
+		require.Contains(t, ov.ExtraArrays, "extra_packages")
 	})
 	t.Run("empty_array", func(t *testing.T) {
 		t.Parallel()
 		ws, err := load(t, `extra_packages = []`)
 		require.NoError(t, err)
-		require.Empty(t, ws.Plugins.Versions["android-sdk"].Extra["extra_packages"])
+		ov := ws.Plugins.Versions["android-sdk"]
+		require.Empty(t, ov.Extra["extra_packages"])
+		require.Contains(t, ov.ExtraArrays, "extra_packages")
+	})
+	t.Run("string_form_records_no_array", func(t *testing.T) {
+		t.Parallel()
+		ws, err := load(t, `api_level = "36"`)
+		require.NoError(t, err)
+		require.Empty(t, ws.Plugins.Versions["android-sdk"].ExtraArrays)
 	})
 
 	cases := []struct {
