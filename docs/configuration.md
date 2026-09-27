@@ -386,6 +386,23 @@ declaration removed upstream) is rejected by `cocoon gen` instead of silently
 falling back to the default. The reserved `version` and `pin` keys are
 **rejected** here (the main version belongs in the `enable` array).
 
+A knob the plugin declares as a **list** takes an array of strings instead of a
+single value. android-sdk's `extra_packages` adds arbitrary `sdkmanager`
+packages on top of the baseline platform-tools / platform / build-tools — the
+emulator and a system image, say:
+
+```toml
+[plugins.options]
+android-sdk = { api_level = "36", build_tools = "36.0.0", extra_packages = [
+    "emulator",
+    "system-images;android-36;google_apis;x86_64",
+] }
+```
+
+Elements are joined with a single space on the way to the install script, so
+each one must be a single token: an empty or whitespace-containing element is
+rejected.
+
 **Manual checksums (escape hatch).** Per-arch checksums normally live in
 `cocoon.lock`, recorded automatically by `cocoon lock`. A few plugins' upstreams
 publish no machine-readable checksum (`codex`, `shellcheck`, `shfmt`,

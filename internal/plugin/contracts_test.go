@@ -103,6 +103,7 @@ func TestPluginContracts(t *testing.T) {
 				"tlsv1.2", "retry 3", "dpkg --print-architecture", "unzip",
 				"ANDROID_HOME", "ANDROID_SDK_ROOT",
 				"ANDROID_SDK_API_LEVEL", "ANDROID_SDK_BUILD_TOOLS",
+				"ANDROID_SDK_EXTRA_PACKAGES", "libpulse0", "libxkbfile1",
 				"--licenses", "yes",
 				"PIN",
 			},

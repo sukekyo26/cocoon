@@ -692,6 +692,10 @@ func TestValidate_ExtraVersionsAccepted(t *testing.T) {
 			ExtraVersions: map[string]plugin.ExtraVersionSpec{
 				"api_level":   {Env: "ANDROID_SDK_API_LEVEL", Default: "35"},
 				"build_tools": {Env: "ANDROID_SDK_BUILD_TOOLS", Default: "35.0.0"},
+				// A list knob is opt-in, so an empty default is legal here
+				// (it means "install nothing extra") while it stays rejected
+				// for the scalar version knobs above.
+				"extra_packages": {Env: "ANDROID_SDK_EXTRA_PACKAGES", Default: "", List: true},
 			},
 		},
 	}

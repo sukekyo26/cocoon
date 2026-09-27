@@ -302,7 +302,7 @@ func validateOneExtraVersion(
 		return
 	}
 	seenEnv[spec.Env] = k
-	checkExtraVersionDefault(a, k, spec.Default)
+	checkExtraVersionDefault(a, k, spec)
 }
 
 // checkExtraVersionEnv returns true when env passed every shape /
@@ -338,10 +338,15 @@ func checkExtraVersionEnv(
 }
 
 // checkExtraVersionDefault rejects an empty default or one containing
-// runes that would break the Dockerfile RUN-prefix env quoting.
-func checkExtraVersionDefault(a *config.Accumulator, k, def string) {
+// runes that would break the Dockerfile RUN-prefix env quoting. A list knob
+// is opt-in extra input, so an empty default is meaningful there ("install
+// nothing extra") and stays stable across invocations.
+func checkExtraVersionDefault(a *config.Accumulator, k string, spec ExtraVersionSpec) {
+	def := spec.Default
 	if def == "" {
-		a.AddCode("err_pval_default_required", nil, "extra_versions", k, "default")
+		if !spec.List {
+			a.AddCode("err_pval_default_required", nil, "extra_versions", k, "default")
+		}
 		return
 	}
 	if bad, r := config.UnsafeExtraVersionRune(def); bad {

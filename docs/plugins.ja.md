@@ -262,7 +262,7 @@ BuildKit / `/bin/sh` を **そのまま透過** する — parse / heredoc 読�
 | `CHECKSUM_AMD64` | per-RUN env、`version_capable = true` かつ `verify = "checksum"` のときのみ | `cocoon.lock` の amd64 アーティファクト `sha256`。`cocoon lock` 実行前は空（その場合スクリプトは上流公開 checksum で検証し、上流が公開していない場合のみ警告）。`verify = "pgp"` プラグインには渡されない |
 | `CHECKSUM_ARM64` | 同上 | arm64 アーティファクトの `sha256` |
 | `<BUILD_ARG>`    | per-RUN env (`ARG` 宣言も併発)、`[install].build_args` に列挙されたときのみ | ジェネレータは `ARG <name>` 行をプラグインごとに 1 回 (先に走る hook の直前) 出力し、両 hook の per-RUN prefix に `<name>="${<name>}"` を載せる。Dockerfile は各 prefix 行で値を置換する。catalog プラグインで現在宣言するものは無く、自作プラグイン向けの機構 |
-| `<EXTRA_ENV>`    | per-RUN env、`[install.extra_versions]` で宣言されたときのみ | 宣言された subcomponent 版ごとに 1 つの env が出る。プラグイン側で env 名と default を宣言し、ユーザーは設定ファイルの `[plugins.options].<id>` インラインテーブルに同じキー名を書いて値を上書きできる（例: `android-sdk = { api_level = "36" }`。主バージョンは `[plugins].enable` に `"android-sdk=..."` として別途 pin）。予約 env 名（上記）と衝突する env 名は宣言できない。詳細は後述の「サブコンポーネントバージョン」節を参照 |
+| `<EXTRA_ENV>`    | per-RUN env、`[install.extra_versions]` で宣言されたときのみ | 宣言された subcomponent 版ごとに 1 つの env が出る。プラグイン側で env 名と default を宣言し、ユーザーは設定ファイルの `[plugins.options].<id>` インラインテーブルに同じキー名を書いて値を上書きできる（例: `android-sdk = { api_level = "36" }`。主バージョンは `[plugins].enable` に `"android-sdk=..."` として別途 pin）。`list = true` で宣言されたつまみは配列を受け取り、空白 1 つで連結される。予約 env 名（上記）と衝突する env 名は宣言できない。詳細は後述の「サブコンポーネントバージョン」節を参照 |
 
 ホスト側での評価は一切行われない — bash はビルド環境内で本体を実行し、
 その環境変数は上記 2 ソースから組み立てられる。
@@ -334,8 +334,9 @@ enable = [
 
 ```toml
 [install.extra_versions]
-api_level   = { env = "ANDROID_SDK_API_LEVEL",   default = "35" }
-build_tools = { env = "ANDROID_SDK_BUILD_TOOLS", default = "35.0.0" }
+api_level      = { env = "ANDROID_SDK_API_LEVEL",      default = "35" }
+build_tools    = { env = "ANDROID_SDK_BUILD_TOOLS",    default = "35.0.0" }
+extra_packages = { env = "ANDROID_SDK_EXTRA_PACKAGES", default = "", list = true }
 ```
 
 - **キー名**（`api_level`, `build_tools`）— ユーザーが
@@ -346,7 +347,14 @@ build_tools = { env = "ANDROID_SDK_BUILD_TOOLS", default = "35.0.0" }
 - **`env`** — install スクリプトが読む環境変数名。`^[A-Z_][A-Z0-9_]*$`、
   予約 env 名（前述）や `[install].build_args` の名前、`extra_versions`
   内の他の `env` と衝突不可。
-- **`default`** — 必須・非空。設定ファイルで未指定時に使われる値。
+- **`list`** — 省略可・既定 `false`。単一のバージョン文字列ではなく、
+  空白を含まないトークンのリストであることを示す。設定ファイル側は配列で
+  書ける（`extra_packages = ["emulator", "system-images;android-36;google_apis;x86_64"]`）。
+  値は空白 1 つで連結されてから `env` に渡り、install スクリプト側で
+  分割する（`read -r -a PKGS <<<"$ANDROID_SDK_EXTRA_PACKAGES"`）。
+  空文字列や空白を含む要素はこの往復で失われるため拒否される。
+  `list = true` のときに限り `default` を空にできる（「追加なし」の意味）。
+- **`default`** — 必須・非空（`list = true` のときのみ空を許す）。設定ファイルで未指定時に使われる値。
   install スクリプトは env がセットされている前提で書く
   （`: "${ANDROID_SDK_API_LEVEL:?...}"` などで fail-fast）。
   `default` も workspace 側の override も `"` / `\` / `\n` / `\r` /
@@ -366,7 +374,10 @@ enable = [
 ]
 
 [plugins.options]
-android-sdk = { api_level = "36", build_tools = "36.0.0" }
+android-sdk = { api_level = "36", build_tools = "36.0.0", extra_packages = [
+    "emulator",
+    "system-images;android-36;google_apis;x86_64",
+] }
 ```
 
 `[install.extra_versions]` で宣言されていないキーが書かれていると
@@ -400,7 +411,11 @@ android-sdk = { api_level = "36", build_tools = "36.0.0" }
   追加のインストーラ (`sdkmanager`) を走らせる例。`[install.extra_versions]`
   の参考にもなる: `commandline-tools` の `pin` とは独立に platform /
   build-tools のバージョンをユーザーが指定できるよう `api_level` /
-  `build_tools` を宣言している。
+  `build_tools` を宣言している。さらに `list` 種別の `extra_packages` で
+  任意の `sdkmanager` パッケージ（`emulator` / `system-images;...` /
+  `ndk;...`）を追加できる。emulator 約 800 MB・システムイメージ約 2.5 GB と
+  大きく、ビルド専用イメージには不要なので既定は空。`emulator` を指定すると
+  実行に必要な共有ライブラリ（`libpulse0` / `libxkbfile1`）も一緒に入る。
 - **`android-studio`** — 数 GB の IDE（ダウンロード約 1.5 GB、`/opt/android-studio`
   に展開して約 3.5 GB）を入れる `archive` メソッド。x86_64 専用。tar.gz の
   ファイル名にリリースのコードネームが入るため、pin は

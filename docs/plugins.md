@@ -278,7 +278,7 @@ bash's environment for that step is composed from two sources:
 | `CHECKSUM_AMD64` | per-RUN env, only when `version_capable = true` and `verify = "checksum"` | `sha256` of the amd64 artifact from `cocoon.lock`, or empty until you run `cocoon lock` (the script then verifies against the upstream-published checksum, warning only if the upstream ships none). Not passed to `verify = "pgp"` plugins. |
 | `CHECKSUM_ARM64` | same as above | `sha256` of the arm64 artifact. |
 | `<BUILD_ARG>`    | per-RUN env (also declared as `ARG`), only when listed in `[install].build_args` | The generator emits one `ARG <name>` line per plugin (next to whichever hook runs first) and threads `<name>="${<name>}"` into the per-RUN prefix of every hook. The Dockerfile substitutes the value on each prefix line at build time. No catalog plugin currently declares one; the mechanism is for custom plugins. |
-| `<EXTRA_ENV>`    | per-RUN env, when declared under `[install.extra_versions]` | One env var per declared subcomponent version. The plugin spells out the env name and a default; the user can override the value from the config file's `[plugins.options].<id>` inline table by writing the same key (e.g. `android-sdk = { api_level = "36" }`, with the main version pinned separately in `[plugins].enable` as `"android-sdk=..."`). The reserved env names above (`PIN`, `CHECKSUM_AMD64`, `CHECKSUM_ARM64`, `RC_FILE`, `RC_SYNTAX`, `LOGIN_SHELL`, `COCOON_INSTALL_METHOD`, `USERNAME`) are off-limits for collision reasons. See "Subcomponent versions" below. |
+| `<EXTRA_ENV>`    | per-RUN env, when declared under `[install.extra_versions]` | One env var per declared subcomponent version. The plugin spells out the env name and a default; the user can override the value from the config file's `[plugins.options].<id>` inline table by writing the same key (e.g. `android-sdk = { api_level = "36" }`, with the main version pinned separately in `[plugins].enable` as `"android-sdk=..."`). A knob declared `list = true` takes an array instead, joined with single spaces. The reserved env names above (`PIN`, `CHECKSUM_AMD64`, `CHECKSUM_ARM64`, `RC_FILE`, `RC_SYNTAX`, `LOGIN_SHELL`, `COCOON_INSTALL_METHOD`, `USERNAME`) are off-limits for collision reasons. See "Subcomponent versions" below. |
 
 Nothing on the developer's host machine evaluates the script — bash
 runs the body inside the build environment, with the env composed as
@@ -354,8 +354,9 @@ To expose a subcomponent as a user-overridable knob, declare it under
 
 ```toml
 [install.extra_versions]
-api_level   = { env = "ANDROID_SDK_API_LEVEL",   default = "35" }
-build_tools = { env = "ANDROID_SDK_BUILD_TOOLS", default = "35.0.0" }
+api_level      = { env = "ANDROID_SDK_API_LEVEL",      default = "35" }
+build_tools    = { env = "ANDROID_SDK_BUILD_TOOLS",    default = "35.0.0" }
+extra_packages = { env = "ANDROID_SDK_EXTRA_PACKAGES", default = "", list = true }
 ```
 
 - **Key** (`api_level`, `build_tools`) — what the user writes in
@@ -367,7 +368,16 @@ build_tools = { env = "ANDROID_SDK_BUILD_TOOLS", default = "35.0.0" }
   `^[A-Z_][A-Z0-9_]*$`, must not collide with the reserved env
   variables above, with any name in `[install].build_args`, or with
   another declared `env` inside `extra_versions`.
-- **`default`** — required, non-empty. Used when the config file does
+- **`list`** — optional, defaults to `false`. Marks the knob as a list
+  of whitespace-free tokens instead of a single version string. The
+  config file may then write an array (`extra_packages = ["emulator",
+  "system-images;android-36;google_apis;x86_64"]`), which is joined with
+  one space before it reaches `env`; the install script splits it back
+  apart (`read -r -a PKGS <<<"$ANDROID_SDK_EXTRA_PACKAGES"`). An element
+  that is empty or contains whitespace is rejected, since it could not
+  survive that round trip. A list knob may declare an empty `default`
+  (meaning "nothing extra"); a scalar knob may not.
+- **`default`** — required, non-empty unless `list = true`. Used when the config file does
   not override the key. The install script should treat the env as
   required (e.g. `: "${ANDROID_SDK_API_LEVEL:?...}"`) so a misconfigured
   generator fails fast instead of producing a half-installed SDK. Both
@@ -388,7 +398,10 @@ enable = [
 ]
 
 [plugins.options]
-android-sdk = { api_level = "36", build_tools = "36.0.0" }
+android-sdk = { api_level = "36", build_tools = "36.0.0", extra_packages = [
+    "emulator",
+    "system-images;android-36;google_apis;x86_64",
+] }
 ```
 
 Keys that are **not** declared under the plugin's
@@ -425,7 +438,12 @@ Use these embedded plugins as templates when writing your own:
   drives a follow-up installer (`sdkmanager`) inside the same RUN.
   Reference for `[install.extra_versions]`: `api_level` and
   `build_tools` are declared so users can pin platform / build-tools
-  versions independently of the `commandline-tools` `pin`.
+  versions independently of the `commandline-tools` `pin`, and
+  `extra_packages` (a `list` knob) adds arbitrary `sdkmanager` package
+  ids — `emulator`, `system-images;...`, `ndk;...`. It is empty by
+  default because the emulator (~800 MB) and a system image (~2.5 GB)
+  have no place in a build-only image; listing `emulator` also pulls in
+  the runtime libraries the emulator needs (`libpulse0`, `libxkbfile1`).
 - **`android-studio`** — `archive` method for a multi-GB IDE (~1.5 GB
   download, ~3.5 GB installed under `/opt/android-studio`), x86_64 only.
   The tarball name carries a release codename, so the pin is
