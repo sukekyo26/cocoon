@@ -127,12 +127,15 @@ fi
 # The emulator is a native binary whose runtime deps the SDK does not carry:
 # PulseAudio for audio and libxkbfile for the Qt UI. Installed here, not in
 # [apt].packages, so the default build-only image stays free of them.
+#
+# No apt-get clean / rm -rf /var/lib/apt/lists here: the generator runs every
+# plugin install RUN with /var/cache/apt and /var/lib/apt cache-mounted (see
+# installRunTmpl), so the lists never reach the image layer and wiping them
+# would only throw away the index this and the next build reuse.
 for pkg in "${EXTRA_PACKAGES[@]}"; do
   if [ "$pkg" = "emulator" ]; then
     apt-get update
     apt-get install -y --no-install-recommends libpulse0 libxkbfile1
-    apt-get clean
-    rm -rf /var/lib/apt/lists/* /var/tmp/*
     break
   fi
 done
