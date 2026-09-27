@@ -205,13 +205,6 @@ func materializeOptionEntry(a *Accumulator, id string, tbl map[string]any, ov *P
 }
 
 // optionScalar reduces a [plugins.options].<id>.<key> value to the single
-// string that reaches the install script as an env var. A string passes
-// through; an array of strings is joined with one space, so a plugin can
-// declare a list-valued knob (list = true under [install.extra_versions],
-// e.g. android-sdk's extra_packages) without inventing its own separator.
-// Every element must be a single whitespace-free token, because the install
-// script splits the env value back apart on whitespace.
-// optionScalar reduces a [plugins.options].<id>.<key> value to the single
 // string that reaches the install script as an env var, and reports whether
 // the config file wrote it as an array. A string passes through; an array of
 // strings is joined with one space, so a plugin can declare a list-valued knob
