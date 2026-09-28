@@ -57,13 +57,19 @@ type InstallMethod struct {
 // It declares one user-overridable subcomponent version: the config file
 // can write `<key> = "..."` inside [plugins.options].<id> and the value
 // is exported into the install script as the env variable named in Env.
-// Default is used when the config-file override is absent. Both Env
-// and Default are required (an empty Env is rejected during validation
-// and an empty Default would make the install script unstable across
-// invocations).
+// Default is used when the config-file override is absent. Env is always
+// required; Default is required unless List is set (an empty Default would
+// otherwise make the install script unstable across invocations).
+//
+// List marks the knob as a list of whitespace-free tokens rather than a
+// single version string: the config file may then write an array
+// (`<key> = ["a", "b"]`), which is joined with one space before it reaches
+// Env, and Default may be empty to mean "nothing extra" (e.g. android-sdk's
+// extra_packages).
 type ExtraVersionSpec struct {
 	Env     string `toml:"env"`
 	Default string `toml:"default"`
+	List    bool   `toml:"list,omitempty"`
 }
 
 // Verification methods for [version].verify.

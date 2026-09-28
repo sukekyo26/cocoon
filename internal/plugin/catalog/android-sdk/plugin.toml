@@ -37,6 +37,11 @@ PATH = "/usr/local/android-sdk/cmdline-tools/latest/bin:/usr/local/android-sdk/p
 [install.extra_versions]
 api_level = { env = "ANDROID_SDK_API_LEVEL", default = "35" }
 build_tools = { env = "ANDROID_SDK_BUILD_TOOLS", default = "35.0.0" }
+# Opt-in sdkmanager package ids installed on top of the three baseline
+# packages — "emulator", "system-images;...", "ndk;...", "cmake;...".
+# Empty by default: the emulator alone is ~800MB and a system image ~2.5GB,
+# which a build-only image (CI) should not carry.
+extra_packages = { env = "ANDROID_SDK_EXTRA_PACKAGES", default = "", list = true }
 
 [version]
 version_capable = true

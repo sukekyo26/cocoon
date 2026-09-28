@@ -262,6 +262,70 @@ android-sdk = { api_level = 36 }`)
 	require.Contains(t, err.Error(), "got int64")
 }
 
+// TestLoadWorkspace_OptionsExtraList pins the array form of a
+// [plugins.options].<id>.<key> value: a list knob (android-sdk's
+// extra_packages) is joined with one space so the install script can split it
+// back apart, and elements that could not survive that round trip (non-string,
+// empty, whitespace-containing) are rejected at decode time.
+func TestLoadWorkspace_OptionsExtraList(t *testing.T) {
+	t.Parallel()
+	load := func(t *testing.T, extraExpr string) (*config.Workspace, error) {
+		t.Helper()
+		body := pluginsTestWorkspace(`[plugins]
+enable = ["android-sdk=14742923"]
+
+[plugins.options]
+android-sdk = { ` + extraExpr + ` }`)
+		tmp := t.TempDir() + "/ws.toml"
+		require.NoError(t, os.WriteFile(tmp, []byte(body), 0o600))
+		return config.LoadWorkspace(tmp)
+	}
+
+	t.Run("joins_with_space", func(t *testing.T) {
+		t.Parallel()
+		ws, err := load(t, `extra_packages = ["emulator", "system-images;android-36;google_apis;x86_64"]`)
+		require.NoError(t, err)
+		ov := ws.Plugins.Versions["android-sdk"]
+		require.Equal(t,
+			"emulator system-images;android-36;google_apis;x86_64",
+			ov.Extra["extra_packages"])
+		// The array shape is recorded for the generator, which is the first
+		// stage able to check it against the plugin's list = true declaration.
+		require.Contains(t, ov.ExtraArrays, "extra_packages")
+	})
+	t.Run("empty_array", func(t *testing.T) {
+		t.Parallel()
+		ws, err := load(t, `extra_packages = []`)
+		require.NoError(t, err)
+		ov := ws.Plugins.Versions["android-sdk"]
+		require.Empty(t, ov.Extra["extra_packages"])
+		require.Contains(t, ov.ExtraArrays, "extra_packages")
+	})
+	t.Run("string_form_records_no_array", func(t *testing.T) {
+		t.Parallel()
+		ws, err := load(t, `api_level = "36"`)
+		require.NoError(t, err)
+		require.Empty(t, ws.Plugins.Versions["android-sdk"].ExtraArrays)
+	})
+
+	cases := []struct {
+		name, extraExpr, want string
+	}{
+		{"item_not_string", `extra_packages = ["emulator", 36]`, "must be a string, got int64"},
+		{"item_empty", `extra_packages = ["emulator", ""]`, "must be a single token"},
+		{"item_with_space", `extra_packages = ["emulator ndk;27.0.0"]`, "must be a single token"},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := load(t, tc.extraExpr)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.want)
+		})
+	}
+}
+
 // TestLoadWorkspace_OptionsExtraUnsafeValue covers the rune classes
 // UnsafeExtraVersionRune rejects on a workspace override value. A bare ", \,
 // \n, or \r would break the Dockerfile RUN-prefix `KEY="..."` env pair the

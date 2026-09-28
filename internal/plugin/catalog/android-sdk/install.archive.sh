@@ -12,6 +12,10 @@
 #                               when CHECKSUM_AMD64 is empty
 #   ANDROID_SDK_API_LEVEL     : platform API level (e.g. "35"); supplied via [install.extra_versions]
 #   ANDROID_SDK_BUILD_TOOLS   : build-tools version (e.g. "35.0.0"); supplied via [install.extra_versions]
+#   ANDROID_SDK_EXTRA_PACKAGES: space-separated extra sdkmanager package ids (e.g.
+#                               "emulator system-images;android-36;google_apis;x86_64");
+#                               supplied via [install.extra_versions] as a list knob.
+#                               Empty = install only the three baseline packages
 set -euo pipefail
 
 # The two extra_versions inputs are always emitted by the generator (with
@@ -22,6 +26,11 @@ set -euo pipefail
 # an empty workspace override.
 : "${ANDROID_SDK_API_LEVEL:?empty/unset — set api_level on android-sdk in [plugins.options], or restore the plugin.toml default}"
 : "${ANDROID_SDK_BUILD_TOOLS:?empty/unset — set build_tools on android-sdk in [plugins.options], or restore the plugin.toml default}"
+
+# extra_packages is opt-in, so an empty value is valid: read splits it into a
+# zero-length array and the sdkmanager call below degrades to the baseline
+# three. The ids contain ';', so whitespace is the only usable separator.
+read -r -a EXTRA_PACKAGES <<<"${ANDROID_SDK_EXTRA_PACKAGES:-}"
 
 # Yellow WARNING when stderr is a TTY (and NO_COLOR is unset) or
 # FORCE_COLOR is set. NO_COLOR wins per no-color.org.
@@ -102,10 +111,34 @@ SDKMANAGER="${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
 # `sdkmanager` call's exit status.
 yes 2>/dev/null | "${SDKMANAGER}" --sdk_root="${ANDROID_SDK_ROOT}" --licenses >/dev/null || true
 
-"${SDKMANAGER}" --sdk_root="${ANDROID_SDK_ROOT}" \
+if ! "${SDKMANAGER}" --sdk_root="${ANDROID_SDK_ROOT}" \
   "platform-tools" \
   "platforms;android-${ANDROID_SDK_API_LEVEL}" \
-  "build-tools;${ANDROID_SDK_BUILD_TOOLS}"
+  "build-tools;${ANDROID_SDK_BUILD_TOOLS}" \
+  "${EXTRA_PACKAGES[@]}"; then
+  echo "ERROR: sdkmanager failed to install the requested packages." >&2
+  echo "       api_level=\"${ANDROID_SDK_API_LEVEL}\", build_tools=\"${ANDROID_SDK_BUILD_TOOLS}\"," >&2
+  echo "       extra_packages=\"${ANDROID_SDK_EXTRA_PACKAGES:-}\"" >&2
+  echo "       Check those values in [plugins.options].android-sdk against the ids" >&2
+  echo "       listed by \`sdkmanager --list\` (a typo in a package id fails here)." >&2
+  exit 1
+fi
+
+# The emulator is a native binary whose runtime deps the SDK does not carry:
+# PulseAudio for audio and libxkbfile for the Qt UI. Installed here, not in
+# [apt].packages, so the default build-only image stays free of them.
+#
+# No apt-get clean / rm -rf /var/lib/apt/lists here: the generator runs every
+# plugin install RUN with /var/cache/apt and /var/lib/apt cache-mounted (see
+# installRunTmpl), so the lists never reach the image layer and wiping them
+# would only throw away the index this and the next build reuse.
+for pkg in "${EXTRA_PACKAGES[@]}"; do
+  if [ "$pkg" = "emulator" ]; then
+    apt-get update
+    apt-get install -y --no-install-recommends libpulse0 libxkbfile1
+    break
+  fi
+done
 
 # The non-root container user owns ~/.android (license cache) and ~/.gradle
 # via volumes, but the SDK tree itself lives under /usr/local. Chown inside

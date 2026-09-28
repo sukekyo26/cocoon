@@ -600,6 +600,9 @@ func validateVersionOverrides(
 		if err := checkExtraOverrideKeys(id, override, p.Install.ExtraVersions); err != nil {
 			return err
 		}
+		if err := checkExtraOverrideArrays(id, override, p.Install.ExtraVersions); err != nil {
+			return err
+		}
 		// The missing-checksum warning applies only to checksum-verified
 		// plugins whose install method consumes a per-arch checksum. A pgp
 		// plugin is verified in-script, and an installer / apt method ignores
@@ -702,6 +705,37 @@ func checkExtraOverrideKeys(
 	return fmt.Errorf("%w: [plugins.options.%s] sets %v; plugin '%s' does not declare these keys"+
 		" under [install.extra_versions]; remove them or fix the typo",
 		ErrUnknownExtraVersion, id, unknown, id)
+}
+
+// checkExtraOverrideArrays rejects a [plugins.options].<id>.<key> the config
+// file wrote as a TOML array when the plugin declares that key as a single
+// value (no list = true). The loader already joined the array with spaces, so
+// letting it through would silently render a multi-token selector — e.g.
+// api_level = ["36", "37"] becoming "platforms;android-36 37" — and fail deep
+// inside docker build instead of here. Unknown keys are left to
+// checkExtraOverrideKeys. Keys are sorted so the message stays stable.
+func checkExtraOverrideArrays(
+	id string,
+	override config.PluginVersionOverride,
+	declared map[string]plugin.ExtraVersionSpec,
+) error {
+	if len(override.ExtraArrays) == 0 {
+		return nil
+	}
+	scalars := make([]string, 0, len(override.ExtraArrays))
+	for k := range override.ExtraArrays {
+		if spec, ok := declared[k]; ok && !spec.List {
+			scalars = append(scalars, k)
+		}
+	}
+	if len(scalars) == 0 {
+		return nil
+	}
+	sort.Strings(scalars)
+	return fmt.Errorf("%w: [plugins.options.%s] gives %v an array, but plugin '%s' declares them as"+
+		" single-value keys; write one string per key (the array form is only for keys declared"+
+		" with list = true under [install.extra_versions])",
+		ErrInvalidVersionOverride, id, scalars, id)
 }
 
 // warnMissingChecksum emits the "pin without recorded checksum" advisory for a

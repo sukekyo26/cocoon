@@ -6,6 +6,34 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+### 追加
+
+- `[plugins.options].android-sdk` に `extra_packages` を追加しました。
+  platform-tools / platform / build-tools に加えてインストールする
+  `sdkmanager` のパッケージ id を並べます（Android Emulator とシステム
+  イメージ、NDK、CMake など）:
+
+  ```toml
+  [plugins.options]
+  android-sdk = { api_level = "37.2", build_tools = "37.0.0", extra_packages = [
+      "emulator",
+      "system-images;android-37.0;google_apis;x86_64",
+  ] }
+  ```
+
+  `emulator` を指定すると、エミュレータの実行に必要な共有ライブラリ
+  （`libpulse0` / `libxkbfile1`）も同時に入るため、`[apt]` に手書きする必要が
+  なくなります。既定は空なので（emulator 約 800 MB・システムイメージ約
+  2.5 GB は、ビルド専用イメージには不要）、既存の `cocoon.toml` の挙動は
+  変わりません。パッケージ id を書き間違えた場合は、どのオプションのどの値が
+  原因かを示すメッセージでビルドが失敗します。
+- `[plugins.options]` の値に、文字列だけでなく文字列の配列を書けるように
+  なりました（プラグインが `[install.extra_versions]` で `list = true` と
+  宣言したつまみが対象）。要素は空白 1 つで連結されて install スクリプトに
+  渡ります。空文字列や空白を含む要素は設定ファイルの読み込み時に拒否され、
+  プラグインが単一値として宣言しているつまみに配列を書いた場合
+  （`api_level = ["36", "37"]`）は `cocoon gen` が拒否します。
+
 ### 変更
 
 - `android-studio` のランチャーが、スクリプト版の `bin/studio.sh` ではなく
