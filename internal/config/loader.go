@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/pelletier/go-toml/v2"
 )
@@ -181,10 +182,8 @@ func materializeOptionEntry(a *Accumulator, id string, tbl map[string]any, ov *P
 		case "checksum_arm64":
 			setOptionChecksum(a, id, k, tbl[k], &ov.ChecksumArm64)
 		default:
-			s, ok := tbl[k].(string)
+			s, isArray, ok := optionScalar(a, id, k, tbl[k])
 			if !ok {
-				a.AddCode("err_field_options_value_not_string",
-					[]any{k, tbl[k]}, "plugins", "options", id, k)
 				continue
 			}
 			if bad, r := UnsafeExtraVersionRune(s); bad {
@@ -195,7 +194,50 @@ func materializeOptionEntry(a *Accumulator, id string, tbl map[string]any, ov *P
 				ov.Extra = make(map[string]string)
 			}
 			ov.Extra[k] = s
+			if isArray {
+				if ov.ExtraArrays == nil {
+					ov.ExtraArrays = make(map[string]struct{})
+				}
+				ov.ExtraArrays[k] = struct{}{}
+			}
 		}
+	}
+}
+
+// optionScalar reduces a [plugins.options].<id>.<key> value to the single
+// string that reaches the install script as an env var, and reports whether
+// the config file wrote it as an array. A string passes through; an array of
+// strings is joined with one space, so a plugin can declare a list-valued knob
+// (list = true under [install.extra_versions], e.g. android-sdk's
+// extra_packages) without inventing its own separator. Every element must be a
+// single whitespace-free token, because the install script splits the env value
+// back apart on whitespace. Whether the plugin actually declared the key as a
+// list is checked by the generator, which is the first stage holding the
+// manifest.
+func optionScalar(a *Accumulator, id, k string, v any) (value string, isArray, ok bool) {
+	switch val := v.(type) {
+	case string:
+		return val, false, true
+	case []any:
+		items := make([]string, 0, len(val))
+		for i, e := range val {
+			s, isString := e.(string)
+			if !isString {
+				a.AddCode("err_field_options_list_item_not_string",
+					[]any{i + 1, k, e}, "plugins", "options", id, k)
+				return "", true, false
+			}
+			if s == "" || strings.ContainsFunc(s, unicode.IsSpace) {
+				a.AddCode("err_field_options_list_item_blank",
+					[]any{i + 1, k}, "plugins", "options", id, k)
+				return "", true, false
+			}
+			items = append(items, s)
+		}
+		return strings.Join(items, " "), true, true
+	default:
+		a.AddCode("err_field_options_value_not_string", []any{k, v}, "plugins", "options", id, k)
+		return "", false, false
 	}
 }
 

@@ -6,6 +6,44 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-09-28
+
+### Added
+
+- `[plugins.options].android-sdk` accepts `extra_packages`, a list of extra
+  `sdkmanager` package ids installed on top of platform-tools / the platform /
+  build-tools — the Android Emulator and its system images, an NDK, CMake:
+
+  ```toml
+  [plugins.options]
+  android-sdk = { api_level = "37.2", build_tools = "37.0.0", extra_packages = [
+      "emulator",
+      "system-images;android-37.0;google_apis;x86_64",
+  ] }
+  ```
+
+  Listing `emulator` also installs the shared libraries it needs at runtime
+  (`libpulse0`, `libxkbfile1`), so they no longer have to be added to `[apt]`
+  by hand. The option is empty by default (the emulator is ~800 MB and a
+  system image ~2.5 GB, which a build-only image should not carry), so an
+  existing `cocoon.toml` builds exactly as before. A typo in a package id
+  fails the build with a message naming the option and its value.
+- `[plugins.options]` values may now be an array of strings, not just a
+  string, for the knobs a plugin declares as a list (`list = true` under
+  `[install.extra_versions]`). The elements are joined with a single space
+  before reaching the install script; an empty or whitespace-containing
+  element is rejected when the config file is read, and an array written for
+  a knob the plugin declares as a single value (`api_level = ["36", "37"]`) is
+  rejected by `cocoon gen`.
+
+### Changed
+
+- The `android-studio` launcher now starts the IDE through the native launcher
+  `bin/studio` instead of the script launcher `bin/studio.sh`, so Android
+  Studio no longer shows the "launched with a script launcher" notification on
+  every start. A pinned release that ships no `bin/studio` fails at build time
+  with an error asking for a newer pin.
+
 ## [0.18.0] - 2026-09-25
 
 ### Added
@@ -871,7 +909,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Add `COMPOSE_PROJECT_NAME` derivation from the project directory basename so docker compose namespacing matches the host directory.
 - Add i18n catalog (English / Japanese) covering every CLI prompt, error message, and inline `workspace.toml` comment, switched via `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG`.
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.18.0...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.19.0...HEAD
+[0.19.0]: https://github.com/sukekyo26/cocoon/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/sukekyo26/cocoon/compare/v0.17.2...v0.18.0
 [0.17.2]: https://github.com/sukekyo26/cocoon/compare/v0.17.1...v0.17.2
 [0.17.1]: https://github.com/sukekyo26/cocoon/compare/v0.17.0...v0.17.1

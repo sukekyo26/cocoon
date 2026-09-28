@@ -91,13 +91,17 @@ fi
 rm -rf /opt/android-studio
 tar -xzf /tmp/android-studio.tar.gz -C /opt
 rm -f /tmp/android-studio.tar.gz
-test -x /opt/android-studio/bin/studio.sh
+if [ ! -x /opt/android-studio/bin/studio ]; then
+  echo "ERROR: Android Studio ${VERSION} ships no native launcher (bin/studio)." >&2
+  echo "       Pin a newer release in the enable array (see https://developer.android.com/studio/archive)." >&2
+  exit 1
+fi
 
 # Launcher. Display forwarding (DISPLAY / WAYLAND_DISPLAY and the socket
 # mounts) is host-specific and left to the user's cocoon.toml.
 # shellcheck disable=SC2016 # the launcher expands $@ at run time
 printf '%s\n' \
   '#!/bin/sh' \
-  'exec /opt/android-studio/bin/studio.sh "$@"' \
+  'exec /opt/android-studio/bin/studio "$@"' \
   >/usr/local/bin/android-studio
 chmod 0755 /usr/local/bin/android-studio

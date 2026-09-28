@@ -380,6 +380,24 @@ android-sdk = { api_level = "36", build_tools = "36.0.0" }
 黙ってフォールバックせず `cocoon gen` が拒否します。予約キー `version` と `pin`
 はここでは **拒否** されます（主バージョンは `enable` 配列に属する）。
 
+プラグインが **list** として宣言したつまみは、単一の値ではなく文字列の配列を
+取ります。android-sdk の `extra_packages` は、既定の platform-tools / platform /
+build-tools に加えて任意の `sdkmanager` パッケージ（例: エミュレータと
+システムイメージ）を入れます:
+
+```toml
+[plugins.options]
+android-sdk = { api_level = "36", build_tools = "36.0.0", extra_packages = [
+    "emulator",
+    "system-images;android-36;google_apis;x86_64",
+] }
+```
+
+要素は空白 1 つで連結されて install スクリプトに渡るため、各要素は 1 つの
+トークンである必要があります。空文字列や空白を含む要素は拒否されます。
+プラグインが単一値として宣言しているキーに配列を書いた場合
+（`api_level = ["36", "37"]`）も拒否されます。
+
 **手動 checksum（エスケープハッチ）。** per-arch checksum は通常 `cocoon.lock` に
 あり、`cocoon lock` が自動記録します。ただし一部のプラグインは上流が機械可読な
 checksum を公開していないため（`codex` / `shellcheck` / `shfmt` / `aws-sam-cli`）、

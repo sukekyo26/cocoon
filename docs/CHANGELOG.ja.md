@@ -6,6 +6,44 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-09-28
+
+### 追加
+
+- `[plugins.options].android-sdk` に `extra_packages` を追加しました。
+  platform-tools / platform / build-tools に加えてインストールする
+  `sdkmanager` のパッケージ id を並べます（Android Emulator とシステム
+  イメージ、NDK、CMake など）:
+
+  ```toml
+  [plugins.options]
+  android-sdk = { api_level = "37.2", build_tools = "37.0.0", extra_packages = [
+      "emulator",
+      "system-images;android-37.0;google_apis;x86_64",
+  ] }
+  ```
+
+  `emulator` を指定すると、エミュレータの実行に必要な共有ライブラリ
+  （`libpulse0` / `libxkbfile1`）も同時に入るため、`[apt]` に手書きする必要が
+  なくなります。既定は空なので（emulator 約 800 MB・システムイメージ約
+  2.5 GB は、ビルド専用イメージには不要）、既存の `cocoon.toml` の挙動は
+  変わりません。パッケージ id を書き間違えた場合は、どのオプションのどの値が
+  原因かを示すメッセージでビルドが失敗します。
+- `[plugins.options]` の値に、文字列だけでなく文字列の配列を書けるように
+  なりました（プラグインが `[install.extra_versions]` で `list = true` と
+  宣言したつまみが対象）。要素は空白 1 つで連結されて install スクリプトに
+  渡ります。空文字列や空白を含む要素は設定ファイルの読み込み時に拒否され、
+  プラグインが単一値として宣言しているつまみに配列を書いた場合
+  （`api_level = ["36", "37"]`）は `cocoon gen` が拒否します。
+
+### 変更
+
+- `android-studio` のランチャーが、スクリプト版の `bin/studio.sh` ではなく
+  ネイティブランチャー `bin/studio` で IDE を起動するようになりました。
+  起動のたびに出ていた「script launcher で起動されている」旨の通知が出なく
+  なります。`bin/studio` を同梱しないリリースを pin した場合は、より新しい
+  バージョンの pin を促すエラーでビルド時に失敗します。
+
 ## [0.18.0] - 2026-09-25
 
 ### 追加
@@ -856,7 +894,8 @@ cocoon の主要な変更を記録します。フォーマットは
 - `COMPOSE_PROJECT_NAME` をプロジェクトディレクトリの basename から導出するように変更。docker compose の namespace がホストディレクトリと一致する。
 - 国際化 (英語 / 日本語) カタログを追加。CLI プロンプト・エラーメッセージ・`workspace.toml` インラインコメントすべてを `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` で切替可能。
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.18.0...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.19.0...HEAD
+[0.19.0]: https://github.com/sukekyo26/cocoon/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/sukekyo26/cocoon/compare/v0.17.2...v0.18.0
 [0.17.2]: https://github.com/sukekyo26/cocoon/compare/v0.17.1...v0.17.2
 [0.17.1]: https://github.com/sukekyo26/cocoon/compare/v0.17.0...v0.17.1
