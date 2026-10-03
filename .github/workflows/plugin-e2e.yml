@@ -226,7 +226,7 @@ jobs:
       - uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
       # trivy has no version pin of its own: install-action resolves an
       # omitted version from its own release, so the SHA above pins both.
-      - uses: taiki-e/install-action@7623a79cdfecb99d681017af368ca353d9f49bb5 # v2.87.19
+      - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
         with:
           tool: just,trivy
       - name: Build cocoon binary
