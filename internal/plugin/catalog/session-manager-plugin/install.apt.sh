@@ -37,6 +37,11 @@ if [ -n "$PIN" ]; then
 else
   VERSION="$(curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
     "${base}/latest/VERSION" | head -n 1 | tr -d '[:space:]')"
+  if [ -z "$VERSION" ]; then
+    echo "ERROR: ${base}/latest/VERSION returned no version; pin one in [plugins].enable" >&2
+    echo "       (e.g. \"session-manager-plugin=<version>\")." >&2
+    exit 1
+  fi
 fi
 
 workdir="$(mktemp -d)"
@@ -44,15 +49,23 @@ GNUPGHOME="$(mktemp -d)"
 export GNUPGHOME
 trap 'rm -rf "$workdir" "$GNUPGHOME"' EXIT
 
+# A 403 from the bucket means the object is missing, so a failure here is
+# either a wrong version, an unsigned (pre-1.2.707.0) release, or the network.
+fetch() {
+  if ! curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+    "$1" -o "$2"; then
+    echo "ERROR: failed to download $1" >&2
+    echo "       Check that session-manager-plugin ${VERSION} exists" >&2
+    echo "       (https://github.com/aws/session-manager-plugin/releases), that it is" >&2
+    echo "       1.2.707.0 or newer (older releases are unsigned), and that" >&2
+    echo "       s3.amazonaws.com is reachable." >&2
+    exit 1
+  fi
+}
+
 deb="${workdir}/session-manager-plugin.deb"
-curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
-  "${base}/${VERSION}/${DEB_ARCH}/session-manager-plugin.deb" -o "$deb"
-if ! curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
-  "${base}/${VERSION}/${DEB_ARCH}/session-manager-plugin.deb.sig" -o "${deb}.sig"; then
-  echo "ERROR: no signature for session-manager-plugin ${VERSION}." >&2
-  echo "       AWS signs releases from 1.2.707.0 onward; pin 1.2.707.0 or newer." >&2
-  exit 1
-fi
+fetch "${base}/${VERSION}/${DEB_ARCH}/session-manager-plugin.deb" "$deb"
+fetch "${base}/${VERSION}/${DEB_ARCH}/session-manager-plugin.deb.sig" "${deb}.sig"
 
 gpg --batch --quiet --import <<'SESSION_MANAGER_PGP_KEY'
 -----BEGIN PGP PUBLIC KEY BLOCK-----
