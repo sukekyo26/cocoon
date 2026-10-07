@@ -155,6 +155,7 @@ pin_entries=(
   opentofu=1.9.0
   proto=0.46.1
   rtk=0.42.4
+  session-manager-plugin=1.2.814.0
   shellcheck=0.10.0
   shfmt=3.10.0
   starship=1.21.1

@@ -6,6 +6,15 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+### 追加
+
+- `session-manager-plugin` プラグインを追加
+  （[aws/session-manager-plugin](https://github.com/aws/session-manager-plugin)。
+  `aws ssm start-session` や ECS Exec が使う AWS CLI 用プラグイン）。`aws-cli`
+  と一緒に有効化する。`.deb` は同梱した AWS の PGP 署名鍵で検証し、`cocoon lock`
+  で最新バージョンを固定できる。AWS が署名を公開しているのは 1.2.707.0 以降の
+  ため、それより古いバージョンの pin は失敗する。
+
 ## [0.19.0] - 2026-09-28
 
 ### 追加

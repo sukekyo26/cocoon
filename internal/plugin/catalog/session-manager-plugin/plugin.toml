@@ -1,0 +1,28 @@
+[metadata]
+name = "AWS Session Manager Plugin"
+description = "AWS CLI plugin for Session Manager (aws ssm start-session, ECS Exec); use with aws-cli"
+url = "https://github.com/aws/session-manager-plugin"
+default = false
+
+[apt]
+# gnupg: install.apt.sh verifies the .deb's detached signature with
+# `gpg --batch --verify` (verify = "pgp"); the minimal base ships no gpg.
+packages = ["gnupg"]
+
+[install]
+requires_root = true
+default_method = "apt"
+
+[install.methods.apt]
+description = "PGP-verified .deb from the AWS session-manager-downloads bucket"
+
+[version]
+version_capable = true
+verify = "pgp"
+
+[version.source.latest]
+type = "text"
+url = "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/VERSION"
+
+[version.source.checksum]
+type = "none"
