@@ -6,6 +6,17 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-10-07
+
+### Added
+
+- New `session-manager-plugin` plugin
+  ([aws/session-manager-plugin](https://github.com/aws/session-manager-plugin)),
+  the AWS CLI plugin behind `aws ssm start-session` and ECS Exec. Enable it
+  together with `aws-cli`. The `.deb` is verified against AWS's bundled PGP
+  signing key, and `cocoon lock` can freeze the latest version. AWS signs
+  releases from 1.2.707.0 onward, so pins older than that fail.
+
 ## [0.19.0] - 2026-09-28
 
 ### Added
@@ -909,7 +920,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Add `COMPOSE_PROJECT_NAME` derivation from the project directory basename so docker compose namespacing matches the host directory.
 - Add i18n catalog (English / Japanese) covering every CLI prompt, error message, and inline `workspace.toml` comment, switched via `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG`.
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.19.0...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.20.0...HEAD
+[0.20.0]: https://github.com/sukekyo26/cocoon/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/sukekyo26/cocoon/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/sukekyo26/cocoon/compare/v0.17.2...v0.18.0
 [0.17.2]: https://github.com/sukekyo26/cocoon/compare/v0.17.1...v0.17.2
