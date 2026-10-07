@@ -427,6 +427,18 @@ func TestPluginContracts(t *testing.T) {
 			mustNotContain: append(append([]string{}, noPlaceholders...), "api.github.com", "| jq "),
 		},
 		{
+			id: "session-manager-plugin", name: "AWS Session Manager Plugin",
+			requiresRoot: true, versionCapable: true, verify: "pgp",
+			mustContain: []string{
+				"s3.amazonaws.com/session-manager-downloads", "tlsv1.2", "retry 3",
+				"dpkg --print-architecture", "ubuntu_64bit", "ubuntu_arm64",
+				// gpg verification needs the gpg binary; gnupg must be an apt dep.
+				"gpg --batch --verify", "gnupg",
+				"7959637124CE093AD501D47A2C4D4AFF6F6757EE", "dpkg -i",
+			},
+			mustNotContain: append(append([]string{}, noPlaceholders...), "api.github.com", "| jq "),
+		},
+		{
 			id: "starship", name: "Starship",
 			requiresRoot: true, versionCapable: true, firstVolume: "config",
 			mustContain: []string{

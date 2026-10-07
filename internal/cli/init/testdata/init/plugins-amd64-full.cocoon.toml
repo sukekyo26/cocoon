@@ -119,6 +119,7 @@ enable = [
     "docker-buildx=0.24.0",
     "aws-cli=2.34.48",
     "aws-sam-cli=1.160.1",
+    "session-manager-plugin=1.2.814.0",
     "azure-cli",
     "gcloud",
     "github-cli",

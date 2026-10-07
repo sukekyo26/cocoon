@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- New `session-manager-plugin` plugin
+  ([aws/session-manager-plugin](https://github.com/aws/session-manager-plugin)),
+  the AWS CLI plugin behind `aws ssm start-session` and ECS Exec. Enable it
+  together with `aws-cli`. The `.deb` is verified against AWS's bundled PGP
+  signing key, and `cocoon lock` can freeze the latest version. AWS signs
+  releases from 1.2.707.0 onward, so pins older than that fail.
+
 ## [0.19.0] - 2026-09-28
 
 ### Added
