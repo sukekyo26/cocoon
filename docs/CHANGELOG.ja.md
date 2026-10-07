@@ -6,6 +6,8 @@ cocoon の主要な変更を記録します。フォーマットは
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-10-07
+
 ### 追加
 
 - `session-manager-plugin` プラグインを追加
@@ -903,7 +905,8 @@ cocoon の主要な変更を記録します。フォーマットは
 - `COMPOSE_PROJECT_NAME` をプロジェクトディレクトリの basename から導出するように変更。docker compose の namespace がホストディレクトリと一致する。
 - 国際化 (英語 / 日本語) カタログを追加。CLI プロンプト・エラーメッセージ・`workspace.toml` インラインコメントすべてを `WORKSPACE_LANG` / `LC_ALL` / `LC_MESSAGES` / `LANG` で切替可能。
 
-[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.19.0...HEAD
+[Unreleased]: https://github.com/sukekyo26/cocoon/compare/v0.20.0...HEAD
+[0.20.0]: https://github.com/sukekyo26/cocoon/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/sukekyo26/cocoon/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/sukekyo26/cocoon/compare/v0.17.2...v0.18.0
 [0.17.2]: https://github.com/sukekyo26/cocoon/compare/v0.17.1...v0.17.2
