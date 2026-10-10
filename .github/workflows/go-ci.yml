@@ -1,14 +1,14 @@
 name: Go CI
 
 on:
-  # Push fires for in-progress branches (pre-PR feedback) and for develop, so
-  # a merge re-validates the integrated state: feature PRs may have been gated
-  # against an older develop, and develop pushes would otherwise run no CI at
-  # all. main stays PR-only — the develop->main release PR reruns the full
-  # suite. e2e / plugin-e2e remain push-excluded (too heavy); only this
-  # lightweight go gate runs on develop pushes.
+  # Topic branches are covered by pull_request, which also fires on every push
+  # to an open PR (synchronize); a separate push trigger would run the suite
+  # twice. develop pushes re-validate the integrated state: feature PRs may
+  # have been gated against an older develop. main stays PR-only — the
+  # develop->main release PR reruns the full suite. e2e / plugin-e2e skip
+  # develop pushes (too heavy); only this lightweight go gate runs there.
   push:
-    branches: ["feature/*", "fix/*", "refactor/*", develop]
+    branches: [develop]
   pull_request:
     branches: [develop, main]
   schedule:
@@ -37,6 +37,7 @@ jobs:
   lint:
     name: Lint (golangci-lint v2)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -46,18 +47,15 @@ jobs:
       - uses: taiki-e/install-action@7623a79cdfecb99d681017af368ca353d9f49bb5 # v2.87.19
         with:
           tool: just
-      # install.sh pinned to the golangci-lint v2.14.0 commit so the fetched
-      # script is immutable; the script itself SHA256-verifies the binary.
-      - name: Install golangci-lint v2.14.0
-        run: |
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/114493f9b3e7257d29e4130f2b4a4aadefbb6845/install.sh | \
-            sh -s -- -b "$(go env GOPATH)/bin" v2.14.0
+      # Installs the golangci-lint version pinned in the justfile.
+      - run: just setup
       - run: just lint
       - run: just fmt-check
 
   test:
     name: Test (race + shuffle)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -74,6 +72,7 @@ jobs:
   coverage:
     name: Coverage gate (>= 90%)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -88,6 +87,7 @@ jobs:
   vuln:
     name: govulncheck
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -97,13 +97,12 @@ jobs:
       - uses: taiki-e/install-action@7623a79cdfecb99d681017af368ca353d9f49bb5 # v2.87.19
         with:
           tool: just
-      - name: Install govulncheck
-        run: go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
       - run: just vuln
 
   build:
     name: Cross-compile (linux/darwin x amd64/arm64)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0

@@ -161,8 +161,8 @@ bash / zsh は `~/.cocoon/.shellrc`、fish は `~/.cocoon/.shellrc.fish` を sou
 
 | ワークフロー | ファイル | トリガー | 役割 |
 |---|---|---|---|
-| Go CI | [`.github/workflows/go-ci.yml`](../.github/workflows/go-ci.yml) | push / PR / `workflow_call` | `golangci-lint` + `go vet` + `go test` + `govulncheck` + クロスコンパイル |
-| E2E | [`.github/workflows/e2e.yml`](../.github/workflows/e2e.yml) | push / PR | サポート対象 base image 全種に対して `minimal` プリセットの実 Docker ラウンドトリップ (`cocoon init` → `gen` → `docker buildx bake` → `docker compose up/exec`、teardown は `trap` 経由) |
+| Go CI | [`.github/workflows/go-ci.yml`](../.github/workflows/go-ci.yml) | PR / `develop` への push / Mon 06:00 UTC / `workflow_call` | `golangci-lint` + `go vet` + `go test` + `govulncheck` + クロスコンパイル |
+| E2E | [`.github/workflows/e2e.yml`](../.github/workflows/e2e.yml) | PR | サポート対象 base image 全種に対して `minimal` プリセットの実 Docker ラウンドトリップ (`cocoon init` → `gen` → `docker buildx bake` → `docker compose up/exec`、teardown は `trap` 経由) |
 | Plugin E2E | [`.github/workflows/plugin-e2e.yml`](../.github/workflows/plugin-e2e.yml) | PR（変更プラグイン）/ Mon 06:00 UTC（全部）/ `workflow_dispatch` | プラグイン単位の install RUN 検証。各カタログプラグインを debian 12 上で base+1プラグインの専用イメージ（`single` プリセット・build-only）として `amd64` + `arm64`・pinned/latest でビルド。`detect` ステップが PR では `internal/plugin/catalog/<id>/` に変更のあったプラグインだけを、cron では全カタログをビルド。`workflow_dispatch` は `plugin` 入力を受け取る |
 | Release | [`.github/workflows/release.yml`](../.github/workflows/release.yml) | `VERSION` 変更を含む `main` への push | タグ作成 → 各プラットフォーム向けビルド → `SHA256SUMS` 付き `gh release` 公開 |
 

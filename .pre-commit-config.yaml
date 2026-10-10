@@ -16,7 +16,7 @@ repos:
 
       - id: shfmt
         name: shfmt (-i 2 -ci -d)
-        entry: shfmt -i 2 -ci -d
+        entry: go tool shfmt -i 2 -ci -d
         language: system
         types: [shell]
         exclude: ^bin/

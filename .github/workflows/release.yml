@@ -13,17 +13,20 @@ jobs:
   check-version:
     name: Check version change
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
       changed: ${{ steps.version.outputs.changed }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
 
-      - name: Extract version from VERSION file
+      # Decide by the release, not the tag: a run that pushed the tag but failed
+      # to publish must be re-runnable instead of being skipped forever.
+      - name: Extract version and check for an existing release
         id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           version=$(tr -d '[:space:]' < VERSION)
           tag="v${version}"
@@ -31,12 +34,15 @@ jobs:
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
           echo "Detected version: ${version} (tag: ${tag})"
 
-          if git tag -l "${tag}" | grep -q "${tag}"; then
-            echo "Tag ${tag} already exists — skipping"
+          if out=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" 2>&1); then
+            echo "Release ${tag} already exists — skipping"
             echo "changed=false" >> "$GITHUB_OUTPUT"
-          else
+          elif printf '%s' "$out" | grep -q 'HTTP 404'; then
             echo "New version detected"
             echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::could not look up release ${tag}: ${out}" >&2
+            exit 1
           fi
 
   ci:
@@ -50,6 +56,7 @@ jobs:
     needs: [check-version, ci]
     if: needs.check-version.outputs.changed == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     # contents: tag push + release upload. id-token + attestations: build provenance (Sigstore).
     permissions:
       contents: write
@@ -108,12 +115,22 @@ jobs:
           git_user_signingkey: true
           git_tag_gpgsign: true
 
+      # Reuse the tag a failed earlier run already pushed, but never one that
+      # points at another commit.
       - name: Create signed version tag
         env:
           TAG: ${{ needs.check-version.outputs.tag }}
         run: |
-          git tag -s -m "$TAG" "$TAG"
-          git push origin "$TAG"
+          if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+            if [ "$(git rev-list -n 1 "${TAG}")" != "$(git rev-parse HEAD)" ]; then
+              echo "::error::tag ${TAG} already exists on another commit; bump VERSION or delete the tag" >&2
+              exit 1
+            fi
+            echo "Tag ${TAG} already exists on HEAD — reusing it"
+          else
+            git tag -s -m "$TAG" "$TAG"
+            git push origin "$TAG"
+          fi
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3

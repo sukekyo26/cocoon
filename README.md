@@ -147,4 +147,4 @@ pip install pre-commit  # or `brew install pre-commit`
 pre-commit install      # hooks fire on each `git commit`
 ```
 
-Required on `$PATH`: `shellcheck`, `shfmt`, `go`, `golangci-lint`. macOS: `brew install shellcheck shfmt golangci-lint`. Linux/WSL: `apt-get install shellcheck`, download `shfmt` from <https://github.com/mvdan/sh/releases>, install `golangci-lint` per <https://golangci-lint.run/welcome/install/>.
+Required on `$PATH`: `shellcheck`, `go`, `golangci-lint` (`just setup` installs the pinned version). macOS: `brew install shellcheck`. Linux/WSL: `apt-get install shellcheck`. `shfmt` and `govulncheck` are pinned as tools in `go.mod` and run via `go tool`.

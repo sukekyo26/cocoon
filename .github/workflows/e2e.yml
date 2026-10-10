@@ -1,6 +1,6 @@
 name: E2E
 
-# Real Docker round-trip on every push / PR: build the cocoon binary,
+# Real Docker round-trip on every PR: build the cocoon binary,
 # init a fresh project, generate .devcontainer/, then `docker buildx
 # bake` the image (via e2e/docker-roundtrip.sh, with GHA cache) and
 # `docker compose up -d` + `exec` into the running container so
@@ -43,11 +43,9 @@ name: E2E
 # box.
 
 on:
-  # Push fires for in-progress branches (pre-PR feedback). develop / main
-  # are deliberately excluded so a merge does not double up with the
-  # pull_request run that already gated it.
-  push:
-    branches: ["feature/*", "fix/*", "refactor/*"]
+  # pull_request also fires on every push to an open PR (synchronize), so a
+  # separate push trigger would build every image twice. develop / main get
+  # no push run either: the pull_request run already gated the merge.
   pull_request:
     branches: [develop, main]
   workflow_dispatch:
