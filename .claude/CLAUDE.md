@@ -36,7 +36,7 @@ cocoon は `cocoon.toml` から `.devcontainer/` を生成する Go CLI です�
 
 ## Branch and PR Workflow
 
-グローバル CLAUDE.md の「`develop` への直接コミットは許可」は **このリポジトリでは適用しない**。ruleset で develop / main とも PR 必須になっており、直接 push は reject される。
+ruleset で develop / main とも PR 必須になっており、直接 push は reject される。
 
 - `develop` への変更は必ずブランチ + PR 経由にする。バージョンバンプ・typo 修正などの小さな変更も例外にしない。
 - develop への PR は squash merge（feature / fix などの使い捨てブランチ）か merge commit（`main` → `develop` の戻しマージ）を選ぶ。rebase merge は使わない。
