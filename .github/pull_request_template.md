@@ -5,6 +5,7 @@ PR title must follow Conventional Commits — examples:
   feat(config)!: rename [container].os → image (also tick 💥 below)
   refactor(generate): extract shared yaml helpers
   docs: clarify plugin authoring contract
+  chore: prepare release v0.7.0  ← CHANGELOG + VERSION bump PR into develop
   feat: release v0.7.0           ← develop → main release PR — use .github/PULL_REQUEST_TEMPLATE/release.md
 
 Scope = package or subsystem (cli / gen / plugin / dockerfile / config / ...).

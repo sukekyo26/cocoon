@@ -1,6 +1,7 @@
 <!--
 Release PR: develop → main. Authored by the version-bump / pr-create skills, not by hand.
-Title MUST be `feat: release vX.Y.Z` (Conventional Commits; the release commit on develop uses the same).
+Title MUST be `feat: release vX.Y.Z` (Conventional Commits). The CHANGELOG + VERSION
+PR into develop is titled `chore: prepare release vX.Y.Z` so the two stay distinct.
 On merge, the VERSION change triggers `.github/workflows/release.yml`:
 tag vX.Y.Z → cross-compile → SHA256SUMS → gh release.
 

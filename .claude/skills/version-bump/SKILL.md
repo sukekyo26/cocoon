@@ -47,10 +47,10 @@ description: 'Bump project version following Semantic Versioning. Use when asked
 3. 上記 1〜4 を更新（`echo x.y.z > VERSION`、`internal/version/version.go` の `var Version = "..."` を新値に書き換え）
 4. `## [Unreleased]` 見出しは残す（次の開発用）。見出しの下は空にする
 5. `just ci` を実行してグリーンを確認（`internal/version/version.go` 変更で test 影響がないか保険的に）
-6. `chore/release-vX.Y.Z` ブランチを切り、`feat: release vX.Y.Z` としてコミットして push する。develop は ruleset で PR 必須なので直接 push は reject される。
-7. `develop` へのリリース PR を作成し、**squash merge** する（タイトルは `feat: release vX.Y.Z`。squash なので develop 上のコミットメッセージがこれになる）。
+6. `chore/release-vX.Y.Z` ブランチを切り、`chore: prepare release vX.Y.Z` としてコミットして push する。develop は ruleset で PR 必須なので直接 push は reject される。
+7. `develop` への準備 PR を作成し、**squash merge** する（タイトルは `chore: prepare release vX.Y.Z`。squash なので develop 上のコミットメッセージがこれになる）。中身は CHANGELOG と VERSION の更新だけなので、手順 8 の `feat: release vX.Y.Z` とは名前を分け、PR 一覧と `git log` で 2 つを見分けられるようにする。
 8. `develop` → `main` のリリース PR を **pr-create スキルの手順で**作成する。**マージ方式は merge commit 一択**（ruleset が squash / rebase を禁止。squash すると main が develop の履歴から分岐し、次のリリースで全ファイルがコンフリクトする）。リリース PR ならではの要点:
-   - **タイトルは `develop` のリリースコミットと同じ `feat: release vX.Y.Z`**（`chore:` ではない）。
+   - **タイトルは `feat: release vX.Y.Z`**（`chore:` ではない）。pr-create スキルの「`develop` のリリースコミットと同一タイトル」には従わず、手順 7 の準備 PR とは別の名前にする。
    - **本文は通常の `.github/pull_request_template.md` ではなく、リリース専用テンプレート `.github/PULL_REQUEST_TEMPLATE/release.md` に従って埋める**。`## Released changes` には今回 `CHANGELOG.md` / `docs/CHANGELOG.ja.md` に追加した `## [x.y.z]` セクションの内容（Added/Changed/Fixed/Removed のうち実在カテゴリのみ）をそのまま転記し、Release checklist を確認する。
    - マージ後、`main` 上の VERSION 変更が `release.yml` をトリガしてタグ・クロスコンパイル・`gh release` 公開が走る。
 
