@@ -124,9 +124,17 @@ build-all:
 
 # Build all release binaries and write bin/SHA256SUMS for GitHub Releases.
 release-assets: build-all
-    cd bin && sha256sum cocoon-linux-amd64 cocoon-linux-arm64 \
-                        cocoon-darwin-amd64 cocoon-darwin-arm64 > SHA256SUMS
-    @echo "wrote bin/SHA256SUMS"
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd bin
+    # macOS ships shasum instead of sha256sum; both print "<hash>  <file>".
+    if command -v sha256sum >/dev/null 2>&1; then sum=(sha256sum)
+    elif command -v shasum >/dev/null 2>&1; then sum=(shasum -a 256)
+    else echo "release-assets: install sha256sum (coreutils) or shasum (perl)" >&2; exit 1
+    fi
+    "${sum[@]}" cocoon-linux-amd64 cocoon-linux-arm64 \
+                cocoon-darwin-amd64 cocoon-darwin-arm64 > SHA256SUMS
+    echo "wrote bin/SHA256SUMS"
 
 # Verify go.sum integrity (supply-chain check)
 mod-verify:
