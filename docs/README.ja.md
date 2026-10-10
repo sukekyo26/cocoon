@@ -147,4 +147,4 @@ pip install pre-commit  # または `brew install pre-commit`
 pre-commit install      # `git commit` ごとにフックが起動
 ```
 
-`$PATH` 上に必要なもの: `shellcheck` / `shfmt` / `go` / `golangci-lint`。macOS: `brew install shellcheck shfmt golangci-lint`。Linux / WSL: `apt-get install shellcheck` + `shfmt` を <https://github.com/mvdan/sh/releases> からダウンロード + `golangci-lint` は <https://golangci-lint.run/welcome/install/> を参照。
+`$PATH` 上に必要なもの: `shellcheck` / `go` / `golangci-lint`（固定版は `just setup` で入る）。macOS: `brew install shellcheck`。Linux / WSL: `apt-get install shellcheck`。`shfmt` と `govulncheck` は `go.mod` の tool として固定し、`go tool` で動かします。

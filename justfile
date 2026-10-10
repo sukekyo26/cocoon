@@ -22,26 +22,21 @@ default:
 
 # Installs into `$(go env GOBIN)`, or the first GOPATH entry's bin when GOBIN is
 # unset; `go` and `just` must already be present.
-# Tool versions are pinned to match CI — keep them in sync with the workflow
-# files noted inline. shellcheck has no `go install` path; install it from your
-# OS package manager (the recipe warns if it is missing).
-# Install the pinned dev tools `just ci` needs (govulncheck, shfmt, golangci-lint).
+# CI runs this recipe too, so the golangci-lint version below is the only pin.
+# govulncheck and shfmt are pinned as `tool` dependencies in go.mod and run via
+# `go tool`. shellcheck has no `go install` path; install it from your OS
+# package manager (the recipe warns if it is missing).
+# Install the pinned golangci-lint that `just ci` needs.
 setup:
     #!/usr/bin/env bash
     set -euo pipefail
-    # Mirror where `go install` lands so all three tools share one directory
-    # and the printed path is accurate: $GOBIN if set, else the first GOPATH
-    # entry's bin (golangci-lint's `-b` then targets the same dir).
+    # Mirror where `go install` would land so the printed path is accurate:
+    # $GOBIN if set, else the first GOPATH entry's bin.
     bindir="$(go env GOBIN)"
     [ -n "${bindir}" ] || bindir="$(go env GOPATH | cut -d: -f1)/bin"
     mkdir -p "${bindir}"
     echo "Installing dev tools into ${bindir} ..."
-    # govulncheck — keep in sync with .github/workflows/go-ci.yml
-    go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
-    # shfmt — keep in sync with SHFMT_VERSION in .github/workflows/shfmt.yml
-    go install mvdan.cc/sh/v3/cmd/shfmt@v3.10.0
-    # golangci-lint — keep in sync with .github/workflows/go-ci.yml; the pinned
-    # install.sh SHA256-verifies the downloaded binary.
+    # The pinned install.sh SHA256-verifies the downloaded binary.
     curl -sSfL --proto '=https' --tlsv1.2 \
         https://raw.githubusercontent.com/golangci/golangci-lint/114493f9b3e7257d29e4130f2b4a4aadefbb6845/install.sh \
         | sh -s -- -b "${bindir}" v2.14.0
@@ -98,7 +93,7 @@ cover-check:
 
 # Run govulncheck against the module
 vuln:
-    govulncheck ./...
+    go tool govulncheck ./...
 
 # Run after intentional changes to generators or `cocoon init` output,
 # then commit the updated golden / snapshot files under each package's
@@ -144,13 +139,11 @@ shellcheck:
 
 # Format all *.sh files in-place with shfmt (gofmt-style)
 shfmt:
-    @command -v shfmt >/dev/null 2>&1 || { echo >&2 "shfmt not installed; see https://github.com/mvdan/sh/releases or 'brew install shfmt'"; exit 1; }
-    shfmt -i 2 -ci -w $(find . -type f -name '*.sh' -not -path './.git/*' -not -path './bin/*')
+    go tool shfmt -i 2 -ci -w $(find . -type f -name '*.sh' -not -path './.git/*' -not -path './bin/*')
 
 # Verify all *.sh files are shfmt-clean (CI gate)
 shfmt-check:
-    @command -v shfmt >/dev/null 2>&1 || { echo >&2 "shfmt not installed; see https://github.com/mvdan/sh/releases or 'brew install shfmt'"; exit 1; }
-    shfmt -i 2 -ci -d $(find . -type f -name '*.sh' -not -path './.git/*' -not -path './bin/*')
+    go tool shfmt -i 2 -ci -d $(find . -type f -name '*.sh' -not -path './.git/*' -not -path './bin/*')
 
 # Trivy misconfiguration scan of a generated .devcontainer/. Only the
 # Dockerfile is in scope: Trivy ships no misconfig checks for Compose, so
