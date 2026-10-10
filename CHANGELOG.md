@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Security**: Build cocoon with Go 1.27.2 (was 1.27.1) to pick up the
+  `net/http`, `net/textproto` and `crypto/tls` fixes (GO-2026-6603,
+  GO-2026-6605, GO-2026-6607, GO-2026-6608, GO-2026-6610, GO-2026-6611,
+  GO-2026-6613, GO-2026-6617), which the release binaries reach through their
+  HTTPS calls (release check, plugin resolution).
+
 ## [0.20.0] - 2026-10-07
 
 ### Added
