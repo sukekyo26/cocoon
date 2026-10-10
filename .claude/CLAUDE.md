@@ -39,6 +39,6 @@ cocoon は `cocoon.toml` から `.devcontainer/` を生成する Go CLI です�
 ruleset で develop / main とも PR 必須になっており、直接 push は reject される。
 
 - `develop` への変更は必ずブランチ + PR 経由にする。バージョンバンプ・typo 修正などの小さな変更も例外にしない。
-- develop への PR は squash merge（feature / fix などの使い捨てブランチ）か merge commit（`main` → `develop` の戻しマージ）を選ぶ。rebase merge は使わない。
+- develop への PR は squash merge のみ（ruleset が merge commit / rebase を禁止している）。`main` に先行した hotfix を `develop` に戻すときも、取り込み結果をブランチに載せて squash の PR で入れる（`sync-upstream` スキル）。
 - `develop` → `main` のリリース PR は **merge commit 一択**（ruleset が squash / rebase を禁止している）。squash すると main が develop の履歴から分岐し、次のリリースで全ファイルがコンフリクトする。
 - develop / main の PR は Go CI・ShellCheck・shfmt の 7 チェックが必須。
