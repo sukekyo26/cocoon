@@ -140,7 +140,7 @@ cocoon はコンテナ内の `~/.cocoon/` に named Docker volume をマウン�
 
 ## 開発
 
-`just ci` が push 前のシングルゲートです (Go fmt / vet / lint / test / vuln / mod-verify + `shellcheck` + `shfmt-check`)。任意で pre-commit 連携を入れると、その高速サブセット (`shellcheck` / `shfmt` / `golangci-lint fmt --diff` / `go vet` / `golangci-lint run` / `go mod verify` / `go mod tidy` ドリフト検査) が `git commit` ごとに走ります。重いゲート (test / coverage / govulncheck / cross-compile) は引き続き `just ci` 側に残します。
+`just ci` が push 前のシングルゲートです (Go fmt / vet / lint / test / vuln / mod-verify / mod-tidy-check + `shellcheck` + `shfmt-check`)。任意で pre-commit 連携を入れると、その高速サブセット (`shellcheck` / `shfmt` / `golangci-lint fmt --diff` / `go vet` / `golangci-lint run` / `go mod verify` / `go mod tidy` ドリフト検査) が `git commit` ごとに走ります。重いゲート (test / coverage / govulncheck / cross-compile) は引き続き `just ci` 側に残します。
 
 ```bash
 pip install pre-commit  # または `brew install pre-commit`

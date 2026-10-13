@@ -140,7 +140,7 @@ Every prompt, error message, and inline config-file comment renders in English o
 
 ## Developing
 
-`just ci` is the single pre-push gate (Go fmt/vet/lint/test/vuln/mod-verify + `shellcheck` + `shfmt-check`). Optional pre-commit integration runs the fast subset on each `git commit` — `shellcheck`, `shfmt`, `golangci-lint fmt --diff`, `go vet`, `golangci-lint run`, `go mod verify`, and a `go mod tidy` drift check. Slow gates (test / coverage / govulncheck / cross-compile) stay in `just ci`.
+`just ci` is the single pre-push gate (Go fmt/vet/lint/test/vuln/mod-verify/mod-tidy-check + `shellcheck` + `shfmt-check`). Optional pre-commit integration runs the fast subset on each `git commit` — `shellcheck`, `shfmt`, `golangci-lint fmt --diff`, `go vet`, `golangci-lint run`, `go mod verify`, and a `go mod tidy` drift check. Slow gates (test / coverage / govulncheck / cross-compile) stay in `just ci`.
 
 ```bash
 pip install pre-commit  # or `brew install pre-commit`
