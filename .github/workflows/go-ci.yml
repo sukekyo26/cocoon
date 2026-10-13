@@ -67,6 +67,7 @@ jobs:
           tool: just
       - run: just vet
       - run: just mod-verify
+      - run: just mod-tidy-check
       - run: just test-race
 
   coverage:

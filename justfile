@@ -140,6 +140,10 @@ release-assets: build-all
 mod-verify:
     go mod verify
 
+# Verify go.mod and go.sum are tidy (direct and indirect requirements, no unused modules)
+mod-tidy-check:
+    go mod tidy -diff
+
 # Run shellcheck across all *.sh files in the repo (severity=style)
 shellcheck:
     @command -v shellcheck >/dev/null 2>&1 || { echo >&2 "shellcheck not installed; install via 'apt-get install shellcheck' / 'brew install shellcheck'"; exit 1; }
@@ -200,4 +204,4 @@ trivy-golden:
 # this repo does not carry and CI produces via e2e/docker-roundtrip.sh (which
 # local WSL2 cannot run). Use `just trivy-golden` for the build-free local
 # smoke test.
-ci: fmt-check vet lint test cover-check vuln mod-verify shellcheck shfmt-check
+ci: fmt-check vet lint test cover-check vuln mod-verify mod-tidy-check shellcheck shfmt-check
